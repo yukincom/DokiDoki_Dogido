@@ -57,15 +57,17 @@ pub fn is_action(action: &str) -> bool {
 #[derive(Deserialize)]
 struct Step {
     action: String,
-    purpose: String,
-    confidence: f64,
+    #[serde(default, rename = "purpose")]
+    _purpose: String,
+    #[serde(default, rename = "confidence")]
+    _confidence: f64,
     evidence: String,
     #[serde(rename = "speech")]
     _speech: String,
     checks: Vec<String>,
 }
 
-/// 原文の否定・引用等は既存の純粋helperで照合し、外形と段階の権限をRustで再検査する。
+/// LLMが選んだ継続操作を原文と現在段階へ接続する。意味は再判定しない。
 pub fn validate(payload: &Value, text: &str, stage: Stage, pending: bool) -> Result<()> {
     // 納得や会話続行は保存・終了・戦闘復帰を実行しない。本文の受理は
     // conversation側で済ませ、ここでは実際の直前段階との接続だけを見る。
@@ -85,16 +87,6 @@ pub fn validate(payload: &Value, text: &str, stage: Stage, pending: bool) -> Res
     ensure!(
         stage.actions(pending).contains(&step.action.as_str()),
         "followup_stage_mismatch"
-    );
-    let purpose = match step.action.as_str() {
-        "acknowledge_meaning" => "understand_meaning",
-        "confirm_close" | "decline_resume" => "finish_workshop",
-        _ => "continue_discussion",
-    };
-    ensure!(step.purpose == purpose, "followup_purpose_mismatch");
-    ensure!(
-        (0.85..=1.0).contains(&step.confidence),
-        "followup_low_confidence"
     );
     ensure!(
         step.evidence.trim().chars().count() >= 2 && text.contains(&step.evidence),
@@ -126,7 +118,7 @@ mod tests {
     use super::*;
     use serde_json::json;
     #[test]
-    fn acknowledgement_never_arms_close_and_hiragana_negation_never_closes() {
+    fn acknowledgement_keeps_stage_and_model_close_is_not_reclassified() {
         let ack = json!({"action":"acknowledge_meaning","purpose":"understand_meaning","confidence":0.95,
             "evidence":"おーいループしてるぞい","speech":"","checks":[]});
         assert!(
@@ -144,7 +136,7 @@ mod tests {
         );
         let close = json!({"action":"confirm_close","purpose":"finish_workshop","confidence":0.95,
             "evidence":"おわらんわ。","speech":"","checks":[]});
-        assert!(validate(&close, "おわらんわ。", Stage::CloseConfirmation, false).is_err());
+        assert!(validate(&close, "おわらんわ。", Stage::CloseConfirmation, false).is_ok());
     }
     #[test]
     fn contextual_yes_requires_completed_confirmation_and_no_pending() {
@@ -161,10 +153,8 @@ mod tests {
         assert!(validate(&p, "ここで区切ってよいよ", Stage::CloseConfirmation, true).is_err());
         for (key, value) in [
             ("confidence", json!(true)),
-            ("confidence", json!(0.84)),
             ("evidence", json!("別の発話")),
             ("checks", json!(["source"])),
-            ("purpose", json!("adopt_pending")),
         ] {
             let mut bad = p.clone();
             bad[key] = value;

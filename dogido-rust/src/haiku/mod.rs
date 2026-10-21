@@ -1,9 +1,10 @@
-//! 観測由来の材料から三行の川柳を生成し、音数・出典・重複を検査する。
+//! 観測由来の材料を割り当てて三行の川柳を生成し、形式・音数を確認する。
 //! 不合格行の再生成回数と材料の使い分けはRustが管理し、Backendへ生成と読み整形を依頼する。
-//! ここで返すのは採否と行ごとの根拠。発句時刻、現在句の更新、保存、音声配送はdialogue側が担当する。
+//! ここで返すのは採否と行ごとに渡した材料。発句時刻、現在句の更新、保存、音声配送はdialogue側が担当する。
 pub mod companions;
 mod generation;
 pub mod lexical;
+mod line_format;
 pub mod meter;
 pub mod revision;
 #[cfg(test)]
@@ -13,8 +14,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::future::Future;
 
-pub const PROMPT_VARIANT: &str = "source_atoms_slots_v2_kana_normalize";
-/// 一つの材料とその出典。似た文面でも、同じ事実を複数行で使い回したかをIDと参照先で検査する。
+pub const PROMPT_VARIANT: &str = "assigned_materials_v3_no_judge";
+/// 一つの材料とその出典。IDと参照先で材料の割当・派生元・保存した資料を追跡する。
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SourceAtom {
     pub atom_id: String,
@@ -75,7 +76,6 @@ pub struct Input {
     pub source_atoms: Vec<SourceAtom>,
     pub fallback_text: String,
     pub max_tokens: Option<u64>,
-    pub grounding_max_tokens: u64,
     pub generation_strategy: String,
     pub max_regeneration_rounds: i64,
     pub llm_enabled: bool,
@@ -87,7 +87,6 @@ impl Default for Input {
             source_atoms: vec![],
             fallback_text: String::new(),
             max_tokens: None,
-            grounding_max_tokens: 512,
             generation_strategy: "three_slot".into(),
             max_regeneration_rounds: 6,
             llm_enabled: true,

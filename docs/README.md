@@ -23,7 +23,7 @@ DokiDoki Dogido の設計・仕様ドキュメントです。
 | **現行仕様** | いまの仕様・方針の基準 | `event-schema` · `state-machine` · `adapter-api` · `dialogue-design` |
 | **完成度ハブ** | 「何を足すか」の優先軸 | `companion-maturity` |
 | **計画・方針** | 設計・PR 経緯・技術判断。**状態は各文書のヘッダ／表を正**（本索引では断定しない） | workshop · casual · voice · `senryu-rag-plan` · `technical-risks` |
-| **参照メモ** | 実装の横で使う一覧・調査メモ（現役） | `mob_list` · 国語知識・詩形データベース · Minecraft Java 公式技術データベース |
+| **参照メモ** | 実装の横で使う一覧・調査メモ（現役） | `mob_list` · 詩の基礎知識データベース · Minecraft Java 公式技術データベース |
 | **バグ / 観測メモ** | 切り分け。現行仕様を置き換えない | `bug-player-chat-observation-gaps` |
 | **終了・履歴** | 過去の実装・試験記録。現行の起動・編集手順には使わない | 旧Python再配置・py_trees・独立国語試験・`debug-checklist`・初期RAG案 |
 | **調査 (`research/`)** | 追加の作業メモ。**現行仕様ではない**が、捨てた資料ではない | `research/haiku` · TTS 地図 · `research/mob_list` |
@@ -232,7 +232,7 @@ architecture（どう詠む）
 
 ### 川柳と記憶
 
-- [国語知識・詩形データベース](../reference/language_education_and_poetry/README.md)（公式データ、文法・歴史的仮名遣い・枕詞・詩形、利用条件、JSON索引）
+- [詩の基礎知識データベース](../reference/language_education_and_poetry/README.md)（枕詞・日本と世界の詩形、出典、JSON索引）
 - [haiku-architecture.md](haiku-architecture.md)
 - [haiku-player-improvement-plan.md](haiku-player-improvement-plan.md)
 - [haiku-workshop-intake-patterns.md](haiku-workshop-intake-patterns.md)

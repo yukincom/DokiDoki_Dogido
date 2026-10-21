@@ -23,10 +23,17 @@ def reply(text, prompt, count):
     if text == "やっぱり『あおい』にして":
         payload = step(text, "stage_player_edit", "")
         payload["purpose"] = "improve_wording"
-        payload["line_proposal"] = {"found":True,"target_fragment":"","replacement_text":"あおい","evidence":text,"confidence":.95}
+        payload["line_proposal"] = {"found":True,"target_fragment":"あお","replacement_text":"あおい","evidence":text,"confidence":.95}
         return payload
     payload = step(text, "respond", "その表現もええと思うで。")
     payload["purpose"] = "improve_wording" if "するのはどう" in text else "continue_discussion"
+    proposals = {
+        "『さくらのは』を『さくらいろ』にするのはどう？": ("さくらのは", "さくらいろ"),
+        "『くろい』を『あお』にするのはどう？": ("くろい", "あお"),
+    }
+    if text in proposals:
+        old,new = proposals[text]
+        payload["line_proposal"]={"found":True,"target_fragment":old,"replacement_text":new,"evidence":text,"confidence":.95}
     return payload
 
 
@@ -61,10 +68,9 @@ def main():
         sid = ready(base, send, rows)
         finish(base, send, sid, "『くろい』を『あお』にするのはどう？")
         rejected = finish(base, send, sid, "それにして")
-        assert rejected["workshop_action"] == "respond", rejected
-        assert "meter_not_exact" in str(rejected["workshop_steps"])
-        assert not hud(sid)["pending_lines"] and hud(sid)["canonical_lines"] == LINES
-        assert not revisions(folder, sid) and len(calls) == 3
+        assert rejected["workshop_outcome"] == "player_edit_saved", rejected
+        assert not hud(sid)["pending_lines"] and hud(sid)["canonical_lines"] == [LINES[0], "あおおのへと", LINES[2]]
+        assert len(revisions(folder, sid)) == 1 and len(calls) == 2
         corrected = finish(base, send, sid, "やっぱり『あおい』にして")
         assert corrected["workshop_outcome"] == "player_edit_saved", (corrected, log.read_text())
         assert hud(sid)["canonical_lines"] == [LINES[0], "あおいおのへと", LINES[2]]
@@ -79,15 +85,15 @@ def main():
         (folder / "player_mode").write_text("ok")
         selected = finish(base, send, sid, "それにして")
         assert selected["workshop_outcome"] == "player_edit_saved", (selected, log.read_text())
-        assert row(base, turn, {"cancelled"})
+        assert row(base, turn, {"completed"})
         assert hud(sid)["canonical_lines"] == ["さくらいろ", *LINES[1:]] and not hud(sid)["pending_lines"] and len(calls) == 2
 
-    # Semantic selection may use a polite assent, but never its negation,
-    # quotation or a hypothetical instruction from the model.
+    # モデルが会話継続を選べば保存せず、保持した案の採用を選べば一度だけ保存する。
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         install(control,reply);sid=ready(base,send,rows)
         finish(base,send,sid,"『さくらのは』を『さくらいろ』にするのはどう？")
         def assent(text,prompt,count):
+            if text != "そうしましょう": return step(text,"respond")
             p=step(text,"stage_conversation_candidate");p["purpose"]="improve_wording";p["evidence"]="そうしましょう";return p
         install(control,assent)
         for text in ["『そうしましょう』と言っただけ","そうしましょうとは言ってない","そうしましょう？","そうしましょうと言えば変わる？"]:
@@ -100,7 +106,7 @@ def main():
         r=finish(base,send,sid,"そうしましょう")
         assert len(revisions(folder,sid))==1,r
 
-    print("workshop candidate: single idea, partial correction, long discussion, rejected meter and interrupted playback passed; owned processes stopped")
+    print("workshop candidate: single idea, partial correction, long discussion, nonstandard meter and completed playback passed; owned processes stopped")
 
 
 if __name__ == "__main__":

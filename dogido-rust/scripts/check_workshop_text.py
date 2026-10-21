@@ -2,6 +2,7 @@
 """Exercise the native text window, prompt changes and persistence with a local fake model."""
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -10,7 +11,7 @@ import tempfile
 import threading
 
 from workshop_text_client import call, speak
-from check_workshop_runtime import step
+from check_workshop_runtime import step, native_mock_message
 from check_workshop_edits import edit
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -23,25 +24,26 @@ def main():
         def do_POST(self):
             body = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
             seen.append(body)
-            prompt = '\n'.join(m['content'] for m in body['messages'])
+            prompt = '\n'.join(m.get('content') or '' for m in body['messages'])
             question = re.search(r'今回のプレイヤー発話（会話理解用）: ([^\n]+)', prompt).group(1)
             reply = step(question, speech='静かな夜の草を思い浮かべた読みやな。')
             if question == proposal_text:
                 reply = edit(question, index=2, replacement='くささむし', reference='のくさふゆむ', fragment='のくさふゆむ')
-                reply['speech'] = '下五をその言葉に変えるんやな？'
-                if '前の一手は実行していない' in prompt:
-                    reply = step(question, 'ask', '下五をその言葉に変えるんやな？')
-            if question in {'うん！変えて！', '変えないで！'}:
-                evidence = question if 'evidenceは今回の発話から' in prompt or question == '変えないで！' else proposal_text
-                reply = edit(evidence, index=2, replacement='くささむし', reference='のくさふゆむ', fragment='のくさふゆむ')
-                reply['speech'] = 'うん、下五をくささむしに変えたで。'
-                if '前の一手は実行していない' in prompt:
-                    reply = step(question, 'respond', 'うん、まだ元の句のままにしとくな。')
+                reply.update(action='ask', purpose='improve_wording', speech='下五をその言葉に変えるんやな？')
+            if question == 'うん！変えて！':
+                reply = step(question, 'stage_conversation_candidate')
+                reply.update(purpose='improve_wording', speech='その案でいこか。')
+            if question == '変えないで！':
+                reply = step(question, 'respond', 'うん、まだ元の句のままにしとくな。')
             if question == '終了でいいよ':
                 reply = step(question, 'close_workshop')
                 reply['speech'] = 'うん、ここまでにしよか。また話そな。'
+            native = native_mock_message(reply, prompt, len(seen))
+            message = native if native.get('role') == 'assistant' else {
+                'role': 'assistant', 'content': json.dumps(native, ensure_ascii=False)}
             response = {'id': 'test-reply', 'object': 'chat.completion', 'model': 'mock',
-                        'choices': [{'index': 0, 'message': {'role': 'assistant', 'content': json.dumps(reply, ensure_ascii=False)}, 'finish_reason': 'stop'}],
+                        'choices': [{'index': 0, 'message': message,
+                                     'finish_reason': 'tool_calls' if message.get('tool_calls') else 'stop'}],
                         'usage': {'prompt_tokens': 100, 'completion_tokens': 30, 'total_tokens': 130}}
             encoded = json.dumps(response).encode()
             self.send_response(200)
@@ -67,7 +69,7 @@ def main():
         model = ThreadingHTTPServer(('127.0.0.1', 0), Model)
         thread = threading.Thread(target=model.serve_forever, daemon=True)
         thread.start()
-        command = [str(ROOT / 'dogido-rust/target/release/examples/workshop_text'),
+        command = [os.environ.get('DOGIDO_WORKSHOP_TEXT_BINARY', str(ROOT / 'dogido-rust/target/release/examples/workshop_text')),
                    '--listen', '127.0.0.1:0', '--memory-dir', str(folder / 'memory'),
                    '--python', sys.executable, '--model', 'mock', '--base-url', f'http://127.0.0.1:{model.server_port}/v1',
                    '--prompt-file', str(folder / 'prompts.json')]
@@ -137,6 +139,7 @@ def main():
                 assert changed['turn']['workshop_outcome'] == 'player_edit_saved', changed
                 assert changed['turn']['text_delivery_acknowledged'], changed
                 assert changed['workshop']['canonical_lines'][-1] == 'くささむし', changed
+                assert changed['workshop']['editing'] and changed['workshop']['selected_line'] == 2, changed
                 assert source.read_text() == original
                 revision_file = source.with_name('haiku_revisions.jsonl')
                 saved_rows = [json.loads(line) for line in revision_file.read_text().splitlines()]
@@ -169,15 +172,18 @@ def main():
                 base = found.group()
                 restored = call('snapshot', {'session_id': sid}, base)
                 assert restored['workshop']['state'] == 'closed'
+                assert not restored['workshop']['editing'] and restored['text_state']['editing_state'] is None
                 assert restored['text_state']['lines'][-1]['reading_text'] == 'くささむし'
                 restored_pending = call('snapshot', {'session_id': stale_sid}, base)
                 assert restored_pending['workshop']['canonical_lines'][-1] == 'のくさふゆむ'
                 assert restored_pending['workshop']['pending_lines'][-1] == 'くささむし'
+                assert restored_pending['workshop']['editing'] and restored_pending['workshop']['selected_line'] == 2
                 assert len(restored['dialogue']['utterances']) == len(closed['dialogue']['utterances'])
                 reopened = call('open', {'key': poems[0]['key']}, base)['session_id']
                 current = call('snapshot', {'session_id': reopened}, base)
                 assert current['workshop']['canonical_lines'][-1] == 'くささむし'
                 assert current['text_state']['revision_id'] == saved_rows[0]['id']
+                assert not current['workshop']['editing'] and current['text_state']['editing_state'] is None
                 assert source.read_text() == original
                 assert len(revision_file.read_text().splitlines()) == 1
                 call('shutdown', {}, base)

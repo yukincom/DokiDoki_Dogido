@@ -6,7 +6,7 @@ use sha2::{Digest, Sha256};
 use std::{
     collections::{HashMap, HashSet},
     fs::{self, File},
-    io::{BufRead, BufReader, Read, Seek, SeekFrom},
+    io::Read,
     path::{Path, PathBuf},
     sync::{
         Arc,
@@ -14,12 +14,7 @@ use std::{
     },
 };
 
-pub const CORE: &[&str] = &[
-    "japanese_grammar",
-    "historical_kana_and_scripts",
-    "makurakotoba",
-    "japanese_poetry_forms",
-];
+pub const CORE: &[&str] = &["makurakotoba", "japanese_poetry_forms", "world_poetry"];
 
 #[derive(Debug)]
 struct Invalid;
@@ -143,21 +138,6 @@ fn safe_path(dir: &Path, raw: &str, suffix: &str) -> Result<PathBuf> {
     valid(path.parent() == Some(base.as_path()))?;
     Ok(path)
 }
-fn digest(file: &mut File, expected: &str, stop: &Stop) -> Result<()> {
-    file.seek(SeekFrom::Start(0))?;
-    let mut hash = Sha256::new();
-    let mut chunk = [0; 65536];
-    loop {
-        stop.check()?;
-        let size = file.read(&mut chunk)?;
-        if size == 0 {
-            break;
-        }
-        hash.update(&chunk[..size]);
-    }
-    valid(format!("{:x}", hash.finalize()) == expected)
-}
-
 pub struct Catalog {
     index: Value,
     datasets: HashMap<String, Value>,
@@ -416,202 +396,6 @@ pub(super) fn rank_records(
 
 /// 大きなJSONLは索引を順に読み、必要な行だけをbyte位置から読む。
 /// 全文検索・全レコード常駐・語彙選定レベルから学年への変換はしない。
-pub struct Bulk {
-    base: PathBuf,
-    index: Value,
-    stop: Stop,
-}
-impl Bulk {
-    pub fn open(base: &Path, stop: Stop) -> Result<Self> {
-        let base = fs::canonicalize(base)?.join("data/normalized");
-        let index = read_json(&base.join("index.json"), &stop)?;
-        valid(index["schema_version"] == 2)?;
-        let mut ids = HashSet::new();
-        for row in array(&index["datasets"])? {
-            let id = string(&row["id"])?;
-            valid(!id.is_empty() && ids.insert(id))?;
-            for (path, hash, suffix) in [
-                ("path", "sha256", ".jsonl"),
-                ("index_path", "index_sha256", ".index.jsonl"),
-            ] {
-                let path = safe_path(&base, string(&row[path])?, suffix)?;
-                digest(&mut File::open(path)?, string(&row[hash])?, &stop)?;
-            }
-        }
-        Ok(Self { base, index, stop })
-    }
-    pub fn get(&self, id: &str) -> Result<Option<Value>> {
-        for dataset in array(&self.index["datasets"])? {
-            let path = safe_path(&self.base, string(&dataset["index_path"])?, ".index.jsonl")?;
-            let mut file = File::open(path)?;
-            digest(&mut file, string(&dataset["index_sha256"])?, &self.stop)?;
-            file.seek(SeekFrom::Start(0))?;
-            for line in BufReader::new(file).lines() {
-                self.stop.check()?;
-                let entry: Value = serde_json::from_str(&line?)?;
-                valid(
-                    entry["dataset_id"] == dataset["id"]
-                        && entry["dataset_path"] == dataset["path"],
-                )?;
-                if entry["id"] != id {
-                    continue;
-                }
-                let path = safe_path(&self.base, string(&dataset["path"])?, ".jsonl")?;
-                let mut data = File::open(path)?;
-                digest(&mut data, string(&dataset["sha256"])?, &self.stop)?;
-                let size = data.stream_position()?;
-                let offset = entry["byte_offset"].as_u64().context(Invalid)?;
-                let length = entry["byte_length"].as_u64().context(Invalid)?;
-                valid(length >= 2 && offset.checked_add(length).is_some_and(|end| end <= size))?;
-                data.seek(SeekFrom::Start(offset))?;
-                let mut bytes = vec![0; usize::try_from(length)?];
-                data.read_exact(&mut bytes)?;
-                self.stop.check()?;
-                let mut record: Value = serde_json::from_slice(&bytes)?;
-                valid(record["id"] == entry["id"])?;
-                if record.get("dataset_id").is_none() {
-                    record["dataset_id"] = entry["dataset_id"].clone();
-                }
-                return Ok(Some(record));
-            }
-        }
-        Ok(None)
-    }
-}
-
-impl Bulk {
-    pub(super) fn dataset_ids(&self) -> Result<Vec<&str>> {
-        array(&self.index["datasets"])?
-            .iter()
-            .map(|r| string(&r["id"]))
-            .collect()
-    }
-    pub fn search(
-        &self,
-        query: &str,
-        datasets: &[&str],
-        kinds: &[&str],
-        limit: usize,
-    ) -> Result<Vec<Value>> {
-        if limit == 0 {
-            return Ok(vec![]);
-        }
-        let query = normalized(query);
-        let wanted: Vec<_> = datasets
-            .iter()
-            .filter(|s| !s.is_empty())
-            .map(|s| normalized(s))
-            .collect();
-        let kinds: HashSet<_> = kinds
-            .iter()
-            .filter(|s| !s.is_empty())
-            .map(|s| normalized(s))
-            .collect();
-        let mut candidates: Vec<(u8, String, Value)> = Vec::new();
-        let mut seen = HashSet::new();
-        let all = array(&self.index["datasets"])?;
-        let mut visited = HashSet::new();
-        let ordered: Vec<_> = if wanted.is_empty() {
-            all.iter().collect()
-        } else {
-            wanted
-                .iter()
-                .filter(|id| visited.insert((*id).clone()))
-                .filter_map(|id| all.iter().find(|row| row["id"] == *id))
-                .collect()
-        };
-        for dataset in ordered {
-            let mut file = File::open(safe_path(
-                &self.base,
-                string(&dataset["index_path"])?,
-                ".index.jsonl",
-            )?)?;
-            digest(&mut file, string(&dataset["index_sha256"])?, &self.stop)?;
-            file.seek(SeekFrom::Start(0))?;
-            for line in BufReader::new(file).lines() {
-                self.stop.check()?;
-                let mut entry: Value = serde_json::from_str(&line?)?;
-                valid(
-                    entry["dataset_id"] == dataset["id"]
-                        && entry["dataset_path"] == dataset["path"],
-                )?;
-                if !kinds.is_empty()
-                    && !kinds.contains(&normalized(entry["kind"].as_str().unwrap_or("")))
-                {
-                    continue;
-                }
-                let Some(score) = bulk_score(&entry, &query)? else {
-                    continue;
-                };
-                let id = string(&entry["id"])?.to_owned();
-                if !seen.insert(id.clone()) {
-                    continue;
-                }
-                entry["_dataset_sha256"] = dataset["sha256"].clone();
-                candidates.push((score, id, entry));
-                candidates.sort_by(|a, b| (&a.0, &a.1).cmp(&(&b.0, &b.1)));
-                candidates.truncate(limit);
-            }
-        }
-        let mut files: HashMap<String, (File, u64)> = HashMap::new();
-        let mut result = Vec::new();
-        for (_, _, entry) in candidates {
-            self.stop.check()?;
-            let path = string(&entry["dataset_path"])?;
-            if !files.contains_key(path) {
-                let mut file = File::open(safe_path(&self.base, path, ".jsonl")?)?;
-                digest(&mut file, string(&entry["_dataset_sha256"])?, &self.stop)?;
-                let size = file.stream_position()?;
-                files.insert(path.into(), (file, size));
-            }
-            let (file, size) = files.get_mut(path).unwrap();
-            let offset = entry["byte_offset"].as_u64().context(Invalid)?;
-            let length = entry["byte_length"].as_u64().context(Invalid)?;
-            valid(length >= 2 && offset.checked_add(length).is_some_and(|end| end <= *size))?;
-            file.seek(SeekFrom::Start(offset))?;
-            let mut bytes = vec![0; usize::try_from(length)?];
-            file.read_exact(&mut bytes)?;
-            let mut record: Value = serde_json::from_slice(&bytes)?;
-            valid(record["id"] == entry["id"])?;
-            if record.get("dataset_id").is_none() {
-                record["dataset_id"] = entry["dataset_id"].clone();
-            }
-            result.push(record);
-        }
-        Ok(result)
-    }
-}
-fn bulk_score(entry: &Value, query: &str) -> Result<Option<u8>> {
-    if query.is_empty() {
-        return Ok(Some(3));
-    }
-    if normalized(entry["title_ja"].as_str().unwrap_or("")) == query {
-        return Ok(Some(0));
-    }
-    let terms: Vec<_> = strings(&entry["search_terms"])?
-        .iter()
-        .filter(|s| !s.is_empty())
-        .map(|s| normalized(s))
-        .collect();
-    if terms.iter().any(|s| s == query) {
-        return Ok(Some(1));
-    }
-    let compact_query = compact(query);
-    if !compact_query.is_empty() && terms.iter().any(|s| compact(s).contains(&compact_query)) {
-        return Ok(Some(2));
-    }
-    let tokens: Vec<_> = query
-        .split(space)
-        .map(compact)
-        .filter(|s| !s.is_empty())
-        .collect();
-    Ok((!tokens.is_empty()
-        && tokens
-            .iter()
-            .all(|t| terms.iter().any(|s| compact(s).contains(t))))
-    .then_some(3))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -623,7 +407,7 @@ mod tests {
     #[test]
     fn canonical_search_order_facets_and_records_match_fixture() {
         let fixture: Value =
-            serde_json::from_str(include_str!("../../fixtures/language-retrieval.json")).unwrap();
+            serde_json::from_str(include_str!("../../fixtures/poetry-catalog.json")).unwrap();
         let catalog = Catalog::open(&base(), Stop::default()).unwrap();
         for case in fixture["catalog"].as_array().unwrap() {
             let filters: Vec<(String, Vec<String>)> =
@@ -672,20 +456,6 @@ mod tests {
             "entries":{"record":{"id":"record","dataset_path":"data.json","record_key":"records","record_index":0}}});
         write(&base.join("index.json"), &index);
         index
-    }
-    fn small_bulk(base: &Path) -> Value {
-        let normalized = base.join("data/normalized");
-        fs::create_dir_all(&normalized).unwrap();
-        let record = json!({"id":"record","title_ja":"旧"});
-        let hash = write(&normalized.join("data.jsonl"), &record);
-        let length = fs::metadata(normalized.join("data.jsonl")).unwrap().len();
-        let index_hash = write(
-            &normalized.join("data.index.jsonl"),
-            &json!({"id":"record","dataset_id":"sample","dataset_path":"data.jsonl","byte_offset":0,"byte_length":length}),
-        );
-        let manifest = json!({"schema_version":2,"datasets":[{"id":"sample","path":"data.jsonl","sha256":hash,"index_path":"data.index.jsonl","index_sha256":index_hash}]});
-        write(&normalized.join("index.json"), &manifest);
-        manifest
     }
     #[test]
     fn core_reader_checks_paths_hashes_record_ids_and_snapshot_generation() {
@@ -739,58 +509,9 @@ mod tests {
             assert!(Catalog::open(&tmp.0, Stop::default()).is_err(), "{name}");
         }
     }
-    #[test]
-    fn bulk_reader_rechecks_open_generation_and_validates_byte_locators() {
-        let tmp = Temporary::new();
-        let original = small_bulk(&tmp.0);
-        let bulk = Bulk::open(&tmp.0, Stop::default()).unwrap();
-        assert_eq!(bulk.get("record").unwrap().unwrap()["title_ja"], "旧");
-        assert!(bulk.get("missing").unwrap().is_none());
-        let dir = tmp.0.join("data/normalized");
-        let new_hash = write(
-            &dir.join("next.jsonl"),
-            &json!({"id":"record","title_ja":"新"}),
-        );
-        fs::rename(dir.join("next.jsonl"), dir.join("data.jsonl")).unwrap();
-        assert!(bulk.get("record").is_err());
-        let mut manifest = original;
-        manifest["datasets"][0]["sha256"] = new_hash.into();
-        write(&dir.join("index.json"), &manifest);
-        assert_eq!(
-            Bulk::open(&tmp.0, Stop::default())
-                .unwrap()
-                .get("record")
-                .unwrap()
-                .unwrap()["title_ja"],
-            "新"
-        );
-        for (offset, length, id, dataset, path) in [
-            (0, 1, "record", "sample", "data.jsonl"),
-            (u64::MAX, 2, "record", "sample", "data.jsonl"),
-            (1, 999999, "record", "sample", "data.jsonl"),
-            (0, 38, "record", "wrong", "data.jsonl"),
-            (0, 38, "record", "sample", "../data.jsonl"),
-        ] {
-            let hash = write(
-                &dir.join("data.index.jsonl"),
-                &json!({"id":id,"dataset_id":dataset,"dataset_path":path,"byte_offset":offset,"byte_length":length}),
-            );
-            manifest["datasets"][0]["index_sha256"] = hash.into();
-            write(&dir.join("index.json"), &manifest);
-            assert!(
-                Bulk::open(&tmp.0, Stop::default())
-                    .unwrap()
-                    .get("record")
-                    .is_err()
-            );
-        }
-        manifest["datasets"][0]["path"] = "../data.jsonl".into();
-        write(&dir.join("index.json"), &manifest);
-        assert!(Bulk::open(&tmp.0, Stop::default()).is_err());
-    }
     #[cfg(unix)]
     #[test]
-    fn symlinked_catalog_index_dataset_and_normalized_directory_are_rejected() {
+    fn symlinked_catalog_index_and_dataset_are_rejected() {
         use std::os::unix::fs::symlink;
         let tmp = Temporary::new();
         small_catalog(&tmp.0);
@@ -802,10 +523,6 @@ mod tests {
         fs::rename(tmp.0.join("data.json"), tmp.0.join("actual.json")).unwrap();
         symlink("actual.json", tmp.0.join("data.json")).unwrap();
         assert!(Catalog::open(&tmp.0, Stop::default()).is_err());
-        small_bulk(&tmp.0);
-        fs::rename(tmp.0.join("data/normalized"), tmp.0.join("actual")).unwrap();
-        symlink("../actual", tmp.0.join("data/normalized")).unwrap();
-        assert!(Bulk::open(&tmp.0, Stop::default()).is_err());
     }
     #[test]
     fn cancelled_reader_stops_before_open_or_next_read() {
@@ -813,10 +530,8 @@ mod tests {
         stop.cancel();
         assert!(read_json(&base().join("index.json"), &stop).is_err());
         assert!(Catalog::open(&base(), stop.clone()).is_err());
-        let tmp = Temporary::new();
-        small_bulk(&tmp.0);
-        let bulk = Bulk::open(&tmp.0, Stop::default()).unwrap();
-        bulk.stop.cancel();
-        assert!(bulk.get("record").is_err());
+        let catalog = Catalog::open(&base(), Stop::default()).unwrap();
+        catalog.stop.cancel();
+        assert!(catalog.get("missing").is_err());
     }
 }

@@ -27,6 +27,7 @@ pub struct HaikuLine {
     pub position: String,
     pub canonical_name: String,
     pub surface_text: String,
+    /// 確定した読み。辞書で解決できない編集行は空文字で保持する。
     pub reading_text: String,
     pub source_atom_ids: Vec<String>,
     pub source_atoms: Vec<Map<String, Value>>,
@@ -70,6 +71,11 @@ impl PreparedEmission {
     /// 行正本が持つ出典だけを使い、不足した由来を補わずに記録の一貫性を保つ。
     pub fn complete(mut self, created_at: DateTime<Utc>) -> Result<Emission> {
         let resolved = ResolvedLines::try_from(self.lines.as_slice())?;
+        // 自動発句は従来どおり確定読みを持つ。WSの未確定読み許容を初期生成へ広げない。
+        anyhow::ensure!(
+            self.lines.iter().all(|line| !line.reading_text.is_empty()),
+            "missing_emission_reading"
+        );
         self.surface_text = Some(resolved.surface());
         self.reading_text = Some(resolved.reading());
         let sources: Vec<_> = self.lines.iter().filter(|l| !l.source_atom_ids.is_empty()).map(|l| {
@@ -235,10 +241,20 @@ pub(crate) fn append_line(file: &mut File, entry: &Value) -> Result<()> {
     Ok(())
 }
 
+/// 編集画面の状態。採用待ちの有無とは別で、行未選択なら三行を同じ強さで表示する。
+/// 行番号は0..2。表示だけを保持し、句の採用・保存や会話対象を変更しない。
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkshopEditing {
+    pub selected_line: Option<usize>,
+}
+
 #[derive(Clone, Debug)]
 pub struct Workshop {
     pub current_lines: Vec<HaikuLine>,
     pub pending: Option<crate::workshop_edit::Pending>,
+    /// 本人編集・AI案で共通の表示状態。保存・採否では解除せず、相談終了で解除する。
+    pub editing: Option<WorkshopEditing>,
     pub revision_id: Option<String>,
     pub version: u64,
     pub emission: Emission,
@@ -295,6 +311,7 @@ impl Workshop {
         Self {
             current_lines: emission.prepared.lines.clone(),
             pending: None,
+            editing: None,
             revision_id: None,
             version: 0,
             emission,
@@ -322,7 +339,18 @@ impl Workshop {
     pub fn combat_paused(&self) -> bool {
         self.paused_at.is_some()
     }
+    /// 検証済みの編集行から共通の編集画面へ入る。省略は複数行または未選択。
+    /// 保存後の遅い結果で終了済みの相談を再び表示しないよう、open中だけ更新する。
+    pub fn begin_editing(&mut self, selected_line: Option<usize>) {
+        if self.open {
+            self.editing = Some(WorkshopEditing {
+                selected_line: selected_line.filter(|index| *index < 3),
+            });
+        }
+    }
+
     pub fn close(&mut self, reason: impl Into<String>) {
+        self.editing = None;
         self.conversation_candidate = None;
         self.discussion_target = None;
         self.provisional = None;
@@ -388,7 +416,9 @@ pub fn project_workshop(
         "character_state":if active.is_none() && mode=="normal" && thinking {"thinking"} else {"normal"},
         "canonical_lines":active.map(|w|w.current_lines.iter().map(|l|l.surface_text.trim()).collect::<Vec<_>>()).unwrap_or_default(),
         "pending_lines":active.and_then(|w|w.pending.as_ref()).map(|p|p.lines.iter().map(|l|l.surface_text.as_str()).collect::<Vec<_>>()).unwrap_or_default(),
-        "editing":active.is_some_and(|w|w.pending.is_some()),"selected_line":active.and_then(|w|w.pending.as_ref()).and_then(|p| if p.generated_basis.as_ref().is_some_and(|b| b.target_indices.len()!=1) {None}else{Some(p.selected_line)}),"provisional_resume":active.is_some_and(|w|w.provisional.is_some())})
+        "editing":active.is_some_and(|w|w.editing.is_some()),
+        "selected_line":active.and_then(|w|w.editing.as_ref()).and_then(|editing|editing.selected_line),
+        "provisional_resume":active.is_some_and(|w|w.provisional.is_some())})
 }
 
 #[cfg(test)]
@@ -556,6 +586,29 @@ mod tests {
             1
         );
     }
+    #[test]
+    fn edit_display_is_shared_and_outlives_pending_until_close() {
+        let now = Instant::now();
+        let mut w = Workshop::open(emission(), None, now);
+        let snapshot = |w: &Workshop| project_workshop(Some(w), "s", Some(5), "normal", false);
+        assert_eq!(snapshot(&w)["editing"], false);
+        w.begin_editing(Some(0));
+        assert_eq!(snapshot(&w)["editing"], true);
+        assert_eq!(snapshot(&w)["selected_line"], 0);
+        assert_eq!(snapshot(&w)["pending_lines"], json!([]));
+        w.begin_editing(None); // 複数行の提案は一行だけを勝手に選ばない。
+        assert!(snapshot(&w)["selected_line"].is_null());
+        w.begin_editing(Some(2)); // その後の本人の局所編集は対象を表示する。
+        w.pause(now);
+        assert_eq!(snapshot(&w)["state"], "danger");
+        w.resume(now);
+        assert_eq!(snapshot(&w)["selected_line"], 2);
+        w.close("explicit_close");
+        w.begin_editing(Some(1)); // 遅い保存結果は閉じた画面を再開しない。
+        assert!(w.editing.is_none());
+        assert_eq!(snapshot(&w)["editing"], false);
+    }
+
     #[test]
     fn timeouts_start_at_completion_and_projection_is_read_only() {
         let start = Instant::now();

@@ -43,15 +43,8 @@ impl Candidate {
         ) {
             return None;
         }
-        if !crate::workshop_input_guard::discussion_idea_safe(player_text) {
-            return None;
-        }
         let raw = &payload["line_proposal"];
-        if raw["found"] != true
-            || !raw["confidence"]
-                .as_f64()
-                .is_some_and(|c| (0.85..=1.0).contains(&c))
-        {
+        if raw["found"] != true {
             return None;
         }
         let fragment = raw["target_fragment"].as_str().unwrap_or("");
@@ -65,15 +58,8 @@ impl Candidate {
             })
             .collect();
         let explicit = crate::workshop_target::Target::explicit(player_text, current);
-        let explicit_indices = crate::workshop_editing::explicit_line_indices(player_text);
         let raw_reference = &payload["line_reference"];
         let reference = if raw_reference["found"] == true {
-            if !raw_reference["confidence"]
-                .as_f64()
-                .is_some_and(|c| (0.85..=1.0).contains(&c))
-            {
-                return None;
-            }
             let index = match raw_reference["concept_id"].as_str()? {
                 "line_1" => 0,
                 "line_2" => 1,
@@ -88,30 +74,18 @@ impl Candidate {
         } else {
             None
         };
-        let index = if matches.len() == 1 {
+        let index = if let Some(reference) = &reference {
+            if !fragment.is_empty() && !matches.contains(&reference.line_index) {
+                return None;
+            }
+            Some(reference.line_index)
+        } else if matches.len() == 1 {
             Some(matches[0])
         } else if fragment.is_empty() {
-            explicit
-                .as_ref()
-                .or(reference.as_ref())
-                .or(retained)
-                .map(|t| t.line_index)
+            explicit.as_ref().or(retained).map(|t| t.line_index)
         } else {
             None
         }?;
-        if explicit.as_ref().is_some_and(|t| t.line_index != index)
-            || reference.as_ref().is_some_and(|t| t.line_index != index)
-            || explicit_indices.len() > 1
-            || explicit_indices.iter().any(|i| *i != index)
-        {
-            return None;
-        }
-        if explicit.is_none()
-            && reference.is_none()
-            && retained.is_some_and(|t| t.line_index != index)
-        {
-            return None;
-        }
         Self::from_player(
             Draft {
                 proposal: Proposal {
@@ -192,7 +166,14 @@ mod tests {
         assert!(!c.is_current(&current, 1, false));
         let conflicting = "上五の「のくさふゆむ」を「くささむし」にするのはどう？";
         payload["line_proposal"]["evidence"] = conflicting.into();
-        assert!(Candidate::from_model(&payload, &current, 0, conflicting, None).is_none());
+        assert_eq!(
+            Candidate::from_model(&payload, &current, 0, conflicting, None)
+                .unwrap()
+                .draft
+                .proposal
+                .line_index,
+            Some(2)
+        );
         for question in [
             "のくさふゆむをくささむしに変えない？",
             "のくさふゆむをくささむしにしない？",
@@ -207,7 +188,8 @@ mod tests {
         ] {
             payload["line_proposal"]["evidence"] = invalid.into();
             assert!(
-                Candidate::from_model(&payload, &current, 0, invalid, None).is_none(),
+                Candidate::from_model(&payload, &current, 0, invalid, None).is_some()
+                    == (invalid != "原文にない案"),
                 "{invalid}"
             );
         }

@@ -6,7 +6,7 @@
       "name": "source_stated_prefixed_editorial",
       "input": {
         "query": {
-          "domain": "japanese_language",
+          "domain": "poetry",
           "subject": "枕詞",
           "intent": "definition",
           "evidence": "枕詞って何？"
@@ -56,7 +56,7 @@
       "name": "dialogue_text_is_spoken_without_prefix",
       "input": {
         "query": {
-          "domain": "japanese_language",
+          "domain": "poetry",
           "subject": "枕詞",
           "intent": "definition",
           "evidence": "枕詞って何？"
@@ -106,7 +106,7 @@
       "name": "guardrail_prefix",
       "input": {
         "query": {
-          "domain": "japanese_language",
+          "domain": "poetry",
           "subject": "枕詞",
           "intent": "definition",
           "evidence": "枕詞って何？"
@@ -156,7 +156,7 @@
       "name": "plain_source_no_prefix",
       "input": {
         "query": {
-          "domain": "japanese_language",
+          "domain": "poetry",
           "subject": "枕詞",
           "intent": "definition",
           "evidence": "枕詞って何？"
@@ -206,7 +206,7 @@
       "name": "normalized_spaces",
       "input": {
         "query": {
-          "domain": "japanese_language",
+          "domain": "poetry",
           "subject": "枕詞",
           "intent": "definition",
           "evidence": "枕詞って何？"
@@ -256,7 +256,7 @@
       "name": "sentence_boundary_shortening",
       "input": {
         "query": {
-          "domain": "japanese_language",
+          "domain": "poetry",
           "subject": "枕詞",
           "intent": "definition",
           "evidence": "枕詞って何？"
@@ -306,7 +306,7 @@
       "name": "length_219",
       "input": {
         "query": {
-          "domain": "japanese_language",
+          "domain": "poetry",
           "subject": "枕詞",
           "intent": "definition",
           "evidence": "枕詞って何？"
@@ -356,7 +356,7 @@
       "name": "length_220",
       "input": {
         "query": {
-          "domain": "japanese_language",
+          "domain": "poetry",
           "subject": "枕詞",
           "intent": "definition",
           "evidence": "枕詞って何？"
@@ -406,7 +406,7 @@
       "name": "length_221_ellipsis",
       "input": {
         "query": {
-          "domain": "japanese_language",
+          "domain": "poetry",
           "subject": "枕詞",
           "intent": "definition",
           "evidence": "枕詞って何？"
@@ -456,7 +456,7 @@
       "name": "unicode_codepoints",
       "input": {
         "query": {
-          "domain": "japanese_language",
+          "domain": "poetry",
           "subject": "枕詞",
           "intent": "definition",
           "evidence": "枕詞って何？"
@@ -506,7 +506,7 @@
       "name": "punctuation_only_prefix_does_not_consume_summary",
       "input": {
         "query": {
-          "domain": "japanese_language",
+          "domain": "poetry",
           "subject": "枕詞",
           "intent": "definition",
           "evidence": "枕詞って何？"
@@ -558,7 +558,7 @@
       "name": "sentence_segments",
       "input": {
         "query": {
-          "domain": "japanese_language",
+          "domain": "poetry",
           "subject": "枕詞",
           "intent": "definition",
           "evidence": "枕詞って何？"
@@ -610,7 +610,7 @@
       "name": "aggregate_limit_keeps_only_spoken_sources",
       "input": {
         "query": {
-          "domain": "japanese_language",
+          "domain": "poetry",
           "subject": "枕詞",
           "intent": "definition",
           "evidence": "枕詞って何？"
@@ -706,7 +706,7 @@
       "name": "duplicate_source_is_displayed_once",
       "input": {
         "query": {
-          "domain": "japanese_language",
+          "domain": "poetry",
           "subject": "枕詞",
           "intent": "definition",
           "evidence": "枕詞って何？"
@@ -775,7 +775,7 @@
       "name": "not_found",
       "input": {
         "query": {
-          "domain": "japanese_language",
+          "domain": "poetry",
           "subject": "枕詞",
           "intent": "definition",
           "evidence": "枕詞って何？"
@@ -798,7 +798,7 @@
       "name": "unavailable",
       "input": {
         "query": {
-          "domain": "japanese_language",
+          "domain": "poetry",
           "subject": "枕詞",
           "intent": "definition",
           "evidence": "枕詞って何？"
@@ -815,29 +815,6 @@
         ],
         "references": [],
         "lookup_status": "unavailable"
-      }
-    },
-    {
-      "name": "ambiguous_numeric_kanji",
-      "input": {
-        "query": {
-          "domain": "japanese_language",
-          "subject": "3",
-          "intent": "definition",
-          "evidence": "枕詞って何？"
-        },
-        "status": "not_found",
-        "facts": [],
-        "error_code": "ambiguous_kanji_numeric_notation"
-      },
-      "expected": {
-        "text": "「3」だけやと、どの漢字か決められへんわ。「一二三の一」みたいに言うてみてな。",
-        "speech_segments": [
-          "「3」だけやと、どの漢字か決められへんわ。",
-          "「一二三の一」みたいに言うてみてな。"
-        ],
-        "references": [],
-        "lookup_status": "not_found"
       }
     },
     {
@@ -867,7 +844,7 @@
       "name": "missing_facts",
       "input": {
         "query": {
-          "domain": "japanese_language",
+          "domain": "poetry",
           "subject": "枕詞",
           "intent": "definition",
           "evidence": "枕詞って何？"
@@ -890,7 +867,7 @@
       "name": "status_with_facts_conflict",
       "input": {
         "query": {
-          "domain": "japanese_language",
+          "domain": "poetry",
           "subject": "枕詞",
           "intent": "definition",
           "evidence": "枕詞って何？"
@@ -932,7 +909,7 @@
       "name": "fabricated_claim",
       "input": {
         "query": {
-          "domain": "japanese_language",
+          "domain": "poetry",
           "subject": "枕詞",
           "intent": "definition",
           "evidence": "枕詞って何？"
@@ -974,7 +951,7 @@
       "name": "untrusted_source_url",
       "input": {
         "query": {
-          "domain": "japanese_language",
+          "domain": "poetry",
           "subject": "枕詞",
           "intent": "definition",
           "evidence": "枕詞って何？"
@@ -1016,7 +993,7 @@
       "name": "untrusted_source_id",
       "input": {
         "query": {
-          "domain": "japanese_language",
+          "domain": "poetry",
           "subject": "枕詞",
           "intent": "definition",
           "evidence": "枕詞って何？"
@@ -1058,7 +1035,7 @@
       "name": "oversized_fact",
       "input": {
         "query": {
-          "domain": "japanese_language",
+          "domain": "poetry",
           "subject": "枕詞",
           "intent": "definition",
           "evidence": "枕詞って何？"
@@ -1100,7 +1077,7 @@
       "name": "blank_dialogue_text",
       "input": {
         "query": {
-          "domain": "japanese_language",
+          "domain": "poetry",
           "subject": "枕詞",
           "intent": "definition",
           "evidence": "枕詞って何？"
@@ -1362,7 +1339,7 @@
       "name": "canonical_makurakotoba_reply",
       "input": {
         "query": {
-          "domain": "japanese_language",
+          "domain": "poetry",
           "subject": "枕詞",
           "intent": "definition",
           "evidence": "枕詞って何？"
@@ -1418,10 +1395,7 @@
       "reference_url": "https://www.mext.go.jp/content/20230809-mxt_kyokoku-000029482_19.pdf"
     },
     "not_found_questions": {
-      "漢字の3は何年生で習うの？": "「3」だけやと、どの漢字か決められへんわ。「一二三の一」みたいに言うてみてな。",
-      "Minecraft 1.20.1のダイヤモンドの剣のIDは？": "このMinecraft技術DBはJava Edition 1.21.11専用やで。別の版は推測せんとくで。",
-      "国語で幻の枕詞って何？": "手元の公式資料では確認できへんかったわ。推測はせんとくで。",
-      "国語で𜳖って何？": "手元の公式資料では確認できへんかったわ。推測はせんとくで。"
+      "Minecraft 1.20.1のダイヤモンドの剣のIDは？": "このMinecraft技術DBはJava Edition 1.21.11専用やで。別の版は推測せんとくで。"
     },
     "not_found": "手元の公式資料では確認できへんかったわ。推測はせんとくで。",
     "unavailable": "手元の公式資料を今は読めへんわ。推測では答えんとくで。"

@@ -19,10 +19,6 @@ pub fn strip_preface(text: &str) -> &str {
             .unwrap_or(s),
     )
 }
-pub fn failed(text: &str) -> bool {
-    let s = strip_preface(text);
-    s.is_empty() || s == strip(&failed_text()) || s.contains("まとまらん")
-}
 pub fn fixed_text(event: &GameEvent) -> String {
     let sky = event.world.sky_visible == Some(true);
     let raw = strip(event.world.biome.as_deref().unwrap_or("")).to_lowercase();

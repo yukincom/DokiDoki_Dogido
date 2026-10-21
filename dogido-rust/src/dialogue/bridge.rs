@@ -73,7 +73,7 @@ pub async fn render(
     input: impl Into<Input>,
     cancel: &mut watch::Receiver<bool>,
 ) -> Result<Value> {
-    render_with_route(config, llm, input, cancel, |_| Ok(()), |_| Ok(false)).await
+    render_with_route(config, llm, input, cancel, |_| Ok(())).await
 }
 
 pub async fn render_with_route(
@@ -82,7 +82,6 @@ pub async fn render_with_route(
     input: impl Into<Input>,
     cancel: &mut watch::Receiver<bool>,
     select_route: impl FnMut(crate::foreground::Route) -> Result<()>,
-    hold_handoff: impl FnMut(&Value) -> Result<bool>,
 ) -> Result<Value> {
     render_with_budget(
         config,
@@ -90,7 +89,6 @@ pub async fn render_with_route(
         input.into(),
         cancel,
         select_route,
-        hold_handoff,
         Duration::from_secs(95),
     )
     .await
@@ -102,7 +100,6 @@ async fn render_with_budget(
     mut input: Input,
     cancel: &mut watch::Receiver<bool>,
     select_route: impl FnMut(crate::foreground::Route) -> Result<()>,
-    hold_handoff: impl FnMut(&Value) -> Result<bool>,
     whole_turn_timeout: Duration,
 ) -> Result<Value> {
     if input["op"] == "light_plan" {
@@ -137,24 +134,8 @@ async fn render_with_budget(
             &overlay,
             chrono::Local::now().fixed_offset(),
         );
-        if input["op"] == "address_route" {
-            ensure!(
-                !*cancel.borrow() && cancel.has_changed().is_ok(),
-                "cancelled"
-            );
-            return Ok(
-                json!({"op":"result","general_conversation":context.general_conversation()}),
-            );
-        }
         input.context = Some(context);
-        input["language_requested"] = (config.language_enabled
-            && (input["language_active"] == true || prepared.explicit_language))
-            .into();
     }
-    ensure!(
-        input["op"] != "address_route",
-        "address routing needs current text"
-    );
     if input["op"] == "combat_leaf" {
         return super::reaction_runtime::render(config, llm, &input, cancel).await;
     }
@@ -164,7 +145,6 @@ async fn render_with_budget(
         &input,
         cancel,
         select_route,
-        hold_handoff,
         whole_turn_timeout,
     )
     .await
@@ -224,72 +204,6 @@ mod tests {
                 &config,
                 &llm,
                 json!({"op":"assist_route","text":"枕詞って何？"}),
-                &mut orphaned
-            )
-            .await
-            .is_err()
-        );
-    }
-    #[tokio::test]
-    async fn address_classification_needs_no_helper_or_model() {
-        let mut config = DialogueConfig {
-            python: "/missing/input-test-python".into(),
-            helper: "/missing/input-test-helper.py".into(),
-            ..Default::default()
-        };
-        config.haiku.memory_enabled = false;
-        let llm = RigLlm::new("http://127.0.0.1:9/v1", None, Duration::from_secs(1)).unwrap();
-        let (cancel, mut rx) = watch::channel(false);
-        for (text, expected) in [
-            ("", false),
-            ("\u{1c}", false),
-            ("こんにちは", true),
-            ("家を建てたいな", true),
-            ("枕詞って何？", false),
-            ("剣に持ち替えて", false),
-            ("草地はくさち", true),
-            ("そうちじゃなくてくさち", true),
-            ("今日の句", false),
-            ("松明ある？", false),
-            ("/say こんにちは", false),
-        ] {
-            let result = render(
-                &config,
-                &llm,
-                json!({"op":"address_route","text":text}),
-                &mut rx,
-            )
-            .await
-            .unwrap();
-            assert_eq!(
-                result,
-                json!({"op":"result","general_conversation":expected}),
-                "{text}"
-            );
-        }
-        assert!(
-            render(&config, &llm, json!({"op":"address_route"}), &mut rx)
-                .await
-                .is_err()
-        );
-        cancel.send(true).unwrap();
-        assert!(
-            render(
-                &config,
-                &llm,
-                json!({"op":"address_route","text":"こんにちは"}),
-                &mut rx
-            )
-            .await
-            .is_err()
-        );
-        let (owner, mut orphaned) = watch::channel(false);
-        drop(owner);
-        assert!(
-            render(
-                &config,
-                &llm,
-                json!({"op":"address_route","text":"こんにちは"}),
                 &mut orphaned
             )
             .await

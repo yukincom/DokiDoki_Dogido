@@ -127,7 +127,7 @@ def main(*, platform_contract_only=False):
     # 受理時はopen。モデル判断と原文検証後に閉じ、返事を戦闘が消しても復活しない。
     for text in ["終了ー", "お開きー"]:
         with fixture(combat_settings=SETTINGS, interval_ms=5000) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
-            sid = register(base, preview=False)
+            sid = register(base, preview=False, body=True)
             drive(send, sid, lambda: any(r["turn_id"].endswith(":poem") and r["playback_status"] == "completed" for r in rows(sid)))
             original = stored(sid)
             entered = threading.Event(); release = threading.Event()
@@ -164,7 +164,10 @@ def main(*, platform_contract_only=False):
         assert datetime.fromisoformat(r["created_at"]) >= datetime.fromisoformat(aftermath["completed_at"])
         assert session(base, sid)["workshop_followup"] == "combat_resume_confirmation"
         history = session(base, sid)["history"]
-        assert [h for h in history if h["role"] == "assistant"] == [{"turn_id":aftermath["turn_id"]+":reply", "role":"assistant", "text":aftermath["text"]}], history
+        # 前置き・固定警告・復帰案内も、実再生が終われば共通履歴に残る。
+        for spoken in [aftermath, r]:
+            matching = [h for h in history if h["role"] == "assistant" and h["turn_id"] == spoken["turn_id"] + ":reply"]
+            assert len(matching) == 1 and " ".join(matching[0]["text"].split()) == " ".join(spoken["text"].split()), history
         assert sum(h["text"] == "句の話に戻る。" for h in history) == 1, history
         assert not session(base, sid)["workshop_history"]
         assert not any(item["role"] == "assistant" and "\n".join(LINES) in item["text"] for item in history)
@@ -266,11 +269,11 @@ def main(*, platform_contract_only=False):
         install(control, lambda text, prompt, n: step(text,"show_current"))
         shown = finish(base, send, sid, "今の句")
         assert shown["text"] == "\n".join(LINES)
-        assert row(base, r["turn_id"], {"cancelled"})
+        assert row(base, r["turn_id"], {"completed"})
         assert session(base, sid)["workshop_followup"] == "discussion"
         for _ in range(3): send(sid)
         assert len(actions(rows, sid, "workshop_resume")) == 1
-        passed.append("new_question_interrupts_notice_without_arming_or_repeating_it")
+        passed.append("new_question_waits_for_notice_then_uses_current_poem_without_repeating_notice")
 
     with fixture(combat_settings=SETTINGS) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         sid = ready(base, send, rows)
@@ -279,12 +282,15 @@ def main(*, platform_contract_only=False):
         warning = wait_for(lambda: next((r for r in rows(sid) if r.get("combat_actions") and r["playback_status"] == "started"), None))
         paused = classifier(control, lambda text: intent(text,"close_workshop"))
         turn = submit(base,sid,"終了")
-        r = wait_for(lambda: row(base,turn,{"quiet"}))
+        assert row(base, warning["turn_id"], {"started"}) and hud(sid)["state"] == "danger"
+        (folder / "player_mode").write_text("ok")
+        from check_workshop_provisional import done
+        r = done(base,send,sid,turn)
         assert r["combat_input_outcome"]=="close_checked" and len(paused)==1,r
         assert hud(sid)["state"] == "closed"
-        assert row(base, warning["turn_id"], {"started"})
+        assert row(base, warning["turn_id"], {"completed"})
         assert not actions(rows, sid, "workshop_resume")
-        passed.append("explicit_close_during_combat_keeps_warning_running")
+        passed.append("explicit_close_during_combat_waits_for_warning_completion")
 
     with fixture(combat_settings=SETTINGS) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         sid = ready(base, send, rows)

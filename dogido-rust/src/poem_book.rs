@@ -1,6 +1,7 @@
-//! Saved poem identity and latest adopted revision, scoped to its source directory.
+//! 保存句の出所と最新採用版を読み出す。句正本・版・表記を照合し、未確定読みは空のまま返す。
+//! 保存・編集は行わず、句集と相談室へ同じ行オブジェクトを渡す。
 use crate::haiku_record::{Emission, HaikuLine, MemoryStore, PreparedEmission, ResolvedLines};
-use crate::workshop_edit::{reading, surface};
+use crate::workshop_edit::{editing_text, reading, surface};
 use anyhow::{Context, Result, ensure};
 use serde_json::{Value, json};
 use std::{
@@ -35,7 +36,7 @@ impl SavedPoem {
         let lines: Vec<HaikuLine> = serde_json::from_value(row["lines"].clone())?;
         ResolvedLines::try_from(lines.as_slice())?;
         ensure!(
-            reading(&lines) == row["revised_text"],
+            editing_text(&lines) == row["revised_text"],
             "revision reading mismatch"
         );
         Ok(lines)
@@ -133,7 +134,15 @@ pub fn rows(root: &Path) -> Result<Vec<Value>> {
                 row["original_text"] = row["text"].clone();
                 row["text"] = text.into();
                 row["surface_text"] = text.into();
-                row["reading_text"] = revision["revised_text"].clone();
+                // 表記を含む編集本文を確定読みに昇格させない。読みは保存行から組み立てる。
+                row["reading_text"] = if revision["lines"].is_array() {
+                    reading(&serde_json::from_value::<Vec<HaikuLine>>(
+                        revision["lines"].clone(),
+                    )?)
+                    .into()
+                } else {
+                    Value::Null
+                };
                 row["lines"] = revision["lines"].clone();
                 row["revision_id"] = revision["id"].clone();
                 row["revised_at"] = revision["created_at"].clone();

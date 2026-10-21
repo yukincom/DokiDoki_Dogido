@@ -17,10 +17,9 @@ def prepared(root):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text('FIXTURE')
     (root / runtime.RUST_BINARY).chmod(0o755)
-    normalized = root / 'reference/language_education_and_poetry/data/normalized'
-    (normalized / 'index.json').write_text('{"datasets":[{"path":"fixture.jsonl","index_path":"fixture.index.jsonl"}]}')
-    (normalized / 'fixture.jsonl').write_text('{}\n')
-    (normalized / 'fixture.index.jsonl').write_text('{}\n')
+    normalized = root / 'reference/language_education_and_poetry'
+    (normalized / 'index.json').write_text('{"datasets":[{"path":"fixture.json"}]}')
+    (normalized / 'fixture.json').write_text('{}\n')
 
 
 def test_ready_requires_rust_dialogue_not_legacy_or_connection_only():
@@ -65,11 +64,11 @@ def test_runtime_check_refuses_external_symlink_before_launch(tmp_path):
         runtime.validate_runtime(root)
 
 
-def test_missing_normalized_dataset_is_detected_before_update(tmp_path):
+def test_missing_poetry_dataset_is_detected_before_update(tmp_path):
     prepared(tmp_path)
-    data = tmp_path / 'reference/language_education_and_poetry/data/normalized/fixture.jsonl'
+    data = tmp_path / 'reference/language_education_and_poetry/fixture.json'
     data.unlink()
-    with pytest.raises(ValueError, match='fixture.jsonl'):
+    with pytest.raises(ValueError, match='fixture.json'):
         runtime.validate_runtime(tmp_path)
 
 

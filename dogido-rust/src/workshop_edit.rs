@@ -1,10 +1,7 @@
 //! 未採用の行差分Pendingと、採用時のCAS・追記保存の契約。
 //! 発話から案を作るworkshop_editingとは分担し、元句一致・対象外不変・読みをここで再検証する。
 //! 実際にpendingを変更し保存を呼ぶのはdialogue/workshop_edits。生成案の採用前検証も同じ境界を使う。
-use crate::{
-    haiku::meter::count_japanese_sounds,
-    haiku_record::{Emission, HaikuLine, MemoryStore, SAVE_LOCK, append_line, locked_file},
-};
+use crate::haiku_record::{Emission, HaikuLine, MemoryStore, SAVE_LOCK, append_line, locked_file};
 use anyhow::{Result, ensure};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -12,7 +9,7 @@ use std::io::{BufRead, BufReader};
 
 pub const CONTRACT: &str = "player_line_compare_and_swap_v1";
 
-pub use crate::haiku_record::verse::{reading, surface};
+pub use crate::haiku_record::verse::{editing_text, reading, surface};
 
 /// Validated line difference shared by edit preparation and persisted revisions.
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
@@ -56,7 +53,8 @@ impl Pending {
             );
         }
         ensure!(
-            lines[selected].reading_text != working[selected].reading_text,
+            lines[selected].surface_text != working[selected].surface_text
+                || lines[selected].reading_text != working[selected].reading_text,
             "no_change"
         );
         let pending = Self {
@@ -88,8 +86,16 @@ impl Pending {
             let line = lines
                 .get_mut(*i)
                 .ok_or_else(|| anyhow::anyhow!("invalid_target"))?;
-            line.reading_text = revision.lines[*i].clone();
-            line.surface_text = line.reading_text.clone();
+            line.surface_text = revision.lines[*i].clone();
+            let kana = crate::haiku::lexical::hiragana(&line.surface_text);
+            line.reading_text = if kana
+                .chars()
+                .all(|c| ('ぁ'..='ゖ').contains(&c) || c == 'ー')
+            {
+                kana
+            } else {
+                String::new()
+            };
             line.source_atom_ids = source.atom_ids.clone();
             line.source_atoms = source
                 .sources
@@ -132,7 +138,14 @@ impl Pending {
                 && self.selected_line < 3,
             "stale_edit"
         );
-        ensure!(reading(&self.base) != reading(&self.lines), "no_change");
+        ensure!(
+            self.base
+                .iter()
+                .zip(&self.lines)
+                .any(|(old, new)| old.surface_text != new.surface_text
+                    || old.reading_text != new.reading_text),
+            "no_change"
+        );
         for (i, (old, new)) in current.iter().zip(&self.lines).enumerate() {
             ensure!(
                 old.line_index == i
@@ -143,7 +156,10 @@ impl Pending {
                 "line_identity_changed"
             );
             if old != new {
-                ensure!(old.reading_text != new.reading_text, "reading_unchanged");
+                ensure!(
+                    old.surface_text != new.surface_text || old.reading_text != new.reading_text,
+                    "content_unchanged"
+                );
                 ensure!(
                     !new.surface_text.trim().is_empty() && !new.surface_text.contains(['\n', '\r']),
                     "invalid_surface"
@@ -177,33 +193,20 @@ impl Pending {
                             && new.source_atoms.is_empty(),
                         "invented_player_source"
                     );
+                    // 読み未確定は空のまま保存する。表記と版が一致する差分へ実行を限定する。
                     ensure!(
-                        !new.reading_text.is_empty()
-                            && new
-                                .reading_text
-                                .chars()
-                                .all(|c| ('\u{3041}'..='\u{3096}').contains(&c) || c == 'ー'),
-                        "unresolved_reading"
-                    );
-                    ensure!(
-                        count_japanese_sounds(&new.reading_text) == crate::haiku::meter::TARGETS[i],
-                        "meter_not_exact"
+                        !new.reading_text.contains(['\n', '\r']),
+                        "invalid_reading_shape"
                     );
                 }
-                ensure!(
-                    !self
-                        .lines
-                        .iter()
-                        .enumerate()
-                        .any(|(j, l)| i != j && l.reading_text == new.reading_text),
-                    "duplicate_line"
-                );
             }
         }
         if let Some(basis) = &self.generated_basis {
             for i in &basis.target_indices {
                 ensure!(
-                    *i < 3 && current[*i].reading_text != self.lines[*i].reading_text,
+                    *i < 3
+                        && (current[*i].surface_text != self.lines[*i].surface_text
+                            || current[*i].reading_text != self.lines[*i].reading_text),
                     "target_unchanged"
                 );
             }
@@ -228,11 +231,13 @@ impl Pending {
             .iter()
             .zip(&self.lines)
             .enumerate()
-            .filter(|(_, (a, b))| a.reading_text != b.reading_text)
+            .filter(|(_, (a, b))| {
+                a.surface_text != b.surface_text || a.reading_text != b.reading_text
+            })
             .map(|(i, (a, b))| LineEdit {
                 line_index: i,
-                expected_text: a.reading_text.clone(),
-                replacement_text: b.reading_text.clone(),
+                expected_text: editing_text(std::slice::from_ref(a)),
+                replacement_text: editing_text(std::slice::from_ref(b)),
                 provenance: b.provenance.clone(),
                 atom_ids: self
                     .generated_basis
@@ -245,8 +250,8 @@ impl Pending {
         json!({"id":self.id,"created_at":chrono::Utc::now(),"haiku_id":original.entry_id(),
             "source":self.source(),"comment":null,
             "original_text":surface(&original.prepared.lines),"original_reading_text":reading(&original.prepared.lines),
-            "base_text":reading(&self.base),"base_surface_text":surface(&self.base),"parent_revision_id":parent,
-            "revised_text":reading(&self.lines),"revised_surface_text":surface(&self.lines),"lines":self.lines,
+            "base_text":editing_text(&self.base),"base_surface_text":surface(&self.base),"parent_revision_id":parent,
+            "revised_text":editing_text(&self.lines),"revised_surface_text":surface(&self.lines),"lines":self.lines,
             "line_sources":self.generated_basis.as_ref().map(|_|self.lines.iter().map(|l|json!({"line_index":l.line_index,"text":l.reading_text,"atom_ids":l.source_atom_ids,"sources":l.source_atoms})).collect::<Vec<_>>()),
             "edit_contract":if self.generated_basis.is_some(){crate::haiku::revision::CONTRACT}else{CONTRACT},"edits":self.edits(),
             "world":{"biome":original.prepared.biome,"structure":original.prepared.structure,"time_phase":original.prepared.time_phase,"dimension":original.prepared.dimension}})
@@ -465,7 +470,7 @@ mod tests {
                     .unwrap_or(()),
                 _ => bad.base[0].reading_text = "別の句".into(),
             }
-            assert!(bad.validate(&base).is_err(), "{case}");
+            assert_eq!(bad.validate(&base).is_ok(), case == 3, "{case}");
         }
     }
     #[test]
@@ -506,15 +511,26 @@ mod tests {
         }
     }
     #[test]
-    fn exact_meter_unresolved_readings_duplicates_and_no_op_fail() {
+    fn meter_unknown_reading_and_repeated_phrases_do_not_block_edits() {
         let base = lines();
-        for text in ["さくら", "さくらいろの", "桜色", "あさのいろ", "さくらのは"]
-        {
-            assert!(
-                Pending::stage(&base, &base, replace(base.clone(), 0, text), 0).is_err(),
-                "{text}"
-            );
+        for text in ["さくら", "さくらいろの", "あさのいろ", "あいうえお"] {
+            let edited = Pending::stage(&base, &base, replace(base.clone(), 0, text), 0).unwrap();
+            assert_eq!(edited.lines[0].surface_text, text);
+            assert_eq!(&edited.lines[1..], &base[1..]);
         }
+        let mut unknown = replace(base.clone(), 0, "未知の表記");
+        unknown[0].reading_text.clear();
+        let first = Pending::stage(&base, &base, unknown, 0).unwrap();
+        assert_eq!(
+            crate::workshop::inspect(&first.lines, &["reading".into(), "meter".into()])["lines"][0]
+                ["reading_status"],
+            "unavailable"
+        );
+        let mut next = first.lines.clone();
+        next[0].surface_text = "次の未知語".into();
+        let second = Pending::stage(&first.lines, &first.lines, next, 0).unwrap();
+        assert_eq!(second.edits()[0].replacement_text, "次の未知語");
+        assert!(Pending::stage(&base, &base, replace(base.clone(), 0, "さくらのは"), 0).is_err());
     }
     #[test]
     fn revision_is_idempotent_and_requires_matching_parent() {

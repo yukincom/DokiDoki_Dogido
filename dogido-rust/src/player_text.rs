@@ -1,12 +1,9 @@
-//! 入力の表記正規化と国語対話の入口候補。保存・操作の原文は別に保持する。
+//! 入力の表記正規化。保存・操作の原文は別に保持する。
 use serde::{Deserialize, Serialize};
 
 const REPLACEMENTS: &[(&str, &str)] = &[
-    ("和業・イダン", "ワ行イ段"),
     ("かんあつばん", "感圧板"),
     ("カンアツバン", "感圧板"),
-    ("和行為為団", "ワ行イ段"),
-    ("和業イダン", "ワ行イ段"),
     ("関圧番", "感圧板"),
     ("管轄版", "感圧板"),
     ("間月版", "感圧板"),
@@ -28,7 +25,6 @@ pub struct Prepared {
     pub raw_text: String,
     pub normalized_text: String,
     pub applied_fixes: Vec<(String, String)>,
-    pub explicit_language: bool,
 }
 
 pub fn prepare(text: &str) -> Prepared {
@@ -37,9 +33,6 @@ pub fn prepare(text: &str) -> Prepared {
         raw_text: text.into(),
         normalized_text,
         applied_fixes,
-        // 通常会話helperのsemantic面は現行どおり今回入力。既知置換を
-        // 国語の新たな入口条件へ広げない。
-        explicit_language: explicit_language(text),
     }
 }
 
@@ -59,56 +52,11 @@ pub fn normalize(text: &str) -> String {
     normalize_with_fixes(text).0
 }
 
-fn explicit_language(text: &str) -> bool {
-    let text = whitespace(text);
-    [
-        "ってどういう意味",
-        "って何て読む",
-        "ってなんて読む",
-        "の読み方",
-        "言葉の意味",
-        "ことばの意味",
-        "何年生で習",
-        "何年生の漢字",
-    ]
-    .iter()
-    .any(|s| text.contains(s))
-        || ([
-            "漢字",
-            "短歌",
-            "俳句",
-            "川柳",
-            "音数",
-            "文法",
-            "熟語",
-            "ことわざ",
-            "枕詞",
-            "語句",
-        ]
-        .iter()
-        .any(|s| text.contains(s))
-            && [
-                "?",
-                "？",
-                "教えて",
-                "知りたい",
-                "調べて",
-                "勉強",
-                "習う",
-                "習った",
-                "話をしよう",
-                "話しよう",
-                "話そう",
-            ]
-            .iter()
-            .any(|s| text.contains(s)))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
-    fn normalization_and_language_entry_match_fixture() {
+    fn normalization_matches_fixture() {
         let cases: Vec<Prepared> =
             serde_json::from_str(include_str!("../fixtures/player-text.json")).unwrap();
         for expected in cases {

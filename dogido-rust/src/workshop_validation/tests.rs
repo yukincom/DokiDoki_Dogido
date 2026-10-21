@@ -43,8 +43,9 @@ fn praise_feedback_is_optional_and_cannot_authorize_closing() {
     {
         let (mut frame, details) = conversation(input, "", "close_workshop");
         frame["payload"]["feedback"] = json!({"kind":"praise","evidence":input});
-        assert!(
-            validate(&frame, &details).unwrap()["step"].is_null(),
+        assert_eq!(
+            validate(&frame, &details).unwrap()["step"]["action"],
+            "close_workshop",
             "{input}"
         );
     }
@@ -87,7 +88,11 @@ fn canonical_corpus_preserves_structural_and_execution_boundaries() {
         let actual = actual.unwrap_or_else(|e| panic!("{}: {e}", case["name"]));
         let legacy_errors = array(&case["expected"]["contract_errors"]);
         let read_only = conversation::handles(text(&frame["payload"]["action"]));
-        if !read_only && legacy_errors.iter().any(|e| e != "speech:not_allowed") {
+        if !read_only
+            && legacy_errors.iter().any(|e| {
+                e != "speech:not_allowed" && !e.as_str().is_some_and(|s| s.starts_with("purpose:"))
+            })
+        {
             assert!(
                 actual["step"].is_null(),
                 "structural case {}: {}",
@@ -119,7 +124,6 @@ fn canonical_corpus_preserves_structural_and_execution_boundaries() {
                 sanitize::strip(text(&frame["payload"]["speech"]))
             );
             if ASSETS["mutation_purposes"].get(action).is_some() {
-                assert!(step["confidence"].as_f64().unwrap() >= 0.85);
                 assert!(text(&frame["text"]).contains(text(&step["evidence"])));
                 assert!(workshop_input_guard::state_change_safe(
                     action,
@@ -158,7 +162,7 @@ fn missing_operation_checks_are_defaulted_before_intent_validation() {
     assert_eq!(result["step"]["checks"], json!([]));
     assert_eq!(frame, original);
 
-    for key in ["purpose", "confidence", "evidence"] {
+    for key in ["confidence", "evidence"] {
         let mut incomplete = frame.clone();
         incomplete["payload"].as_object_mut().unwrap().remove(key);
         assert!(
@@ -167,7 +171,15 @@ fn missing_operation_checks_are_defaulted_before_intent_validation() {
         );
     }
     frame["payload"]["confidence"] = json!(0.5);
-    assert!(validate(&frame, &details).unwrap()["step"].is_null());
+    assert_eq!(
+        validate(&frame, &details).unwrap()["step"]["action"],
+        "close_workshop"
+    );
+    frame["payload"].as_object_mut().unwrap().remove("purpose");
+    assert_eq!(
+        validate(&frame, &details).unwrap()["step"]["purpose"],
+        "finish_workshop"
+    );
     frame["payload"]["confidence"] = json!(0.95);
     frame["payload"]["evidence"] = json!("今日は終了");
     assert!(validate(&frame, &details).unwrap()["step"].is_null());
@@ -348,7 +360,7 @@ fn actual_player_approved_explanations_are_not_screened_by_prose_or_origin_words
 }
 
 #[test]
-fn model_selects_natural_close_and_words_but_cannot_close_a_negation() {
+fn model_selects_close_without_lexical_reclassification() {
     let (frame, details) = conversation(
         "きょうはここらで区切っとこか",
         "うん、また気になったら続きを話そな。",
@@ -365,8 +377,9 @@ fn model_selects_natural_close_and_words_but_cannot_close_a_negation() {
     ] {
         let (mut frame, details) = conversation(input, "まだ話そな。", "close_workshop");
         frame["payload"].as_object_mut().unwrap().remove("checks");
-        assert!(
-            validate(&frame, &details).unwrap()["step"].is_null(),
+        assert_eq!(
+            validate(&frame, &details).unwrap()["step"]["action"],
+            "close_workshop",
             "{input}"
         );
     }
@@ -400,7 +413,7 @@ fn oversized_request_and_invalid_projection_fail_before_decision() {
 }
 
 #[test]
-fn generated_repair_must_keep_the_retained_line_until_player_selects_another() {
+fn generated_repair_uses_model_target_instead_of_retained_or_mentioned_line() {
     let (mut frame, mut details) = conversation("もっと自然に直して", "", "propose_revision");
     details["workshop_context"]["discussion_target"] = json!({"line_index":2});
     frame["payload"]["purpose"] = "improve_wording".into();
@@ -410,12 +423,15 @@ fn generated_repair_must_keep_the_retained_line_until_player_selects_another() {
         .collect();
     assert_eq!(lines.len(), 3);
     frame["payload"]["findings"] = json!([{"line_index":0,"fragment":lines[0],"problem":"preference","note":"自然にしたい","confidence":0.95}]);
-    assert_eq!(
-        validate(&frame, &details).unwrap()["reason"],
-        "repair_target_conflict"
-    );
+    assert_eq!(validate(&frame, &details).unwrap()["reason"], "accepted");
     frame["payload"]["findings"][0]["line_index"] = 2.into();
     frame["payload"]["findings"][0]["fragment"] = lines[2].clone().into();
+    assert_eq!(validate(&frame, &details).unwrap()["reason"], "accepted");
+    let raw = "上五はそのままで、末尾の言い方を直して";
+    frame["text"] = raw.into();
+    frame["payload"]["evidence"] = raw.into();
+    details["player_text"] = raw.into();
+    details["original_player_text"] = raw.into();
     assert_eq!(validate(&frame, &details).unwrap()["reason"], "accepted");
 }
 
@@ -464,9 +480,10 @@ fn short_edit_selects_only_the_exact_current_candidate_with_current_evidence() {
         negative["payload"]["evidence"] = input.into();
         d["player_text"] = input.into();
         d["original_player_text"] = input.into();
-        assert!(
-            validate(&negative, &d).unwrap()["step"].is_null(),
-            "{input}"
+        let result = validate(&negative, &d).unwrap();
+        assert_eq!(
+            result["step"]["action"], "stage_conversation_candidate",
+            "{input}: {result}"
         );
     }
 }
@@ -475,11 +492,17 @@ fn short_edit_selects_only_the_exact_current_candidate_with_current_evidence() {
 fn reported_natural_close_needs_the_missing_authority_fields() {
     let input = "<では終了で！>";
     let (mut frame, details) = conversation(input, "また話そな。", "close_workshop");
-    frame["payload"].as_object_mut().unwrap().remove("confidence");
+    frame["payload"]
+        .as_object_mut()
+        .unwrap()
+        .remove("confidence");
     frame["payload"].as_object_mut().unwrap().remove("evidence");
     let rejected = validate(&frame, &details).unwrap();
     assert!(rejected["step"].is_null());
-    assert_eq!(rejected["contract_errors"], json!(["confidence:missing", "evidence:missing"]));
+    assert_eq!(
+        rejected["contract_errors"],
+        json!(["confidence:missing", "evidence:missing"])
+    );
     frame["payload"]["confidence"] = 0.95.into();
     frame["payload"]["evidence"] = "では終了で！".into();
     let accepted = validate(&frame, &details).unwrap();

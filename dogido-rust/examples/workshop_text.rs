@@ -10,7 +10,7 @@ use axum::{
 };
 use clap::Parser;
 use dogido_rust::{
-    dialogue::{Dialogue, DialogueConfig, HaikuSettings, WebSettings},
+    dialogue::{Dialogue, DialogueConfig, HaikuSettings},
     poem_book,
 };
 use serde_json::{Value, json};
@@ -192,12 +192,8 @@ async fn main() -> Result<()> {
         timeout_ms: args.timeout_ms,
         max_tokens: args.max_tokens,
         audio_enabled: false,
-        language_enabled: false,
+
         haiku,
-        web: WebSettings {
-            enabled: false,
-            ..Default::default()
-        },
         ..Default::default()
     })?;
     if args.prompt_file.exists() {

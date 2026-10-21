@@ -1,6 +1,6 @@
 # ドギド Rust本体
 
-HTTP受付、ゲーム判断、通常会話、川柳・共同編集、記憶、知識検索、音声入力の制御と配送をRustが所有します。旧Python本体・比較oracleの運用は終了しました。Pythonは設定、UniDic token、Whisper設定、AEC、端末AI、Chrome/MCPの接続補助に残ります。
+HTTP受付、ゲーム判断、通常会話、川柳・共同編集、記憶、知識検索、音声入力の制御と配送をRustが所有します。旧Python本体・比較oracleの運用は終了しました。Pythonは設定、UniDic token、Whisper設定、AEC、端末AIの接続補助に残ります。
 
 保存した句だけを相談する場合は [川柳のテキスト相談室](workshop-text.md)、Minecraftと音声を合わせた確認は [実機チェック](manual-dialogue-check.md) を使います。
 
@@ -18,7 +18,7 @@ Rustの版は `rust-toolchain.toml`、依存は `Cargo.lock` で固定してい�
 
 ## 設定と既定値
 
-戦闘・環境の99項目とHTTPの4項目の既定値は、共有する `dogido_server/runtime_defaults.json` 一つにあります。Rustは `src/runtime_settings.rs`、Python起動補助は `dogido_server/runtime_settings.py` から読みます。`config.py` は型・入力制約と `.env` の上書きを担当し、同じ数値を再定義しません。Python単独導入と家庭用配布にも同じJSONを含めます。
+戦闘・環境とHTTPの設定の既定値は、共有する `dogido_server/runtime_defaults.json` 一つにあります。Rustは `src/runtime_settings.rs`、Python起動補助は `dogido_server/runtime_settings.py` から読みます。`config.py` は型・入力制約と `.env` の上書きを担当し、同じ数値を再定義しません。Python単独導入と家庭用配布にも同じJSONを含めます。
 
 `max_batch_size`、`max_body_kb`、`heartbeat_interval_ms`、`accepted_schema_version` はRustのHTTP設定へ渡ります。待受は `127.0.0.1` / `::1` / `localhost` に限定します。旧Python本体用の廃止設定が `.env` / `.env.shared` / 環境変数に残る場合は、設定名だけを起動時に知らせます。既存ファイルや設定値は自動変更しません。
 
@@ -50,7 +50,7 @@ python dogido-rust/scripts/launch_dialogue.py --settings-dir . --voice --check
 python dogido-rust/scripts/launch_dialogue.py --settings-dir . --voice
 ```
 
-`--check` は設定・本体ファイル・補助を確認するだけで、サーバー・モデル生成・録音・Chromeを開始しません。終了は各ターミナルで `Ctrl+C`。今回起動した録音・補助・再生プロセスを回収し、共有LLMとVOICEVOX本体はそのままにします。
+`--check` は設定・本体ファイル・補助を確認するだけで、サーバー・モデル生成・録音を開始しません。終了は各ターミナルで `Ctrl+C`。今回起動した録音・補助・再生プロセスを回収し、共有LLMとVOICEVOX本体はそのままにします。
 
 既存の `dogido-llm` 補助環境を使う場合は、`./scripts/start_dogido.command server` と別ターミナルの `./scripts/start_dogido.command voice` も同じRust起動へ接続します。`--profile shared` は従来どおり `.env.shared` を重ねます。
 
@@ -84,10 +84,10 @@ DOGIDO_MEMORY_DIR=.dogido_memory/rust-migration
 | 戦闘・環境 | `src/combat/` · `src/environment/` |
 | 通常会話・観測照合 | `src/planner/` · `src/chat_*` · `src/conversation_observation.rs` |
 | 川柳・共同編集・記憶 | `src/haiku/` · `src/workshop_*` · `src/haiku_memory.rs` |
-| 知識・限定国語 | `src/knowledge/` · `src/language/` |
+| 詩・Minecraftの知識 | `src/knowledge/` |
 | 音声入力・配送 | `src/voice/` · `src/dialogue/audio.rs` |
 
-`source_cards.json`、`reference/`、カタログは現役の資料です。旧Python本体とともに削除しません。Python SDK補助へ会話判断や保存権限を戻さず、各SDKとの入出力に閉じます。
+詩の基礎資料とMinecraft資料を `reference/` に残します。旧learnの資料カード・一般文法・漢字・語彙データと専用対話・Web処理は撤去しました。Python SDK補助へ会話判断や保存権限を戻さず、各SDKとの入出力に閉じます。
 
 ### 残すPython補助と資料
 
@@ -98,18 +98,16 @@ DOGIDO_MEMORY_DIR=.dogido_memory/rust-migration
 | `dogido_server/__init__.py` · `dogido_server/config.py` | パッケージ入口と既存設定の解決 |
 | `dogido_server/platform_ai.py` · `dogido_server/combat_input_contract.py` | 戦闘中断中の限定分類に必要な端末AI接続と出力契約 |
 | `dogido_server/voice_settings.py` · `dogido_server/voice_capture.py` · `dogido_server/echo_input.py` | 音声設定・録音機器・AECの接続 |
-| `dogido_server/language_dialogue/{__init__,main_web,chrome_web,google_overview,web_types}.py` | 専用Chrome・MCP SDKの接続と結果形式。会話・検索開始の判断はRust |
 | `dogido-rust/scripts/request_classifier_worker.py` | 採用記録で検証するModernBERT推論補助。本体未接続の[組み込み準備](../docs/2026-10-15-modernbert-integration-preparation.md) |
 | `dogido-rust/scripts/haiku_tokens.py` · `dogido-rust/scripts/tts_tokens_worker.py` | Rustからの辞書token要求を受けるworker。相談・読みの判定・保存はRustが担当 |
 | `dogido-rust/scripts/tts_shared_tokens.py` · `dogido-rust/scripts/tts_unidic_adapter.py` | UniDic token取得。`tts_shared_tokens._reader = Unidic()` をworker内で共有し、辞書は初回利用時に初期化 |
-| `dogido_server/language_dialogue/source_cards.json` | Rustの国語検索が読む資料カード |
 | `dogido_server/llm/companion_prompts.json` · `dogido_server/llm/reaction_situations.json` | 共有プロンプト・状況文の正本データ |
 | `dogido-rust/src/server/dogido.html` | Rust本体に埋め込む表示画面 |
 | `dogido_server/runtime_settings.py` · `runtime_defaults.json` | RustとPython起動設定で共有する既定値 |
 
 旧 `dogido_server/tts_reading.py` は廃止しました。読みの判定・整形は `src/tts_reading.rs`、辞書tokenの取得だけが上記のPython補助です。`.[tts-reading]` はこの補助に必要な任意のUniDic依存であり、旧Python本体を起動するものではありません。
 
-データ整備用のPython補助は `dev_tools/catalog_tools/` に置きます。`language_knowledge` を含む検索CLI/APIは資料整備専用で、本体の実行時検索はRustの `src/knowledge/` が担当します。`dogido-rust/scripts/` の起動・SDK接続・検証スクリプトも引き続き使用します。
+データ整備用のPython補助は `dev_tools/catalog_tools/` に置きます。`reference_catalog`・`minecraft_knowledge` の検索CLI/APIは資料整備専用で、本体の実行時検索はRustの `src/knowledge/` が担当します。`dogido-rust/scripts/` の起動・SDK接続・検証スクリプトも引き続き使用します。
 
 ### 検証
 
@@ -119,13 +117,14 @@ DOGIDO_MEMORY_DIR=.dogido_memory/rust-migration
 ./dogido-rust/cargo.sh build --release --locked
 ```
 
-さらに変更した領域の `scripts/check_*.py` で模擬通信を確認します。保存済みの移植fixtureは回帰資産として使い、撤去したPython oracleを再導入して再生成しません。実モデル試験は生成内容と条件を別記し、実Minecraft・実マイク・スピーカー・Chromeの確認を自動テストの成功から推定しません。
+さらに変更した領域の `scripts/check_*.py` で模擬通信を確認します。保存済みの移植fixtureは回帰資産として使い、撤去したPython oracleを再導入して再生成しません。実モデル試験は生成内容と条件を別記し、実Minecraft・実マイク・スピーカーの確認を自動テストの成功から推定しません。
 
 実機で問題が出た機能の模擬確認は、次の既存スクリプトを入口にします。通常の開発用ビルドを用意し、リポジトリのルートから準備済みPython環境で実行します。これらは模擬モデル・音声を使う検証で、実機の合格とは分けます。
 
 | 対象 | 模擬確認スクリプト（`dogido-rust/scripts/`） |
 |---|---|
 | 通常会話・音声配送 | `check_dialogue.py` |
+| 詩の知識・通常会話との境界 | `check_poetry_knowledge.py` · `check_knowledge.py` |
 | 発句・workshop・局所編集 | `check_haiku_runtime.py` · `check_workshop_runtime.py` · `check_workshop_edits.py` |
 | 戦闘中断・復帰 | `check_workshop_combat.py` · `check_workshop_provisional.py` |
 | 読み辞書・記憶 | `check_reading_runtime.py` · `check_memory_runtime.py` |

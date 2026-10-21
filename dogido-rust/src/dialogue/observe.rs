@@ -131,7 +131,6 @@ impl Dialogue {
                 && !workshop_focus::owns_input(&d.sessions[session_id])
             {
                 Self::cancel_haiku(&mut d, session_id, "current_threat");
-                Self::cancel_address(&mut d, session_id, "attention_interrupted");
             }
             if recent && !text.trim().is_empty() {
                 Self::cancel_combat_input(&mut d, session_id);
@@ -223,7 +222,6 @@ impl Dialogue {
                 }
                 if event.event.name == EventName::PlayerDied || decision.dimension_changed {
                     self.cancel_knowledge_queue(&mut d, session_id, "world_context_changed");
-                    Self::cancel_address(&mut d, session_id, "attention_interrupted");
                 }
                 self.apply_combat_decision(
                     &mut d,

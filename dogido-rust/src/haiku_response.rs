@@ -1,5 +1,5 @@
 //! 自動川柳・修正案のモデル返答からJSON objectを取り出し、内容検査へ渡す入口。
-//! 完成objectの抽出を試し、行別出典の返答だけは途切れる前に完成した外側の項目も回収する。
+//! 完成objectを抽出し、候補の空行・折返し補完と音数確認は生成器が行う。
 //! 抽出できなければ、呼び手のfallbackにinvalid_json/output_truncatedを付けて返す。
 //! acceptedはobjectを取得できたという意味。句・判定・根拠の採否は後続のドメイン検査が決める。
 //! 生成再試行は呼び手が所有し、ここでは欠けた根拠の補完やschemaの修復を行わない。
@@ -12,7 +12,6 @@ const STATUS: &str = "__dogido_status";
 const KINDS: &[&str] = &[
     "haiku_draft",
     "haiku_workshop_revision",
-    "haiku_line_grounding",
     "haiku_line_regeneration",
     "haiku_irony",
     "haiku_scene",
@@ -36,18 +35,7 @@ pub fn parse(kind: &str, generated: &GeneratedText, fallback: &Value) -> Result<
         completion_tokens = ?generated.completion_tokens,
         prompt_tokens = ?generated.prompt_tokens,
     );
-    let grounding = kind == "haiku_line_grounding";
-    let mut payload = extract_object(&generated.text, !grounding);
-    if grounding && payload.is_none() {
-        payload = grounding_prefix(&generated.text);
-        if payload.is_some() {
-            tracing::warn!(
-                event = "llm_structured",
-                kind,
-                result = "complete_fields_recovered"
-            );
-        }
-    }
+    let payload = extract_object(&generated.text, true);
     if let Some(mut object) = payload {
         object.insert(STATUS.into(), "accepted".into());
         tracing::warn!(
@@ -90,46 +78,6 @@ pub(crate) fn extract_object(text: &str, allow_nested: bool) -> Option<Map<Strin
         }
     }
     None
-}
-
-/// Only completed outer members are eligible; never scan inside assessments.
-/// Check the key for repetition before decoding its value, so an unfinished
-/// second `verdicts` cannot make the first verdicts look authoritative.
-fn grounding_prefix(text: &str) -> Option<Map<String, Value>> {
-    let normalized = strip_code_fence(text);
-    let normalized = if normalized.starts_with("```") {
-        normalized
-            .split_once('\n')
-            .map_or(normalized.as_str(), |(_, rest)| trim_start(rest))
-    } else {
-        &normalized
-    };
-    let mut rest = normalized.strip_prefix('{')?;
-    let mut fields = Map::new();
-    while !rest.is_empty() {
-        rest = trim_start(rest);
-        let Some((key, consumed)) = raw_value(rest) else {
-            break;
-        };
-        let key = key.as_str()?;
-        if fields.contains_key(key) {
-            return None;
-        }
-        rest = trim_start(&rest[consumed..]);
-        rest = trim_start(rest.strip_prefix(':')?);
-        let Some((value, consumed)) = raw_value(rest) else {
-            break;
-        };
-        fields.insert(key.into(), value);
-        rest = trim_start(&rest[consumed..]);
-        let Some(next) = rest.strip_prefix(',') else {
-            break;
-        };
-        rest = next;
-    }
-    (fields.get("verdicts").is_some_and(Value::is_object)
-        && fields.get("assessments").is_some_and(Value::is_array))
-    .then_some(fields)
 }
 
 fn raw_value(text: &str) -> Option<(Value, usize)> {
@@ -185,274 +133,60 @@ fn number_end(bytes: &[u8]) -> Option<usize> {
     Some(end)
 }
 
-fn is_space(c: char) -> bool {
-    c.is_whitespace() || matches!(c, '\u{001c}'..='\u{001f}')
-}
-
-fn trim_start(text: &str) -> &str {
-    text.trim_start_matches(is_space)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
-
-    const PREFIX: &str = r#"{"verdicts":{"0":"pass","1":"meaning_fail","2":"pass"},"assessments":[{"line_index":0,"atom_ids":[1]},{"line_index":1,"atom_ids":[]},{"line_index":2,"atom_ids":[3]}]"#;
-
     fn generated(text: &str, finish: Option<&str>) -> GeneratedText {
         GeneratedText {
             text: text.into(),
             finish_reason: finish.map(str::to_owned),
-            completion_tokens: Some(512),
-            prompt_tokens: Some(1234),
+            completion_tokens: Some(12),
+            prompt_tokens: Some(40),
         }
     }
-    fn grounding(raw: &str, finish: Option<&str>) -> Value {
-        parse(
-            "haiku_line_grounding",
-            &generated(raw, finish),
-            &json!({"assessments":[]}),
-        )
-        .unwrap()
-    }
-
     #[test]
-    fn all_supported_kinds_defer_content_validation_to_the_domain() {
+    fn completed_json_and_embedded_objects_keep_domain_payload() {
         for kind in KINDS {
-            let output = parse(
-                kind,
-                &generated(
-                    r#"{"unexpected":true,"__dogido_status":"invalid_json"}"#,
-                    None,
-                ),
-                &json!({}),
-            )
-            .unwrap();
-            assert_eq!(output, json!({"unexpected":true,STATUS:"accepted"}));
-        }
-    }
-
-    #[test]
-    fn unsupported_kinds_and_non_object_fallback_are_errors() {
-        let response = generated("{}", None);
-        for kind in ["player_chat_plan", "", "haiku_draft "] {
-            assert!(parse(kind, &response, &json!({})).is_err());
-        }
-        for value in [Value::Null, json!([]), json!(1), json!("{}")] {
-            assert!(parse("haiku_draft", &response, &value).is_err());
-        }
-    }
-
-    #[test]
-    fn complete_report_is_accepted_even_when_provider_says_length() {
-        let raw = format!(r#"{PREFIX},"failure_reasons":{{"1":"材料がない。"}}}}"#);
-        let result = grounding(&raw, Some("length"));
-        assert_eq!(result[STATUS], "accepted");
-        assert_eq!(result["failure_reasons"]["1"], "材料がない。");
-        assert_eq!(result["assessments"][1]["atom_ids"], json!([]));
-    }
-
-    #[test]
-    fn explanation_truncation_keeps_only_completed_outer_fields() {
-        let raw = format!(r#"{PREFIX},"failure_reasons":{{"1":"途中"#);
-        for finish in [Some("length"), Some("stop"), None] {
-            let result = grounding(&raw, finish);
-            assert_eq!(result[STATUS], "accepted");
-            assert_eq!(result["verdicts"]["1"], "meaning_fail");
-            assert_eq!(result["assessments"].as_array().unwrap().len(), 3);
-            assert!(result.get("failure_reasons").is_none());
-            assert!(result["assessments"][1].get("meaning_retained").is_none());
-        }
-    }
-
-    #[test]
-    fn structured_reason_truncation_keeps_verdicts_without_salvaging_inner_reasons() {
-        let raw = format!(
-            r#"{PREFIX},"failure_reasons":{{"1":[{{"kind":"meaning","fragment":"つるぎ","reason":"途中"#
-        );
-        let result = grounding(&raw, Some("length"));
-        assert_eq!(result[STATUS], "accepted");
-        assert_eq!(result["verdicts"]["1"], "meaning_fail");
-        assert_eq!(result["assessments"].as_array().unwrap().len(), 3);
-        assert!(result.get("failure_reasons").is_none());
-        assert!(result.get("kind").is_none());
-        assert!(result.get("fragment").is_none());
-    }
-
-    #[test]
-    fn incomplete_evidence_never_becomes_an_inner_assessment() {
-        for raw in [
-            r#"{"verdicts":{"0":"pass","1":"pass","2":"pass"},"assessments":["#,
-            r#"{"assessments":[{"line_index":0,"atom_ids":[1],"meaning_retained":true,"natural_japanese":true},"#,
-            r#"{"verdicts":{"0":"pass"},"assessments":[{"line_index":0,"atom_ids":[1]},"#,
-            r#"{"verdicts":{"0":"pass"},"assessments":[{"line_index":0,"atom_ids":["#,
-        ] {
-            assert_eq!(
-                grounding(raw, Some("length")),
-                json!({"assessments":[],STATUS:"output_truncated"})
-            );
-        }
-    }
-
-    #[test]
-    fn duplicate_prefix_keys_reject_even_before_the_second_value() {
-        for suffix in [
-            r#", "verdicts":"#,
-            r#", "verdicts""#,
-            r#", "verdicts": {"0":"meaning_fail"}, "failure_reasons":"#,
-            r#", "assessments": ["#,
-            r#", "\u0076erdicts":"#,
-            r#", "other":1,"other":"#,
-        ] {
-            assert_eq!(
-                grounding(&format!("{PREFIX}{suffix}"), Some("length"))[STATUS],
-                "output_truncated",
-                "{suffix}"
-            );
-        }
-    }
-
-    #[test]
-    fn missing_or_wrong_typed_complete_fields_do_not_salvage() {
-        for raw in [
-            r#"{"verdicts":{"0":"pass"},"failure_reasons":"#,
-            r#"{"assessments":[],"failure_reasons":"#,
-            r#"{"verdicts":[],"assessments":[],"failure_reasons":"#,
-            r#"{"verdicts":{},"assessments":{},"failure_reasons":"#,
-        ] {
-            assert_eq!(grounding(raw, None)[STATUS], "invalid_json");
-        }
-    }
-
-    #[test]
-    fn grounding_prefix_does_not_invent_a_missing_line_or_reason() {
-        let result = grounding(
-            r#"{"verdicts":{"1":"pass"},"assessments":[],"failure_reasons":"#,
-            Some("length"),
-        );
-        assert_eq!(
-            result,
-            json!({"verdicts":{"1":"pass"},"assessments":[],STATUS:"accepted"})
-        );
-    }
-
-    #[test]
-    fn complete_fences_and_open_fence_grounding_prefix_match_canonical_contract() {
-        for separator in ["\n", "\r\n", "\u{2028}"] {
-            let raw = format!("  ```json{separator}{PREFIX}}}{separator}```  ");
-            assert_eq!(grounding(&raw, None)[STATUS], "accepted");
-        }
-        let raw = format!("```json\n{PREFIX},\"failure_reasons\":{{\"0\":\"途");
-        assert_eq!(grounding(&raw, Some("length"))[STATUS], "accepted");
-        assert_eq!(
-            grounding("```json\n{\"line_index\":0}", Some("length"))[STATUS],
-            "output_truncated"
-        );
-    }
-
-    #[test]
-    fn only_non_grounding_kinds_scan_nested_objects_and_surrounding_prose() {
-        for raw in [
-            "前置き {\"lines\":[\"草\",\"黒\",\"影\"]} 後書き",
-            "{\"broken\": [ {\"lines\":[\"草\",\"黒\",\"影\"]}",
-            "[{\"lines\":[\"草\",\"黒\",\"影\"]}]",
-        ] {
-            for kind in [
-                "haiku_draft",
-                "haiku_line_regeneration",
-                "haiku_irony",
-                "haiku_scene",
+            for text in [
+                r#"{"lines":["草","黒","影"]}"#,
+                "前置き {\"lines\":[\"草\",\"黒\",\"影\"]} 後書き",
+                "```json\n{\"lines\":[\"草\",\"黒\",\"影\"]}\n```",
             ] {
-                let result = parse(kind, &generated(raw, None), &json!({})).unwrap();
-                assert_eq!(result["lines"], json!(["草", "黒", "影"]));
-                assert_eq!(result[STATUS], "accepted");
+                let out = parse(kind, &generated(text, Some("length")), &json!({})).unwrap();
+                assert_eq!(out[STATUS], "accepted");
+                assert_eq!(out["lines"], json!(["草", "黒", "影"]));
             }
-            assert_eq!(grounding(raw, None)[STATUS], "invalid_json");
         }
     }
-
     #[test]
-    fn complete_outer_object_is_preferred_to_inner_objects() {
-        let result = parse(
+    fn incomplete_output_keeps_transport_failure_separate_from_poem_text() {
+        let fallback = json!({"lines":[],"kept":true});
+        for (finish, status) in [
+            (Some("length"), "output_truncated"),
+            (Some("stop"), "invalid_json"),
+            (None, "invalid_json"),
+        ] {
+            let out = parse("haiku_draft", &generated("{", finish), &fallback).unwrap();
+            assert_eq!(out[STATUS], status);
+            assert_eq!(out["kept"], true);
+        }
+        assert!(fallback.get(STATUS).is_none());
+    }
+    #[test]
+    fn unsupported_evaluation_and_nonobject_fallback_are_rejected() {
+        assert!(parse("haiku_line_grounding", &generated("{}", None), &json!({})).is_err());
+        assert!(parse("haiku_draft", &generated("{}", None), &json!([])).is_err());
+    }
+    #[test]
+    fn outer_object_is_not_replaced_with_an_inner_line_object() {
+        let out = parse(
             "haiku_draft",
             &generated(r#"{"outer":{"lines":[]}}"#, None),
             &json!({}),
         )
         .unwrap();
-        assert_eq!(result, json!({"outer":{"lines":[]},STATUS:"accepted"}));
-    }
-
-    #[test]
-    fn truncation_status_depends_only_on_known_finish_reasons() {
-        for finish in ["length", "max_tokens", "MAX_TOKENS"] {
-            assert_eq!(grounding("{", Some(finish))[STATUS], "output_truncated");
-        }
-        for finish in [None, Some("stop"), Some("LENGTH"), Some("unknown")] {
-            assert_eq!(grounding("{", finish)[STATUS], "invalid_json");
-        }
-        for raw in ["", " ", "null", "true", "23", "[]", "\"text\""] {
-            assert_eq!(grounding(raw, None)[STATUS], "invalid_json");
-        }
-    }
-
-    #[test]
-    fn fallback_is_cloned_and_status_is_overwritten() {
-        let fallback = json!({"assessments":[],"nested":{"kept":true},STATUS:"old"});
-        let saved = fallback.clone();
-        let result = parse(
-            "haiku_line_grounding",
-            &generated("{", Some("length")),
-            &fallback,
-        )
-        .unwrap();
-        assert_eq!(fallback, saved);
-        assert_eq!(result["nested"], fallback["nested"]);
-        assert_eq!(result[STATUS], "output_truncated");
-    }
-
-    #[test]
-    fn completed_json_duplicate_keys_use_last_value() {
-        // The duplicate-key guard applies to recovery, not ordinary json.loads.
-        let result = grounding(
-            r#"{"verdicts":{"0":"pass"},"verdicts":{"0":"meaning_fail"},"assessments":[]}"#,
-            None,
-        );
-        assert_eq!(result["verdicts"]["0"], "meaning_fail");
-        assert_eq!(result[STATUS], "accepted");
-    }
-
-    #[test]
-    fn prefix_delimiters_and_utf8_strings_are_not_repaired() {
-        let prefix = r#"{"verdicts":{"0":"pass"},"assessments":[],"note":"引用\\\" と { } 日本語""#;
-        assert_eq!(
-            grounding(&format!("{prefix},\"failure_reasons\":"), None)["note"],
-            "引用\\\" と { } 日本語"
-        );
-        for suffix in [",\"bad\" 0", ",42:0"] {
-            assert_eq!(
-                grounding(&format!("{PREFIX}{suffix}"), None)[STATUS],
-                "invalid_json"
-            );
-        }
-    }
-
-    #[test]
-    fn raw_primitive_prefixes_match_canonical_contract_without_repairing_tokens() {
-        for (token, value) in [
-            ("trueXXX", json!(true)),
-            ("falsex", json!(false)),
-            ("nullx", Value::Null),
-            ("1x", json!(1)),
-            ("1e", json!(1)),
-            ("1e+", json!(1)),
-            ("01", json!(0)),
-            ("0.", json!(0)),
-            ("-12.5e-2x", json!(-0.125)),
-        ] {
-            let result = grounding(&format!("{PREFIX},\"note\":{token}"), None);
-            assert_eq!(result["note"], value, "{token}");
-            assert_eq!(result[STATUS], "accepted");
-        }
+        assert!(out.get("outer").is_some());
+        assert!(out.get("lines").is_none());
     }
 }

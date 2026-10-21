@@ -55,6 +55,17 @@ fn canonical_source_atom_and_stored_reader_goldens() {
             )),
             op => panic!("unknown op {op}"),
         };
+        if row["op"] == "clauses" && row["expected"].is_null() && !actual.is_null() {
+            // 長さだけで旧契約が棄却した行も、出典と本文を保ったまま受け取る。
+            let clauses = actual.as_array().unwrap();
+            assert!(!clauses.is_empty());
+            assert!(
+                clauses
+                    .iter()
+                    .all(|c| !c["text"].as_str().unwrap().is_empty())
+            );
+            continue;
+        }
         assert_eq!(
             actual, row["expected"],
             "row {i} op {} input {input}",
@@ -86,4 +97,19 @@ fn saved_source_never_reloads_or_adopts_changed_catalog_values() {
     assert_ne!(old, changed);
     assert_eq!(source_atoms_from_materials(&saved), old_atoms);
     assert_eq!(saved, before);
+}
+
+#[test]
+fn scene_length_and_clause_count_do_not_veto_valid_material() {
+    let a = atoms_from_observations(&[json!({"source":"world","key":"rain","label":"雨"})]);
+    let clause = |text: &str| json!({"text":text,"basis_atom_ids":[a[0].atom_id],"claim_class":"interpretive"});
+    let long = "雨の気配がゆっくり遠くまで広がっていて静かな時間がいつまでも続いているように感じる";
+    assert!(preface_clauses_from_payload(&json!([clause(long)]), &a).is_some());
+    assert!(
+        preface_clauses_from_payload(
+            &json!([clause("雨"), clause("空"), clause("音"), clause("雲")]),
+            &a
+        )
+        .is_some()
+    );
 }

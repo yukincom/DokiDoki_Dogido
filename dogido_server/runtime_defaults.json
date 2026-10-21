@@ -90,8 +90,6 @@
     "thunder_reaction_panic_cue_cooldown_ms": 600000,
     "smell_comment_cooldown_ms": 120000,
     "conversation_active_ttl_ms": 300000,
-    "conversation_topic_fresh_ms": 120000,
-    "conversation_pending_address_ttl_ms": 300000,
     "conversation_suspended_player_turns": 10,
     "conversation_post_danger_player_turns": 3,
     "surroundings_notice_interval_ms": 180000

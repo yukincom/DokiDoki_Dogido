@@ -43,7 +43,7 @@ def base():
     """Synthetic poem request shared by bridge tests; assertions stay in tests."""
     return {"details": {}, "source_atoms": [atom(i) for i in range(3)],
             "fallback_text": "まとまらんかった。。。", "max_tokens": 192,
-            "grounding_max_tokens": 512, "generation_strategy": "three_slot",
+            "generation_strategy": "three_slot",
             "max_regeneration_rounds": 6, "llm_enabled": True}
 
 

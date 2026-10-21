@@ -165,7 +165,6 @@ pub fn validate_lines(text: &str, source: &str, lines: &[HaikuLine]) -> Result<(
             crate::haiku_record::LinePosition::ALL[i].matches(l)
                 && l.surface_text == expected[i]
                 && l.provenance == source
-                && !l.reading_text.is_empty()
                 && l.reading_text
                     .chars()
                     .all(|c| ('ぁ'..='ゖ').contains(&c) || c == 'ー')
@@ -237,7 +236,7 @@ impl MemoryStore {
             ensure!(
                 p.len() == 1
                     && p[0]["haiku_id"] == revision.original.entry_id()
-                    && p[0]["revised_text"] == workshop_edit::reading(&revision.base),
+                    && p[0]["lines"] == json!(revision.base),
                 "parent_revision_mismatch"
             );
         } else {
@@ -266,8 +265,8 @@ impl WholeRevision {
         let e = &self.original.prepared;
         json!({"id":self.id,"created_at":self.at,"haiku_id":self.original.entry_id(),"source":self.source,"comment":null,
             "original_text":e.surface_text.as_deref().unwrap_or(&e.text),"original_reading_text":e.reading_text.as_deref().unwrap_or(&e.text),
-            "base_text":workshop_edit::reading(&self.base),"base_surface_text":workshop_edit::surface(&self.base),"parent_revision_id":self.parent,
-            "revised_text":if self.lines.is_empty(){self.text.clone()}else{workshop_edit::reading(&self.lines)},
+            "base_text":workshop_edit::editing_text(&self.base),"base_surface_text":workshop_edit::surface(&self.base),"parent_revision_id":self.parent,
+            "revised_text":if self.lines.is_empty(){self.text.clone()}else{workshop_edit::editing_text(&self.lines)},
             "revised_surface_text":if self.lines.is_empty(){self.text.clone()}else{workshop_edit::surface(&self.lines)},
             "lines":if self.lines.is_empty(){Value::Null}else{json!(self.lines)},"line_sources":null,
             "world":{"biome":e.biome,"structure":e.structure,"time_phase":e.time_phase,"dimension":e.dimension}})

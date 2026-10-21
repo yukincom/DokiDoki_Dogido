@@ -38,11 +38,6 @@ class ReferenceCatalogTests(unittest.TestCase):
         for row in rows.values():
             self.assertTrue((ROOT / "reference" / row["readme"]).is_file())
             self.assertIsNotNone(importlib.util.find_spec(row["search_module"]))
-        self.assertIsNotNone(
-            importlib.util.find_spec(
-                rows["language_education_and_poetry"]["classification_search_module"]
-            )
-        )
         self.assertTrue(
             (ROOT / "reference" / rows["language_education_and_poetry"]["index"]).is_file()
         )
@@ -83,21 +78,11 @@ class ReferenceCatalogTests(unittest.TestCase):
         self.assertTrue(issues)
 
     def test_explicit_term_search_and_lookup(self) -> None:
-        for query in ("学習指導要領コード", "学習指導要領 コード"):
-            ids = [row["id"] for row in search_references(query)]
-            self.assertIn("jp.mext.curriculum-codes", ids)
-        for query in ("日本語文型", "日本語 文型"):
-            ids = [row["id"] for row in search_references(query)]
-            self.assertIn("jp.ninjal.sentence-patterns", ids)
         five_seven_five = {row["id"] for row in search_references("五 七 五")}
         self.assertIn("poetry.jp.haiku", five_seven_five)
         self.assertIn("poetry.jp.senryu", five_seven_five)
         self.assertNotIn("poetry.zh.jueju", five_seven_five)
         self.assertNotIn("poetry.zh.lushi", five_seven_five)
-
-        record = get_reference("jp.mext.curriculum-codes")
-        self.assertIsNotNone(record)
-        self.assertEqual(record["policy_role"], "advisory_only")
 
     def test_exact_title_precedes_other_exact_search_terms(self) -> None:
         result = search_references(
@@ -194,17 +179,6 @@ class ReferenceCatalogTests(unittest.TestCase):
         self.assertIn("poetry.jp.senryu", world_ids)
         self.assertNotIn("poetry.general.lyric", world_ids)
 
-        official_api_ids = {
-            row["id"]
-            for row in search_references(
-                dataset_ids=["japanese_language_education"],
-                acquisition_modes=["official_api"],
-                local_runtime_allowed=["true"],
-            )
-        }
-        self.assertIn("jp.ndl.search-api", official_api_ids)
-        self.assertIn("jp.ndl.authorities", official_api_ids)
-
     def test_world_poetry_japanese_axis_labels_are_searchable(self) -> None:
         expected = {
             "poetry.general.free-verse",
@@ -244,21 +218,21 @@ class ReferenceCatalogTests(unittest.TestCase):
 
     def test_multiple_dataset_ids_are_or_within_the_dataset_facet(self) -> None:
         results = search_references(
-            dataset_ids=["world_poetry", "japanese_language_education"],
+            dataset_ids=["world_poetry", "makurakotoba"],
             limit=10_000,
         )
         result_ids = {record["id"] for record in results}
         self.assertIn("poetry.jp.senryu", result_ids)
-        self.assertIn("jp.ndl.search-api", result_ids)
+        self.assertIn("knowledge.rhetoric.makurakotoba", result_ids)
 
         forms = search_references(
-            dataset_ids=["world_poetry", "japanese_language_education"],
+            dataset_ids=["world_poetry", "makurakotoba"],
             entity_kinds=["form"],
             limit=10_000,
         )
         form_ids = {record["id"] for record in forms}
         self.assertIn("poetry.jp.senryu", form_ids)
-        self.assertNotIn("jp.ndl.search-api", form_ids)
+        self.assertNotIn("knowledge.rhetoric.makurakotoba", form_ids)
 
     def test_world_poetry_guardrails_are_structured(self) -> None:
         haiku = get_reference("poetry.jp.haiku")
@@ -362,36 +336,6 @@ class ReferenceCatalogTests(unittest.TestCase):
         haiku = next(row for row in invalid["entries"] if row["id"] == "poetry.jp.haiku")
         haiku["structure"]["constraint_profiles"][0]["formal_constraints"] = ["invented"]
         self.assertTrue(validate_against_schema(invalid, "invalid-profile"))
-
-    def test_manual_research_resources_are_not_runtime_inputs(self) -> None:
-        assessment = get_reference("jp.nier.national-assessment-japanese")
-        self.assertEqual(assessment["acquisition_mode"], "manual_research_only")
-        self.assertFalse(assessment["local_runtime_allowed"])
-        self.assertFalse(assessment["external_runtime_fetch_allowed"])
-
-    def test_editorial_school_grammar_claims_are_explicitly_marked(self) -> None:
-        grammar = json.loads(
-            (ROOT / "reference/language_education_and_poetry/japanese_grammar.json").read_text(
-                encoding="utf-8"
-            )
-        )
-        curriculum_records = [
-            record
-            for record in grammar["entries"]
-            if record["structured_data"].get("source_scope")
-            == "curriculum_statement"
-        ]
-        self.assertEqual(len(curriculum_records), 10)
-        self.assertTrue(
-            all(
-                record["definition_status"] == "editorial_synthesis"
-                and all(
-                    rule["claim_status"] == "editorial_guardrail"
-                    for rule in record["rules"]
-                )
-                for record in curriculum_records
-            )
-        )
 
     def test_linked_verse_claims_have_direct_institutional_sources(self) -> None:
         poetry = json.loads(

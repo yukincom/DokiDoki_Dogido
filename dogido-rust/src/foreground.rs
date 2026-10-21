@@ -8,14 +8,13 @@ pub enum Route {
     #[default]
     None,
     Casual,
-    Learning,
-    Web,
+    Knowledge,
     HaikuPreparation,
     HaikuWorkshop,
 }
 impl Route {
     pub fn blocks_haiku(self) -> bool {
-        matches!(self, Self::Learning | Self::Web)
+        matches!(self, Self::Knowledge)
     }
 }
 
@@ -110,11 +109,11 @@ impl State {
         self.completed.clear();
     }
     pub fn tick(&mut self, now: u64, ttl: u64) {
-        if matches!(self.route, Route::Casual | Route::Learning | Route::Web)
+        if matches!(self.route, Route::Casual | Route::Knowledge)
             && let Some(at) = self.last_player_at
             && now.saturating_sub(at) >= ttl
         {
-            // 観測が途切れていても、期限後まで学習していたことにしない。
+            // 観測が途切れていても、期限後まで資料を確認していたことにしない。
             self.clear(at.saturating_add(ttl));
         }
         self.clock.sync(now, self.haiku_clock_paused());
@@ -151,7 +150,7 @@ impl State {
         if turn.trim().is_empty()
             || player.trim().is_empty()
             || reply.trim().is_empty()
-            || !matches!(route, Route::Casual | Route::Learning)
+            || !matches!(route, Route::Casual | Route::Knowledge)
         {
             return;
         }
@@ -166,7 +165,7 @@ impl State {
         }
     }
     pub fn suspend(&mut self, now: u64, reason: &str, hold: u64) {
-        if !matches!(self.route, Route::Casual | Route::Learning) {
+        if !matches!(self.route, Route::Casual | Route::Knowledge) {
             return;
         }
         let turns = self
@@ -255,8 +254,8 @@ mod tests {
         let mut s = State::default();
         s.clock.start(0);
         s.set_game_paused(300_000, true);
-        s.activate(Route::Learning, 400_000, Some(400_000));
-        s.tick(800_000, 300_000); // learning expires while Minecraft remains paused
+        s.activate(Route::Knowledge, 400_000, Some(400_000));
+        s.tick(800_000, 300_000); // 資料照会の期限が切れてもMinecraftのポーズは保持する。
         assert_eq!(s.route, Route::None);
         s.activate(Route::Casual, 900_000, Some(900_000));
         s.suspend(1_000_000, "combat", 10);
@@ -271,45 +270,43 @@ mod tests {
         assert_eq!(s.clock.elapsed(1_800_000), 600_000);
     }
     #[test]
-    fn unpausing_game_does_not_unpause_learning_or_web() {
-        for route in [Route::Learning, Route::Web] {
-            let mut s = State::default();
-            s.clock.start(0);
-            s.activate(route, 100_000, Some(100_000));
-            s.set_game_paused(200_000, true);
-            s.set_game_paused(900_000, false);
-            assert_eq!(s.clock.elapsed(1_000_000), 100_000);
-            s.clear(1_000_000);
-            assert_eq!(s.clock.elapsed(1_500_000), 600_000);
-        }
+    fn unpausing_game_does_not_unpause_knowledge() {
+        let mut s = State::default();
+        s.clock.start(0);
+        s.activate(Route::Knowledge, 100_000, Some(100_000));
+        s.set_game_paused(200_000, true);
+        s.set_game_paused(900_000, false);
+        assert_eq!(s.clock.elapsed(1_000_000), 100_000);
+        s.clear(1_000_000);
+        assert_eq!(s.clock.elapsed(1_500_000), 600_000);
     }
     #[test]
-    fn learning_freezes_remaining_interval_and_expires_at_the_deadline() {
+    fn knowledge_freezes_remaining_interval_and_expires_at_the_deadline() {
         let mut s = State::default();
         s.clock.start(0);
         s.activate(Route::Casual, 0, Some(0));
-        s.activate(Route::Learning, 300_000, Some(300_000));
+        s.activate(Route::Knowledge, 300_000, Some(300_000));
         s.tick(599_999, 300_000);
         assert_eq!(s.clock.elapsed(599_999), 300_000);
-        // tick無しで期限を越えても、学習終了後の1秒だけを加算する。
+        // tick無しで期限を越えても、資料照会終了後の1秒だけを加算する。
         s.tick(601_000, 300_000);
         assert_eq!(s.route, Route::None);
         assert_eq!(s.clock.elapsed(601_000), 301_000);
-        s.activate(Route::Learning, 602_000, Some(602_000));
+        s.activate(Route::Knowledge, 602_000, Some(602_000));
         s.activate(Route::Casual, 900_000, Some(900_000));
         assert_eq!(s.clock.elapsed(901_000), 303_000);
     }
     #[test]
     fn only_completed_topic_survives_combat_and_ticks_do_not_consume_turns() {
         let mut s = State::default();
-        s.activate(Route::Learning, 0, Some(0));
+        s.activate(Route::Knowledge, 0, Some(0));
         s.completed(
             "heard",
             "枕詞って何？",
             "定型的な言葉やで。",
-            Route::Learning,
+            Route::Knowledge,
         );
-        s.completed("not_heard", "後の話", "", Route::Learning);
+        s.completed("not_heard", "後の話", "", Route::Knowledge);
         s.start_combat(1000, 10);
         for now in 1001..1200 {
             s.start_combat(now, 10);
@@ -333,7 +330,7 @@ mod tests {
         assert!(s.resume_prompt("さっきの話の続き").contains("枕詞"));
         assert_eq!(
             s.select("resume", "さっきの話の続き", Route::Casual, 3000, 3000),
-            Route::Learning
+            Route::Knowledge
         );
         assert!(s.suspended.is_none());
     }

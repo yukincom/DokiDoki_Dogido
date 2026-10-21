@@ -6,14 +6,12 @@ import shlex
 import shutil
 import subprocess
 import sys
-from types import SimpleNamespace
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import launch_dialogue as launch
 from dogido_server.config import Settings, get_settings
-from dogido_server.language_dialogue import main_web
 
 
 class Executed(BaseException):
@@ -25,8 +23,6 @@ def command(monkeypatch, tmp_path, settings):
     monkeypatch.setattr(sys, "argv", ["launch", "--settings-dir", str(tmp_path)])
     monkeypatch.setattr(launch, "get_settings", lambda: settings)
     monkeypatch.setattr(launch, "check_runtime_files", lambda root: root / "dogido-rust/target/release/dogido-rust")
-    monkeypatch.setattr(main_web, "inspect_main_web_availability",
-                        lambda: SimpleNamespace(available=False, reason="test"))
     captured = {}
 
     def execute(binary, argv, env):
@@ -45,11 +41,11 @@ def value(args, flag):
 
 def test_optional_cue_disabled_features_and_voice_profiles_reach_rust(monkeypatch, tmp_path):
     settings = Settings(_env_file=None, cue_audio_dir=None, audio_enabled=False,
-                        llm_enabled=False, main_language_dialogue_enabled=False,
+                        llm_enabled=False,
                         voicevox_speed_scale_peace=.91, voicevox_speed_scale_battle=1.23,
                         voicevox_speed_scale_haiku=.76, voicevox_output_sampling_rate=48000)
     args, _ = command(monkeypatch, tmp_path, settings)
-    assert {"--no-audio", "--no-llm", "--no-language"} <= set(args)
+    assert {"--no-audio", "--no-llm"} <= set(args)
     assert value(args, "--speed") == "0.91"
     assert value(args, "--haiku-speed") == "0.76"
     assert value(args, "--output-sampling-rate") == "48000"
@@ -62,10 +58,10 @@ def test_optional_cue_disabled_features_and_voice_profiles_reach_rust(monkeypatc
 def test_unset_sampling_and_battle_override_keep_engine_defaults(monkeypatch, tmp_path):
     settings = Settings(_env_file=None, voicevox_speed_scale=1.17,
                         voicevox_speed_scale_battle=None, voicevox_output_sampling_rate=None,
-                        audio_enabled=True, llm_enabled=True, main_language_dialogue_enabled=True)
+                        audio_enabled=True, llm_enabled=True)
     args, _ = command(monkeypatch, tmp_path, settings)
     assert "--output-sampling-rate" not in args
-    assert not {"--no-audio", "--no-llm", "--no-language"} & set(args)
+    assert not {"--no-audio", "--no-llm"} & set(args)
     assert json.loads(value(args, "--warning-settings"))["battle_speed"] == 1.17
 
 

@@ -35,7 +35,6 @@ pub struct RuntimeSnapshot {
 pub struct Settings {
     pub llm_enabled: bool,
     pub structured_max_tokens: u64,
-    pub grounding_max_tokens: u64,
     pub generation_strategy: String,
     pub max_regeneration_rounds: i64,
 }
@@ -44,7 +43,6 @@ impl Default for Settings {
         Self {
             llm_enabled: true,
             structured_max_tokens: 192,
-            grounding_max_tokens: 512,
             generation_strategy: "three_slot".into(),
             max_regeneration_rounds: 6,
         }
@@ -193,8 +191,7 @@ impl Preparation {
     /// LLM有効ならhaiku_irony要求、無効なら観測に対応した固定句を返す。ここではモデルを呼ばない。
     pub fn capture(start: Start) -> Result<(Self, ContextOutput)> {
         ensure!(
-            start.settings.grounding_max_tokens >= 1
-                && (0..=8).contains(&start.settings.max_regeneration_rounds)
+            (0..=8).contains(&start.settings.max_regeneration_rounds)
                 && ["whole_poem", "three_slot", "one_plus_two", "two_plus_one"]
                     .contains(&start.settings.generation_strategy.as_str()),
             "invalid haiku preparation settings"
@@ -426,7 +423,6 @@ impl Preparation {
                 source_atoms: self.atoms.clone(),
                 fallback_text: fallback::failed_text(),
                 max_tokens: Some(self.settings.structured_max_tokens),
-                grounding_max_tokens: self.settings.grounding_max_tokens,
                 generation_strategy: self.settings.generation_strategy.clone(),
                 max_regeneration_rounds: self.settings.max_regeneration_rounds,
                 llm_enabled: self.settings.llm_enabled,
@@ -448,7 +444,7 @@ impl Preparation {
             "invalid haiku preparation stage"
         );
         ensure!(
-            result.accepted && !fallback::failed(&result.text),
+            result.accepted,
             "only accepted poem text may become an emission"
         );
         if self.stage == Stage::Fixed {
@@ -461,6 +457,10 @@ impl Preparation {
         let mut mats = self.materials.clone();
         if self.stage == Stage::Materials {
             mats.insert("line_sources".into(), json!(result.line_sources));
+            mats.insert(
+                "source_attribution".into(),
+                "provided_materials_unverified".into(),
+            );
             mats.insert(
                 "generation_strategy".into(),
                 result.generation_strategy.clone().into(),
@@ -529,7 +529,12 @@ impl Preparation {
                                 .collect()
                         })
                         .unwrap_or_default(),
-                    provenance: "generated".into(),
+                    provenance: if self.stage == Stage::Materials {
+                        "generated_material_assignment"
+                    } else {
+                        "generated"
+                    }
+                    .into(),
                 });
             }
         }

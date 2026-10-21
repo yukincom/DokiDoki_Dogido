@@ -1,10 +1,10 @@
-//! 抽出済みの明示知識質問を、国語・詩・Minecraftの正本資料へ照合して回答事実を組み立てる。
+//! 抽出済みの明示知識質問を、詩・Minecraftの正本資料へ照合して回答事実を組み立てる。
 //! 正常経路はQueryの事前確認→分野と意図に合う資料検索→対象の一致確認→出典付き事実の抽出。
 //! 対象語を生成で増やさず、登録済みの題名・別名・読み・検索語と正規化して照合する。
 //! 未収録はnot_found、読込・検証・取消の失敗はunavailableへ分け、一般知識の生成で穴埋めしない。
 //! ファイル読取りを所有し、発話生成・会話状態・保存・世界操作は呼出側へ残す。
 use super::{
-    catalog::{CORE, Stop, error_class, valid},
+    catalog::{Stop, error_class, valid},
     query::{Query, fold, normalize, space},
     retrieval::{self, Reader, shorten},
 };
@@ -20,10 +20,10 @@ static POLICY: LazyLock<Value> = LazyLock::new(|| {
     serde_json::from_str(include_str!("provider-policy.json")).expect("checked knowledge policy")
 });
 #[derive(Clone)]
-/// 検索に使う正本資料の所在。国語資料とMinecraftの収録データ・出典固定情報をまとめる。
+/// 検索に使う正本資料の所在。詩資料とMinecraftの収録データ・出典固定情報をまとめる。
 /// パスの基準は起動時に選んだ補助スクリプトと同じcheckoutで、質問文から組み立てない。
 pub struct Paths {
-    pub language: retrieval::Paths,
+    pub poetry: retrieval::Paths,
     pub minecraft: PathBuf,
     pub source_lock: PathBuf,
 }
@@ -31,12 +31,12 @@ impl Paths {
     /// 起動に使用するhelperの実パスからcheckoutを確定し、各資料の既定配置を求める。
     /// この段階はパス解決だけで、資料の読込み・検証は検索時に行う。
     pub fn from_helper(helper: &Path) -> Result<Self> {
-        let language = retrieval::Paths::from_helper(helper)?;
-        let root = language.reference.parent().unwrap().parent().unwrap();
+        let poetry = retrieval::Paths::from_helper(helper)?;
+        let root = poetry.reference.parent().unwrap().parent().unwrap();
         Ok(Self {
             minecraft: root.join(".dogido_reference/minecraft_technical"),
             source_lock: root.join("reference/minecraft_technical/source_lock.json"),
-            language,
+            poetry,
         })
     }
 }
@@ -108,120 +108,8 @@ fn match_rank(record: &Value, subject: &str) -> Option<u8> {
     }
     (compact(text(record, "id")) == q).then_some(3)
 }
-/// 対象が対応範囲の漢字一文字なら返す。読み・配当学年の文字ID直接検索への入口。
-fn cjk(subject: &str) -> Option<char> {
-    let mut chars = subject.chars();
-    let c = chars.next()?;
-    (chars.next().is_none()
-        && ((0x3400..=0x4dbf).contains(&(c as u32))
-            || (0x4e00..=0x9fff).contains(&(c as u32))
-            || (0xf900..=0xfaff).contains(&(c as u32))))
-    .then_some(c)
-}
-/// 文型recordの一般説明・語義・接続・分類を重複除去して、一件の説明へ組み立てる。
-/// definitionでは先頭の意味・用法を、それ以外では代表的な接続を優先し、省略数も表示する。
-fn grammar_fact(record: &Value, intent: &str, sources: Vec<Value>) -> Option<Value> {
-    let title = choose(record, &["title_ja", "reading"], "");
-    let reading = text(record, "reading");
-    let (mut categories, mut connections, mut explanations) = (vec![], vec![], vec![]);
-    push_unique(
-        &mut explanations,
-        text(&record["general_explanation"], "text").trim_matches(space),
-    );
-    for sense in rows(record, "senses") {
-        for category in rows(sense, "categories") {
-            if let Some(v) = category.as_str() {
-                push_unique(&mut categories, v);
-            }
-        }
-        for conn in rows(sense, "connections") {
-            push_unique(&mut connections, text(&conn["connection_type"], "text"));
-        }
-        push_unique(
-            &mut explanations,
-            text(&sense["usage"], "text").trim_matches(space),
-        );
-    }
-    let mut parts = vec![format!("文型「{title}」")];
-    if !reading.is_empty() && reading != text(record, "title_ja") {
-        parts.push(format!("読みは「{reading}」"));
-    }
-    if intent == "definition" && !explanations.is_empty() {
-        let shown = shorten(&explanations[0], 135);
-        let mut notes = vec![];
-        if shown
-            != explanations[0]
-                .split(space)
-                .filter(|s| !s.is_empty())
-                .collect::<Vec<_>>()
-                .join(" ")
-        {
-            notes.push("一部省略".into());
-        }
-        if explanations.len() > 1 {
-            notes.push(format!("ほか{}件", explanations.len() - 1));
-        }
-        parts.push(format!("意味・用法は「{shown}」{}", suffix(&notes)));
-    }
-    if intent != "definition" && !connections.is_empty() {
-        let shown: Vec<_> = connections.iter().take(2).map(|s| shorten(s, 48)).collect();
-        let mut notes = vec![];
-        if connections
-            .iter()
-            .zip(&shown)
-            .any(|(raw, short)| raw != short)
-        {
-            notes.push("一部省略".into());
-        }
-        if connections.len() > shown.len() {
-            notes.push(format!("ほか{}件", connections.len() - shown.len()));
-        }
-        parts.push(format!(
-            "{}は「{}」{}",
-            if notes.is_empty() {
-                "接続"
-            } else {
-                "代表的な接続"
-            },
-            shown.join("／"),
-            suffix(&notes)
-        ));
-    }
-    if !categories.is_empty() {
-        let shown: Vec<_> = categories.iter().take(3).map(|s| shorten(s, 24)).collect();
-        let notes = if categories.len() > shown.len() {
-            vec![format!("ほか{}件", categories.len() - shown.len())]
-        } else {
-            vec![]
-        };
-        parts.push(format!(
-            "{}は「{}」{}",
-            if notes.is_empty() {
-                "分類"
-            } else {
-                "代表的な分類"
-            },
-            shown.join("・"),
-            suffix(&notes)
-        ));
-    }
-    fact(
-        record,
-        &(parts.join("。") + "。"),
-        "official_normalized_extract",
-        sources,
-        "",
-    )
-}
-fn suffix(notes: &[String]) -> String {
-    if notes.is_empty() {
-        String::new()
-    } else {
-        format!("（{}）", notes.join("、"))
-    }
-}
 /// 出典を取得できたrecordから、質問意図に合う事実を上限まで抽出する。
-/// 文型はgrammar_fact、rulesは規則文を先に扱い、その後に定義または要約を補う。
+/// rulesは規則文を先に扱い、その後に定義または要約を補う。
 fn reference_facts(
     reader: &mut Reader<'_>,
     record: &Value,
@@ -231,11 +119,6 @@ fn reference_facts(
     let sources = reader.sources(record)?;
     if sources.is_empty() {
         return Ok(vec![]);
-    }
-    if text(record, "kind") == "grammar_pattern" {
-        return Ok(grammar_fact(record, &query.intent, sources)
-            .into_iter()
-            .collect());
     }
     let mut facts = vec![];
     if query.intent == "rules" {
@@ -310,144 +193,14 @@ fn classification_fact(record: &Value, sources: Vec<Value>) -> Option<Value> {
         "",
     )
 }
-/// 一文字のUnicode値に対応する常用漢字・学年配当recordを直接読む。
-/// gradeでは配当表、readingでは常用漢字表の音訓を使い、対象recordがなければ空を返す。
-fn kanji_facts(reader: &mut Reader<'_>, query: &Query, c: char) -> Result<Vec<Value>> {
-    let joyo = reader.bulk()?.get(&format!("kanji.joyo.u{:x}", c as u32))?;
-    let grade = reader
-        .bulk()?
-        .get(&format!("kanji.grade-allocation.u{:x}", c as u32))?;
-    if query.intent == "grade" {
-        let Some(record) = grade else {
-            return Ok(vec![]);
-        };
-        let sources = reader.sources(&record)?;
-        return Ok(fact(
-            &record,
-            &format!(
-                "「{}」は{}{}の配当漢字です。",
-                query.subject,
-                text(&record, "school_stage_ja"),
-                text(&record, "school_grade_ja")
-            ),
-            "official_normalized_extract",
-            sources,
-            "",
-        )
-        .into_iter()
-        .collect());
-    }
-    let Some(record) = joyo else {
-        return Ok(vec![]);
-    };
-    let mut by_type: Vec<(String, Vec<String>)> = vec![];
-    for item in rows(&record, "readings") {
-        let reading = text(item, "reading");
-        if reading.is_empty() {
-            continue;
-        }
-        let kind = choose(item, &["reading_type_ja"], "読み");
-        if let Some((_, v)) = by_type.iter_mut().find(|(k, _)| k == kind) {
-            v.push(reading.into());
-        } else {
-            by_type.push((kind.into(), vec![reading.into()]));
-        }
-    }
-    if by_type.is_empty() {
+/// 詩形・詩の用語を検索し、完全一致したrecordから出典付き事実を返す。
+fn poetry(reader: &mut Reader<'_>, query: &Query, limit: usize) -> Result<Vec<Value>> {
+    if has(&POLICY["ambiguous"], &compact(&query.subject)) {
         return Ok(vec![]);
     }
-    let parts: Vec<_> = by_type
-        .iter()
-        .map(|(k, v)| format!("{k}は「{}」", v.join("・")))
-        .collect();
-    let sources = reader.sources(&record)?;
-    Ok(fact(
-        &record,
-        &format!(
-            "常用漢字表で「{}」の{}です。",
-            query.subject,
-            parts.join("、")
-        ),
-        "official_normalized_extract",
-        sources,
-        "",
-    )
-    .into_iter()
-    .collect())
-}
-/// 国語・詩の質問を資料群へ振り分け、完全一致したrecordから出典付き事実を取り出す。
-/// 表そのものの質問と漢字一文字は直接照合し、詩形・通常語句・明示文型はそれぞれ検索する。
-/// 曖昧語は空を返し、検索後は一致順位と重複除去で少数の回答事実へ絞る。
-fn japanese(reader: &mut Reader<'_>, query: &Query, limit: usize) -> Result<Vec<Value>> {
-    let subject = compact(&query.subject);
-    if has(&POLICY["ambiguous"], &subject) {
-        return Ok(vec![]);
-    }
-    if query.domain == "japanese_language"
-        && let Some(id) = POLICY["_OFFICIAL_KANJI_TABLE_RECORDS"][&subject].as_str()
-    {
-        let Some(mut record) = reader.catalog()?.get(id)? else {
-            return Ok(vec![]);
-        };
-        if record.get("dataset_id").is_none() {
-            record["dataset_id"] = "japanese_language_education".into();
-        }
-        let sources = reader.sources(&record)?;
-        let body = if id == "jp.bunka.joyo-kanji" {
-            "「常用漢字表」は、平成22年内閣告示第2号の2,136字を収めた漢字表です。本データベースでは字種と音訓を検索できます。"
-        } else {
-            "「学年別漢字配当表」は、小学校第1学年から第6学年までの配当漢字1,026字を示す別表です。本データベースでは文字ごとの配当学年を検索できます。"
-        };
-        return Ok(
-            fact(&record, body, "official_normalized_extract", sources, "")
-                .into_iter()
-                .collect(),
-        );
-    }
-    if ["grade", "reading"].contains(&query.intent.as_str())
-        && let Some(c) = cjk(&query.subject)
-    {
-        return kanji_facts(reader, query, c);
-    }
-    let mut records = if query.domain == "poetry" {
-        let mut records = reader.japanese(&query.subject, &["japanese_poetry_forms"], limit)?;
-        for hit in reader.catalog()?.search(
-            &query.subject,
-            &[("by_dataset".into(), vec!["world_poetry".into()])],
-            limit,
-        )? {
-            if let Some(mut record) = reader.catalog()?.get(text(&hit, "id"))? {
-                if record.get("dataset_id").is_none() {
-                    record["dataset_id"] = "world_poetry".into();
-                }
-                records.push(record);
-            }
-        }
-        records
-    } else {
-        let mut datasets = CORE.to_vec();
-        if query.subject.starts_with(['～', '〜', '~']) || has(&POLICY["grammar_exact"], &subject)
-        {
-            datasets.push("grammar_patterns");
-        }
-        reader.japanese(&query.subject, &datasets, limit)?
-    };
+    let mut records = reader.poetry(&query.subject, limit)?;
     // 下位readerの検索は部分一致も拾うため、回答へ使う段階で対象の完全一致を必須にする。
     records.retain(|r| match_rank(r, &query.subject).is_some());
-    let exact: HashSet<_> = records
-        .iter()
-        .filter(|r| {
-            text(r, "dataset_id") == "grammar_patterns" && compact(text(r, "title_ja")) == subject
-        })
-        .map(|r| compact(text(r, "title_ja")))
-        .collect();
-    // 文型の題名そのものが当たった場合は、同じ別名などで拾った別文型の混入を避ける。
-    if !exact.is_empty() {
-        records.retain(|r| {
-            text(r, "dataset_id") != "grammar_patterns"
-                || exact.contains(&compact(text(r, "title_ja")))
-        });
-    }
     // 一致順位が先。同順位の分類質問だけworld_poetryを優先し、最後はrecord IDで順序を固定する。
     records.sort_by_key(|r| {
         (
@@ -479,10 +232,9 @@ fn japanese(reader: &mut Reader<'_>, query: &Query, limit: usize) -> Result<Vec<
                 }
             }
         }
-        // 定義・分類・読みは一つの非文型recordから事実を得たら確定し、別recordの説明を混ぜない。
+        // 定義・分類・読みは一つのrecordから事実を得たら確定し、別recordの説明を混ぜない。
         if has_candidates
             && ["definition", "classification", "reading"].contains(&query.intent.as_str())
-            && text(&record, "dataset_id") != "grammar_patterns"
         {
             return Ok(facts);
         }
@@ -768,29 +520,25 @@ fn version_error(query: &Query) -> bool {
         .collect();
     !versions.is_empty() && (versions.len() != 1 || !versions.contains("1.21.11"))
 }
-/// 取消を確認し、Minecraft用readerまたは国語用readerへ検索を渡す。
+/// 取消を確認し、Minecraft用readerまたは詩用readerへ検索を渡す。
 /// 取得不能と未収録を区別するため、readerのエラーは空配列へ変換せず呼出側へ返す。
 fn lookup_inner(paths: &Paths, query: &Query, limit: usize, stop: Stop) -> Result<Vec<Value>> {
     stop.check()?;
     if query.domain == "minecraft" {
         let reader = super::minecraft::Minecraft::open(&paths.minecraft, &paths.source_lock, stop)?;
         minecraft(&reader, query, limit)
+    } else if query.domain == "poetry" {
+        poetry(&mut Reader::new(&paths.poetry, stop), query, limit)
     } else {
-        japanese(&mut Reader::new(&paths.language, stop), query, limit)
+        Ok(vec![])
     }
 }
 /// Queryから回答事実1〜3件と状態を返す同期入口。
-/// 曖昧な数字表記・未対応Minecraft版はnot_found、読込等の失敗はunavailable。
+/// 未対応Minecraft版はnot_found、読込等の失敗はunavailable。
 /// 成功時でも事実0件ならnot_foundとなり、検索成功だけではfoundにしない。
 pub fn lookup(paths: &Paths, query: &Query, limit: usize, stop: Stop) -> Value {
     let limit = limit.clamp(1, 3);
-    let error = if query.domain == "japanese_language"
-        && ["grade", "definition"].contains(&query.intent.as_str())
-        && query.subject.len() == 1
-        && query.subject.as_bytes()[0].is_ascii_digit()
-    {
-        "ambiguous_kanji_numeric_notation"
-    } else if query.domain == "minecraft" && version_error(query) {
+    let error = if query.domain == "minecraft" && version_error(query) {
         "unsupported_minecraft_version"
     } else {
         ""
@@ -824,9 +572,8 @@ mod tests {
     fn paths() -> Paths {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
         Paths {
-            language: retrieval::Paths {
+            poetry: retrieval::Paths {
                 reference: root.join("reference/language_education_and_poetry"),
-                cards: PathBuf::new(),
             },
             minecraft: root.join(".dogido_reference/minecraft_technical"),
             source_lock: root.join("reference/minecraft_technical/source_lock.json"),
@@ -848,9 +595,9 @@ mod tests {
     #[test]
     fn missing_data_cannot_become_an_empty_successful_search() {
         let mut paths = paths();
-        paths.language.reference = PathBuf::from("/missing-dogido-reference-data");
+        paths.poetry.reference = PathBuf::from("/missing-dogido-reference-data");
         let query = Query {
-            domain: "japanese_language".into(),
+            domain: "poetry".into(),
             subject: "枕詞".into(),
             intent: "definition".into(),
             evidence: "枕詞って何？".into(),

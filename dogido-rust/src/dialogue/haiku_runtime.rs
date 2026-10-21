@@ -19,7 +19,6 @@ pub struct Settings {
     pub interval_ms: u64,
     pub quiet_time_ms: u64,
     pub structured_max_tokens: u64,
-    pub grounding_max_tokens: u64,
     pub generation_strategy: String,
     pub max_regeneration_rounds: i64,
     pub base_url: Option<String>,
@@ -41,7 +40,6 @@ impl Default for Settings {
             interval_ms: 600_000,
             quiet_time_ms: 30_000,
             structured_max_tokens: 192,
-            grounding_max_tokens: 512,
             generation_strategy: "three_slot".into(),
             max_regeneration_rounds: 6,
             base_url: None,
@@ -70,10 +68,7 @@ impl Routes {
             "invalid workshop resume delay"
         );
         ensure!(
-            h.structured_max_tokens > 0
-                && h.grounding_max_tokens > 0
-                && h.job_timeout_ms > 0
-                && h.workshop_idle_ms > 0,
+            h.structured_max_tokens > 0 && h.job_timeout_ms > 0 && h.workshop_idle_ms > 0,
             "invalid haiku settings"
         );
         ensure!(
@@ -545,7 +540,6 @@ impl Dialogue {
             settings: haiku::preparation::Settings {
                 llm_enabled: self.config.llm_enabled && h.llm_enabled,
                 structured_max_tokens: h.structured_max_tokens,
-                grounding_max_tokens: h.grounding_max_tokens,
                 generation_strategy: h.generation_strategy.clone(),
                 max_regeneration_rounds: h.max_regeneration_rounds,
             },

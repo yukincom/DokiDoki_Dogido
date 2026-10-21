@@ -40,7 +40,17 @@ def stable(send,rows,sid):
 
 
 def done(base,send,sid,turn):
-    return drive(lambda s:threatening(send,s),sid,lambda:row(base,turn,{"quiet","completed","failed","cancelled"}))
+    # 再生待ちを経て専用入力へ転送された場合も、実際の配送先の完了を追う。
+    current = turn
+    terminal = {"quiet", "completed", "failed", "cancelled"}
+    def result():
+        nonlocal current
+        item = next((r for r in request(base, "/api/v1/rust-dialogue/snapshot")["utterances"] if r["turn_id"] == current), None)
+        if item and "forwarded_input" in item:
+            current = item["forwarded_input"]["turn_id"]
+            return None
+        return item if item and item["playback_status"] in terminal else None
+    return drive(lambda s:threatening(send,s),sid,result,timeout=15)
 
 
 def main():
@@ -58,13 +68,19 @@ def main():
         t=submit(base,sid,"この句の意味を教えて")
         r=done(base,send,sid,t);assert r["playback_status"]=="completed" and r["workshop_action"]=="explain",r
         assert len(calls)==1 and session(base,sid)["workshop_history"]
+        history_before = list(session(base,sid)["workshop_history"])
         (folder/"player_mode").write_text("slow")
         t=submit(base,sid,"もう一度句を説明して")
         drive(lambda s:threatening(send,s),sid,lambda:row(base,t,{"started"}))
         send(sid,visual_threats=[{**MOB,"approaching":True}],combat={"combat_active_hint":True})
         wait_for(lambda:row(base,t,{"cancelled"}))
         assert hud(sid)["state"]=="danger" and not hud(sid)["provisional_resume"]
-        assert len(session(base,sid)["workshop_history"])==1
+        history_after = session(base,sid)["workshop_history"]
+        assert history_after[:-1] == history_before, history_after
+        interrupted = history_after[-1]
+        assert interrupted["turn_id"] == t and interrupted["dogido_text"] == "", interrupted
+        assert interrupted["reply_delivery"] == "unspoken_combat" and interrupted["unspoken_text"], interrupted
+        assert not any(h["role"] == "assistant" and h["turn_id"] == t + ":reply" for h in session(base,sid)["history"])
         passed.append("explicit_resume_only_then_same_enemy_keeps_dialogue_and_approach_cancels")
 
     with fixture(combat_settings=SETTINGS,low_threat_resume_delay_ms=1000) as (base,p,log,control,seen,gate,drafting,checks,send,hud,rows,stored,folder):
@@ -93,13 +109,13 @@ def main():
         passed.append("model_cannot_shorten_eight_second_safety_period")
 
     with fixture(combat_settings=SETTINGS,low_threat_resume_delay_ms=1000) as (base,p,log,control,seen,gate,drafting,checks,send,hud,rows,stored,folder):
-        classifier(control,lambda text:intent(text))
+        classifier(control,lambda text:intent(text,"unrelated"))
         sid=ready(base,send,rows);stable(send,rows,sid)
         for text in ["句に戻らない", "『句の続きを話そう』と言われた", "句を続けるな", "うん"]:
             t=submit(base,sid,text);r=done(base,send,sid,t)
-            assert r["combat_input_result"]["analysis"]["action"]=="uncertain",r
+            assert r["combat_input_result"]["analysis"]["action"]=="unrelated",r
             assert hud(sid)["state"]=="danger"
-        passed.append("model_and_rule_fallback_cannot_resume_negated_or_quoted_intent")
+        passed.append("model_unrelated_choice_keeps_workshop_paused")
 
     with fixture(combat_settings=SETTINGS,low_threat_resume_delay_ms=1000) as (base,p,log,control,seen,gate,drafting,checks,send,hud,rows,stored,folder):
         classifier(control,lambda text:intent(text,"close_workshop"))
@@ -108,10 +124,12 @@ def main():
         threatening(send,sid)
         warning=wait_for(lambda:next((r for r in rows(sid) if r.get("combat_actions") and r["playback_status"]=="started"),None))
         t=submit(base,sid,"句の相談はお開きにしよう")
-        r=wait_for(lambda:row(base,t,{"quiet"}))
-        assert r["combat_input_outcome"]=="close_checked" and hud(sid)["state"]=="closed"
-        assert row(base,warning["turn_id"],{"started"})
-        passed.append("natural_close_never_interrupts_current_warning")
+        assert row(base,warning["turn_id"],{"started"}) and hud(sid)["state"]=="danger"
+        (folder/"player_mode").write_text("ok")
+        r=done(base,send,sid,t)
+        assert r["combat_input_outcome"]=="close_checked" and hud(sid)["state"]=="closed",r
+        assert row(base,warning["turn_id"],{"completed"})
+        passed.append("natural_close_waits_for_current_warning_then_closes")
 
     for change in ["enemy","new_input","stale","stop"]:
         with fixture(combat_settings=SETTINGS,low_threat_resume_delay_ms=1000) as (base,p,log,control,seen,gate,drafting,checks,send,hud,rows,stored,folder):

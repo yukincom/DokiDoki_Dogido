@@ -1,6 +1,6 @@
 //! Sessionの現在観測と確定済み短期履歴から、通常対話を一回だけ生成する。
 //! 話題選択を本文生成へまとめ、コードは形式補完と明らかな出力破損だけを判定する。
-//! 正本知識・川柳想起・国語対話は既存routing、履歴と実再生の確定はSessionが所有する。
+//! 詩の基本知識・Minecraft知識は既存DBへ。国語専用対話へは分岐せず、履歴確定はSessionが所有する。
 use super::{DialogueConfig, bridge, chat_context::CatalogLabels};
 use crate::{
     chat_materials::{self, Prepared},
@@ -21,7 +21,7 @@ fn live(cancel: &watch::Receiver<bool>) -> Result<()> {
 }
 
 /// 返答処理全体をbudget内で実行し、表示用textと必要時spoken_textを返す。
-/// select_route/hold_handoffはSession側で所有権と保留を照合する入口。
+/// select_routeはSession側で所有権と保留を照合する入口。
 /// 読み補正に子プロセスが必要な場合は、その終了処理まで待ってから返る。
 pub(super) async fn render(
     config: &DialogueConfig,
@@ -29,7 +29,6 @@ pub(super) async fn render(
     input: &bridge::Input,
     cancel: &mut watch::Receiver<bool>,
     mut select_route: impl FnMut(Route) -> Result<()>,
-    mut hold_handoff: impl FnMut(&Value) -> Result<bool>,
     budget: Duration,
 ) -> Result<Value> {
     live(cancel)?;
@@ -38,7 +37,7 @@ pub(super) async fn render(
     // 本文生成と資料読取りはfutureの破棄で止められるため、全体期限と取消を同じ待機で扱う。
     let mut result = tokio::select! { biased;
         _ = bridge::cancelled(cancel) => bail!("cancelled"),
-        result = tokio::time::timeout_at(deadline, body(config,llm,input,&mut native_cancel,&mut select_route,&mut hold_handoff)) => result.context("chat generation timed out")??,
+        result = tokio::time::timeout_at(deadline, body(config,llm,input,&mut native_cancel,&mut select_route)) => result.context("chat generation timed out")??,
     };
     live(cancel)?;
     ensure!(Instant::now() < deadline, "chat timed out");
@@ -66,14 +65,8 @@ async fn body(
     input: &bridge::Input,
     cancel: &mut watch::Receiver<bool>,
     select_route: &mut impl FnMut(Route) -> Result<()>,
-    hold_handoff: &mut impl FnMut(&Value) -> Result<bool>,
 ) -> Result<Value> {
     live(cancel)?;
-    if let Some(text) = input["address_reply"].as_str() {
-        return Ok(
-            json!({"op":"result","text":text,"language_status":"address_confirmation_requested","llm_reports":[]}),
-        );
-    }
     let mut context = input.context.clone().context("native prepared input")?;
     let raw = input["text"].as_str().context("native current input")?;
     // 操作・保存・知識照会のroutingは原文由来の解析を使う。
@@ -133,36 +126,13 @@ async fn body(
         .await?;
         live(cancel)?;
         let reply = crate::knowledge::render(&lookup);
-        select_route(Route::Learning)?;
+        select_route(Route::Knowledge)?;
         return Ok(
             json!({"op":"result","text":reply.text,"knowledge_status":reply.lookup_status,"references":reply.references,"llm_reports":[]}),
         );
     }
-    let mut reports = vec![];
-    let mut language = None;
-    if config.language_enabled
-        && input["host_chat_confirmed"] != true
-        && input["workshop_fallback"] != true
-        && input["workshop"].is_null()
-        && !context.asks_inventory
-        && !context.normalized_text.starts_with('/')
-        && input["language_requested"] == true
-    {
-        select_route(Route::Learning)?;
-        let mut turn = crate::language::Turn::new(input)?;
-        drive_language(config, llm, &mut turn, &mut reports, cancel).await?;
-        live(cancel)?;
-        if turn.outcome["status"] == "host_chat" && hold_handoff(&turn.outcome)? {
-            turn.outcome["status"] = "awaiting_address".into();
-        }
-        if turn.outcome["status"] != "host_chat" {
-            let mut result =
-                json!({"op":"result","text":turn.outcome["text"],"llm_reports":reports});
-            language_fields(&mut result, &turn)?;
-            return Ok(result);
-        }
-        language = Some(turn);
-    }
+    // 国語学習の専用対話は本体の対象外。詩の基本知識は上の正本DB経路で扱う。
+    let mut reports: Vec<Value> = vec![];
     // Sessionがこのturn用に投影した観測・履歴をまとめて読む。
     // 判断途中で別時点の観測を拾うと照合対象が変わるため、snapshot欠落はエラーにする。
     let (_event, snapshot) = input
@@ -174,9 +144,7 @@ async fn body(
         native.context.workshop_open = false;
         native.context.workshop_details = None;
     }
-    if language.is_none() {
-        select_route(Route::Casual)?;
-    }
+    select_route(Route::Casual)?;
     let prepared = chat_materials::prepare(
         native
             .sensory_event
@@ -193,7 +161,6 @@ async fn body(
         Prepared::Fixed(fixed) => fixed_result(fixed),
         Prepared::Reply(reply) => {
             if config.llm_enabled
-                && language.is_none()
                 && input["workshop_fallback"] != true
                 && let Some(horse) = &input.horse_recall
             {
@@ -226,86 +193,12 @@ async fn body(
         }
     };
     result["llm_reports"] = json!(reports);
-    if let Some(turn) = language {
-        language_fields(&mut result, &turn)?;
-    }
     Ok(result)
 }
 fn fixed_result(fixed: chat_materials::Fixed) -> Value {
     tracing::info!(event = "chat_fixed", reason = fixed.reason);
     json!({"op":"result","text":fixed.text,"announce_smell":fixed.announce_smell})
 }
-fn language_fields(result: &mut Value, turn: &crate::language::Turn) -> Result<()> {
-    ensure!(turn.finished(), "unfinished language turn");
-    result["language_status"] = turn.outcome["status"].clone();
-    result["language_state"] = serde_json::to_value(&turn.state)?;
-    result["language_references"] = turn.outcome["references"].clone();
-    if let Some(proposal) = turn.outcome.get("web_proposal") {
-        result["web_proposal"] = proposal.clone();
-    }
-    Ok(())
-}
-/// 国語対話のTurnが返すgenerate/lookupだけを実行し、その結果を次の段階へ戻す。
-/// 資料照会はローカルDB読取り、生成失敗はerror結果としてTurnへ渡し、doneまで状態機械を進める。
-async fn drive_language(
-    config: &DialogueConfig,
-    llm: &RigLlm,
-    turn: &mut crate::language::Turn,
-    reports: &mut Vec<Value>,
-    cancel: &watch::Receiver<bool>,
-) -> Result<()> {
-    let mut reply = turn.advance(&json!({"stage":"start"}))?;
-    while matches!(reply["command"].as_str(), Some("generate" | "lookup")) {
-        live(cancel)?;
-        if reply["command"] == "lookup" {
-            let interpretation = &reply["interpretation"];
-            let request = crate::knowledge::retrieval::Request {
-                terms: serde_json::from_value(interpretation["search_terms"].clone())?,
-                facet: interpretation["facet"]
-                    .as_str()
-                    .context("lookup facet")?
-                    .into(),
-                target: interpretation["target"]
-                    .as_str()
-                    .context("lookup target")?
-                    .into(),
-            };
-            let lookup = crate::knowledge::retrieval::search_async(
-                crate::knowledge::retrieval::Paths::from_helper(&config.helper)?,
-                request,
-            )
-            .await?;
-            tracing::info!(event = "language_lookup", reader = "rust", status = ?lookup["status"]);
-            reply = turn.advance(&json!({"stage":"lookup","lookup":lookup}))?;
-        } else {
-            let request = turn.request(&config.model)?;
-            let generated = if !config.llm_enabled {
-                json!({"text":"","finish_reason":"error"})
-            } else {
-                match llm.generate(&request).await {
-                    Ok(report) => {
-                        let report = serde_json::to_value(report)?;
-                        let generated = report["generated"].clone();
-                        reports.push(report);
-                        generated
-                    }
-                    Err(error) => {
-                        reports.push(json!({"kind":request.kind,"error":error.to_string()}));
-                        json!({"text":"","finish_reason":"error"})
-                    }
-                }
-            };
-            reply = turn.generated(generated)?;
-        }
-    }
-    live(cancel)?;
-    ensure!(
-        reply["command"] == "done" && turn.finished(),
-        "unfinished language turn"
-    );
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -341,28 +234,12 @@ mod tests {
             &input("静かにして"),
             &mut rx,
             |_| panic!("no route"),
-            |_| panic!("no handoff"),
             Duration::from_secs(1),
         )
         .await
         .unwrap();
         assert_eq!(quiet["text"], "");
         assert_eq!(quiet["spoken_text"], "");
-        let mut address = input("ドギド");
-        address["address_reply"] = "あの話、わし宛てでええんか？".into();
-        let fixed = super::render(
-            &c,
-            &llm,
-            &address,
-            &mut rx,
-            |_| panic!("no route"),
-            |_| panic!("no handoff"),
-            Duration::from_secs(1),
-        )
-        .await
-        .unwrap();
-        assert_eq!(fixed["text"], address["address_reply"]);
-        assert_eq!(fixed["language_status"], "address_confirmation_requested");
         for text in ["剣に持ち替えて", "今の句を保存して"] {
             let reply = super::render(
                 &c,
@@ -370,7 +247,6 @@ mod tests {
                 &input(text),
                 &mut rx,
                 |_| Ok(()),
-                |_| Ok(false),
                 Duration::from_secs(1),
             )
             .await
@@ -396,7 +272,6 @@ mod tests {
                 &input("静かにして"),
                 &mut rx,
                 |_| Ok(()),
-                |_| Ok(false),
                 Duration::from_secs(1)
             )
             .await
@@ -413,7 +288,6 @@ mod tests {
                 &input("静かにして"),
                 &mut rx,
                 |_| Ok(()),
-                |_| Ok(false),
                 Duration::from_secs(1)
             )
             .await
@@ -423,10 +297,9 @@ mod tests {
         );
     }
     #[tokio::test]
-    async fn disabled_model_and_language_are_quiet_without_transport() {
+    async fn disabled_model_is_quiet_without_transport() {
         let mut c = config();
         c.llm_enabled = false;
-        c.language_enabled = false;
         let llm = RigLlm::new("http://127.0.0.1:9/v1", None, Duration::from_secs(1)).unwrap();
         let fixture: Value = serde_json::from_str(
             include_str!("../../fixtures/chat-materials.jsonl")
@@ -437,7 +310,6 @@ mod tests {
         .unwrap();
         let mut frame = json!({"text":"こんにちは","reading_corrections":[]});
         frame["event"] = fixture["event"].clone();
-        frame["language_requested"] = true.into();
         let mut native: crate::dialogue::chat_context::Native = serde_json::from_value(json!({"snapshot":fixture["snapshot"],"context":fixture["context"],"settings":fixture["settings"]})).unwrap();
         native.sensory_event =
             Some(crate::events::GameEvent::parse(fixture["event"].clone()).unwrap());
@@ -466,7 +338,6 @@ mod tests {
                 assert_eq!(route, Route::Casual);
                 Ok(())
             },
-            |_| panic!("language disabled"),
             Duration::from_secs(1),
         )
         .await
@@ -477,6 +348,5 @@ mod tests {
         assert_eq!(result["dialogue_outcome"], "generation_error");
         assert!(result.get("spoken_text").is_none());
         assert_eq!(result["llm_reports"], json!([]));
-        assert!(result.get("language_status").is_none());
     }
 }

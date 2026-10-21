@@ -5,7 +5,6 @@ import json
 
 from check_dialogue import register, request, row, snapshot, submit, wait_for
 from check_haiku_runtime import fixture, LINES
-from check_language_runtime import interpretation
 from check_workshop_combat import SETTINGS, MOB, end, enter, returned
 from check_workshop_runtime import ready, session, install, step
 from check_workshop_edits import finish, edit, adoption, revisions
@@ -15,7 +14,10 @@ from check_workshop_combat import actions, drive
 
 
 def context(base):
-    return request(base, "/api/v1/voice-input/context")
+    result = request(base, "/api/v1/voice-input/context")
+    assert isinstance(result["voice_enabled"], bool), result
+    assert "voice_generation" in result, result
+    return {key:result[key] for key in ("prompt_mode", "session_id")}
 
 
 def scream(base, sid=None, text="うわああ！", source="voice"):
@@ -53,35 +55,28 @@ def main():
         previous_rows = len(rows(sid))
         result = scream(base, sid)
         assert result["accepted"] and result["reason"] == "situation_vocalization" and "turn_id" not in result
-        interrupted = wait_for(lambda: row(base, active, {"cancelled"}))
-        assert interrupted["cancel_reason"] == "voice_vocalization", interrupted
+        delivered = wait_for(lambda: row(base, active, {"completed"}))
+        assert delivered["delivery_confirmed"], delivered
         assert len(rows(sid)) == previous_rows
-        assert not any(r["turn_id"] == active + ":reply" for r in session(base, sid)["history"])
+        assert sum(r["turn_id"] == active + ":reply" for r in session(base, sid)["history"]) == 1
         assert len(calls(seen)) == before
         assert session(base, sid)["history_retention"]["danger_active"]
         assert not session(base, sid)["foreground"]["combat_active"]
-        passed.append("scream_cancels_unheard_reply_without_model_turn_or_fake_combat")
+        passed.append("scream_keeps_started_reply_without_model_turn_or_fake_combat")
 
         enter(send, rows, sid)
         end(send, rows, sid)
-        captures = []
-        def model(incoming):
-            if incoming["max_tokens"] != 850:
-                return None
-            background, current = incoming["messages"][-1]["content"].split("\n以上は背景。今回応答する最新の発話はこちら：\n")
-            details, current = json.loads(background), json.loads(current)
-            captures.append(details)
-            return interpretation(current)
-        control["structured_handler"] = model
+        def situation_prompt():
+            return "\n".join(m["content"] for m in calls(seen)[-1]["messages"])
         for i in range(4):
             send(sid)
             turn = submit(base, sid, f"きょうの音数を教えて。その{i}")
             wait_for(lambda: row(base, turn, {"completed"}))
-            note = captures[-1]["situation_history"]
+            note = situation_prompt()
             assert ("近くの敵対モブを視認" in note) == (i < 3), note
             assert "うわああ" not in note
         assert "voice_situation" in log.read_text() and "player_vocalization" in log.read_text()
-        passed.append("observed_situation_reaches_language_and_expires_after_three_inputs")
+        passed.append("observed_situation_reaches_chat_and_expires_after_three_inputs")
 
         # 5秒以上ずれた観測から、声の原因を推定しない。
         scream(base, sid)
@@ -94,8 +89,8 @@ def main():
         send(sid)
         turn = submit(base, sid, "きょうの音数を教えて。その後")
         wait_for(lambda: row(base, turn, {"completed"}))
-        assert "驚いた声を検出。原因は不明" in captures[-1]["situation_history"]
-        assert "近くの敵対モブを視認" not in captures[-1]["situation_history"]
+        assert "驚いた声を検出。原因は不明" in situation_prompt()
+        assert "近くの敵対モブを視認" not in situation_prompt()
         passed.append("unrelated_old_observation_does_not_invent_scream_cause")
 
         other = register(base, preview=False)
@@ -178,7 +173,7 @@ def main():
         base, _, log, _, _, gate, drafting, _, send, hud, _, stored, _ = f
         gate.clear()
         try:
-            sid = register(base, preview=False)
+            sid = register(base, preview=False, body=True)
             send(sid)
             wait_for(drafting.is_set)
             assert context(base)["prompt_mode"] == "normal" and hud(sid)["state"] == "closed"

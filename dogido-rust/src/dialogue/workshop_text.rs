@@ -39,6 +39,7 @@ impl Dialogue {
         };
         json!({"key":s.text_poem.as_ref().map(|p| &p.key),"lines":w.current_lines,
             "revision_id":w.revision_id,"pending":w.pending,"version":w.version,
+            "editing_state":w.editing,
             "workshop_id":w.hud_id,"open":w.open,"candidate":w.conversation_candidate})
     }
 
@@ -127,6 +128,22 @@ impl Dialogue {
             w.pending = serde_json::from_value(saved["pending"].clone())?;
             if let Some(pending) = &w.pending {
                 pending.validate(&w.current_lines)?;
+            }
+            // 編集表示も引継ぐ。旧記録は検証済みの未採用案がある場合だけ復元し、
+            // 保存済みrevisionを開いた事実だけでは編集開始と扱わない。
+            if let Some(state) = saved.get("editing_state") {
+                let editing: Option<crate::haiku_record::WorkshopEditing> =
+                    serde_json::from_value(state.clone())?;
+                ensure!(editing.as_ref().is_none_or(|e| e.selected_line.is_none_or(|i| i < 3)),
+                    "invalid editing line");
+                w.editing = editing;
+            } else if let Some(pending) = &w.pending {
+                let selected = if pending.generated_basis.as_ref().is_some_and(|b| b.target_indices.len() != 1) {
+                    None
+                } else {
+                    Some(pending.selected_line)
+                };
+                w.begin_editing(selected);
             }
             w.version = saved["version"].as_u64().unwrap_or(0);
             w.hud_id = saved["workshop_id"]
@@ -271,8 +288,7 @@ impl Dialogue {
         ensure!(
             !self.config.audio_enabled
                 && !self.config.haiku.memory_enabled
-                && !self.config.haiku.enabled
-                && !self.config.web.enabled,
+                && !self.config.haiku.enabled,
             "text workshop requires isolated, silent configuration"
         );
         let mut d = self.data.lock().unwrap();
@@ -348,24 +364,28 @@ mod tests {
                 memory_enabled: false,
                 ..Default::default()
             },
-            web: WebSettings {
-                enabled: false,
-                ..Default::default()
-            },
             ..Default::default()
-        }).unwrap();
+        })
+        .unwrap();
         dialogue.register("text", "プレイヤー", true);
-        dialogue.open_text_workshop("text", emission(), "fake_entry".into()).unwrap();
+        dialogue
+            .open_text_workshop("text", emission(), "fake_entry".into())
+            .unwrap();
         let mut data = dialogue.data.lock().unwrap();
         let s = data.sessions.get_mut("text").unwrap();
-        let saved = |s: &mut Session| Dialogue::workshop_view(s, "そのまま残そう").unwrap()["current_verse_saved"].clone();
+        let saved = |s: &mut Session| {
+            Dialogue::workshop_view(s, "そのまま残そう").unwrap()["current_verse_saved"].clone()
+        };
         assert_eq!(saved(s), false);
         s.haiku.workshop.as_mut().unwrap().revision_id = Some("text_fake_revision".into());
         assert_eq!(saved(s), false);
         s.text_poem = Some(crate::poem_book::SavedPoem {
-            key: "saved_poem".into(), root: Default::default(), original: emission(),
+            key: "saved_poem".into(),
+            root: Default::default(),
+            original: emission(),
             lines: s.haiku.workshop.as_ref().unwrap().current_lines.clone(),
-            revision_id: None, revisions: Vec::new(),
+            revision_id: None,
+            revisions: Vec::new(),
         });
         assert_eq!(saved(s), true);
         s.text_workshop = false;
@@ -388,10 +408,6 @@ mod tests {
             haiku: HaikuSettings {
                 enabled: false,
                 memory_enabled: false,
-                ..Default::default()
-            },
-            web: WebSettings {
-                enabled: false,
                 ..Default::default()
             },
             ..Default::default()

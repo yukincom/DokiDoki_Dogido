@@ -263,9 +263,6 @@ impl Engine {
         for s in &surfaces {
             readings.push(self.normalized(s, false)?)
         }
-        if readings.iter().any(Option::is_none) {
-            return Ok(vec![]);
-        }
         Ok(surfaces
             .into_iter()
             .zip(readings)
@@ -278,7 +275,7 @@ impl Engine {
                     position: position.into(),
                     canonical_name: name.into(),
                     surface_text: surface,
-                    reading_text: reading.unwrap(),
+                    reading_text: reading.unwrap_or_default(),
                     source_atom_ids: vec![],
                     source_atoms: vec![],
                     provenance: provenance.into(),

@@ -3,7 +3,6 @@
 import json
 from check_dialogue import register, request, row, snapshot, submit, wait_for
 from check_haiku_runtime import fixture
-from check_language_runtime import interpretation
 from check_workshop_combat import SETTINGS, MOB, drive, end, enter, event
 
 def session(base, sid):
@@ -85,14 +84,16 @@ def main():
             assert all(r["kind"] == "combat_fact" for r in short_rows), short_rows
         passed.append("no_added_model_calls_or_conversation_persistence")
 
-        # 実際に始まった音声を敵が中断しても、全文を会話済みにはしない。
+        # 実際に始まった音声を導火の緊急警告が中断しても、全文を会話済みにはしない。
         (folder / "player_mode").write_text("slow")
         send(sid)
         cancelled = submit(base, sid, "ドギド、途中で止まる返事のテスト")
         wait_for(lambda: row(base, cancelled, {"started"}))
-        (folder / "player_mode").write_text("ok")
-        send(sid, visual_threats=[MOB], combat={"combat_active_hint": True})
+        send(sid, visual_threats=[{"type":"creeper", "entity_id":"urgent-fuse",
+                                 "distance":3, "fuse_active":True}],
+             combat={"combat_active_hint": True})
         wait_for(lambda: row(base, cancelled, {"cancelled"}))
+        (folder / "player_mode").write_text("ok")
         current = session(base, sid)
         assert current["history_retention"]["danger_active"]
         assert not any(r["turn_id"] == cancelled + ":reply" for r in current["history"])
@@ -101,40 +102,6 @@ def main():
         assert session(base, new)["history"] == []
         assert session(base, new)["history_retention"]["retained_utterances"] == 0
         passed.append("interrupted_audio_excluded_and_session_reconnect_clears_bookmark")
-
-    with fixture(enabled=False, combat_settings=SETTINGS) as f:
-        base, _, log, control, seen, _, _, _, send, _, rows, _, _ = f
-        captures = []
-
-        def language_model(incoming):
-            if incoming["max_tokens"] != 850:
-                return None
-            background, latest = incoming["messages"][-1]["content"].split(
-                "\n以上は背景。今回応答する最新の発話はこちら：\n")
-            details, current = json.loads(background), json.loads(latest)
-            captures.append(details)
-            return interpretation(current, target="あさ", relation="continue")
-
-        control["structured_handler"] = language_model
-        sid = register(base, preview=False)
-        seeds = []
-        for i in range(5):
-            send(sid)
-            t = submit(base, sid, f"音数を教えて。あさ。その{i}")
-            wait_for(lambda: row(base, t, {"completed"}))
-            seeds.append(t)
-        enter(send, rows, sid)
-        end(send, rows, sid)
-        for i in range(3):
-            send(sid)
-            t = submit(base, sid, "さっきの話の続きをお願い" if i == 0 else f"音数を教えて。あさ。その後{i}")
-            wait_for(lambda: row(base, t, {"completed"}))
-            assert any(r["turn_id"] == seeds[0] for r in captures[-1]["history"]), captures[-1]
-        send(sid)
-        t = submit(base, sid, "音数を教えて。あさ。その後3")
-        wait_for(lambda: row(base, t, {"completed"}))
-        assert not any(r["turn_id"] == seeds[0] for r in captures[-1]["history"])
-        passed.append("language_interpretation_receives_retained_history_then_expires")
 
     with fixture(enabled=False, combat_settings={**SETTINGS, "conversation_post_danger_player_turns": 0}) as f:
         base, _, log, _, _, _, _, _, send, _, rows, _, _ = f

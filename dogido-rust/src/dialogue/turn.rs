@@ -141,18 +141,7 @@ impl Dialogue {
             }
         });
         let mut completed = false;
-        self.prepare_web(&sid, epoch, &mut input, &cancel).await;
-        let web_result = self.web_turn(&sid, epoch, &input, &mut cancel).await;
-        let result = if let Err(error) = web_result {
-            Err(error)
-        } else if let Some(result) = web_result.unwrap() {
-            Ok(result)
-        } else if input["address_reply"].is_string() {
-            match self.select_foreground(&sid, &turn, epoch, crate::foreground::Route::Learning) {
-                Ok(()) => bridge::render(&self.config, &self.llm, input.clone(), &mut cancel).await,
-                Err(error) => Err(error),
-            }
-        } else if input["poem_input"].is_object() {
+        let result = if input["poem_input"].is_object() {
             self.save_poem_input(&sid, epoch, &input, &mut cancel).await
         } else if crate::haiku_memory::clear_requested(input["text"].as_str().unwrap_or("")) {
             self.clear_lessons(&sid, epoch, &input).await
@@ -209,7 +198,6 @@ impl Dialogue {
                 input.clone(),
                 &mut cancel,
                 |route| self.select_foreground(&sid, &turn, epoch, route),
-                |outcome| self.hold_language_handoff(&sid, &turn, epoch, &input, outcome),
             )
             .await
         };
@@ -238,10 +226,6 @@ impl Dialogue {
                     result["horse_recall_status"] = "rejected".into();
                     result["horse_recall_reason"] = error.to_string().into();
                 }
-                if input["host_chat_confirmed"] == true {
-                    result["language_status"] = "host_chat".into();
-                    result["language_state"] = json!(crate::language::State::default());
-                }
                 if result["output_suppressed"] == true || self.workshop_combat_priority(&input) {
                     // 発言への評価と返答予定は残すが、古い句操作や音声は実行しない。
                     drop(permit.take());
@@ -253,7 +237,6 @@ impl Dialogue {
                     drop(permit);
                     return;
                 }
-                self.apply_language_result(&sid, &turn, epoch, &result);
                 {
                     // ディスクへの記録待ちも、戦闘音声の直列枠を占有し続けない。
                     let feedback = self.record_feedback(&sid, epoch, &input, &mut result);
@@ -303,14 +286,6 @@ impl Dialogue {
                         PlaybackStatus::Unsupported,
                         Some(&result),
                     );
-                } else if result["language_status"] == "awaiting_address" {
-                    self.update(
-                        &sid,
-                        &turn,
-                        epoch,
-                        PlaybackStatus::NotSelected,
-                        Some(&result),
-                    );
                 } else if result["text"].as_str().is_none_or(|s| s.is_empty()) {
                     self.update(&sid, &turn, epoch, PlaybackStatus::Quiet, Some(&result));
                 } else if self.update(&sid, &turn, epoch, PlaybackStatus::Queued, Some(&result)) {
@@ -355,8 +330,6 @@ impl Dialogue {
                             }
                         }
                     };
-                    // Web開始は音声プロセスの実終了と同じepochの確認後だけ。
-                    self.web_playback(&sid, epoch, &result, status);
                     completed = self.update(&sid, &turn, epoch, status, Some(&result))
                         && (status == PlaybackStatus::Completed || text_displayed)
                         && result["workshop_action"].is_null()

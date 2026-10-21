@@ -23,12 +23,12 @@ DESCRIPTION = "サクラの葉と黒い斧の対比。"
 
 
 @contextmanager
-def fixture(*, combat_settings=None, extra_args=(), **settings):
+def fixture(*, combat_settings=None, extra_args=(), initial_lines=None, **settings):
     with tempfile.TemporaryDirectory(prefix="dogido-haiku-runtime-") as temp, dependencies() as (dep, control, seen):
         folder = Path(temp)
         gate = threading.Event(); gate.set()
         drafting = threading.Event()
-        checks = {"fail": False, "drafts": 0}
+        checks = {"fail": False, "drafts": 0, "regenerations": 0}
         def structured(incoming):
             temperature = incoming.get("temperature")
             if temperature == .15:
@@ -36,23 +36,20 @@ def fixture(*, combat_settings=None, extra_args=(), **settings):
                         "elements": ["サクラの葉", "ネザライトの斧"], "focus": ["サクラの葉"], "confidence": .95}
             if temperature == .2:
                 return {"found": False}
-            if temperature == .6:
-                checks["drafts"] += 1
-                drafting.set()
-                gate.wait(timeout=15)
-                assert not incoming.get("tools") and "tool_choice" not in incoming
-                return {"lines": LINES}
-            if incoming["max_tokens"] == 512:
-                if checks["fail"]:
-                    return {"verdicts": {}}
+            if temperature in {.6, .3}:
                 text = "\n".join(m["content"] for m in incoming["messages"])
-                indices = [int(i) for i in re.findall(r"^- ([012]):", text, re.M)]
-                numbers = list(dict.fromkeys(int(i) for i in re.findall(r"^- \[(\d+)\]", text, re.M)))
-                assert indices and len(numbers) >= len(indices), text
-                return {"verdicts": {str(i): "pass" for i in indices},
-                        "assessments": [{"line_index": i, "atom_ids": [numbers[n]]} for n, i in enumerate(indices)],
-                        "failure_reasons": {}}
-            return None  # existing casual planner/leaf mock
+                assert not incoming.get("tools") and "tool_choice" not in incoming
+                assert "上五" in text and "中七" in text and "下五" in text
+                assert "atom_ids" not in text and "verdicts" not in text, text
+                if temperature == .6:
+                    checks["drafts"] += 1
+                    drafting.set()
+                    gate.wait(timeout=15)
+                    return {"lines": ["あ", "い", "う"] if checks["fail"] else LINES if initial_lines is None else initial_lines}
+                checks["regenerations"] += 1
+                return {"lines": [{"line_index": i, "text": "あ" if checks["fail"] else line}
+                                  for i, line in enumerate(LINES)]}
+            return None  # existing single-call conversation mock
         control["structured_handler"] = structured
         h = {"interval_ms": 0, "quiet_time_ms": 0, "memory_dir": str(folder / "memory"), "platform_ai": {"provider": "chat"}, **settings}
         try:
@@ -132,6 +129,11 @@ def main():
         assert datetime.fromisoformat(entry["created_at"]) >= completed_after
         assert entry["materials_snapshot"]["preface_spoken"] == inspiration["text"]
         assert len(stored(sid)) == 1
+        assert entry["materials_snapshot"]["source_attribution"] == "provided_materials_unverified", entry
+        model_calls = [r["body"] for r in seen if r["path"] == "/v1/chat/completions"]
+        assert all(r["temperature"] in {.15, .2, .6} for r in model_calls), model_calls
+        assert checks["regenerations"] == 0
+        passed.append("current_materials_without_source_ids_or_evaluation_and_explicit_unverified_provenance")
         short = [json.loads(line) for line in (folder / "memory/sessions" / sid / "short_term/current_session.jsonl").read_text().splitlines()]
         assert len([r for r in short if r["type"] == "haiku_emitted"]) == 1, short
         assert len([r for r in short if r.get("kind") == "haiku_delivered"]) == 1, short
@@ -163,11 +165,12 @@ def main():
         assert not stored(sid) and hud(sid)["state"] == "closed"
         passed.append("partial_hostile_audio_cancels_and_warning_precedes_late_model")
 
-    with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
+    with fixture(max_regeneration_rounds=2) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         checks["fail"] = True; sid = register(base, preview=False, body=True); send(sid)
         wait_for(lambda: any(r["turn_id"].endswith(":failure") and r["playback_status"] == "completed" for r in rows(sid)))
         assert not stored(sid) and hud(sid)["state"] == "closed" and checks["drafts"] == 1
-        passed.append("unavailable_checker_never_saves_or_rewrites_poem")
+        assert checks["regenerations"] == 2, checks
+        passed.append("invalid_meter_exhausts_only_configured_generation_attempts_without_save")
 
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         control["fail_sentence"] = "ここで一句。"

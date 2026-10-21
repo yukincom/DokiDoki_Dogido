@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""native stage_player_editを既存の原文・音数・保存経路へ通す。観測・初期句・音声は模擬。"""
+"""native stage_player_editを既存の原文補完・保存経路へ通す。観測・初期句・音声は模擬。"""
 import argparse
 import json
 import time
@@ -18,11 +18,12 @@ def edit_args(text, replacement="しろい"):
 
 
 def run_case(name, text, arguments, *, expected_lines=None, expected_code=None, batch=False, base_url=None,
-             legacy_action=None, sampling=None):
+             legacy_action=None, sampling=None, initial_lines=None):
     calls = []
     responses = []
     tool_results = []
-    with fixture() as (base, _, log, control, _, _, _, _, send, hud, rows, stored, folder):
+    base_lines = LINES if initial_lines is None else initial_lines
+    with fixture(initial_lines=initial_lines) as (base, _, log, control, _, _, _, _, send, hud, rows, stored, folder):
         def completion(incoming):
             if incoming["max_tokens"] != 420:
                 return None
@@ -89,20 +90,23 @@ def run_case(name, text, arguments, *, expected_lines=None, expected_code=None, 
         if expected_lines is not None:
             passed = passed and current["canonical_lines"] == expected_lines and len(saved) == 1
             passed = passed and reply.get("workshop_outcome") == "player_edit_saved" and bool(native_calls)
+            passed = passed and current["editing"] and current["selected_line"] == next(
+                i for i, pair in enumerate(zip(base_lines, expected_lines)) if pair[0] != pair[1])
             passed = passed and any(s.get("transport") == "native_tool" and
                 s.get("tool_call", {}).get("name") == "stage_player_edit" for s in reply.get("workshop_steps", []))
             if saved:
-                assert len(saved[0]["edits"]) == 1 and saved[0]["edits"][0]["line_index"] == 1, saved
-                assert saved[0]["base_text"] == "\n".join(LINES), saved
+                changed = [i for i, pair in enumerate(zip(base_lines, expected_lines)) if pair[0] != pair[1]]
+                assert len(changed) == 1 and len(saved[0]["edits"]) == 1, saved
+                assert saved[0]["edits"][0]["line_index"] == changed[0], saved
+                assert saved[0]["edits"][0]["replacement_text"] == expected_lines[changed[0]], saved
+                assert saved[0]["base_text"] == "\n".join(base_lines), saved
             if not base_url:
                 assert len(calls) == 1, calls
         else:
-            passed = passed and current["canonical_lines"] == LINES and not saved and not current["pending_lines"]
+            passed = passed and current["canonical_lines"] == base_lines and not saved and not current["pending_lines"]
             if expected_code:
-                evidence = json.dumps(tool_results, ensure_ascii=False) + log.read_text()
+                evidence = json.dumps([tool_results, reply.get("workshop_steps", [])], ensure_ascii=False) + log.read_text()
                 passed = passed and expected_code in evidence
-                if expected_code == "meter_not_exact":
-                    passed = passed and len(tool_results) == 1 and expected_code in tool_results[0]["validation_codes"]
             if not base_url:
                 assert len(calls) == 2, calls
             if legacy_action:
@@ -135,8 +139,8 @@ def main():
             edit_args(full, "\n".join([LINES[0], "しろいおのへと", LINES[2]])),
             expected_lines=[LINES[0], "しろいおのへと", LINES[2]]))
         short = "くろいをあおに変えて"
-        cases.append(run_case("bad_meter_returns_result_without_saving", short, edit_args(short, "あお"),
-                              expected_code="meter_not_exact"))
+        cases.append(run_case("short_meter_is_saved", short, edit_args(short, "あお"),
+                              expected_lines=[LINES[0], "あおおのへと", LINES[2]]))
         stale = edit_args(raw)
         stale["expected_text"] = "\n".join(["さくらいろ", *LINES[1:]])
         cases.append(run_case("stale_unselected_line_blocks_edit", raw, stale, expected_code="stale_tool_edit"))
@@ -149,6 +153,59 @@ def main():
         for action in ("stage_player_edit", "inspect"):
             cases.append(run_case("removed_json_" + action + "_cannot_execute", raw, edit_args(raw),
                                   legacy_action=action, expected_code="native_tool_required"))
+        # 2026-10-18実ログの原文と誤ったtool引数を再現。モデルによる末尾・旧語の短縮後も
+        # 原文の「うつろいの」を使い、同じ保存経路で上五一行だけを一度保存する。
+        reported_lines = ["ゆらぐひが", "たましいのひが", "ゆらゆらと"]
+        for name, text, target in [
+            ("reported_typed_keeps_trailing_no", "ゆらぐひが を うつろいの に変えてください。", "ゆらぐひが"),
+            ("reported_voice_keeps_both_phrases", "揺らぐひがをうつろいのに変えてください", "ひが"),
+            ("reported_voice_with_intro_keeps_both_phrases", "では揺らぐひがをうつろいのに変えてください", "ゆらぐひが"),
+        ]:
+            arguments = {"line_id":"line_1", "expected_text":reported_lines[0],
+                "target_fragment":target, "replacement_text":"うつろい", "evidence":text, "confidence":1.0}
+            cases.append(run_case(name, text, arguments, initial_lines=reported_lines,
+                expected_lines=["うつろいの", *reported_lines[1:]]))
+        # 2026-10-21実発話。句中の「もし」で変更を棄却し、音数説明だけへ戻っていた。
+        lamp_lines = ["いしのそこ", "ゆれるともしのひ", "だいじょうぶや"]
+        for name, text, fragment, reference in [
+            ("lamp_arrow", "ゆれるともしのひ->ゆれるともしび", "ゆれるともしのひ", ""),
+            ("lamp_full_request", "ゆれるともしのひをゆれるともしびに変更してください", "ゆれるともしのひ", ""),
+            ("lamp_free_wording", "ゆれるともしのひをゆれるともしびにかえようぜ", "ゆれるともしのひ", ""),
+            ("lamp_line_reference", "中句をゆれるともしびに変更してください", "", "中句"),
+        ]:
+            arguments = {"line_id":"line_2", "expected_text":lamp_lines[1],
+                "target_fragment":fragment, "line_reference_evidence":reference,
+                "replacement_text":"ゆれるともしび", "evidence":text, "confidence":1.0}
+            case = run_case(name, text, arguments, initial_lines=lamp_lines,
+                expected_lines=[lamp_lines[0], "ゆれるともしび", lamp_lines[2]])
+            assert case["reply"]["text"] == "変更しました。", case["reply"]
+            cases.append(case)
+        text = "ではじめるをおわるに変えて"
+        arguments = {"line_id":"line_1", "expected_text":"ではじめる",
+            "target_fragment":"ではじめる", "replacement_text":"おわる", "evidence":text, "confidence":1.0}
+        cases.append(run_case("word_initial_dewa_is_not_removed_to_fit_meter", text, arguments,
+            initial_lines=["ではじめる", *reported_lines[1:]], expected_lines=["おわる", *reported_lines[1:]]))
+        # 17:01の矢印入力。今回の7音を指定したのに、モデルが前の8音を再利用したケース。
+        sand_lines = ["やさしいひが", "しろいしをてらし", "うみのゆめ"]
+        for name, text, model_word, expected_lines, expected_code in [
+            ("reported_arrow_eight_mora_is_saved",
+             "しろいしをてらし -> しろすなをてらし", "しろすなをてらし", [sand_lines[0], "しろすなをてらし", sand_lines[2]], None),
+            ("reported_arrow_seven_mora_overrides_previous_model_word",
+             "しろいしをてらし -> しろすなてらし", "しろすなをてらし",
+             [sand_lines[0], "しろすなてらし", sand_lines[2]], None),
+            ("arrow_preserves_players_eight_mora",
+             "しろいしをてらし → しろすなをてらし", "しろすなてらし", [sand_lines[0], "しろすなをてらし", sand_lines[2]], None),
+            ("arrow_denial_uses_model_choice",
+             "しろいしをてらし → しろさではない", "しろさ", [sand_lines[0], "しろさ", sand_lines[2]], None),
+            ("arrow_condition_uses_model_choice",
+             "しろいしをてらし → さくらいろなら", "さくらいろ", [sand_lines[0], "さくらいろ", sand_lines[2]], None),
+            ("arrow_question_with_period_uses_model_choice",
+             "しろいしをてらし → さくらいろかな。", "さくらいろ", [sand_lines[0], "さくらいろ", sand_lines[2]], None),
+        ]:
+            arguments = {"line_id":"line_2", "expected_text":sand_lines[1],
+                "target_fragment":sand_lines[1], "replacement_text":model_word, "evidence":text, "confidence":.95}
+            cases.append(run_case(name, text, arguments, initial_lines=sand_lines,
+                expected_lines=expected_lines, expected_code=expected_code))
     if args.output:
         with args.output.open("x") as handle:
             json.dump({"mode":"live" if args.base_url else "mock", "cases":cases}, handle, ensure_ascii=False, indent=2)

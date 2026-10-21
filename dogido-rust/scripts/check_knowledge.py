@@ -56,13 +56,14 @@ def integration(binary, directory):
         assert view["references"][0]["utterance_ids"] == [reply["utterance_id"], repeat["utterance_id"]]
         passed.append("references_deduplicate_and_follow_selected_session")
 
+        # Minecraftの未対応版はコードで未収録を返す。
         for question, expected_text in contracts()["integration"]["not_found_questions"].items():
             turn = submit(base, sid, question)
             reply = wait_for(lambda: row(base, turn, {"completed"}))
             assert reply["text"] == expected_text, reply
             assert reply["reference_ids"] == [] and reply["knowledge_status"] == "not_found", reply
         assert not any(r["path"] == "/v1/chat/completions" for r in seen)
-        passed.append("ambiguous_kanji_wrong_version_missing_fact_never_generate")
+        passed.append("minecraft_wrong_version_never_generates_an_answer")
 
         question = "ダイヤモンドの剣のIDは？"
         turn = submit(base, sid, question)
@@ -98,7 +99,7 @@ def integration(binary, directory):
         (directory / "player_mode").write_text("ok")
         passed.append("cancelled_knowledge_stops_owned_audio_without_history")
 
-        # 学習の続きではない別sessionの雑談に、国語分類を増やさない。
+        # 別sessionの雑談も、国語分類を挟まず一回で返す。
         turn = submit(base, other, "こんにちは")
         wait_for(lambda: row(base, turn, {"completed"}))
         assert len([r for r in seen if r["path"] == "/v1/chat/completions"]) == 1, seen

@@ -2,8 +2,8 @@
 //! 入力世代・観測鮮度・重複を照合し、jobs → dataの順でロックして保留状態と会話jobを更新する。
 //! 記録制限を内部再送へ引き継ぎ、受付前後のworkshop状態を記録する。受理は実再生の成功を意味しない。
 use super::{
-    Dialogue, address_runtime, bridge, chat_context, empty_event, environment_runtime, fresh, id,
-    language_runtime, observation_fresh, workshop_combat_input, workshop_focus, workshop_record,
+    Dialogue, bridge, chat_context, empty_event, environment_runtime, fresh, id, observation_fresh,
+    workshop_combat_input, workshop_focus, workshop_record,
 };
 use crate::{events::GameEvent, playback::Status as PlaybackStatus};
 use serde_json::{Value, json};
@@ -52,14 +52,13 @@ impl Dialogue {
                 workshop_record::state(s.and_then(|s| s.haiku.workshop.as_ref())),
                 origin.private
                     || s.is_some_and(|s| {
-                        s.web.state.research.is_some()
-                            || origin.forwarded
-                                && s.record_private_generation.is_some_and(|(g, private)| {
-                                    private
-                                        && expected_generation
-                                            .as_ref()
-                                            .is_some_and(|(expected, _)| *expected == g)
-                                })
+                        origin.forwarded
+                            && s.record_private_generation.is_some_and(|(g, private)| {
+                                private
+                                    && expected_generation
+                                        .as_ref()
+                                        .is_some_and(|(expected, _)| *expected == g)
+                            })
                     }),
             )
         };
@@ -145,15 +144,6 @@ impl Dialogue {
         let vocalization =
             source.trim().eq_ignore_ascii_case("voice") && crate::vocalization::is_pure(text);
         if jobs.len() >= 16 && !vocalization {
-            let mut d = self.data.lock().unwrap();
-            self.tick_address(&mut d, &session_id);
-            if d.sessions
-                .get(&session_id)
-                .and_then(|s| s.address.as_ref())
-                .is_some_and(|p| p.input(text) == crate::address::Action::Accept)
-            {
-                Self::cancel_address(&mut d, &session_id, "host_chat_queue_full");
-            }
             return json!({"accepted":false,"reason":"input_queue_full"});
         }
         let mut d = self.data.lock().unwrap();
@@ -332,18 +322,7 @@ impl Dialogue {
             return json!({"accepted":false,"reason":"fresh_safe_snapshot_required"});
         }
         self.tick_workshop(&mut d, &session_id);
-        if let Some(result) = self.check_address_input(&mut d, &mut jobs, &session_id, text, source)
-        {
-            return result;
-        }
-        let (address_reply, replay) = match self.address_input(&mut d, &session_id, text, source) {
-            address_runtime::Input::Pass => (None, None),
-            address_runtime::Input::Repair(reply) => (Some(reply), None),
-            address_runtime::Input::Replay(original) => (None, Some(original)),
-            address_runtime::Input::Consumed(result) => return result,
-        };
-        let host_chat_confirmed = replay.is_some();
-        let replay = replay.or(queued_knowledge);
+        let replay = queued_knowledge;
         let text = replay.as_ref().map_or(text, |p| p.text.as_str());
         let source = replay.as_ref().map_or(source, |p| p.source.as_str());
         let private = private || replay.as_ref().is_some_and(|p| p.record_private);
@@ -428,11 +407,6 @@ impl Dialogue {
         let turn = replay
             .as_ref()
             .map_or_else(|| id("turn"), |p| p.turn.clone());
-        if address_reply.is_some()
-            && let Some(p) = s.address.as_mut()
-        {
-            p.repair = Some((turn.clone(), false));
-        }
         if let Some(checked) = s.knowledge_checked.as_ref()
             && checked.original.as_ref().is_some_and(|r| r.turn == turn)
             && let Some(audit) = &checked.audit
@@ -441,12 +415,10 @@ impl Dialogue {
         }
         s.current_turn = turn.clone();
         s.status = PlaybackStatus::Generating;
-        let (language_active, language_state) = language_runtime::context(s, text);
         let input = json!({"audit_before":audit_before,"audit_private":private,"model":self.config.model,"max_tokens":self.config.max_tokens,"reading_engine":self.config.reading_engine,"workshop":workshop,
             "poem_input":poem_input,"poem_reference":poem_reference,"operation_id":turn,
             "session_instance":s.instance_id,"feedback_workshop":workshop,
-            "source":source,"language_active":language_active,"language_state":language_state,
-            "address_reply":address_reply,"host_chat_confirmed":host_chat_confirmed,
+            "source":source,
             "input_at_ms":now,"previous_activity_ms":s.foreground.last_player_at.max(s.last_completed_conversation),
             "text":text,"interpreted_text":interpreted_text,"history":history,"conversation_history":conversation_history,
             "event_digest":event_digest,"event":event});
@@ -458,7 +430,6 @@ impl Dialogue {
         let mut input = bridge::Input::native(input, event, chat_native);
         input.retained_history_count = s.history.retained_count();
         if workshop.is_none()
-            && s.web.state.research.is_none()
             && poem_input.is_none()
             && !crate::haiku_memory::memory_candidate(text)
         {
@@ -482,15 +453,10 @@ impl Dialogue {
                 row["asr_corrections"] = new_row["asr_corrections"].clone();
                 row["workshop_state_before"] = new_row["workshop_state_before"].clone();
                 row["workshop_record_private"] = new_row["workshop_record_private"].clone();
-                if host_chat_confirmed {
-                    row["language_status"] = "host_chat".into();
-                    row["conversation_route"] = "casual".into();
-                } else {
-                    row["category"] = "speech".into();
-                    row["workshop_id"] = new_row["workshop_id"].clone();
-                    row["workshop_fixed_close"] = new_row["workshop_fixed_close"].clone();
-                    row["resolution"] = "knowledge_resumed".into();
-                }
+                row["category"] = "speech".into();
+                row["workshop_id"] = new_row["workshop_id"].clone();
+                row["workshop_fixed_close"] = new_row["workshop_fixed_close"].clone();
+                row["resolution"] = "knowledge_resumed".into();
                 row["input_at_ms"] = original.input_at.into();
                 row["resumed_at"] = chrono::Utc::now().to_rfc3339().into();
             } else {

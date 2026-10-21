@@ -24,14 +24,11 @@ pub fn allowed_actions(
         actions.push("propose_revision");
     }
     if phase == "decide" {
-        actions.extend(["inspect", "unrelated"]);
+        actions.extend(["inspect", "unrelated", "close_workshop"]);
         if pending {
             actions.extend(["accept_pending", "reject_pending"]);
-        } else {
-            actions.push("close_workshop");
-            if conversation_candidate {
-                actions.push("stage_conversation_candidate");
-            }
+        } else if conversation_candidate {
+            actions.push("stage_conversation_candidate");
         }
     }
     if pending {

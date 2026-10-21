@@ -517,7 +517,41 @@
       "未確定": "未確定"
     },
     "expected": {
-      "lines": []
+      "lines": [
+        {
+          "line_id": "line_1",
+          "line_index": 0,
+          "position": "upper",
+          "canonical_name": "上五",
+          "surface_text": "未確定",
+          "reading_text": "",
+          "source_atom_ids": [],
+          "source_atoms": [],
+          "provenance": "formal"
+        },
+        {
+          "line_id": "line_2",
+          "line_index": 1,
+          "position": "middle",
+          "canonical_name": "中七",
+          "surface_text": "未確定",
+          "reading_text": "",
+          "source_atom_ids": [],
+          "source_atoms": [],
+          "provenance": "formal"
+        },
+        {
+          "line_id": "line_3",
+          "line_index": 2,
+          "position": "lower",
+          "canonical_name": "下五",
+          "surface_text": "未確定",
+          "reading_text": "",
+          "source_atom_ids": [],
+          "source_atoms": [],
+          "provenance": "formal"
+        }
+      ]
     }
   },
   {
@@ -530,7 +564,41 @@
       "未確定": "未確定"
     },
     "expected": {
-      "lines": []
+      "lines": [
+        {
+          "line_id": "line_1",
+          "line_index": 0,
+          "position": "upper",
+          "canonical_name": "上五",
+          "surface_text": "未確定",
+          "reading_text": "",
+          "source_atom_ids": [],
+          "source_atoms": [],
+          "provenance": "conversational"
+        },
+        {
+          "line_id": "line_2",
+          "line_index": 1,
+          "position": "middle",
+          "canonical_name": "中七",
+          "surface_text": "未確定",
+          "reading_text": "",
+          "source_atom_ids": [],
+          "source_atoms": [],
+          "provenance": "conversational"
+        },
+        {
+          "line_id": "line_3",
+          "line_index": 2,
+          "position": "lower",
+          "canonical_name": "下五",
+          "surface_text": "未確定",
+          "reading_text": "",
+          "source_atom_ids": [],
+          "source_atoms": [],
+          "provenance": "conversational"
+        }
+      ]
     }
   },
   {
@@ -665,7 +733,41 @@
       "朝の色": "あさのいろ"
     },
     "expected": {
-      "lines": []
+      "lines": [
+        {
+          "line_id": "line_1",
+          "line_index": 0,
+          "position": "upper",
+          "canonical_name": "上五",
+          "surface_text": "「桜の葉」",
+          "reading_text": "",
+          "source_atom_ids": [],
+          "source_atoms": [],
+          "provenance": "formal"
+        },
+        {
+          "line_id": "line_2",
+          "line_index": 1,
+          "position": "middle",
+          "canonical_name": "中七",
+          "surface_text": "黒い斧へと",
+          "reading_text": "くろいおのへと",
+          "source_atom_ids": [],
+          "source_atoms": [],
+          "provenance": "formal"
+        },
+        {
+          "line_id": "line_3",
+          "line_index": 2,
+          "position": "lower",
+          "canonical_name": "下五",
+          "surface_text": "朝の色",
+          "reading_text": "あさのいろ",
+          "source_atom_ids": [],
+          "source_atoms": [],
+          "provenance": "formal"
+        }
+      ]
     }
   },
   {
@@ -680,7 +782,41 @@
       "朝の色": "あさのいろ"
     },
     "expected": {
-      "lines": []
+      "lines": [
+        {
+          "line_id": "line_1",
+          "line_index": 0,
+          "position": "upper",
+          "canonical_name": "上五",
+          "surface_text": "「桜の葉」",
+          "reading_text": "",
+          "source_atom_ids": [],
+          "source_atoms": [],
+          "provenance": "conversational"
+        },
+        {
+          "line_id": "line_2",
+          "line_index": 1,
+          "position": "middle",
+          "canonical_name": "中七",
+          "surface_text": "黒い斧へと",
+          "reading_text": "くろいおのへと",
+          "source_atom_ids": [],
+          "source_atoms": [],
+          "provenance": "conversational"
+        },
+        {
+          "line_id": "line_3",
+          "line_index": 2,
+          "position": "lower",
+          "canonical_name": "下五",
+          "surface_text": "朝の色",
+          "reading_text": "あさのいろ",
+          "source_atom_ids": [],
+          "source_atoms": [],
+          "provenance": "conversational"
+        }
+      ]
     }
   },
   {

@@ -7,7 +7,7 @@ from check_haiku_runtime import fixture, LINES
 from check_workshop_runtime import install, ready, step
 from check_workshop_edits import edit, adoption
 from check_workshop_provisional import classifier, intent, threatening, done
-from check_workshop_combat import SETTINGS
+from check_workshop_combat import SETTINGS, enter
 
 
 def records(folder, sid):
@@ -78,7 +78,7 @@ def main():
         for text, expected in [
             ("今の句", "show_current"),
             ("この句はどういう意味？", "explain"),
-            ("上五を『さくら』にして", "respond"),
+            ("上五を『さくら』にして", "stage_player_edit"),
             ("中七のくろいをしろいに変えて", "stage_player_edit"),
             ("中七のしろいをくろいに変えて", "stage_player_edit"),
             ("検査方法を相談したい", "fallback"),  # 不正な検査指定も理由とともに記録する。
@@ -103,10 +103,10 @@ def main():
                 == 1
             )
             if text == "上五を『さくら』にして":
-                assert "meter_not_exact" in str(r["steps"]), r
+                assert r["result"]["workshop_outcome"] == "player_edit_saved" and r["canonical_after"].splitlines()[0] == "さくら", r
             if text == "中七のくろいをしろいに変えて":
                 assert r["result"]["workshop_outcome"] == "player_edit_saved", r
-                assert r["base_verse"] == "\n".join(LINES) and r["canonical_after"].splitlines()[1] == "しろいおのへと", r
+                assert r["base_verse"] == "\n".join(["さくら", *LINES[1:]]) and r["canonical_after"].splitlines()[1] == "しろいおのへと", r
                 assert not r["pending_after"], r
             count += 1
         install(control, lambda text, prompt, n: step(text, speech=""))
@@ -167,7 +167,7 @@ def main():
         send(sid)
         close = submit(base, sid, "終了でいいよ")
         old_record = finished(folder, sid, old)
-        assert old_record["result"]["playback_status"] == "cancelled", old_record
+        assert old_record["result"]["playback_status"] == "completed", old_record
         r = finished(folder, sid, close)
         assert r["state_before"]["open"] and not r["state_after"]["open"], r
         assert (
@@ -199,8 +199,8 @@ def main():
     ):
         classifier(control, lambda text: intent(text, "uncertain", 0))
         sid = ready(base, send, rows)
-        threatening(send, sid)
-        turn = submit(base, sid, "うん")
+        enter(send, rows, sid)
+        turn = submit(base, sid, "なんの話？")
         done(base, send, sid, turn)
         r = finished(folder, sid, turn)
         assert r["result"]["combat_action"] == "uncertain", r

@@ -229,12 +229,6 @@ def search_references(
     prosodic_bases: Iterable[str] = (),
     transmission_modes: Iterable[str] = (),
     composition_modes: Iterable[str] = (),
-    education_stages: Iterable[str] = (),
-    subject_areas: Iterable[str] = (),
-    acquisition_modes: Iterable[str] = (),
-    machine_readable: Iterable[str] = (),
-    local_runtime_allowed: Iterable[str] = (),
-    providers: Iterable[str] = (),
     limit: int = 20,
     reference_dir: Path | None = None,
 ) -> list[dict[str, Any]]:
@@ -276,12 +270,6 @@ def search_references(
         ("by_prosodic_basis", prosodic_bases),
         ("by_transmission_mode", transmission_modes),
         ("by_composition_mode", composition_modes),
-        ("by_education_stage", education_stages),
-        ("by_subject_area", subject_areas),
-        ("by_acquisition_mode", acquisition_modes),
-        ("by_machine_readable", machine_readable),
-        ("by_local_runtime_allowed", local_runtime_allowed),
-        ("by_provider", providers),
     )
     for facet, values in filters:
         matched = _facet_ids(index, facet, values)
@@ -310,12 +298,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--prosodic-basis", action="append", default=[])
     parser.add_argument("--transmission-mode", action="append", default=[])
     parser.add_argument("--composition-mode", action="append", default=[])
-    parser.add_argument("--education-stage", action="append", default=[])
-    parser.add_argument("--subject-area", action="append", default=[])
-    parser.add_argument("--acquisition-mode", action="append", default=[])
-    parser.add_argument("--machine-readable", action="append", default=[])
-    parser.add_argument("--local-runtime-allowed", action="append", default=[])
-    parser.add_argument("--provider", action="append", default=[])
     parser.add_argument("--limit", type=int, default=20)
     parser.add_argument("--full", action="store_true", help="完全なレコードを返す")
     args = parser.parse_args(argv)
@@ -334,12 +316,6 @@ def main(argv: list[str] | None = None) -> int:
         prosodic_bases=args.prosodic_basis,
         transmission_modes=args.transmission_mode,
         composition_modes=args.composition_mode,
-        education_stages=args.education_stage,
-        subject_areas=args.subject_area,
-        acquisition_modes=args.acquisition_mode,
-        machine_readable=args.machine_readable,
-        local_runtime_allowed=args.local_runtime_allowed,
-        providers=args.provider,
         limit=args.limit,
     )
     if args.full:

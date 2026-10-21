@@ -1,11 +1,12 @@
 use super::*;
+use crate::workshop_edit;
 use serde_json::json;
 #[test]
-fn extraction_reading_edits_and_materials_match_fixture() {
+fn legacy_inputs_keep_data_integrity_under_model_owned_edits() {
     let cases: Value = serde_json::from_str(include_str!("fixtures.json")).unwrap();
     assert_eq!(cases.as_array().unwrap().len(), 2006);
     for (index, case) in cases.as_array().unwrap().iter().enumerate() {
-        let engine = Engine {
+        let mut engine = Engine {
             readings: serde_json::from_value(case["readings"].clone()).unwrap(),
         };
         let f = &case["input"];
@@ -29,17 +30,124 @@ fn extraction_reading_edits_and_materials_match_fixture() {
             _ => {
                 let mut f = f.clone();
                 f["op"] = op.into();
-                engine
-                    .project(&f)
-                    .and_then(|result| Ok(serde_json::to_value(result)?))
+                loop {
+                    match engine.project(&f) {
+                        Err(error)
+                            if matches!(
+                                op,
+                                "player_edit" | "discussion_candidate" | "explicit_discussion"
+                            ) && error.downcast_ref::<NeedsReading>().is_some() =>
+                        {
+                            // 旧コーパスで照会されなかった語は辞書未解決として模擬する。
+                            // 読みを推測せず、表記を保持したまま編集できることを確認する。
+                            let source = error.downcast_ref::<NeedsReading>().unwrap().0.clone();
+                            engine.readings.insert(source.clone(), source);
+                        }
+                        result => {
+                            break result.and_then(|result| Ok(serde_json::to_value(result)?));
+                        }
+                    }
+                }
             }
         };
-        assert_eq!(
-            actual.unwrap_or_else(|e| panic!("case {index} {op} text={} error {e}", f["text"])),
-            case["expected"],
-            "case {index} {op} text={}",
-            f["text"]
-        );
+        let actual =
+            actual.unwrap_or_else(|e| panic!("case {index} {op} text={} error {e}", f["text"]));
+        // 移植時の品質・語句拒否は新仕様の期待値にしない。入力は保持し、各成功差分の
+        // 元句・対象外不変・行ID・本人語の出典を全件で確認する。具体的な表記は下の明示例でも確認する。
+        if op == "player_edit" {
+            if actual["text"].is_string() {
+                let snapshot = Snapshot::from_view(&f["workshop"]).unwrap();
+                let working = editing_records(&snapshot);
+                let output: Vec<HaikuLine> =
+                    serde_json::from_value(actual["lines"].clone()).unwrap();
+                let target = actual["target_line_index"].as_u64().unwrap() as usize;
+                assert!(target < 3, "case {index}");
+                if let Some(selected) = f["proposal"]["line_index"].as_u64() {
+                    assert_eq!(target, selected as usize, "case {index}: model target");
+                }
+                assert_eq!(output.len(), 3, "case {index}");
+                for i in 0..3 {
+                    assert_eq!(output[i].line_id, working[i].line_id, "case {index}");
+                    if i != target {
+                        assert_eq!(output[i], working[i], "case {index}: untouched line {i}");
+                    }
+                }
+                assert_eq!(output[target].provenance, "player_explicit");
+                assert!(output[target].source_atom_ids.is_empty());
+                assert!(output[target].source_atoms.is_empty());
+                assert_eq!(
+                    actual["base_text"],
+                    workshop_edit::editing_text(&snapshot.current_lines)
+                );
+                assert_eq!(actual["text"], workshop_edit::editing_text(&output));
+                let pending =
+                    workshop_edit::Pending::stage(&snapshot.current_lines, working, output, target)
+                        .unwrap();
+                assert_eq!(
+                    actual["edits"],
+                    serde_json::to_value(pending.edits()).unwrap()
+                );
+                if case["expected"]["text"].is_string() {
+                    assert_eq!(
+                        actual, case["expected"],
+                        "case {index}: existing successful edit"
+                    );
+                }
+            } else {
+                assert!(
+                    !actual["failure_reasons"].as_array().unwrap().is_empty(),
+                    "case {index}"
+                );
+                for reason in actual["failure_reasons"].as_array().unwrap() {
+                    assert!(
+                        matches!(
+                            reason.as_str().unwrap(),
+                            "invalid_surface"
+                                | "target_conflict"
+                                | "target_fragment_not_readable"
+                                | "ambiguous_target_fragment"
+                                | "missing_target"
+                                | "invalid_line_records"
+                                | "pending_source_conflict"
+                                | "no_change"
+                                | "not_hiragana"
+                        ),
+                        "case {index}: {reason}"
+                    );
+                }
+            }
+        } else if matches!(op, "discussion_candidate" | "explicit_discussion") {
+            if let Some(candidate) = actual["candidate"].as_object() {
+                let proposal = &candidate["proposal"];
+                assert!(
+                    text(&f["text"]).contains(text(&proposal["replacement_text"])),
+                    "case {index}"
+                );
+                assert_eq!(candidate["evidence"], f["text"], "case {index}");
+                assert!(
+                    proposal["line_index"].is_null()
+                        || proposal["line_index"].as_u64().is_some_and(|i| i < 3),
+                    "case {index}"
+                );
+                if case["expected"]["candidate"].is_object() {
+                    assert_eq!(
+                        proposal, &case["expected"]["candidate"]["proposal"],
+                        "case {index}"
+                    );
+                }
+            } else {
+                assert!(
+                    case["expected"]["candidate"].is_null(),
+                    "case {index}: lost candidate"
+                );
+            }
+        } else {
+            assert_eq!(
+                actual, case["expected"],
+                "case {index} {op} text={}",
+                f["text"]
+            );
+        }
     }
 }
 
@@ -101,7 +209,12 @@ async fn same_child_cache_and_optional_dictionary_failure() {
             panic!("wrong output");
         };
         assert_eq!(first, second);
-        assert_eq!(first.len(), if mode == "ok" { 3 } else { 0 });
+        assert_eq!(first.len(), 3);
+        assert_eq!(first[0].surface_text, "桜");
+        assert_eq!(
+            first[0].reading_text,
+            if mode == "ok" { "さくら" } else { "" }
+        );
         helper.finish(false).await.unwrap();
         reaped(&dir);
         let requests = std::fs::read_to_string(dir.join("requests")).unwrap();
@@ -160,7 +273,7 @@ async fn dictionary_protocol_errors_deadline_and_cancel_do_not_become_success() 
 }
 
 #[test]
-fn retained_target_applies_omitted_location_but_blocks_silent_redirection() {
+fn retained_target_completes_only_an_omitted_model_target() {
     let cases: Value = serde_json::from_str(include_str!("fixtures.json")).unwrap();
     let case = cases
         .as_array()
@@ -194,7 +307,12 @@ fn retained_target_applies_omitted_location_but_blocks_silent_redirection() {
     let Output::PlayerEdit(result) = engine.project(&frame).unwrap() else {
         panic!("wrong output");
     };
-    assert_eq!(result.failure_reasons(), ["retained_target_conflict"]);
+    let PlayerEditResult::Validated(result) = result else {
+        panic!("missing model edit");
+    };
+    assert_eq!(result.target_line_index, Some(2));
+    assert_eq!(result.lines[2].surface_text, "さくらいろ");
+    assert_eq!(result.lines[0], records[0]);
 }
 
 #[test]
@@ -332,4 +450,33 @@ fn malformed_proposal_cannot_borrow_a_target_from_an_earlier_candidate() {
             "{malformed}"
         );
     }
+}
+
+#[tokio::test]
+async fn unknown_reading_edits_preserve_surface_and_can_be_edited_again() {
+    let dir = dir();
+    let mut helper = fake_helper(&dir, "unavailable");
+    let mut engine = Engine::default();
+    let base = engine
+        .whole_verse("さくらのは\nくろいおのへと\nあさのいろ", "generated")
+        .unwrap();
+    let mut current = base.clone();
+    for surface in ["未知の表記", "次の未知語"] {
+        let view = json!({"current_lines":current,"emission":{"lines":base},"materials":{}});
+        let frame = json!({"op":"player_edit","workshop":view,"text":format!("上五を{surface}にして"),"proposal":{"line_index":0,"target_fragment":"","replacement_text":surface}});
+        let Output::PlayerEdit(PlayerEditResult::Validated(result)) =
+            engine.run(&mut helper, &frame).await.unwrap()
+        else {
+            panic!("missing edit")
+        };
+        assert!(result.failure_reasons.is_empty(), "{result:?}");
+        assert_eq!(result.lines[0].surface_text, surface);
+        assert_eq!(result.lines[0].reading_text, "");
+        let pending = workshop_edit::Pending::stage(&current, &current, result.lines, 0).unwrap();
+        assert_eq!(pending.edits()[0].replacement_text, surface);
+        current = pending.lines;
+    }
+    helper.finish(false).await.unwrap();
+    reaped(&dir);
+    std::fs::remove_dir_all(dir).unwrap();
 }

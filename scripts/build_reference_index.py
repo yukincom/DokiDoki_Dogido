@@ -1,4 +1,4 @@
-"""国語教育・世界詩参照カタログの決定的な索引を生成する。"""
+"""詩の基礎知識参照カタログの決定的な索引を生成する。"""
 from __future__ import annotations
 
 import argparse
@@ -16,9 +16,6 @@ REFERENCE_DIR = ROOT / "reference" / "language_education_and_poetry"
 INDEX_PATH = REFERENCE_DIR / "index.json"
 DATASETS = (
     ("sources", "sources.json", "sources"),
-    ("japanese_language_education", "japanese_language_education.json", "resources"),
-    ("japanese_grammar", "japanese_grammar.json", "entries"),
-    ("historical_kana_and_scripts", "historical_kana_and_scripts.json", "entries"),
     ("makurakotoba", "makurakotoba.json", "entries"),
     ("japanese_poetry_forms", "japanese_poetry_forms.json", "entries"),
     ("world_poetry", "world_poetry.json", "entries"),
@@ -160,12 +157,6 @@ def build_index() -> dict[str, Any]:
             "by_prosodic_basis",
             "by_transmission_mode",
             "by_composition_mode",
-            "by_education_stage",
-            "by_subject_area",
-            "by_acquisition_mode",
-            "by_machine_readable",
-            "by_local_runtime_allowed",
-            "by_provider",
         )
     }
     dataset_rows: list[dict[str, Any]] = []
@@ -244,30 +235,6 @@ def build_index() -> dict[str, Any]:
                 ]
                 _add(facets[facet_name], values, record_id)
                 _add(facets[facet_name], [label for label in labels if label], record_id)
-            _add(
-                facets["by_education_stage"],
-                record.get("education_stages"),
-                record_id,
-            )
-            _add(facets["by_subject_area"], record.get("subject_areas"), record_id)
-            _add(
-                facets["by_acquisition_mode"],
-                record.get("acquisition_mode"),
-                record_id,
-            )
-            if "machine_readable" in record:
-                _add(
-                    facets["by_machine_readable"],
-                    str(record["machine_readable"]).lower(),
-                    record_id,
-                )
-            if "local_runtime_allowed" in record:
-                _add(
-                    facets["by_local_runtime_allowed"],
-                    str(record["local_runtime_allowed"]).lower(),
-                    record_id,
-                )
-            _add(facets["by_provider"], record.get("provider"), record_id)
 
     index: dict[str, Any] = {
         "schema_version": 1,

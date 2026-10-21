@@ -122,7 +122,6 @@ def fixture(helper, binary, plan, *, capability=True, fail_selection=False):
                 binary, directory, dep, live=False,
                 haiku_settings={"enabled": False, "memory_enabled": False,
                                 "memory_dir": str(directory / "memory")},
-                web_settings={"enabled": False},
             ) as (base, process, log):
                 capabilities = ["dialogue_text.v1"]
                 session = helper.request(base, "/api/v1/adapter-sessions", {

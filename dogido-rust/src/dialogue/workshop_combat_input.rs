@@ -73,13 +73,13 @@ impl Dialogue {
             super::workshop_record::Input {
                 raw: text.into(),
                 semantic: None,
-                private: s.web.state.research.is_some()
-                    || s.record_private_generation
-                        .is_some_and(|(g, private)| g == s.input_generation && private),
+                private: s
+                    .record_private_generation
+                    .is_some_and(|(g, private)| g == s.input_generation && private),
                 epoch: Some(s.epoch),
             },
         );
-        let input = json!({"text":text,"verse":crate::workshop_edit::reading(w.pending.as_ref().map_or(&w.current_lines, |p| &p.lines)),
+        let input = json!({"text":text,"verse":crate::workshop_edit::surface(w.pending.as_ref().map_or(&w.current_lines, |p| &p.lines)),
             "workshop":{"emission":w.emission,"materials":w.materials,"current_lines":w.current_lines,
                 "pending":w.pending,"dialogue":w.dialogue,"agent_steps":w.agent_steps}});
         let (cancel, rx) = watch::channel(false);
@@ -254,7 +254,7 @@ impl Dialogue {
                         if action == Action::WorkshopInput {
                             forward = Some((p.text.clone(), p.source.clone(), p.generation));
                         } else {
-                            let verse = crate::workshop_edit::reading(
+                            let verse = crate::workshop_edit::surface(
                                 w.pending.as_ref().map_or(&w.current_lines, |p| &p.lines),
                             );
                             let mut speech = Speech::new(

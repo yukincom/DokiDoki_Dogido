@@ -255,7 +255,6 @@ impl Dialogue {
     ) {
         if !self.config.haiku.memory_enabled
             || input.private
-            || result["web_private"] == true
             || result["workshop_record_private"] == true
             || !relevant(before, after)
             || result["deduplicated"] == true

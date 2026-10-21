@@ -7,33 +7,11 @@ mod conversation;
 mod tests;
 use crate::{reaction_leaf::sanitize, workshop_input_guard};
 use anyhow::{Context, Result, ensure};
-use regex::Regex;
 use serde_json::{Value, json};
-use std::{
-    collections::{BTreeSet, HashMap},
-    sync::LazyLock,
-};
+use std::{collections::BTreeSet, sync::LazyLock};
 
 static ASSETS: LazyLock<Value> = LazyLock::new(|| {
     serde_json::from_str(include_str!("assets.json")).expect("canonical workshop validation assets")
-});
-static PATTERNS: LazyLock<HashMap<String, Regex>> = LazyLock::new(|| {
-    let mut patterns = HashMap::new();
-    let compile = |s: &str| {
-        Regex::new(&s.replace(r"\s", r"[\s\x1c-\x1f]")).expect("canonical workshop regex")
-    };
-    for key in [
-        "edit_quote",
-        "edit_negative",
-        "repair_quote",
-        "repair_negative",
-    ] {
-        patterns.insert(key.to_owned(), compile(text(&ASSETS[key])));
-    }
-    for pair in array(&ASSETS["explicit_lines"]) {
-        patterns.insert(format!("line_{}", pair[0]), compile(text(&pair[1])));
-    }
-    patterns
 });
 fn text(v: &Value) -> &str {
     v.as_str().unwrap_or("")
@@ -61,24 +39,6 @@ fn compact(s: &str) -> String {
         })
         .collect::<String>()
         .to_lowercase()
-}
-fn explicit_lines(s: &str) -> BTreeSet<usize> {
-    (0..3)
-        .filter(|i| PATTERNS[&format!("line_{i}")].is_match(s))
-        .collect()
-}
-fn edit_is_negated(action: &str, source: &str) -> bool {
-    let key = if action == "stage_player_edit" {
-        "edit"
-    } else {
-        "repair"
-    };
-    // Quoted replacement words can themselves contain a negative expression.
-    // Reject only the player's negated operation, without requiring fixed verbs
-    // for a positive request that the model has understood.
-    let outside = PATTERNS[&format!("{key}_quote")].replace_all(source, "対象");
-    PATTERNS[&format!("{key}_negative")].is_match(&outside)
-        || (key == "edit" && workshop_input_guard::edit_negated(source))
 }
 fn reject(reason: &str) -> Value {
     json!({"contract_errors":[],"step":null,"reason":reason})
@@ -156,12 +116,9 @@ pub(super) fn validate(frame: &Value, details: &Value) -> Result<Value> {
         && proposal["found"] == true
         && proposal["confidence"]
             .as_f64()
-            .is_some_and(|c| (0.85..=1.0).contains(&c))
+            .is_some_and(|c| (0.0..=1.0).contains(&c))
         && proposal["replacement_text"] == candidate["replacement_text"]
         && proposal["target_fragment"] == candidate["target_fragment"]
-        && explicit_lines(source)
-            .iter()
-            .all(|i| candidate["line_index"].as_u64() == Some(*i as u64))
         && (payload["line_reference"]["found"] != true
             || candidate["line_index"].as_u64().is_some_and(|i| {
                 payload["line_reference"]["concept_id"] == format!("line_{}", i + 1)
@@ -184,6 +141,9 @@ pub(super) fn validate(frame: &Value, details: &Value) -> Result<Value> {
     ) {
         details["player_text"] = details["original_player_text"].clone();
     }
+    if let Some(purpose) = ASSETS["mutation_purposes"][text(&payload["action"])].as_str() {
+        payload["purpose"] = purpose.into();
+    }
     let errors = contract::errors(&payload, &details);
     if !errors.is_empty() {
         return Ok(json!({"contract_errors":errors,"step":null,"reason":"schema_contract_error"}));
@@ -192,52 +152,14 @@ pub(super) fn validate(frame: &Value, details: &Value) -> Result<Value> {
     if let Some(step) = outcome["step"].as_object() {
         let action = text(&step["action"]);
         let evidence = text(&step["evidence"]);
-        if matches!(
-            action,
-            "stage_player_edit" | "stage_conversation_candidate" | "propose_revision"
-        ) && edit_is_negated(
-            if action == "stage_conversation_candidate" {
-                "stage_player_edit"
-            } else {
-                action
-            },
-            source,
-        ) {
-            outcome = reject("unsafe_state_change_evidence");
-        } else if action == "stage_conversation_candidate"
+        if action == "stage_conversation_candidate"
             && !truth(&frame["workshop"]["conversation_candidate"])
         {
             outcome = reject("conversation_candidate_missing");
-        } else if action == "stage_conversation_candidate"
-            && explicit_lines(source)
-                .iter()
-                .any(|i| candidate["line_index"].as_u64() != Some(*i as u64))
+        } else if action == "propose_revision"
+            && !workshop_input_guard::state_change_safe(action, source, evidence)
         {
-            outcome = reject("conversation_candidate_target_conflict");
-        } else if action == "propose_revision" {
-            if step["confidence"].as_f64().unwrap_or(0.) < 0.85
-                || !workshop_input_guard::state_change_safe(action, source, evidence)
-            {
-                outcome = reject("repair_intent_not_explicit");
-            } else {
-                let mut explicit = explicit_lines(source);
-                if explicit.is_empty() {
-                    let reference = &step["analysis"]["line_reference"];
-                    let selected = reference["line_index"].as_u64().or_else(|| {
-                        details["workshop_context"]["discussion_target"]["line_index"].as_u64()
-                    });
-                    if let Some(index) = selected.filter(|i| *i < 3) {
-                        explicit.insert(index as usize);
-                    }
-                }
-                let targets: BTreeSet<usize> = array(&step["analysis"]["findings"])
-                    .iter()
-                    .filter_map(|f| f["line_index"].as_u64().map(|n| n as usize))
-                    .collect();
-                if !explicit.is_empty() && !targets.is_subset(&explicit) {
-                    outcome = reject("repair_target_conflict");
-                }
-            }
+            outcome = reject("repair_intent_not_explicit");
         }
     }
     Ok(outcome)
@@ -255,31 +177,11 @@ fn finalize(payload: &Value, d: &Value) -> Value {
     {
         return reject("action_not_allowed");
     }
-    let purpose = sanitize::strip(text(&payload["purpose"]));
-    if !strings(&ASSETS["purposes"]).contains(purpose) {
-        return reject("purpose_not_allowed");
-    }
-    if let Some(required) = ASSETS["mutation_purposes"][action].as_str()
-        && purpose != required
-    {
-        return reject("action_purpose_mismatch");
-    }
+    // purposeは操作名から一意に補える。自己申告の確信度は記録用であり、実行の門番にしない。
+    let purpose = ASSETS["mutation_purposes"][action]
+        .as_str()
+        .unwrap_or_else(|| sanitize::strip(text(&payload["purpose"])));
     let confidence = payload["confidence"].as_f64().unwrap_or(0.);
-    let threshold = if matches!(
-        action,
-        "accept_pending"
-            | "reject_pending"
-            | "close_workshop"
-            | "stage_player_edit"
-            | "stage_conversation_candidate"
-    ) {
-        0.85
-    } else {
-        0.72
-    };
-    if !(0.0..=1.0).contains(&confidence) || confidence < threshold {
-        return reject("low_confidence");
-    }
     let player = sanitize::strip(text(&d["player_text"]));
     let original = sanitize::strip(if truth(&d["original_player_text"]) {
         text(&d["original_player_text"])
@@ -290,8 +192,9 @@ fn finalize(payload: &Value, d: &Value) -> Value {
     if compact(&evidence).chars().count() < 2 || !compact(player).contains(&compact(&evidence)) {
         return reject("ungrounded_evidence");
     }
-    if (ASSETS["mutation_purposes"].get(action).is_some() || action == "propose_revision")
-        && !workshop_input_guard::state_change_safe(action, original, &evidence)
+    let analysis = analysis::finalize(payload, d, action, confidence, player);
+    let safe = workshop_input_guard::state_change_safe(action, original, &evidence);
+    if (ASSETS["mutation_purposes"].get(action).is_some() || action == "propose_revision") && !safe
     {
         return reject("unsafe_state_change_evidence");
     }
@@ -348,7 +251,6 @@ fn finalize(payload: &Value, d: &Value) -> Value {
     // Prose does not execute an action. The model chooses wording and whether a
     // recorded reading/meter/source inspection is useful; code validates only
     // the selected operation and its concrete inputs.
-    let analysis = analysis::finalize(payload, d, action, confidence, player);
     if action == "propose_revision"
         && array(&analysis["findings"]).is_empty()
         && !truth(&d["workshop_context"]["last_findings"])

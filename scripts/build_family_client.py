@@ -26,7 +26,6 @@ DOGIDO_TTS_BACKEND=voicevox
 DOGIDO_VOICEVOX_URL=http://127.0.0.1:50021
 DOGIDO_VOICEVOX_SPEAKER=21
 DOGIDO_TTS_READING_ENGINE=unidic
-DOGIDO_MAIN_LANGUAGE_WEB_ENABLED=false
 DOGIDO_HAIKU_GROUNDING_MAX_TOKENS=512
 DOGIDO_VOICE_WHISPER_CLI=.dogido_tools/whisper/bin/whisper-cli
 DOGIDO_VOICE_WHISPER_MODEL=.dogido_tools/models/ggml-kotoba-whisper-v2.0-q5_0.bin
@@ -108,9 +107,9 @@ def build(args: argparse.Namespace) -> None:
     for name in RUNTIME_SCRIPTS:
         relative = "dogido-rust/scripts/" + name
         copy_file(source / relative, target / relative)
-    shutil.copytree(source / "reference/language_education_and_poetry",
-                    target / "reference/language_education_and_poetry",
-                    ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".DS_Store"))
+    for name in ("README.md", "sources.json", "makurakotoba.json", "japanese_poetry_forms.json", "world_poetry.json", "index.json"):
+        relative = "reference/language_education_and_poetry/" + name
+        copy_file(source / relative, target / relative)
     copy_file(source / "reference/minecraft_technical/source_lock.json",
               target / "reference/minecraft_technical/source_lock.json")
     copy_file(source / "dogido-rust/Cargo.lock", target / "licenses/rust-Cargo.lock")
@@ -159,7 +158,7 @@ def build(args: argparse.Namespace) -> None:
         "- Silero VAD: https://github.com/snakers4/silero-vad (MIT)\n"
         "- Fabric: https://fabricmc.net/ (Fabric API のライセンスは jar 内に同梱)\n"
         "- Rust本体: 同梱LICENSE.md、組込み素材: rust-third-party/、依存版: rust-Cargo.lock\n"
-        "- 国語資料: reference/language_education_and_poetry/data/LICENSES.md\n"
+        "- 詩資料: reference/language_education_and_poetry/README.md、sources.json\n"
         "- Python / WebRTC 等は初期設定時に各パッケージから取得します。\n"
         "\nこのセットは家庭内テスト用です。Qwen・VOICEVOX・Minecraft本体は含みません。\n",
         encoding="utf-8")

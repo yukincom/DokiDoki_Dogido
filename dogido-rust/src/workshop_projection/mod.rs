@@ -41,7 +41,7 @@ fn clean(s: &str) -> String {
         .collect::<Vec<_>>()
         .join(" ")
 }
-use crate::haiku_record::verse::{reading as join_reading, surface as join_surface};
+use crate::haiku_record::verse::{editing_text as join_reading, surface as join_surface};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Snapshot {
@@ -75,11 +75,14 @@ impl Snapshot {
             None => vec![],
         };
         let dialogue = dialogue_from_view(list(&view["dialogue"]))?;
-        let dialogue = [view["shared_context"].as_str().unwrap_or(""), dialogue.as_str()]
-            .into_iter()
-            .filter(|s| !s.is_empty())
-            .collect::<Vec<_>>()
-            .join("\n");
+        let dialogue = [
+            view["shared_context"].as_str().unwrap_or(""),
+            dialogue.as_str(),
+        ]
+        .into_iter()
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n");
         let steps = list(&view["agent_steps"]);
         let steps = steps[steps.len().saturating_sub(12)..].to_vec();
         Ok(Self {
@@ -223,6 +226,9 @@ pub fn workshop_context_details(workshop: &Snapshot) -> Value {
             "sources":l.source_atoms.iter().take(3).map(|s|json!({"text":cut(&value_text(s.get("text").unwrap_or(&Value::Null)),240),"atom_id":s.get("atom_id").unwrap_or(&Value::Null)})).collect::<Vec<_>>(),"provenance":l.provenance})).collect::<Vec<_>>(),
         "recent_dialogue":workshop.recent_dialogue,"last_findings":workshop.last_findings.iter().take(3).collect::<Vec<_>>(),
         "recent_agent_steps":workshop.agent_steps[workshop.agent_steps.len().saturating_sub(6)..]});
+    if let Some(attribution) = workshop.materials.get("source_attribution") {
+        context["source_attribution"] = attribution.clone();
+    }
     if workshop.last_repair_feedback.get("base_text")
         == Some(&Value::String(workshop.display_line()))
     {
@@ -260,7 +266,6 @@ fn allowed_actions(workshop: &Snapshot, phase: &str) -> Vec<String> {
         if !matches!(phase, "after_validation" | "after_inspection") {
             actions.extend(["accept_pending", "reject_pending"]);
         }
-        actions.remove("close_workshop");
     } else {
         for a in ["compare", "accept_pending", "reject_pending"] {
             actions.remove(a);
@@ -367,7 +372,7 @@ pub fn revision_input(frame: &Value) -> Result<Value> {
     let lines = workshop
         .current_lines
         .iter()
-        .map(|l| l.reading_text.clone())
+        .map(|l| crate::haiku_record::verse::editing_text(std::slice::from_ref(l)))
         .collect::<Vec<_>>();
     let atoms = source_atoms::source_atoms_from_materials(&workshop.materials);
     let findings = frame["findings"].as_array().context("workshop findings")?;
@@ -385,6 +390,6 @@ pub fn revision_input(frame: &Value) -> Result<Value> {
     details["workshop_context"] = workshop_context_details(&workshop);
     Ok(
         json!({"lines":lines,"line_sources":sources,"findings":findings,"basis":{"target_indices":targets,"source_atoms":atoms,"details":details},
-        "max_tokens":frame["max_tokens"],"grounding_max_tokens":frame["grounding_max_tokens"]}),
+        "max_tokens":frame["max_tokens"]}),
     )
 }

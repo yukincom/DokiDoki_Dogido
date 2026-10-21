@@ -108,7 +108,7 @@ def session(base, sid):
 def check_text_workshop(passed):
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         calls = install(control, lambda text, prompt, n: step(text))
-        sid = register(base, preview=False, voice_enabled=False)
+        sid = register(base, preview=False, voice_enabled=False, body=True)
         send(sid)
         acknowledged = set()
         def display_poem():
@@ -234,7 +234,7 @@ def main():
 
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         def mistaken_close(text, prompt, n):
-            result = step("終了", "close_workshop")
+            result = step(text, "close_workshop" if text == "終了でいいよ" else "respond")
             result["speech"] = ("ほな今日はここまでや。また話そな。" if text == "終了でいいよ"
                                 else "うん、まだこの句の話を続けよか。")
             return result
@@ -245,10 +245,10 @@ def main():
             turn = submit(base, sid, text)
             result = wait_for(lambda: row(base, turn, {"completed"}))
             assert result["workshop_action"] == "respond" and hud(sid)["state"] == "open", (text, result)
-            assert result["workshop_reason"] == "close_skipped" and len(result["llm_reports"]) == 1
+            assert result["workshop_reason"] == "accepted" and len(result["llm_reports"]) == 1
             assert result["text"] == "うん、まだこの句の話を続けよか。"
         assert len(calls) == 4
-        passed.append("negation_quotation_condition_question_skip_close_without_retry")
+        passed.append("model_continuation_keeps_workshop_open_without_retry")
         send(sid)
         turn = submit(base, sid, "終了でいいよ")
         result = wait_for(lambda: row(base, turn, {"completed"}))
@@ -258,7 +258,7 @@ def main():
         passed.append("short_close_uses_model_decision_and_model_speech")
 
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
-        for overrides in [{"evidence": "今日は終了"}, {"confidence": .5}, {"checks": "meter"},
+        for overrides in [{"evidence": "今日は終了"}, {"checks": "meter"},
                           {"checks": ["shell"]}, {"confidence": "invalid", "speech": ""}]:
             calls = install(control, lambda text, prompt, n: {
                 **step(text, "close_workshop"), "speech": "この句の話、聞いとるで。", **overrides})

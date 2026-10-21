@@ -83,24 +83,10 @@ class Settings(BaseSettings):
     default_call_name: str = COMBAT_DEFAULTS["default_call_name"]
 
     audio_enabled: bool = True
-    # 本体の国語・語句質問を、ゲームイベントworker外の限定対話へ渡す。
-    # 世界操作・戦況・川柳workshopは従来どおり状態機械が所有する。
-    main_language_dialogue_enabled: bool = True
-    # 既存の専用ChromeとMCP SDKが揃う端末だけ、同意済みのWeb調査を有効にする。
-    # 起動時にはブラウザーもMCPも開始せず、案内音声の実再生完了後まで待つ。
-    main_language_web_enabled: bool = True
     conversation_active_ttl_ms: int = Field(default=COMBAT_DEFAULTS["conversation_active_ttl_ms"], ge=30000, le=3600000)
     # 雑談後の非敵対モブコメント抑止。会話の文脈保持期限とは分ける。
     surroundings_notice_interval_ms: int = Field(default=COMBAT_DEFAULTS["surroundings_notice_interval_ms"], ge=1000, le=3600000)
     conversation_ambient_mute_ms: int = Field(default=COMBAT_DEFAULTS["conversation_ambient_mute_ms"], ge=0, le=3600000)
-    # learning中の無関係な発話を「新しい話」と即扱う無会話時間。
-    conversation_topic_fresh_ms: int = Field(default=COMBAT_DEFAULTS["conversation_topic_fresh_ms"], ge=0, le=3600000)
-    # 宛先不明で保留した元入力の期限。呼び直しでは延長しない。
-    conversation_pending_address_ttl_ms: int = Field(
-        default=COMBAT_DEFAULTS["conversation_pending_address_ttl_ms"],
-        ge=1000,
-        le=3600000,
-    )
     conversation_suspended_player_turns: int = Field(default=COMBAT_DEFAULTS["conversation_suspended_player_turns"], ge=1, le=50)
     conversation_post_danger_player_turns: int = Field(default=COMBAT_DEFAULTS["conversation_post_danger_player_turns"], ge=0, le=20)
     llm_enabled: bool = True
@@ -303,7 +289,6 @@ class Settings(BaseSettings):
     haiku_quiet_time_ms: int = 30000
     haiku_structured_max_tokens: int = 192
     # 合否・材料番号・不合格理由を最後まで返す検査専用の上限。
-    haiku_grounding_max_tokens: int = Field(default=512, ge=1)
     # 4方式は一つずつ固定して比較する。材料からの自動選択はまだ行わない。
     haiku_generation_strategy: HAIKU_GENERATION_STRATEGY = "three_slot"
     haiku_max_regeneration_rounds: int = Field(default=6, ge=0, le=8)

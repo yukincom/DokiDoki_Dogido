@@ -65,7 +65,6 @@ pub(in crate::dialogue) fn fixture() -> Fixture {
     config.haiku.enabled = false;
     config.haiku.memory_enabled = true;
     config.haiku.memory_dir = root.clone();
-    config.web.enabled = false;
     let d = Dialogue::new(config).unwrap();
     d.register("s", "試験", true);
     let lines:Vec<Value>=[("upper","上五","くさちのひ"),("middle","中七","くろきつるぎの"),("lower","下五","かげのさむさ")]
@@ -144,33 +143,21 @@ async fn old_epoch_never_reads_replayed_rows_result_and_new_epoch_is_distinct() 
     f.finish().await;
 }
 #[tokio::test]
-async fn private_input_is_excluded_from_admission_decision_and_terminal_after_web_ends() {
+async fn private_input_is_excluded_from_admission_decision_and_terminal() {
     let f = fixture();
-    {
-        let mut data = f.d.data.lock().unwrap();
-        data.sessions.get_mut("s").unwrap().web.state.research =
-            Some(crate::language::web::Research {
-                question: "合成の質問".into(),
-                target: "合成".into(),
-                pages: vec![],
-                phase: "reading".into(),
-                search_results: vec![],
-                search_url: "https://private.example/secret".into(),
-            });
-    }
-    // Code-only path: the ordinary turn is accepted while web research is active.
-    // Clear it before the spawned turn finishes, like an end-reading response.
-    let got = f.d.submit(Some("s"), "気にせんで", "text");
+    let got = f.d.submit_recorded(
+        Some("s"),
+        "気にせんで",
+        "text",
+        false,
+        None,
+        false,
+        Admission {
+            private: true,
+            forwarded: false,
+        },
+    );
     assert_eq!(got["accepted"], true, "{got}");
-    f.d.data
-        .lock()
-        .unwrap()
-        .sessions
-        .get_mut("s")
-        .unwrap()
-        .web
-        .state
-        .clear(false);
     let jobs = std::mem::take(&mut *f.d.jobs.lock().unwrap());
     for job in jobs {
         job.await.unwrap();

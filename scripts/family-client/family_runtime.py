@@ -12,7 +12,6 @@ RUST_BINARY = "dogido-rust/target/release/dogido-rust"
 RUNTIME_SCRIPTS = (
     "launch_dialogue.py", "runtime_build.py", "haiku_tokens.py", "tts_tokens_worker.py",
     "tts_shared_tokens.py", "tts_unidic_adapter.py", "combat_input_helper.py",
-    "web_adapter.py",
 )
 RUNTIME_DATA = (
     "dogido_server/runtime_defaults.json",
@@ -20,15 +19,10 @@ RUNTIME_DATA = (
     "dogido_server/config.py",
     "dogido_server/platform_ai.py",
     "dogido_server/combat_input_contract.py",
-    "dogido_server/language_dialogue/main_web.py",
-    "dogido_server/language_dialogue/chrome_web.py",
-    "dogido_server/language_dialogue/google_overview.py",
-    "dogido_server/language_dialogue/web_types.py",
     "dogido_server/voice_settings.py",
     "dogido_server/voice_capture.py",
     "dogido_server/echo_input.py",
-    "dogido_server/language_dialogue/source_cards.json",
-    "reference/language_education_and_poetry/data/normalized/index.json",
+    "reference/language_education_and_poetry/index.json",
 )
 LEGACY_RUNTIME = ("dogido_server/app.py", "dogido_server/service.py", "dogido_server/voice_input.py")
 
@@ -47,7 +41,7 @@ def reject_runtime_link(root: Path, path: Path) -> None:
 def validate_runtime(root: Path) -> None:
     """旧セットや一部だけの更新を、設定や鍵を書き換える前に拒否する。"""
     required = list(runtime_files())
-    index = root / 'reference/language_education_and_poetry/data/normalized/index.json'
+    index = root / 'reference/language_education_and_poetry/index.json'
     reject_runtime_link(root, index)
     if index.is_file():
         try:
@@ -56,13 +50,13 @@ def validate_runtime(root: Path) -> None:
             if not isinstance(datasets, list) or not datasets:
                 raise ValueError('empty datasets')
             for dataset in datasets:
-                for field in ('path', 'index_path'):
+                for field in ('path',):
                     name = dataset[field]
-                    if not isinstance(name, str) or not name or Path(name).name != name or name in {'.', '..'}:
+                    if not isinstance(name, str) or not name or Path(name).name != name or not name.endswith('.json') or '\\' in name:
                         raise ValueError('invalid dataset path')
                     required.append((index.parent / name).relative_to(root).as_posix())
         except (ValueError, TypeError, KeyError) as error:
-            raise ValueError('Rust本体の国語資料目録が不正です') from error
+            raise ValueError('Rust本体の詩資料目録が不正です') from error
     for relative in required:
         path = root / relative
         if not path.is_file():

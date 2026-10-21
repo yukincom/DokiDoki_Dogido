@@ -393,10 +393,6 @@ impl Dialogue {
     }
 
     pub(super) fn cancel_chat(d: &mut Data, sid: &str, reason: &str) {
-        Self::cancel_web(d, sid, reason);
-        if reason != "new_player_input" {
-            Self::cancel_address(d, sid, "attention_interrupted");
-        }
         let Some(s) = d.sessions.get_mut(sid) else {
             return;
         };
@@ -405,14 +401,6 @@ impl Dialogue {
             s.status = PlaybackStatus::Cancelled;
             let _ = c.send(true);
             let turn = s.current_turn.clone();
-            if !d
-                .rows
-                .iter()
-                .any(|row| row["turn_id"] == turn && row["text_displayed"] == true)
-                && let Some(p) = s.address.as_mut()
-            {
-                p.playback(&turn, PlaybackStatus::Cancelled);
-            }
             Self::cancel_row(d, sid, &turn, reason);
         }
     }

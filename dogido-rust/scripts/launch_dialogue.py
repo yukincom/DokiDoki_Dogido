@@ -23,12 +23,10 @@ def check_runtime_files(root):
     for relative in (
         "dogido-rust/scripts/tts_unidic_adapter.py",
         "dogido-rust/scripts/tts_shared_tokens.py",
-        "dogido-rust/scripts/web_adapter.py",
         "dogido_server/runtime_defaults.json",
         "dogido-rust/scripts/haiku_tokens.py",
         "dogido-rust/scripts/tts_tokens_worker.py",
         "dogido-rust/scripts/combat_input_helper.py",
-        "dogido_server/language_dialogue/source_cards.json",
         "reference/language_education_and_poetry",
     ):
         if not (root / relative).exists():
@@ -152,7 +150,6 @@ def main():
         "llm_enabled": use_model, "interval_ms": settings.haiku_interval_ms,
         "quiet_time_ms": settings.haiku_quiet_time_ms,
         "structured_max_tokens": settings.haiku_structured_max_tokens,
-        "grounding_max_tokens": settings.haiku_grounding_max_tokens,
         "generation_strategy": settings.haiku_generation_strategy,
         "max_regeneration_rounds": settings.haiku_max_regeneration_rounds,
         "base_url": haiku_base, "model": haiku_model,
@@ -169,17 +166,12 @@ def main():
             raise ValueError("この起動ファイルは既存のlocalhostモデル・VOICEVOX専用です。")
     combat_settings = {key: getattr(settings, key) for key in COMBAT_DEFAULTS}
     server_settings = {key: getattr(settings, key) for key in SERVER_DEFAULTS}
-    from dogido_server.language_dialogue.main_web import inspect_main_web_availability
-    web_availability = inspect_main_web_availability()
-    web_settings = {"enabled": settings.main_language_web_enabled and settings.main_language_dialogue_enabled,
-                    "available": web_availability.available}
-    print(f"同意済みWeb検索: {web_availability.reason if web_settings['enabled'] else 'disabled'}（ブラウザー未起動）", flush=True)
     print(f"Rust本体 / 実行元: {ROOT}", flush=True)
     print(f"設定の読込元: {folder} / モデル: {model}", flush=True)
     print(f"表示: {base_url}/rust-chat", flush=True)
     print("会話・川柳・戦闘・環境反応の判断と音声配送はRustで処理します。", flush=True)
     print(f"自動川柳: {haiku_model} / 保存先: {haiku_settings['memory_dir']}（セッションごと）", flush=True)
-    print("情景発話・発句・保存・掛け軸、句の共同編集・採否・読み訂正・保存した句の検索、知識回答・限定国語対話に対応。Web連携は利用前提が揃うときだけ、同意と案内音声の再生完了後に開始します。", flush=True)
+    print("情景発話・発句・保存・掛け軸、句の共同編集・採否・読み訂正・保存した句の検索、詩とMinecraftの知識回答に対応。", flush=True)
     print(f"マイクは同じ設定・ポート {settings.bind_port} の起動指定に --voice を付け、別のターミナルで開始してください。", flush=True)
     print("終了はこのターミナルで Ctrl+C。共有MLXとVOICEVOX本体は停止しません。", flush=True)
     if args.check:
@@ -204,7 +196,6 @@ def main():
         "--server-settings", json.dumps(server_settings),
         "--combat-settings", json.dumps(combat_settings),
         "--haiku-settings", json.dumps(haiku_settings),
-        "--web-settings", json.dumps(web_settings),
         "--warning-settings", json.dumps({
             **{key: getattr(settings, key) for key in (
                 "panic_distance", "rear_warning_distance", "recent_damage_window_ms",
@@ -225,8 +216,6 @@ def main():
         command.append("--no-audio")
     if not use_model:
         command.append("--no-llm")
-    if not settings.main_language_dialogue_enabled:
-        command.append("--no-language")
     os.chdir(ROOT)
     os.execve(binary, command, env)
 

@@ -31,10 +31,9 @@ def prepared_runtime(kit):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text('FIXTURE RUNTIME')
     (kit / runtime['RUST_BINARY']).chmod(0o755)
-    normalized = kit / 'reference/language_education_and_poetry/data/normalized'
-    (normalized / 'index.json').write_text('{"datasets":[{"path":"fixture.jsonl","index_path":"fixture.index.jsonl"}]}')
-    (normalized / 'fixture.jsonl').write_text('{}\n')
-    (normalized / 'fixture.index.jsonl').write_text('{}\n')
+    normalized = kit / 'reference/language_education_and_poetry'
+    (normalized / 'index.json').write_text('{"datasets":[{"path":"fixture.json"}]}')
+    (normalized / 'fixture.json').write_text('{}\n')
 
 
 def valid():

@@ -183,7 +183,8 @@ impl Helper {
         );
         let messages = crate::haiku_prompt::messages(request)?;
         ensure!(
-            crate::text_format::spaced_json(&json!({"messages":messages})).len() < FRAME_LIMIT as usize,
+            crate::text_format::spaced_json(&json!({"messages":messages})).len()
+                < FRAME_LIMIT as usize,
             "Python worker response too large"
         );
         Ok(messages)
@@ -320,13 +321,20 @@ impl Backend for LiveBackend<'_> {
     async fn generate(&mut self, request: StructuredRequest) -> Result<Value> {
         self.requests.push(serde_json::to_value(&request)?);
         let route = match (request.kind.as_str(), request.route.as_str()) {
-            ("haiku_irony" | "haiku_scene" | "haiku_line_grounding", "chat") => self.chat,
+            ("haiku_irony" | "haiku_scene", "chat") => self.chat,
             ("haiku_draft" | "haiku_line_regeneration" | "haiku_workshop_revision", "haiku") => {
                 self.haiku
             }
             _ => anyhow::bail!("unexpected haiku generation route"),
         };
-        tracing::info!(event="haiku_llm_started",kind=request.kind,route=request.route,model=route.model,request_index=self.requests.len(),"川柳: モデル呼び出し開始");
+        tracing::info!(
+            event = "haiku_llm_started",
+            kind = request.kind,
+            route = request.route,
+            model = route.model,
+            request_index = self.requests.len(),
+            "川柳: モデル呼び出し開始"
+        );
         let messages = self.helper.prepare(&request).await.inspect_err(|error| {
             tracing::error!(event="haiku_llm_failed",kind=request.kind,phase="prompt_prepare",%error);
         })?;
@@ -441,7 +449,7 @@ mod tests {
 
     fn prompt_request() -> StructuredRequest {
         StructuredRequest {
-            kind: "haiku_line_grounding".into(),
+            kind: "haiku_scene".into(),
             details: serde_json::Map::new(),
             route: "chat".into(),
             temperature: 0.0,

@@ -1,25 +1,19 @@
+//! 自動発句の材料を行ごとに割り当て、候補の形式・音数を確認する。
+//! 材料の意味や日本語の自然さを別モデルで評価しない。再生成時は採用行へ渡した材料を外す。
+//! 保存する行別材料はコードが渡した資料の記録であり、モデルが実際に使った根拠の認定ではない。
 use super::{
     Backend, GroundedHaikuResult, Input, LineForm, LineSource, PROMPT_VARIANT, SourceAtom,
-    StructuredRequest, TransformMode, TransformRequest, meter,
+    StructuredRequest, TransformMode, TransformRequest, line_format, meter,
 };
 use anyhow::Result;
 use serde_json::{Map, Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 pub(super) type Indices = BTreeSet<usize>;
 pub(super) type Failures = BTreeMap<usize, Vec<String>>;
-pub(super) type Assessments = BTreeMap<usize, Assessment>;
-#[derive(Clone, Debug)]
-pub(super) struct Assessment {
-    pub(super) atom_ids: Vec<String>,
-    pub(super) meaning_retained: bool,
-    pub(super) natural_japanese: bool,
-    pub(super) assessed_text: String,
-    pub(super) reason: String,
-}
+type Assignments = BTreeMap<usize, Vec<SourceAtom>>;
 
-/// 三行を生成し、不合格行を含む生成グループを上限付きで作り直す。
-/// モデル通信と辞書処理はBackend経由で実行し、採用済み行の出典予約と候補ごとの不合格理由を保持する。
-/// 結果を返すところまでが責務で、句の保存や掛け軸の更新は行わない。
+/// 現在使える一次材料を異なる三行へ割り当て、初案＋設定回数以内の再生成を行う。
+/// 合格行を固定し、失敗した生成グループにだけ未採用材料を渡す。採否と保存は呼出元が所有する。
 pub async fn generate<B: Backend>(backend: &mut B, input: Input) -> Result<GroundedHaikuResult> {
     let groups: &[&[usize]] = match input.generation_strategy.as_str() {
         "whole_poem" => &[&[0, 1, 2]],
@@ -32,136 +26,110 @@ pub async fn generate<B: Backend>(backend: &mut B, input: Input) -> Result<Groun
     if !input.llm_enabled {
         return Ok(failed(&input, "llm_unavailable", 0));
     }
-    let claims: BTreeSet<_> = input
-        .source_atoms
-        .iter()
-        .flat_map(atom_reservations)
-        .collect();
-    if claims.len() < 3 {
-        return Ok(failed(&input, "insufficient_source_atoms", 0));
-    }
-    let atom_by_id: BTreeMap<_, _> = input
-        .source_atoms
-        .iter()
-        .map(|a| (a.atom_id.clone(), a.clone()))
-        .collect();
-    let mut details = input.details.clone();
-    details.insert("source_atoms".into(), json!(input.source_atoms));
-    details.insert(
-        "generation_strategy".into(),
-        json!(input.generation_strategy),
-    );
-    details.insert("generation_slot_groups".into(), json!(groups));
-    let payload = request(
-        backend,
-        StructuredRequest {
-            kind: "haiku_draft".into(),
-            fallback_value: json!({"lines":[]}),
-            details: details.clone(),
-            temperature: 0.60,
-            route: "haiku".into(),
-            max_tokens: input.max_tokens,
-        },
-    )
-    .await;
-    let Some(raw_lines) = draft_lines(&payload) else {
-        return Ok(failed(&input, "invalid_draft", 0));
-    };
-    let mut lines = Vec::new();
-    for (index, text) in raw_lines.into_iter().enumerate() {
-        lines.push(
-            transform(
+    let mut lines = vec![
+        LineForm {
+            text: String::new(),
+            signature: String::new()
+        };
+        3
+    ];
+    let mut assignments = Assignments::new();
+    let mut failed_indices: Indices = (0..3).collect();
+    let mut failures = Failures::new();
+    for round in 0..=limit {
+        if !assign_materials(&input.source_atoms, &failed_indices, &mut assignments) {
+            return Ok(failed(
+                &input,
+                if round == 0 {
+                    "insufficient_source_atoms"
+                } else {
+                    "insufficient_unused_atoms"
+                },
+                round,
+            ));
+        }
+        let mut details = input.details.clone();
+        details.insert(
+            "generation_strategy".into(),
+            json!(input.generation_strategy),
+        );
+        details.insert("generation_slot_groups".into(), json!(groups));
+        // 識別子は内部記録だけ。モデルへは現在使える材料の中身を行ごとに渡す。
+        details.insert("available_line_materials".into(), json!(failed_indices.iter().map(|i| {
+            json!({"line_index":i,"materials":assignments[i].iter().map(|a|
+                json!({"text":a.text,"claim_class":a.claim_class,"claim_scopes":a.claim_scopes})).collect::<Vec<_>>()})
+        }).collect::<Vec<_>>()));
+        details.insert(
+            "shared_poetic_context".into(),
+            json!(
+                input
+                    .source_atoms
+                    .iter()
+                    .filter(|a| a.kind == "poetic_interpretation")
+                    .map(|a| a.text.clone())
+                    .collect::<Vec<_>>()
+            ),
+        );
+        details.remove("source_atoms");
+        let raw = if round == 0 {
+            let payload = request(
                 backend,
-                text,
-                index,
+                StructuredRequest {
+                    kind: "haiku_draft".into(),
+                    fallback_value: json!({"lines":[]}),
+                    details,
+                    temperature: 0.60,
+                    route: "haiku".into(),
+                    max_tokens: input.max_tokens,
+                },
+            )
+            .await;
+            if structured_accepted(&payload) {
+                line_format::three(&payload)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .enumerate()
+                    .collect()
+            } else {
+                BTreeMap::new()
+            }
+        } else {
+            regenerate(
+                backend,
+                &details,
+                &lines,
+                &failed_indices,
+                &failures,
+                input.max_tokens,
+            )
+            .await
+        };
+        let mut current_failures = Failures::new();
+        for i in &failed_indices {
+            let Some(text) = raw.get(i) else {
+                current_failures.insert(*i, vec!["missing_regenerated_line".into()]);
+                continue;
+            };
+            // 辞書による読みの整形だけを行う。意味評価を前提とした語句の自動置換は行わない。
+            lines[*i] = transform(
+                backend,
+                text.clone(),
+                *i,
                 TransformMode::Normalize,
                 vec![],
                 vec![],
             )
-            .await?,
-        );
-    }
-    let mut accepted = Assessments::new();
-    let mut failed_indices: Indices = (0..3).collect();
-    let mut candidates: BTreeSet<_> = lines.iter().map(|l| l.signature.clone()).collect();
-    let mut forced = duplicate_failures(&lines);
-    // A repeated/missing rewrite leaves the displayed candidate unchanged. Keep
-    // its diagnostic, never a different candidate's verdict or source evidence.
-    let mut last_feedback: BTreeMap<usize, (LineForm, Vec<String>, String)> = BTreeMap::new();
-    for round in 0..=limit {
-        tracing::info!(event="haiku_candidate",round,
-            candidate=%json!(lines.iter().map(|line| &line.text).collect::<Vec<_>>()),
-            "川柳: 検査する候補三行（round=0は初案）");
-        let used = used_claims(&accepted, &atom_by_id);
-        let eligible = eligible_atoms(&input.source_atoms, &used);
-        let indices: Indices = failed_indices
-            .iter()
-            .filter(|i| !forced.contains_key(i))
-            .copied()
-            .collect();
-        let assessments = assess_lines(
-            backend,
-            &details,
-            &lines,
-            &indices,
-            &eligible,
-            input.grounding_max_tokens,
-        )
-        .await;
-        if indices.iter().any(|i| !assessments.contains_key(i)) {
-            tracing::warn!(event="haiku_grounding_missing",round,
-                line_numbers=%json!(indices.iter().filter(|i| !assessments.contains_key(i)).map(|i| i + 1).collect::<Vec<_>>()),
-                "川柳: 個別再照合後も検査結果が揃わず終了");
-            return Ok(failed(&input, "grounding_unavailable", round));
-        }
-        let frozen: BTreeSet<_> = accepted
-            .keys()
-            .map(|i| lines[*i].signature.clone())
-            .collect();
-        let (tentative, mut failures) = accept_lines(
-            backend,
-            &mut lines,
-            &indices,
-            &assessments,
-            &input.details,
-            &atom_by_id,
-            &used,
-            frozen,
-        )
-        .await?;
-        let mut comments: BTreeMap<_, _> = assessments
-            .iter()
-            .filter(|(i, a)| !a.reason.is_empty() && a.assessed_text == lines[**i].text)
-            .map(|(i, a)| (*i, a.reason.clone()))
-            .collect();
-        for (index, codes) in forced {
-            let mut reasons = Vec::new();
-            if let Some((line, previous, comment)) = last_feedback.get(&index)
-                && line == &lines[index]
-            {
-                reasons.extend(previous.iter().cloned());
-                if !comment.is_empty() {
-                    comments.insert(index, comment.clone());
-                }
+            .await?;
+            let reasons = meter::line_failure_reasons(&lines[*i].text, *i, &input.details);
+            if !reasons.is_empty() {
+                current_failures.insert(*i, reasons);
             }
-            for code in codes {
-                if !reasons.contains(&code) {
-                    reasons.push(code);
-                }
-            }
-            failures.insert(index, reasons);
         }
-        let expanded = expand_failures(&failures, groups);
-        failed_indices = expanded.keys().copied().collect();
-        accepted.extend(
-            tentative
-                .into_iter()
-                .filter(|(i, _)| !failed_indices.contains(i)),
-        );
-        tracing::info!(event="haiku_grounding_round",strategy=input.generation_strategy,round,
-            accepted_line_numbers=%json!(accepted.keys().map(|i| i + 1).collect::<Vec<_>>()),
-            failures=%json!(expanded.iter().map(|(i, codes)| json!({"line_number":i + 1,"reasons":codes,"comment":comments.get(i)})).collect::<Vec<_>>()),
-            "川柳: 行ごとの検査結果");
+        failures = expand_failures(&current_failures, groups);
+        failed_indices = failures.keys().copied().collect();
+        tracing::info!(event="haiku_generation_round", round,
+            candidate=%json!(lines.iter().map(|l| &l.text).collect::<Vec<_>>()), failures=%json!(failures),
+            "川柳: 形式と音数の確認結果");
         if failed_indices.is_empty() {
             return Ok(GroundedHaikuResult {
                 text: lines
@@ -171,14 +139,11 @@ pub async fn generate<B: Backend>(backend: &mut B, input: Input) -> Result<Groun
                     .join("\n"),
                 accepted: true,
                 line_sources: (0..3)
-                    .map(|i| {
-                        let a = &accepted[&i];
-                        LineSource {
-                            line_index: i,
-                            text: lines[i].text.clone(),
-                            atom_ids: a.atom_ids.clone(),
-                            sources: a.atom_ids.iter().map(|id| atom_by_id[id].clone()).collect(),
-                        }
+                    .map(|i| LineSource {
+                        line_index: i,
+                        text: lines[i].text.clone(),
+                        atom_ids: assignments[&i].iter().map(|a| a.atom_id.clone()).collect(),
+                        sources: assignments[&i].clone(),
                     })
                     .collect(),
                 failure_reason: None,
@@ -187,67 +152,150 @@ pub async fn generate<B: Backend>(backend: &mut B, input: Input) -> Result<Groun
                 prompt_variant: PROMPT_VARIANT.into(),
             });
         }
-        if round >= limit {
-            break;
-        }
-        let used = used_claims(&accepted, &atom_by_id);
-        let remaining = eligible_atoms(&input.source_atoms, &used);
-        let remaining_claims: BTreeSet<_> = remaining.iter().flat_map(atom_reservations).collect();
-        if remaining_claims.len() < failed_indices.len() {
-            return Ok(failed(&input, "insufficient_unused_atoms", round));
-        }
-        candidates.extend(lines.iter().map(|l| l.signature.clone()));
-        last_feedback = expanded
-            .iter()
-            .map(|(i, reasons)| {
-                (
-                    *i,
-                    (
-                        lines[*i].clone(),
-                        reasons.clone(),
-                        comments.get(i).cloned().unwrap_or_default(),
-                    ),
-                )
-            })
-            .collect();
-        let regenerated = regenerate(
-            backend,
-            &details,
-            &lines,
-            &failed_indices,
-            &expanded,
-            &remaining,
-            input.max_tokens,
-            &comments,
-        )
-        .await;
-        forced = Failures::new();
-        for index in &failed_indices {
-            let Some(text) = regenerated.get(index) else {
-                forced.insert(*index, vec!["missing_regenerated_line".into()]);
-                continue;
-            };
-            let form = transform(
-                backend,
-                text.clone(),
-                *index,
-                TransformMode::Normalize,
-                vec![],
-                vec![],
-            )
-            .await?;
-            if form.signature.is_empty() || candidates.contains(&form.signature) {
-                forced.insert(*index, vec!["duplicate_candidate".into()]);
-                continue;
-            }
-            candidates.insert(form.signature.clone());
-            last_feedback.remove(index);
-            lines[*index] = form;
-        }
     }
     Ok(failed(&input, "max_regeneration_rounds", limit))
 }
 
+/// 採用行へ渡した元事実を外し、残る資料を同じ出典ごとにまとめて対象行へ分配する。
+/// 先頭数件だけを選ばず全ての一次材料を渡す。同じ対象の説明は同じ行にまとめる。
+/// 複数一次材料からできた見どころは、その全材料が同じ行にある場合だけ行材料へ添える。
+fn assign_materials(
+    atoms: &[SourceAtom],
+    targets: &Indices,
+    assignments: &mut Assignments,
+) -> bool {
+    let used: BTreeSet<_> = assignments
+        .iter()
+        .filter(|(i, _)| !targets.contains(i))
+        .flat_map(|(_, assigned)| assigned.iter().flat_map(atom_reservations))
+        .collect();
+    let primary: Vec<_> = atoms
+        .iter()
+        .filter(|a| {
+            a.basis_atom_ids.is_empty()
+                && a.kind != "poetic_interpretation"
+                && used.is_disjoint(&atom_reservations(a))
+        })
+        .collect();
+    if primary.len() < targets.len() {
+        return false;
+    }
+    let mut groups: Vec<Vec<SourceAtom>> = vec![];
+    let mut by_source = BTreeMap::new();
+    for atom in primary {
+        let key = if atom.source_ref.is_empty() {
+            &atom.atom_id
+        } else {
+            &atom.source_ref
+        };
+        let group = *by_source.entry(key.clone()).or_insert_with(|| {
+            groups.push(vec![]);
+            groups.len() - 1
+        });
+        groups[group].push(atom.clone());
+    }
+    // 一つの資料にしか材料がない場合も、別の事実が三つあれば初案を試せる。
+    while groups.len() < targets.len() {
+        let index = groups
+            .iter()
+            .enumerate()
+            .max_by_key(|(_, g)| g.len())
+            .unwrap()
+            .0;
+        let atom = groups[index].pop().unwrap();
+        groups.push(vec![atom]);
+    }
+    for i in targets {
+        assignments.insert(*i, vec![]);
+    }
+    for group in groups {
+        let i = *targets.iter().min_by_key(|i| assignments[i].len()).unwrap();
+        assignments.get_mut(&i).unwrap().extend(group);
+    }
+    for atom in atoms
+        .iter()
+        .filter(|a| !a.basis_atom_ids.is_empty() && a.kind != "poetic_interpretation")
+    {
+        if let Some(i) = targets.iter().find(|i| {
+            let ids: BTreeSet<_> = assignments[i].iter().map(|a| a.atom_id.as_str()).collect();
+            atom.basis_atom_ids
+                .iter()
+                .all(|id| ids.contains(id.as_str()))
+        }) {
+            assignments.get_mut(i).unwrap().push(atom.clone());
+        }
+    }
+    true
+}
+
+fn expand_failures(failures: &Failures, groups: &[&[usize]]) -> Failures {
+    let mut expanded = Failures::new();
+    for group in groups {
+        if group.iter().any(|i| failures.contains_key(i)) {
+            for i in *group {
+                expanded.insert(
+                    *i,
+                    failures
+                        .get(i)
+                        .cloned()
+                        .unwrap_or_else(|| vec!["slot_dependency".into()]),
+                );
+            }
+        }
+    }
+    expanded
+}
+
+async fn regenerate<B: Backend>(
+    backend: &mut B,
+    details: &Map<String, Value>,
+    lines: &[LineForm],
+    failed: &Indices,
+    failures: &Failures,
+    max_tokens: Option<u64>,
+) -> BTreeMap<usize, String> {
+    let mut details = details.clone();
+    let rows:Vec<_> = lines.iter().enumerate().map(|(i,l)| {
+        let count = meter::count_japanese_sounds(&l.text); let target = meter::TARGETS[i];
+        json!({"line_index":i,"text":l.text,"frozen":!failed.contains(&i),
+            "sound_count":count,"target_sound_count":target,"allowed_sound_min":target-1,
+            "allowed_sound_max":target+1,"meter_status":if count<target-1 {"too_short"} else if count>target+1 {"too_long"} else {"within_range"},
+            "failure_reasons":failures.get(&i).cloned().unwrap_or_default()})
+    }).collect();
+    details.insert("current_lines".into(), json!(rows));
+    details.insert("failed_line_indices".into(), json!(failed));
+    let payload = request(
+        backend,
+        StructuredRequest {
+            kind: "haiku_line_regeneration".into(),
+            fallback_value: json!({"lines":[]}),
+            details,
+            temperature: 0.30,
+            route: "haiku".into(),
+            max_tokens,
+        },
+    )
+    .await;
+    parse_regeneration(&payload, failed)
+}
+fn parse_regeneration(payload: &Value, failed: &Indices) -> BTreeMap<usize, String> {
+    let parse = || -> Option<BTreeMap<usize, String>> {
+        if !structured_accepted(payload) {
+            return None;
+        }
+        let rows = payload.get("lines")?.as_array()?;
+        let mut out = BTreeMap::new();
+        for row in rows {
+            let i: usize = row.get("line_index")?.as_u64()?.try_into().ok()?;
+            let text = line_format::one(row.get("text")?.as_str()?)?;
+            if !failed.contains(&i) || out.insert(i, text).is_some() {
+                return None;
+            }
+        }
+        (out.keys().copied().collect::<Indices>() == *failed).then_some(out)
+    };
+    parse().unwrap_or_default()
+}
 /// 生成失敗時は要求のfallbackと失敗状態を返す。consumerは句案・検査結果として採用しない。
 pub(super) async fn request<B: Backend>(backend: &mut B, request: StructuredRequest) -> Value {
     let fallback = request.fallback_value.clone();
@@ -281,391 +329,6 @@ pub(super) async fn transform<B: Backend>(
         })
         .await
 }
-fn draft_lines(payload: &Value) -> Option<Vec<String>> {
-    if !structured_accepted(payload) {
-        return None;
-    }
-    let rows = payload.get("lines")?.as_array()?;
-    if rows.len() != 3 {
-        return None;
-    }
-    rows.iter().map(|v| clean_line(v.as_str()?)).collect()
-}
-pub(super) async fn assess_lines<B: Backend>(
-    backend: &mut B,
-    details: &Map<String, Value>,
-    lines: &[LineForm],
-    indices: &Indices,
-    atoms: &[SourceAtom],
-    max_tokens: u64,
-) -> Assessments {
-    if indices.is_empty() {
-        return Assessments::new();
-    }
-    let mut assessments =
-        request_assessments(backend, details, lines, indices, atoms, max_tokens).await;
-    let missing: Vec<_> = indices
-        .iter()
-        .filter(|i| !assessments.contains_key(i))
-        .copied()
-        .collect();
-    for i in missing {
-        tracing::info!(
-            event = "haiku_grounding",
-            result = "assessment_retry",
-            line_index = i
-        );
-        assessments.extend(
-            request_assessments(
-                backend,
-                details,
-                lines,
-                &BTreeSet::from([i]),
-                atoms,
-                max_tokens,
-            )
-            .await,
-        );
-    }
-    assessments
-}
-async fn request_assessments<B: Backend>(
-    backend: &mut B,
-    details: &Map<String, Value>,
-    lines: &[LineForm],
-    indices: &Indices,
-    atoms: &[SourceAtom],
-    max_tokens: u64,
-) -> Assessments {
-    let mut details = details.clone();
-    details.insert(
-        "grounding_lines".into(),
-        json!(
-            indices
-                .iter()
-                .map(|i| json!({"line_index":i,"text":lines[*i].text}))
-                .collect::<Vec<_>>()
-        ),
-    );
-    details.insert("source_atoms".into(), json!(atoms));
-    // 根拠番号は採用可能なatom IDを先に並べ、その後に由来となるbasis IDを足す。
-    // 番号と表示の対応を固定し、由来の説明だけに使うbasisを採用可能な根拠と混同しない。
-    let mut numbers = Map::new();
-    for id in atoms
-        .iter()
-        .map(|a| &a.atom_id)
-        .chain(atoms.iter().flat_map(|a| a.basis_atom_ids.iter()))
-    {
-        if !numbers.contains_key(id) {
-            let next = numbers.len() + 1;
-            numbers.insert(id.clone(), json!(next));
-        }
-    }
-    details.insert(
-        "grounding_atom_numbers".into(),
-        Value::Object(numbers.clone()),
-    );
-    let value = request(
-        backend,
-        StructuredRequest {
-            kind: "haiku_line_grounding".into(),
-            fallback_value: json!({"assessments":[]}),
-            details,
-            temperature: 0.0,
-            route: "chat".into(),
-            max_tokens: Some(max_tokens),
-        },
-    )
-    .await;
-    parse_assessments(&value, lines, indices, atoms, &numbers)
-}
-fn parse_assessments(
-    payload: &Value,
-    lines: &[LineForm],
-    indices: &Indices,
-    atoms: &[SourceAtom],
-    numbers: &Map<String, Value>,
-) -> Assessments {
-    let mut out = Assessments::new();
-    if !structured_accepted(payload) {
-        return out;
-    }
-    let Some(rows) = payload.get("assessments").and_then(Value::as_array) else {
-        return out;
-    };
-    let Some(verdicts) = payload.get("verdicts").and_then(Value::as_object) else {
-        return out;
-    };
-    let eligible: BTreeSet<_> = atoms.iter().map(|a| a.atom_id.as_str()).collect();
-    let by_number: BTreeMap<_, _> = eligible
-        .iter()
-        .filter_map(|id| numbers.get(*id).and_then(Value::as_u64).map(|n| (n, *id)))
-        .collect();
-    for row in rows {
-        if !row.as_object().is_some_and(|row| {
-            row.len() == 2 && row.contains_key("line_index") && row.contains_key("atom_ids")
-        }) {
-            continue;
-        }
-        let Some(index) = line_index(row.get("line_index")) else {
-            continue;
-        };
-        if !indices.contains(&index) || out.contains_key(&index) {
-            continue;
-        }
-        let (meaning, natural) = match verdicts.get(&index.to_string()).and_then(Value::as_str) {
-            Some("pass") => (true, true),
-            Some("meaning_fail") => (false, true),
-            Some("japanese_fail") => (true, false),
-            Some("both_fail") => (false, false),
-            _ => continue,
-        };
-        let Some(raw_ids) = row.get("atom_ids").and_then(Value::as_array) else {
-            continue;
-        };
-        let ids: Option<Vec<String>> = raw_ids
-            .iter()
-            .map(|v| {
-                v.as_u64()
-                    .and_then(|n| by_number.get(&n))
-                    .map(|id| (*id).to_owned())
-            })
-            .collect();
-        let Some(ids) = ids else {
-            continue;
-        };
-        if ids.is_empty() && meaning || ids.iter().collect::<BTreeSet<_>>().len() != ids.len() {
-            continue;
-        }
-        let reason = payload
-            .get("failure_reasons")
-            .and_then(Value::as_object)
-            .and_then(|m| m.get(&index.to_string()));
-        let reason = assessment_reason(reason, &lines[index].text, meaning, natural);
-        out.insert(
-            index,
-            Assessment {
-                atom_ids: ids,
-                meaning_retained: meaning,
-                natural_japanese: natural,
-                assessed_text: lines[index].text.clone(),
-                reason,
-            },
-        );
-    }
-    out
-}
-
-/// Reasons explain an already validated verdict; absent or malformed reasons
-/// never turn a valid verdict into a pass or an unavailable assessment.
-fn assessment_reason(value: Option<&Value>, line: &str, meaning: bool, natural: bool) -> String {
-    if meaning && natural {
-        return String::new();
-    }
-    let Some(value) = value else {
-        return String::new();
-    };
-    if let Some(reason) = value.as_str() {
-        return reason.trim().chars().take(240).collect();
-    }
-    let Some(rows) = value.as_array() else {
-        return String::new();
-    };
-    let mut reasons = Vec::new();
-    for row in rows.iter().take(3) {
-        let Some(row) = row.as_object().filter(|r| r.len() == 3) else {
-            continue;
-        };
-        let label = match row.get("kind").and_then(Value::as_str) {
-            Some("meaning") if !meaning => "意味",
-            Some("japanese") if !natural => "日本語",
-            _ => continue,
-        };
-        let Some(fragment) = row.get("fragment").and_then(Value::as_str).map(str::trim) else {
-            continue;
-        };
-        let Some(reason) = row.get("reason").and_then(Value::as_str).map(str::trim) else {
-            continue;
-        };
-        if fragment.is_empty()
-            || fragment.chars().count() > 24
-            || !line.contains(fragment)
-            || reason.is_empty()
-            || reason.chars().count() > 48
-            || fragment.chars().chain(reason.chars()).any(char::is_control)
-        {
-            continue;
-        }
-        // Three fully rendered reasons fit the existing 240-character feedback
-        // limit, so no valid third reason disappears in prompt truncation.
-        let reason = format!("{label}「{fragment}」:{reason}");
-        if !reasons.contains(&reason) {
-            reasons.push(reason);
-        }
-    }
-    reasons.join("、")
-}
-#[allow(clippy::too_many_arguments)]
-pub(super) async fn accept_lines<B: Backend>(
-    backend: &mut B,
-    lines: &mut [LineForm],
-    indices: &Indices,
-    assessments: &Assessments,
-    details: &Map<String, Value>,
-    atoms: &BTreeMap<String, SourceAtom>,
-    already_used: &BTreeSet<String>,
-    mut seen: BTreeSet<String>,
-) -> Result<(Assessments, Failures)> {
-    let mut accepted = Assessments::new();
-    let mut failures = Failures::new();
-    let mut used = already_used.clone();
-    for i in indices {
-        let assessment = &assessments[i];
-        if assessment.meaning_retained {
-            lines[*i] = transform(
-                backend,
-                lines[*i].text.clone(),
-                *i,
-                TransformMode::Correct,
-                assessment.atom_ids.clone(),
-                atoms.values().cloned().collect(),
-            )
-            .await?;
-        }
-        let mut reasons = Vec::<String>::new();
-        if !assessment.meaning_retained {
-            reasons.push("meaning_not_retained".into());
-        }
-        if !assessment.natural_japanese {
-            reasons.push("unnatural_japanese".into());
-        }
-        let claims = reservations(&assessment.atom_ids, atoms);
-        if !used.is_disjoint(&claims) {
-            reasons.push("source_reused".into());
-        }
-        reasons.extend(meter::line_failure_reasons(&lines[*i].text, *i, details));
-        let signature = &lines[*i].signature;
-        if signature.is_empty() || seen.contains(signature) {
-            reasons.push("duplicate_line".into());
-        }
-        if !reasons.is_empty() {
-            failures.insert(*i, reasons);
-            continue;
-        }
-        accepted.insert(*i, assessment.clone());
-        used.extend(claims);
-        seen.insert(signature.clone());
-    }
-    Ok((accepted, failures))
-}
-fn expand_failures(failures: &Failures, groups: &[&[usize]]) -> Failures {
-    let mut expanded = Failures::new();
-    for group in groups {
-        if group.iter().any(|i| failures.contains_key(i)) {
-            for i in *group {
-                expanded.insert(
-                    *i,
-                    failures
-                        .get(i)
-                        .cloned()
-                        .unwrap_or_else(|| vec!["slot_dependency".into()]),
-                );
-            }
-        }
-    }
-    expanded
-}
-#[allow(clippy::too_many_arguments)]
-async fn regenerate<B: Backend>(
-    backend: &mut B,
-    details: &Map<String, Value>,
-    lines: &[LineForm],
-    failed: &Indices,
-    failures: &Failures,
-    atoms: &[SourceAtom],
-    max_tokens: Option<u64>,
-    comments: &BTreeMap<usize, String>,
-) -> BTreeMap<usize, String> {
-    let mut details = details.clone();
-    let rows: Vec<_> = lines
-        .iter()
-        .enumerate()
-        .map(|(index, line)| {
-            let mut row =
-                json!({"line_index": index, "text": line.text, "frozen": !failed.contains(&index)});
-            if failed.contains(&index) {
-                let count = meter::count_japanese_sounds(&line.text);
-                let target = meter::TARGETS[index];
-                let meter_status = if count < target - 1 {
-                    "too_short"
-                } else if count > target + 1 {
-                    "too_long"
-                } else {
-                    "within_range"
-                };
-                let feedback = json!({
-                    "sound_count": count, "target_sound_count": target,
-                    "allowed_sound_min": target - 1, "allowed_sound_max": target + 1,
-                    "meter_status": meter_status,
-                    "failure_reasons": failures.get(&index).cloned().unwrap_or_default(),
-                    "assessment_comment": comments.get(&index).map(String::as_str).unwrap_or("")
-                });
-                row.as_object_mut()
-                    .unwrap()
-                    .extend(feedback.as_object().unwrap().clone());
-            }
-            row
-        })
-        .collect();
-    details.insert("current_lines".into(), json!(rows));
-    details.insert("failed_line_indices".into(), json!(failed));
-    details.insert("source_atoms".into(), json!(atoms));
-    let payload = request(
-        backend,
-        StructuredRequest {
-            kind: "haiku_line_regeneration".into(),
-            fallback_value: json!({"lines":[]}),
-            details,
-            temperature: 0.30,
-            route: "haiku".into(),
-            max_tokens,
-        },
-    )
-    .await;
-    parse_regeneration(&payload, failed)
-}
-fn parse_regeneration(payload: &Value, failed: &Indices) -> BTreeMap<usize, String> {
-    let parse = || -> Option<BTreeMap<usize, String>> {
-        if !structured_accepted(payload) {
-            return None;
-        }
-        let rows = payload.get("lines")?.as_array()?;
-        let mut out = BTreeMap::new();
-        for row in rows {
-            let i = line_index(row.get("line_index"))?;
-            let text = clean_line(row.get("text")?.as_str()?)?;
-            if !failed.contains(&i) || out.contains_key(&i) {
-                return None;
-            }
-            out.insert(i, text);
-        }
-        (out.keys().copied().collect::<Indices>() == *failed).then_some(out)
-    };
-    parse().unwrap_or_default()
-}
-fn line_index(value: Option<&Value>) -> Option<usize> {
-    value?.as_u64()?.try_into().ok()
-}
-fn duplicate_failures(lines: &[LineForm]) -> Failures {
-    let mut seen = BTreeSet::new();
-    let mut out = Failures::new();
-    for (i, line) in lines.iter().enumerate() {
-        if line.signature.is_empty() || !seen.insert(line.signature.clone()) {
-            out.insert(i, vec!["duplicate_line".into()]);
-        }
-    }
-    out
-}
 fn atom_reservations(atom: &SourceAtom) -> BTreeSet<String> {
     if atom.kind == "poetic_interpretation" {
         BTreeSet::new()
@@ -682,12 +345,6 @@ pub(super) fn reservations(
     ids.iter()
         .filter_map(|id| atoms.get(id))
         .flat_map(atom_reservations)
-        .collect()
-}
-fn used_claims(accepted: &Assessments, atoms: &BTreeMap<String, SourceAtom>) -> BTreeSet<String> {
-    accepted
-        .values()
-        .flat_map(|a| reservations(&a.atom_ids, atoms))
         .collect()
 }
 pub(super) fn eligible_atoms(atoms: &[SourceAtom], used: &BTreeSet<String>) -> Vec<SourceAtom> {
@@ -713,7 +370,7 @@ pub(super) fn structured_accepted(payload: &Value) -> bool {
 }
 fn failed(input: &Input, reason: &str, round: usize) -> GroundedHaikuResult {
     tracing::warn!(
-        event = "haiku_grounding",
+        event = "haiku_generation_failed",
         result = "fallback",
         reason,
         round

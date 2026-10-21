@@ -3,13 +3,11 @@
   "catalogs": [
     {
       "id": "language_education_and_poetry",
-      "title_ja": "国語知識・詩形データベース",
+      "title_ja": "詩の基礎知識データベース",
       "path": "language_education_and_poetry",
       "readme": "language_education_and_poetry/README.md",
       "index": "language_education_and_poetry/index.json",
-      "bulk_index": "language_education_and_poetry/data/normalized/index.json",
-      "search_module": "dev_tools.catalog_tools.language_knowledge",
-      "classification_search_module": "dev_tools.catalog_tools.reference_catalog",
+      "search_module": "dev_tools.catalog_tools.reference_catalog",
       "storage_scope": "tracked_reference_data"
     },
     {

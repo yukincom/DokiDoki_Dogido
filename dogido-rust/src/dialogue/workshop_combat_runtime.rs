@@ -105,7 +105,7 @@ impl Dialogue {
         };
         let reason = w.recovery.reason.unwrap_or(Reason::Safe);
         let lines = w.pending.as_ref().map_or(&w.current_lines, |p| &p.lines);
-        let text = reason.prompt(&crate::workshop_edit::reading(lines));
+        let text = reason.prompt(&crate::workshop_edit::surface(lines));
         let mut speech = Speech::new("workshop_resume", text);
         speech.delivery = Delivery::PlayerReply;
         speech.scope = Scope::Workshop {

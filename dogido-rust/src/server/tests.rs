@@ -27,7 +27,6 @@ async fn text_capability_voice_modes_and_display_ack_use_the_authenticated_actor
     };
     config.haiku.enabled = false;
     config.haiku.memory_enabled = false;
-    config.web.enabled = false;
     let dialogue = crate::dialogue::Dialogue::new(config).unwrap();
     let app = Application::new(ServerConfig {
         auth_token: Some("dialogue-test".into()),
@@ -223,7 +222,7 @@ async fn catalog_form_is_authenticated_explicit_and_reversible_without_a_dialogu
     let mut config = crate::dialogue::DialogueConfig {
         audio_enabled: false,
         llm_enabled: false,
-        language_enabled: false,
+
         ..Default::default()
     };
     config.haiku.enabled = false;
@@ -995,7 +994,7 @@ async fn dialogue_display_describes_connected_features() {
     let mut config = crate::dialogue::DialogueConfig {
         audio_enabled: false,
         llm_enabled: false,
-        language_enabled: false,
+
         ..Default::default()
     };
     config.haiku.enabled = false;

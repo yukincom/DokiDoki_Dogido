@@ -5,7 +5,6 @@
 //! LLMの提案は各ドメインで検証してから使い、採否・状態変更・保存はRustが決める。
 //! Python補助の通信と寿命管理はpython_worker、録音・音声認識の制御はvoiceを参照する。
 
-pub mod address;
 pub mod assist;
 pub mod body;
 pub mod catalog_editor;
@@ -25,7 +24,6 @@ pub mod episode_log;
 pub mod events;
 pub mod foreground;
 pub mod haiku;
-pub mod python_worker;
 pub mod haiku_memory;
 pub mod haiku_prompt;
 pub mod haiku_record;
@@ -34,7 +32,6 @@ pub mod ingress;
 pub mod input_context;
 pub mod input_policy;
 pub mod knowledge;
-pub mod language;
 pub mod light_plan;
 pub mod llm;
 pub mod memory_api;
@@ -44,6 +41,7 @@ pub mod playback;
 pub mod player_text;
 pub mod poem_book;
 pub mod poem_input;
+pub mod python_worker;
 pub mod reading_correction;
 pub mod recall_query;
 pub mod request_classifier;

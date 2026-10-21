@@ -177,3 +177,64 @@ fn unresolved_archive_preserves_literal_text_and_no_canonical_reading_is_invente
     r.text = "変わった内容".into();
     assert!(s.save_whole_revision(&r).is_err());
 }
+
+#[test]
+fn unknown_reading_survives_local_save_book_reload_and_whole_revision() {
+    use dogido_rust::{
+        poem_book,
+        workshop_edit::{Pending, editing_text},
+    };
+    let f = Fixture::new();
+    let s = f.store();
+    let mut r = revision();
+    s.save_agent_haiku("test", "player", &r.original).unwrap();
+    let mut changed = r.base.clone();
+    changed[0].surface_text = "未知語の句".into();
+    changed[0].reading_text.clear();
+    changed[0].provenance = "player_explicit".into();
+    let p = Pending::stage(&r.base, &r.base, changed.clone(), 0).unwrap();
+    let parent = s.save_player_revision(&r.original, &p, None).unwrap();
+    let book = poem_book::load(&f.0).unwrap();
+    let loaded = book.values().next().unwrap();
+    assert_eq!(loaded.lines, changed);
+    assert_eq!(loaded.lines_at(Some(&parent)).unwrap(), changed);
+    let rows = poem_book::rows(&f.0).unwrap();
+    assert!(rows[0]["text"].as_str().unwrap().starts_with("未知語の句"));
+    assert!(rows[0]["reading_text"].as_str().unwrap().starts_with('\n'));
+    r.base = changed.clone();
+    r.parent = Some(parent);
+    r.lines = changed;
+    for line in &mut r.lines {
+        line.provenance = "formal".into();
+    }
+    r.lines[1].surface_text = "また未知語".into();
+    r.lines[1].reading_text.clear();
+    r.text = dogido_rust::workshop_edit::surface(&r.lines);
+    validate_lines(&r.text, &r.source, &r.lines).unwrap();
+    s.save_whole_revision(&r).unwrap();
+    assert_eq!(r.record()["revised_text"], editing_text(&r.lines));
+    assert_eq!(
+        poem_book::load(&f.0)
+            .unwrap()
+            .values()
+            .next()
+            .unwrap()
+            .lines,
+        r.lines
+    );
+    r.id = "resolved".into();
+    r.parent = Some("rev_one".into());
+    r.base = r.lines.clone();
+    r.lines = lines("formal");
+    r.text = dogido_rust::workshop_edit::surface(&r.lines);
+    s.save_whole_revision(&r).unwrap();
+    assert_eq!(
+        poem_book::load(&f.0)
+            .unwrap()
+            .values()
+            .next()
+            .unwrap()
+            .lines,
+        r.lines
+    );
+}

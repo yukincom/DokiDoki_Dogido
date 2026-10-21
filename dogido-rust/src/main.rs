@@ -38,14 +38,6 @@ enum Command {
     RenderKnowledge { request: PathBuf },
     /// 通常会話の現行要求を組み立てる。モデル・音声・通信なし。
     BuildChatPrompt { request: PathBuf },
-    /// 国語資料を読み取り専用で検索する。モデル・音声・Pythonの起動なし。
-    LookupLanguage {
-        request: PathBuf,
-        #[arg(long)]
-        reference_dir: PathBuf,
-        #[arg(long)]
-        cards_path: PathBuf,
-    },
     /// 正本資料への一般知識質問を検索する。ネットワーク・モデル・Python起動なし。
     LookupKnowledge {
         request: PathBuf,
@@ -101,8 +93,6 @@ enum Command {
         combat_settings: String,
         #[arg(long, default_value = "{}")]
         haiku_settings: String,
-        #[arg(long, default_value = "{}")]
-        web_settings: String,
         #[arg(long, default_value = "/usr/bin/afplay")]
         audio_player: PathBuf,
         #[arg(long, default_value = ".dogido_tmp/rust-dialogue")]
@@ -123,8 +113,6 @@ enum Command {
         no_audio: bool,
         #[arg(long)]
         no_llm: bool,
-        #[arg(long)]
-        no_language: bool,
     },
     /// 要求の型だけを確認する。ネットワーク・モデル生成なし。
     Check { request: PathBuf },
@@ -160,25 +148,6 @@ async fn main() -> Result<()> {
                 dogido_rust::voice::run(settings).await?;
             }
         }
-        Command::LookupLanguage {
-            request,
-            reference_dir,
-            cards_path,
-        } => {
-            let requests: Vec<dogido_rust::knowledge::retrieval::Request> =
-                serde_json::from_slice(&std::fs::read(request)?)?;
-            let paths = dogido_rust::knowledge::retrieval::Paths {
-                reference: reference_dir,
-                cards: cards_path,
-            };
-            let mut results = Vec::new();
-            for request in requests {
-                results.push(
-                    dogido_rust::knowledge::retrieval::search_async(paths.clone(), request).await?,
-                );
-            }
-            println!("{}", serde_json::to_string(&results)?);
-        }
         Command::LookupKnowledge {
             request,
             reference_dir,
@@ -188,9 +157,8 @@ async fn main() -> Result<()> {
             let requests: Vec<dogido_rust::knowledge::query::Query> =
                 serde_json::from_slice(&std::fs::read(request)?)?;
             let paths = dogido_rust::knowledge::provider::Paths {
-                language: dogido_rust::knowledge::retrieval::Paths {
+                poetry: dogido_rust::knowledge::retrieval::Paths {
                     reference: reference_dir,
-                    cards: PathBuf::new(),
                 },
                 minecraft: minecraft_cache,
                 source_lock,
@@ -252,12 +220,10 @@ async fn main() -> Result<()> {
             server_settings,
             combat_settings,
             haiku_settings,
-            web_settings,
             audio_player,
             audio_dir,
             no_audio,
             no_llm,
-            no_language,
             max_tokens,
             timeout_ms,
             reading_engine,
@@ -280,12 +246,10 @@ async fn main() -> Result<()> {
                     &combat_settings,
                 )?)?,
                 haiku: serde_json::from_str(&haiku_settings)?,
-                web: serde_json::from_str(&web_settings)?,
                 player: audio_player,
                 audio_dir,
                 audio_enabled: !no_audio,
                 llm_enabled: !no_llm,
-                language_enabled: !no_language,
                 max_tokens,
                 timeout_ms,
                 reading_engine,

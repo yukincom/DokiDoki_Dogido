@@ -15,11 +15,11 @@ def main():
     with fixture(interval_ms=4000, quiet_time_ms=0,
                  combat_settings={"conversation_active_ttl_ms":2500}) as f:
         base, _, log, control, seen, _, _, checks, send, _, rows, _, _ = f
-        sid = register(base, preview=False)
+        sid = register(base, preview=False, body=True)
         send(sid)
         turn = submit(base, sid, "枕詞って何？")
         wait_for(lambda: row(base, turn, {"completed"}))
-        assert foreground(base, sid)["route"] == "learning", log.read_text()
+        assert foreground(base, sid)["route"] == "knowledge", log.read_text()
         frozen = foreground(base, sid)["haiku_elapsed_ms"]
         for _ in range(3):
             send(sid); time.sleep(.12)
@@ -43,30 +43,10 @@ def main():
         wait_for(lambda: any(r["turn_id"].endswith(":poem") and r["playback_status"] == "completed" for r in rows(sid)))
         assert foreground(base, sid)["route"] == "haiku_workshop"
         assert checks["drafts"] == 1
-        passed.append("expired_learning_resumes_remaining_interval_then_opens_workshop")
+        passed.append("expired_knowledge_resumes_remaining_interval_then_opens_workshop")
 
     with fixture(enabled=False) as f:
         base, _, log, control, seen, _, _, _, send, _, rows, _, _ = f
-        original_model = control["structured_handler"]
-        def language_model(incoming):
-            if incoming["max_tokens"] not in {850, 700}:
-                return original_model(incoming)
-            background, text = incoming["messages"][-1]["content"].split("\n以上は背景。今回応答する最新の発話はこちら：\n")
-            details, current = json.loads(background), json.loads(text)
-            if incoming["max_tokens"] == 700:
-                return {"status":"answer", "text":"枕詞は、決まった言葉の前につく言い回しやで。",
-                        "fact_ids":[details["facts"][0]["id"]], "application":"", "missing":""}
-            continuing = current["text"] == "さっきの話の続き"
-            evidence = [{"turn_id":current["turn_id"], "quote":current["text"]}]
-            if continuing:
-                previous = next(t for t in details["history"] if t["text"] == "枕詞って何？")
-                evidence.append({"turn_id":previous["turn_id"], "quote":previous["text"]})
-            return {"dialogue_act":"information_request" if continuing else "casual",
-                    "question":current["text"], "target":"枕詞" if continuing else "",
-                    "facet":"meaning" if continuing else "other", "topic":"language" if continuing else "general",
-                    "relation":"resume" if continuing else "switch", "target_status":"contextual" if continuing else "explicit",
-                    "alternatives":[], "evidence":evidence, "search_terms":["枕詞"] if continuing else [], "clarification":""}
-        control["structured_handler"] = language_model
         sid = register(base, preview=False); send(sid)
         turn = submit(base, sid, "枕詞って何？")
         wait_for(lambda: row(base, turn, {"completed"}))
@@ -84,13 +64,13 @@ def main():
         send(sid)
         resume = submit(base, sid, "さっきの話の続き")
         wait_for(lambda: row(base, resume, {"completed"}))
-        assert foreground(base, sid)["route"] == "learning"
+        assert foreground(base, sid)["route"] == "knowledge"
         assert foreground(base, sid)["suspended"] is None
         prompts = "\n".join(m["content"] for r in seen if r["path"] == "/v1/chat/completions" for m in r["body"]["messages"])
         assert "プレイヤーが明示的に再開した保留話題:" in prompts
         passed.append("combat_bookmark_survives_ticks_and_resumes_only_on_player_turn")
 
-        # 学習直後の新しい話は7dの宛先保留を通るため、明示名指しで通常会話へ移す。
+        # 通常会話と死亡イベントで戦闘状態が解放される。
         turn = submit(base, sid, "ドギド、こんにちは")
         wait_for(lambda: row(base, turn, {"completed"}))
         assert foreground(base, sid)["route"] == "casual"

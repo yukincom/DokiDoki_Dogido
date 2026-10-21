@@ -1,6 +1,15 @@
 //! 危険中・警告中の知識質問を一度だけ分類し、安全な観測で先着順に戻す。
 use super::*;
-use crate::address::Request;
+/// 警告後に再送する知識質問。input_atはDialogue時計の経過ミリ秒。
+/// 元turn・入力時刻・記録制限を保持し、再送時の表示と記録へ引き継ぐ。
+#[derive(Clone, Debug)]
+pub(super) struct Request {
+    pub turn: String,
+    pub text: String,
+    pub source: String,
+    pub input_at: u64,
+    pub record_private: bool,
+}
 
 pub(super) struct Pending {
     pub request: Request,
@@ -77,8 +86,7 @@ impl Dialogue {
         if s.knowledge_queue.len() + reserved >= 9 {
             return Some(json!({"accepted":false,"reason":"knowledge_queue_full"}));
         }
-        let private = s.web.state.research.is_some()
-            || s.record_private_generation
+        let private = s.record_private_generation
                 .is_some_and(|(g, private)| g == s.input_generation && private);
         let audit = super::workshop_record::Attempt::new(
             super::workshop_record::state(s.haiku.workshop.as_ref()),
@@ -428,7 +436,6 @@ mod tests {
             ..DialogueConfig::default()
         };
         config.haiku.memory_enabled = false;
-        config.web.enabled = false; // Only the deliberately stalled dictionary adapter is owned.
         let dialogue = Dialogue::new(config).unwrap();
         dialogue.register("s", "試験", true);
         {

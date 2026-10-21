@@ -1,6 +1,6 @@
 use super::*;
 use crate::text_format::{self, ContainerFormat::QuotedRepr};
-use crate::{haiku::meter, workshop_edit};
+use crate::workshop_edit;
 use parse::Replacement;
 impl Engine {
     pub(super) fn discussion(
@@ -10,11 +10,6 @@ impl Engine {
         proposal: &Value,
     ) -> Result<Option<crate::workshop_candidate::Draft>> {
         let input = text(&f["text"]);
-        if parse::pattern("discussion_report").is_match(input)
-            || !crate::workshop_input_guard::discussion_idea_safe(input)
-        {
-            return Ok(None);
-        }
         let r = if proposal.is_object() && truth(&proposal["replacement_text"]) {
             let replacement = text_format::value_text(&proposal["replacement_text"], QuotedRepr);
             let fragment = if truth(&proposal["target_fragment"]) {
@@ -94,39 +89,16 @@ impl Engine {
                 .filter(|s| !s.is_empty())
                 .map(str::to_owned),
         };
-        let explicit = parse::explicit_lines(input);
-        if explicit.len() > 1 {
-            return Ok(conflict("target_conflict"));
-        }
-        if let Some(index) = explicit.first() {
-            if !proposal
-                .get("line_index")
-                .is_none_or(|i| i.is_null() || i.as_u64() == Some(*index as u64))
-            {
-                return Ok(conflict("target_conflict"));
-            }
-            replacement.index = Some(*index as i64);
-        }
-        // The player-selected target survives the short history window. A model
-        // cannot silently redirect an edit; only a new player reference moves it.
-        if crate::workshop_target::Target::explicit(input, editing_records(s)).is_none()
-            && let Some(target) =
-                crate::workshop_target::Target::from_view(&f["workshop"], editing_records(s))
-        {
-            if replacement
-                .index
-                .is_some_and(|i| i >= 0 && i != target.line_index as i64)
-            {
-                return Ok(conflict("retained_target_conflict"));
-            }
-            replacement.index = Some(target.line_index as i64);
-            if replacement.fragment.is_none() {
-                replacement.fragment = (!target.fragment.is_empty()).then_some(target.fragment);
+        // LLMが対象を返した場合は、その行と実際の旧語をreviseで照合する。
+        // 対象が欠ける場合だけ、既存の一意な原文参照・保持対象から補完する。
+        if replacement.index.is_none() {
+            let explicit = parse::explicit_lines(input);
+            if explicit.len() == 1 {
+                replacement.index = explicit.first().map(|i| *i as i64);
             }
         }
-        let fragment = self.mentioned_fragment(s, input, &replacement.text)?;
-        if replacement.fragment.is_none() {
-            replacement.fragment = fragment;
+        if replacement.fragment.is_none() && replacement.index.is_none() {
+            replacement.fragment = self.mentioned_fragment(s, input, &replacement.text)?;
         }
         let discussed = &f["workshop"]["conversation_candidate"]["proposal"];
         if replacement.fragment.is_none() && replacement.index.is_none() && discussed.is_object() {
@@ -148,183 +120,211 @@ impl Engine {
             replacement.index = Some(target.line_index as i64);
             replacement.fragment = (!target.fragment.is_empty()).then_some(target.fragment);
         }
+        // 明示A/Bの旧語が現在行へ実際に対応するときだけ、モデルが短縮した旧語を補完する。
+        // 漢字表記も既存辞書で照合する。前置き込みのAや未解決の語は採用せずモデルの対象を保つ。
+        if replacement.fragment.as_ref().is_some_and(|fragment| {
+            !editing_records(s)
+                .iter()
+                .any(|line| fragment == &line.surface_text || fragment == &line.reading_text)
+        }) && let Ok(Some(verbatim)) = parse::verbatim_edit(input)
+        {
+            let raw = parse::fragment_prefix(verbatim.target);
+            let raw = parse::unquote(&raw);
+            let records = editing_records(s);
+            let exact = records
+                .iter()
+                .any(|line| line.surface_text.contains(raw) || line.reading_text.contains(raw));
+            let reading = if raw.is_empty() || exact {
+                None
+            } else {
+                self.normalized(raw, true)?
+            };
+            let matches: Vec<_> = records
+                .iter()
+                .enumerate()
+                .filter_map(|(i, line)| {
+                    (!raw.is_empty()
+                        && (line.surface_text.contains(raw)
+                            || line.reading_text.contains(raw)
+                            || reading
+                                .as_ref()
+                                .is_some_and(|r| line.reading_text.contains(r))))
+                    .then_some(i)
+                })
+                .collect();
+            if matches.len() == 1 && replacement.index.is_none_or(|i| i == matches[0] as i64) {
+                replacement.fragment = Some(raw.to_owned());
+            }
+        }
+        // 「ではじめる」など旧語自身の先頭を、依頼の「では」と取り違えない。
+        // 空白・読点・引用開始で分かれた導入部、または原文A全体の辞書読みが現在句の
+        // どこにも一致しない場合だけ分ける。引用内や任意の接頭語は削らない。
+        if let Some(fragment) = replacement.fragment.as_ref()
+            && let Ok(Some(verbatim)) = parse::verbatim_edit(input)
+            && !verbatim.target_quoted
+            && fragment == verbatim.target
+            && let Some((without_intro, separated)) = parse::without_intro(fragment)
+            && (separated
+                || self.normalized(fragment, true)?.is_some_and(|reading| {
+                    !editing_lines(s).iter().any(|line| line.contains(&reading))
+                }))
+        {
+            replacement.fragment = Some(parse::unquote(without_intro).to_owned());
+        }
         self.revise(&f["workshop"], s, &replacement)
             .map(PlayerEditResult::Validated)
     }
 
+    /// LLMの置換語を現在の一行へ適用し、表記と取得できた読みを返す。
+    /// 読み・音数・語彙・他行との表現重複で拒否しない。未確定の読みは空のまま保持する。
+    /// 対象と元句の対応、対象外の行不変はこの差分構築と保存前のCASで守る。
     fn revise(&self, view: &Value, s: &Snapshot, r: &Replacement) -> Result<EditResult> {
-        let base = s.surface_text.trim_matches(space).to_owned();
-        let fail = |codes: Vec<String>, target: Option<usize>| EditResult {
+        let base = workshop_edit::editing_text(&s.current_lines);
+        let failure = |code: &str, target: Option<usize>| EditResult {
             text: None,
             base_text: base.clone(),
             surface_text: None,
             lines: vec![],
             edits: vec![],
-            failure_reasons: codes,
+            failure_reasons: vec![code.into()],
             target_line_index: target,
         };
-        let failure = |code: &str, target: Option<usize>| fail(vec![code.into()], target);
         if s.pending_revision.as_ref().is_some_and(|s| !s.is_empty())
             && truth(&view["pending"]["generated_basis"])
         {
             return Ok(failure("pending_source_conflict", None));
         }
-        let base_lines = parse::verse_lines(&base);
-        let mut draft = editing_lines(s);
-        if base_lines.len() != 3 || draft.len() != 3 {
-            return Ok(failure("invalid_verse", None));
+        let mut source = editing_records(s).to_vec();
+        if s.current_lines.len() != 3 || source.len() != 3 {
+            return Ok(failure("invalid_line_records", None));
         }
-        for line in base_lines.iter().chain(draft.iter()) {
-            if self.normalized(line, true)?.as_deref() != Some(line) {
-                return Ok(failure("verse_not_hiragana", None));
-            }
-        }
-        let mut fragment_target = None;
-        let mut normalized_fragment = None;
-        if let Some(fragment) = r.fragment.as_ref().filter(|s| !s.is_empty()) {
-            let Some(normalized) = self.normalized(fragment, true)? else {
-                return Ok(failure("target_fragment_not_readable", None));
-            };
-            let matches = draft
-                .iter()
-                .enumerate()
-                .filter_map(|(i, s)| s.contains(&normalized).then_some(i))
-                .collect::<Vec<_>>();
-            fragment_target = if let Some(i) = r
-                .index
-                .filter(|i| *i >= 0)
-                .map(|i| i as usize)
-                .filter(|i| matches.contains(i))
+        let fragment = r.fragment.as_deref().filter(|v| !v.is_empty());
+        let normalized_fragment = match fragment {
+            Some(value)
+                if !source.iter().any(|line| {
+                    line.surface_text.contains(value) || line.reading_text.contains(value)
+                }) =>
             {
-                Some(i)
-            } else if matches.len() == 1 {
-                Some(matches[0])
+                self.normalized(value, true)?
+            }
+            _ => None,
+        };
+        let match_in = |line: &HaikuLine| -> Option<String> {
+            let fragment = fragment?;
+            if line.surface_text.contains(fragment) {
+                Some(fragment.to_owned())
+            } else if !line.reading_text.is_empty() && line.reading_text.contains(fragment) {
+                Some(fragment.to_owned())
             } else {
+                normalized_fragment
+                    .as_ref()
+                    .filter(|v| {
+                        !line.reading_text.is_empty() && line.reading_text.contains(v.as_str())
+                    })
+                    .cloned()
+            }
+        };
+        let matches: Vec<usize> = source
+            .iter()
+            .enumerate()
+            .filter_map(|(i, line)| match_in(line).map(|_| i))
+            .collect();
+        let target = match r.index {
+            Some(index) if (0..3).contains(&index) => {
+                let index = index as usize;
+                if fragment.is_some() && !matches.contains(&index) {
+                    return Ok(failure("target_conflict", Some(index)));
+                }
+                index
+            }
+            Some(_) => return Ok(failure("target_conflict", None)),
+            None if matches.len() == 1 => matches[0],
+            None => {
                 return Ok(failure(
                     if matches.len() > 1 {
                         "ambiguous_target_fragment"
                     } else {
-                        "target_fragment_not_found"
+                        "missing_target"
                     },
                     None,
                 ));
-            };
-            let line = &draft[fragment_target.unwrap()];
-            let at = line.find(&normalized).unwrap();
-            let next = at + line[at..].chars().next().unwrap().len_utf8();
-            if line[next..].contains(&normalized) {
-                return Ok(failure("ambiguous_target_fragment", None));
             }
-            normalized_fragment = Some(normalized);
-        }
-        if let (Some(a), Some(b)) = (r.index, fragment_target)
-            && a != b as i64
-        {
-            return Ok(failure("target_conflict", None));
-        }
-        let target = r.index.or(fragment_target.map(|i| i as i64));
-        let Some(target) = target.filter(|i| (0..3).contains(i)).map(|i| i as usize) else {
-            return Ok(failure("missing_target", None));
         };
-        let Some(normalized) = self.normalized(&r.text, true)? else {
-            return Ok(failure("not_hiragana", Some(target)));
-        };
-        let partial = normalized_fragment
-            .as_ref()
-            .filter(|f| **f != draft[target]);
-        let revised = partial.map_or_else(
-            || normalized.clone(),
-            |f| draft[target].replacen(f, &normalized, 1),
-        );
-        let mut reasons =
-            meter::line_failure_reasons(&revised, target, s.materials.as_object().unwrap());
-        if meter::count_japanese_sounds(&revised) != meter::TARGETS[target] {
-            reasons.push("meter_not_exact".into())
-        }
-        if draft
-            .iter()
-            .enumerate()
-            .any(|(i, l)| i != target && compact(l) == compact(&revised))
-        {
-            reasons.push("duplicate_line".into())
-        }
-        let mut dedup = Vec::new();
-        for r in reasons {
-            if !dedup.contains(&r) {
-                dedup.push(r)
-            }
-        }
-        if !dedup.is_empty() {
-            return Ok(fail(dedup, Some(target)));
-        }
-        let mut source = if s.pending_revision.as_ref().is_some_and(|s| !s.is_empty()) {
-            s.pending_revision_lines.clone()
-        } else {
-            s.current_lines.clone()
-        };
-        if source.len() != 3 {
-            let surface = s
-                .pending_revision_surface_text
-                .clone()
-                .unwrap_or_else(|| workshop_edit::surface(&s.current_lines));
-            source = self.whole_verse(&surface, "generated")?
-        }
-        if source.len() != 3 {
-            return Ok(failure("invalid_line_records", Some(target)));
-        }
-        let mut surface = r
+        let replacement = r
             .text
             .trim_matches(space)
-            .trim_matches(|c| "「」『』\"' 。．.!！?？…".contains(c))
-            .to_owned();
-        if let Some(fragment) = partial {
-            let old = &source[target].surface_text;
-            let spoken = r
-                .fragment
-                .as_deref()
-                .unwrap_or("")
-                .trim_matches(space)
-                .trim_matches(|c| "「」『』\"'".contains(c));
-            surface = if let Some(found) = [spoken, fragment.as_str()]
-                .into_iter()
-                .find(|s| old.matches(s).count() == 1)
-            {
-                old.replacen(found, &surface, 1)
-            } else {
-                revised.clone()
-            };
-            if self.normalized(&surface, true)?.as_deref() != Some(&revised) {
-                surface = revised.clone()
-            }
+            .trim_matches(|c| "「」『』\"' 。．.!！?？…".contains(c));
+        if replacement.is_empty() || replacement.contains(['\n', '\r']) {
+            return Ok(failure("invalid_surface", Some(target)));
         }
+        let old = &source[target];
+        let surface = if let Some(found) = match_in(old) {
+            let text = if old.surface_text.contains(&found) {
+                &old.surface_text
+            } else {
+                &old.reading_text
+            };
+            if text.matches(&found).count() != 1 {
+                return Ok(failure("ambiguous_target_fragment", Some(target)));
+            }
+            text.replacen(&found, replacement, 1)
+        } else {
+            replacement.to_owned()
+        };
+        if surface == old.surface_text {
+            return Ok(failure("no_change", Some(target)));
+        }
+        // 確定済みの旧行・旧語・置換語の読みを合成できるときだけ保持する。
+        // 完成行をもう一度辞書へ送り直さず、未確定なら原文表記と空の読みを返す。
+        let replacement_reading = self.normalized(replacement, true)?;
+        let reading = if let Some(found) = match_in(old) {
+            if found == old.surface_text || found == old.reading_text {
+                replacement_reading.unwrap_or_default()
+            } else if old.reading_text.is_empty() {
+                String::new()
+            } else {
+                let old_reading = if old.reading_text.contains(&found) {
+                    Some(found)
+                } else {
+                    self.normalized(fragment.unwrap(), true)?
+                };
+                match (old_reading, replacement_reading) {
+                    (Some(from), Some(to)) if old.reading_text.matches(&from).count() == 1 => {
+                        old.reading_text.replacen(&from, &to, 1)
+                    }
+                    _ => String::new(),
+                }
+            }
+        } else {
+            replacement_reading.unwrap_or_default()
+        };
         let line = &mut source[target];
         line.surface_text = surface;
-        line.reading_text = revised;
+        line.reading_text = reading;
         line.provenance = "player_explicit".into();
         line.source_atom_ids.clear();
         line.source_atoms.clear();
-        let revised_text = workshop_edit::reading(&source);
-        if revised_text == editing_lines(s).join("\n") {
-            return Ok(failure("no_change", Some(target)));
-        }
-        draft = parse::verse_lines(&revised_text);
-        let edits = (0..3)
-            .filter(|i| base_lines[*i] != draft[*i])
-            .map(|i| workshop_edit::LineEdit {
+        let edits = s
+            .current_lines
+            .iter()
+            .zip(&source)
+            .enumerate()
+            .filter(|(_, (old, new))| {
+                old.surface_text != new.surface_text || old.reading_text != new.reading_text
+            })
+            .map(|(i, (old, new))| workshop_edit::LineEdit {
                 line_index: i,
-                expected_text: base_lines[i].clone(),
-                replacement_text: draft[i].clone(),
-                provenance: "player_explicit".into(),
+                expected_text: workshop_edit::editing_text(std::slice::from_ref(old)),
+                replacement_text: workshop_edit::editing_text(std::slice::from_ref(new)),
+                provenance: new.provenance.clone(),
                 atom_ids: None,
             })
             .collect::<Vec<_>>();
-        // These edits are constructed from the same three base/draft lines. Runtime
-        // Pending::stage rechecks identity/frozen lines/CAS before any state mutation.
         if edits.is_empty() {
-            return Ok(failure("invalid_edit", Some(target)));
+            return Ok(failure("no_change", Some(target)));
         }
         Ok(EditResult {
-            text: Some(revised_text),
+            text: Some(workshop_edit::editing_text(&source)),
             base_text: base,
             surface_text: Some(workshop_edit::surface(&source)),
             lines: source,

@@ -35,7 +35,6 @@ impl Dialogue {
             .map(str::to_owned);
         let fixed_close = row.is_some_and(|r| r["workshop_fixed_close"] == true);
         let closed_by_turn = row.is_some_and(|r| r["workshop_closed_by_turn"] == true);
-        let text_displayed = row.is_some_and(|r| r["text_displayed"] == true);
         let player_text = row
             .and_then(|r| r["player_input_text"].as_str())
             .unwrap_or("")
@@ -53,6 +52,12 @@ impl Dialogue {
                         && !w.combat_paused()
                         && result.is_none_or(|r| {
                             r["workshop_action"] != "knowledge"
+                                || r["workshop_version"] == w.version
+                        })
+                        // 終了も処理開始時と同じ版だけに適用する。生成中に案や句が
+                        // 変わったとき、その新しい相談を古い終了結果で閉じない。
+                        && result.is_none_or(|r| {
+                            r["workshop_action"] != "close_workshop"
                                 || r["workshop_version"] == w.version
                         })
                         && (result.is_none_or(|r| {
@@ -106,7 +111,7 @@ impl Dialogue {
                     row["conversation_route"] = if result["knowledge_status"].is_null() {
                         "casual"
                     } else {
-                        "learning"
+                        "knowledge"
                     }
                     .into();
                 }
@@ -171,11 +176,6 @@ impl Dialogue {
             if status.is_terminal() {
                 s.cancel = None;
             }
-            if let Some(p) = s.address.as_mut()
-                && !text_displayed
-            {
-                p.playback(turn, status);
-            }
             if let Some(result) = result {
                 let knowledge_detour =
                     workshop_id.is_some() && result["workshop_action"] == "knowledge";
@@ -221,7 +221,6 @@ impl Dialogue {
                 if status == PlaybackStatus::Queued
                     && !workshop_reply
                     && result["memory_action"].is_null()
-                    && result["web_private"] != true
                 {
                     s.history.push(turn, "user", &player_text);
                     if !knowledge_detour {
@@ -268,6 +267,13 @@ impl Dialogue {
                             || result["workshop_action"] == "confirm_close"
                             || result["workshop_action"] == "decline_resume"
                         {
+                            // 原文の終了意思と同じworkshop・版・処理世代の検証後だけ
+                            // 未採用案を外す。現在句と保存済みrevisionは書き換えない。
+                            if result["workshop_action"] == "close_workshop"
+                                && w.pending.take().is_some()
+                            {
+                                w.version += 1;
+                            }
                             w.close("explicit_close");
                         }
                     }

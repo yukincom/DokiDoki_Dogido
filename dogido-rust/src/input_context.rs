@@ -120,24 +120,6 @@ impl Context {
             .and_then(|q| q.biome_id.clone());
         context
     }
-    pub fn general_conversation(&self) -> bool {
-        !self
-            .interpreted_text
-            .trim_matches(|c: char| c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c))
-            .is_empty()
-            && !self.normalized_text.starts_with('/')
-            && !self.wants_quiet
-            && !self.asks_hostile_count
-            && !self.asks_hostile_direction
-            && !self.asks_dragon_direction
-            && !self.asks_save_last_haiku
-            && !self.asks_inventory
-            && !self.requests_sword
-            && self.knowledge_query.is_none()
-            && self.player_haiku_text.is_none()
-            && self.revised_haiku_text.is_none()
-            && !self.asks_haiku_recall
-    }
 }
 
 #[cfg(test)]
@@ -157,11 +139,16 @@ mod tests {
                 &[],
                 DateTime::parse_from_rfc3339("2026-09-30T00:00:00Z").unwrap(),
             );
-            assert!(c.general_conversation(), "{raw}");
+            assert!(
+                c.knowledge_query.is_none()
+                    && c.player_haiku_text.is_none()
+                    && c.revised_haiku_text.is_none(),
+                "{raw}"
+            );
         }
     }
     #[test]
-    fn all_context_fields_and_address_ownership_match_fixture() {
+    fn all_context_fields_match_fixture() {
         let cases: Vec<Value> =
             serde_json::from_str(include_str!("../fixtures/input-context.json")).unwrap();
         for case in cases {
@@ -179,12 +166,6 @@ mod tests {
                 "raw={:?}, normalized={:?}",
                 case["raw"],
                 case["normalized"]
-            );
-            assert_eq!(
-                actual.general_conversation(),
-                case["general"].as_bool().unwrap(),
-                "raw={:?}",
-                case["raw"]
             );
         }
     }

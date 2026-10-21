@@ -7,10 +7,6 @@
 //! job登録で両方を取る順序はjobs → data。通常turnのserial待ちはdataを解放して行う。
 //! epochは返答処理の世代、input_generationは入力とその内部再送の世代を識別する。
 //! 取消通知で処理を止めるとともに、完了時にも世代を再照合して古い結果の混入を防ぐ。
-mod address_runtime;
-mod web_adapter;
-mod web_runtime;
-pub use web_runtime::Settings as WebSettings;
 mod assist_runtime;
 mod audio;
 mod body_runtime;
@@ -27,7 +23,6 @@ mod history;
 mod horse_recall_runtime;
 mod knowledge_display;
 mod knowledge_queue;
-mod language_runtime;
 mod memory_runtime;
 mod monitor;
 mod observe;
@@ -75,7 +70,7 @@ use tokio::sync::{Semaphore, watch};
 #[derive(Clone)]
 pub struct DialogueConfig {
     pub python: PathBuf,
-    /// UniDic token補助のパス。同じディレクトリのOS AI・Web等のSDKアダプターもここを基準に探す。
+    /// UniDic token補助のパス。同じディレクトリのOS AI等のSDKアダプターもここを基準に探す。
     pub helper: PathBuf,
     pub model: String,
     pub base_url: String,
@@ -93,8 +88,6 @@ pub struct DialogueConfig {
     pub player: PathBuf,
     pub audio_enabled: bool,
     pub llm_enabled: bool,
-    pub language_enabled: bool,
-    pub web: WebSettings,
     pub warnings: crate::threats::Settings,
     pub combat: crate::combat::model::Settings,
     pub haiku: HaikuSettings,
@@ -120,8 +113,6 @@ impl Default for DialogueConfig {
             player: "/usr/bin/afplay".into(),
             audio_enabled: true,
             llm_enabled: true,
-            language_enabled: true,
-            web: WebSettings::default(),
             warnings: crate::threats::Settings::default(),
             combat: crate::combat::model::Settings::default(),
             haiku: HaikuSettings::default(),
@@ -177,7 +168,7 @@ struct Session {
     pending_vocalization: Option<voice_input_runtime::Pending>,
     /// haiku_runtimeが持つ生成状態・現在句・workshopの正本。発句時計はforegroundが所有する。
     haiku: haiku_runtime::State,
-    /// 戦闘の出来事とWeb復帰時の話題を保持する短い文脈。combat_runtime／web_runtimeが更新する。
+    /// 戦闘の出来事を保持する短い文脈。combat_runtimeが更新する。
     combat_digest: VecDeque<String>,
     /// 敵の同一性・接近・被弾を追跡し、workshop暫定再開の安全条件に使う。
     stable_threat: crate::workshop_combat_input::StableThreat,
@@ -207,20 +198,12 @@ struct Session {
     conversation_observation: crate::conversation_observation::State,
     /// 最後に扱ったplayer入力のDialogue時計上の経過ミリ秒。発話の優先制御に使う。
     last_player_input: Option<u64>,
-    /// casual/learning/web/workshop等、現在どの会話を優先するかの状態。
+    /// casual/knowledge/workshop等、現在どの会話を優先するかの状態。
     foreground: crate::foreground::State,
-    /// 限定国語対話の対象・確認段階。language_runtimeが検証済み結果を反映する。
-    language: crate::language::State,
-    /// Web調査の同意・実再生待ち・読書期限・専用アダプターの状態。
-    web: web_runtime::State,
     /// 高優先発話の後へ回す知識質問。knowledge_queueが先着順・安全復帰時の再送・取消を管理する。
     knowledge_queue: VecDeque<knowledge_queue::Pending>,
     /// 先に分類済みの知識質問。内部再送を同じ入力世代へ結ぶ。
     knowledge_checked: Option<knowledge_queue::Checked>,
-    /// 学習から通常会話へ戻す際の宛先確認待ち一件。address_runtimeが所有する。
-    address: Option<crate::address::Pending>,
-    /// 宛先待ちの自由文を先に分類した結果。元turnと入力世代が一致するときだけ使う。
-    address_checked: Option<address_runtime::Checked>,
     /// 会話の実再生完了またはテキスト表示確認時の経過ミリ秒。話題の新しさの判定に使う。
     last_completed_conversation: Option<u64>,
     /// 新規入力や割込みで進める世代。内部再送が後の入力を追い越すことを防ぐ。
@@ -408,12 +391,8 @@ impl Dialogue {
                 conversation_observation: crate::conversation_observation::State::default(),
                 last_player_input: None,
                 foreground: crate::foreground::State::default(),
-                language: crate::language::State::default(),
-                web: web_runtime::State::default(),
                 knowledge_queue: VecDeque::new(),
                 knowledge_checked: None,
-                address: None,
-                address_checked: None,
                 last_completed_conversation: None,
                 input_generation: 0,
                 record_private_generation: None,
@@ -469,13 +448,7 @@ impl Dialogue {
     ) -> Value {
         let before = self.workshop_record_state(session_id);
         let text = event.meta.user_text.clone().unwrap_or_default();
-        let private = self
-            .data
-            .lock()
-            .unwrap()
-            .sessions
-            .get(session_id)
-            .is_some_and(|s| s.web.state.research.is_some());
+        let private = false;
         let mut result = self.observe_inner(session_id, event, key, private);
         let direct_input = result
             .as_object_mut()
@@ -558,7 +531,7 @@ impl Dialogue {
             .filter(|r| selected.is_none_or(|id| r["session_id"] == id))
             .collect::<Vec<_>>();
         json!({"revision":d.revision,"phase":"dialogue","audio_enabled":self.config.audio_enabled,"llm_enabled":self.config.llm_enabled,
-            "sessions":d.sessions.iter().map(|(id,s)|json!({"session_id":id,"session_instance":s.instance_id,"voice_enabled":s.delivery.voice_enabled,"voice_generation":s.delivery.generation,"voice_inputs":s.delivery.voice_inputs,"text_enabled":s.delivery.enabled,"name":s.name,"status":s.status,"observation_mode":if s.preview{"none"}else{"minecraft"},"history":s.history.rows(),"history_retention":s.history.retention_status(),"foreground":s.foreground.snapshot(self.clock.elapsed().as_millis() as u64),"web":s.web.state.snapshot(),"workshop_history":s.haiku.workshop.as_ref().map(|w| &w.dialogue),"workshop_followup":s.haiku.workshop.as_ref().map(|w| w.followup),"workshop_discussion_target":s.haiku.workshop.as_ref().and_then(|w| w.discussion_target.as_ref()),"state":s.mode,"chat_allowed":fresh(s),"horse_recall":horse_recall_runtime::snapshot(s),"body_observation":s.body_observation.project(Instant::now())})).collect::<Vec<_>>(),
+            "sessions":d.sessions.iter().map(|(id,s)|json!({"session_id":id,"session_instance":s.instance_id,"voice_enabled":s.delivery.voice_enabled,"voice_generation":s.delivery.generation,"voice_inputs":s.delivery.voice_inputs,"text_enabled":s.delivery.enabled,"name":s.name,"status":s.status,"observation_mode":if s.preview{"none"}else{"minecraft"},"history":s.history.rows(),"history_retention":s.history.retention_status(),"foreground":s.foreground.snapshot(self.clock.elapsed().as_millis() as u64),"workshop_history":s.haiku.workshop.as_ref().map(|w| &w.dialogue),"workshop_followup":s.haiku.workshop.as_ref().map(|w| w.followup),"workshop_discussion_target":s.haiku.workshop.as_ref().and_then(|w| w.discussion_target.as_ref()),"state":s.mode,"chat_allowed":fresh(s),"horse_recall":horse_recall_runtime::snapshot(s),"body_observation":s.body_observation.project(Instant::now())})).collect::<Vec<_>>(),
             "utterances":rows,"references":knowledge_display::collect(&rows)})
     }
     pub fn cancel_all(&self) {

@@ -20,7 +20,6 @@ pub struct Query {
 struct Grammar {
     question_cues: Vec<String>,
     generation_requests: Vec<String>,
-    japanese: HashSet<String>,
     poetry: HashSet<String>,
     minecraft_exact: HashSet<String>,
     minecraft_context: Vec<String>,
@@ -170,22 +169,12 @@ fn strip_subject(text: &str) -> String {
     unwrap_quotes(subject.trim_matches(|c| TRIM.contains(c) || "?？".contains(c))).into()
 }
 fn subject(text: &str) -> Option<String> {
-    for (index, pattern) in SPECIAL.iter().enumerate() {
-        let Some(captures) = pattern.captures(text) else {
-            continue;
-        };
-        let raw = captures.name("subject")?.as_str();
-        match index {
-            0 | 2 => return Some(raw.into()),
-            1 if captures["context"].contains(raw) => return Some(raw.into()),
-            3 => {
-                let candidate = strip_subject(raw);
-                let key = compact(&candidate);
-                if GRAMMAR.japanese.contains(&key) || GRAMMAR.poetry.contains(&key) {
-                    return Some(candidate);
-                }
+    for pattern in SPECIAL.iter() {
+        if let Some(captures) = pattern.captures(text) {
+            let candidate = strip_subject(captures.name("subject")?.as_str());
+            if GRAMMAR.poetry.contains(&compact(&candidate)) {
+                return Some(candidate);
             }
-            _ => {}
         }
     }
     for pattern in PATTERNS.iter() {
@@ -213,9 +202,7 @@ fn identifier(text: &str) -> bool {
     false
 }
 fn intent(text: &str) -> &'static str {
-    if any(&compact(text), &["何年生", "何年で", "配当学年", "学年"]) {
-        "grade"
-    } else if text.contains("読み") {
+    if text.contains("読み") {
         "reading"
     } else if any(text, &["どう変わ", "変更点", "どう変更"]) {
         "change"
@@ -244,49 +231,21 @@ fn minecraft_context(text: &str) -> bool {
         || any(&normalized, &["マインクラフト", "マイクラ"])
         || MINECRAFT.is_match(&normalized)
 }
-fn cjk(text: &str) -> bool {
-    let mut chars = text.chars();
-    chars.next().is_some_and(|c| matches!(c, '\u{3400}'..='\u{4dbf}' | '\u{4e00}'..='\u{9fff}' | '\u{f900}'..='\u{faff}')) && chars.next().is_none()
-}
-fn domain(subject: &str, text: &str, intent: &str) -> Option<&'static str> {
+fn domain(subject: &str, text: &str) -> Option<&'static str> {
     let key = compact(subject);
-    if GRAMMAR.poetry.contains(&key) {
-        return Some("poetry");
-    }
-    if GRAMMAR.japanese.contains(&key) {
-        return Some("japanese_language");
-    }
-    if ["国語で", "国語の", "日本語で", "日本語の"]
+    if GRAMMAR.poetry.contains(&key)
+        || [
+            "世界の詩で",
+            "世界の詩の",
+            "世界の詩形で",
+            "世界の詩形の",
+            "詩形で",
+            "詩形の",
+        ]
         .iter()
         .any(|s| text.starts_with(s))
     {
-        return Some("japanese_language");
-    }
-    if [
-        "世界の詩で",
-        "世界の詩の",
-        "世界の詩形で",
-        "世界の詩形の",
-        "詩形で",
-        "詩形の",
-    ]
-    .iter()
-    .any(|s| text.starts_with(s))
-    {
         return Some("poetry");
-    }
-    if matches!(intent, "grade" | "reading") && cjk(subject) {
-        return Some("japanese_language");
-    }
-    if matches!(intent, "grade" | "definition")
-        && subject.len() == 1
-        && subject.as_bytes()[0].is_ascii_digit()
-        && (text.starts_with("漢字の") || (text.contains("数字の") && text.contains("漢字")))
-    {
-        return Some("japanese_language");
-    }
-    if subject.starts_with(['～', '〜', '~']) {
-        return Some("japanese_language");
     }
     let resource = fold(&normalize(subject));
     if minecraft_context(text)
@@ -322,7 +281,9 @@ pub fn extract(raw: &str) -> Option<Query> {
         return None;
     }
     let intent = intent(&text);
-    let domain = domain(&subject, &text, intent)?;
+    let domain = domain(&subject, &text)?;
+    // TODO(BERT): minecraft_knowledge / world_observation は次回学習用キュレーション段階。
+    // 新ラベル採用後に入口を共通分類へ移す。ここは既存資料の対象語・観点抽出に留める。
     Some(Query {
         domain: domain.into(),
         subject,
@@ -353,7 +314,28 @@ mod tests {
         let cases: Vec<Case> =
             serde_json::from_str(include_str!("../../fixtures/knowledge-query.json")).unwrap();
         for case in cases {
-            assert_eq!(extract(&case.text), case.query, "input {:?}", case.text);
+            let expected = case.query;
+            assert_eq!(extract(&case.text), expected, "input {:?}", case.text);
+        }
+    }
+    #[test]
+    fn companion_keeps_poetry_and_minecraft_without_language_lessons() {
+        for text in [
+            "枕詞って何？",
+            "まくらことばって何？",
+            "川柳とは？",
+            "ソネットとは？",
+            "Minecraftで石のIDは？",
+        ] {
+            assert!(extract(text).is_some(), "{text}");
+        }
+        for text in [
+            "桜は何年生で習う？",
+            "助詞って何？",
+            "国語で活用とは？",
+            "音読みって何？",
+        ] {
+            assert!(extract(text).is_none(), "{text}");
         }
     }
     #[test]

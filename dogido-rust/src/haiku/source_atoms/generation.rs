@@ -224,8 +224,7 @@ fn single_clause(value: &Value) -> String {
         return String::new();
     };
     let s = strip(s).trim_matches(|c| "「」\"' 。．.!！?？…".contains(c));
-    let n = s.chars().count();
-    if !(2..=36).contains(&n)
+    if s.is_empty()
         || s.contains(['\n', '\r'])
         || ["プレイヤー", "Y座標", "ｙ座標", "%", "％", "確率"]
             .iter()
@@ -240,7 +239,7 @@ pub fn preface_clauses_from_payload(
     raw: &Value,
     source_atoms: &[SourceAtom],
 ) -> Option<Vec<PrefaceClause>> {
-    let rows = raw.as_array().filter(|v| (1..=3).contains(&v.len()))?;
+    let rows = raw.as_array().filter(|v| !v.is_empty())?;
     let by_id = source_atoms
         .iter()
         .filter(|a| a.basis_atom_ids.is_empty())
@@ -251,7 +250,6 @@ pub fn preface_clauses_from_payload(
     }
     let mut clauses = vec![];
     let mut seen = HashSet::new();
-    let mut total = 0;
     for row in rows {
         if !row.is_object() {
             return None;
@@ -276,10 +274,6 @@ pub fn preface_clauses_from_payload(
             .map(|id| by_id.get(id.as_str()).copied())
             .collect::<Option<Vec<_>>>()?;
         if !seen.insert(compact(&text)) {
-            return None;
-        }
-        total += text.chars().count();
-        if total > 72 {
             return None;
         }
         let claim_scopes = if class == "factual" {

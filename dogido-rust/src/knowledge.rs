@@ -1,5 +1,5 @@
 //! ローカル正本DBの回答だけを、出典境界を保って表示・音声へ投影する。
-//! 一般知識と限定国語の検索・出典照合もRust readerが担当する。
+//! 詩とMinecraftの検索・出典照合もRust readerが担当する。
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::hash::{DefaultHasher, Hash, Hasher};
@@ -124,20 +124,18 @@ struct Lookup {
 
 impl Lookup {
     fn valid(&self) -> bool {
-        matches!(
-            self.query.domain.as_str(),
-            "japanese_language" | "poetry" | "minecraft"
-        ) && matches!(
-            self.query.intent.as_str(),
-            "definition"
-                | "rules"
-                | "reading"
-                | "grade"
-                | "identifier"
-                | "change"
-                | "properties"
-                | "classification"
-        ) && required(&self.query.subject, 240)
+        matches!(self.query.domain.as_str(), "poetry" | "minecraft")
+            && matches!(
+                self.query.intent.as_str(),
+                "definition"
+                    | "rules"
+                    | "reading"
+                    | "identifier"
+                    | "change"
+                    | "properties"
+                    | "classification"
+            )
+            && required(&self.query.subject, 240)
             && required(&self.query.evidence, 240)
             && matches!(self.status.as_str(), "found" | "not_found" | "unavailable")
             && length(&self.error_code) <= 160
@@ -234,11 +232,6 @@ pub fn render(value: &Value) -> Reply {
         Some(UNAVAILABLE.to_owned())
     } else if result.error_code == "unsupported_minecraft_version" {
         Some("このMinecraft技術DBはJava Edition 1.21.11専用やで。別の版は推測せんとくで。".into())
-    } else if result.error_code == "ambiguous_kanji_numeric_notation" {
-        Some(format!(
-            "「{}」だけやと、どの漢字か決められへんわ。「一二三の一」みたいに言うてみてな。",
-            result.query.subject
-        ))
     } else if result.status != "found" {
         Some("手元の公式資料では確認できへんかったわ。推測はせんとくで。".into())
     } else {
@@ -296,7 +289,7 @@ mod tests {
     use serde_json::json;
 
     fn lookup() -> Value {
-        json!({"query":{"domain":"japanese_language","subject":"枕詞","intent":"definition","evidence":"枕詞って何？"},
+        json!({"query":{"domain":"poetry","subject":"枕詞","intent":"definition","evidence":"枕詞って何？"},
             "status":"found","error_code":"","facts":[{"record_id":"r","dataset_id":"d","title_ja":"枕詞",
             "text_ja":"資料の説明。","dialogue_text_ja":"","claim_status":"editorial_synthesis",
             "sources":[{"source_id":"src.example","title_ja":"参考資料","citation_label_ja":"文部科学省",

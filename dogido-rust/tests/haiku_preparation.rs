@@ -48,11 +48,22 @@ async fn canonical_persistent_preparation_traces() {
         .lines()
         .enumerate()
     {
-        let row: Value = serde_json::from_str(line).unwrap();
+        let mut row: Value = serde_json::from_str(line).unwrap();
+        // 旧収録の材料本文はそのまま照合し、撤去した評価設定と材料割当の記録だけを現行化する。
+        if let Some(input) = row["materials"]["input"].as_object_mut() {
+            input.remove("grounding_max_tokens");
+        }
         let start: Start = serde_json::from_value(row["start"].clone()).unwrap();
         let (mut prep, context) = Preparation::capture(start).unwrap();
         assert_eq!(json!(context), row["context"], "context {i}");
         if context.fixed_text.is_none() {
+            row["emission"]["materials"]["source_attribution"] =
+                json!("provided_materials_unverified");
+            if let Some(lines) = row["emission"]["lines"].as_array_mut() {
+                for line in lines {
+                    line["provenance"] = json!("generated_material_assignment");
+                }
+            }
             let mut inspiration = prep.inspiration(&row["irony_payload"]).unwrap();
             assert_eq!(json!(inspiration), row["inspiration"], "inspiration {i}");
             inspiration.text.clear();
@@ -124,12 +135,13 @@ async fn stage_rejection_does_not_consume_job_or_allow_fixed_substitution() {
             .is_err()
     );
     result.accepted = true;
-    result.text = preparation::fallback::failed_text();
-    assert!(
-        job.emission(&result, &mut Dictionary(json!({})))
-            .await
-            .is_err()
-    );
+    // 本文の語句は失敗判定に使わず、生成器の採否状態を受け取る。
+    result.text = "まとまらん\nくろいおのへと\nあさのいろ".into();
+    let emitted = job
+        .emission(&result, &mut Dictionary(json!({})))
+        .await
+        .unwrap();
+    assert!(emitted.text.contains("まとまらん"));
 }
 
 #[test]
@@ -171,9 +183,6 @@ fn preparation_retains_settings_domain_validation() {
         invalid.settings.max_regeneration_rounds = rounds;
         assert!(Preparation::capture(invalid).is_err());
     }
-    let mut invalid = start.clone();
-    invalid.settings.grounding_max_tokens = 0;
-    assert!(Preparation::capture(invalid).is_err());
     let mut invalid = start;
     invalid.settings.generation_strategy = "unknown".into();
     assert!(Preparation::capture(invalid).is_err());

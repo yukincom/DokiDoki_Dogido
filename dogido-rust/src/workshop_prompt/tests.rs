@@ -262,7 +262,6 @@ fn native_runtime_materials_match_every_canonical_preparation() {
         assert_eq!(prepared.findings, expected.findings);
         assert_eq!(prepared.basis, expected.basis);
         assert_eq!(prepared.max_tokens, expected.max_tokens);
-        assert_eq!(prepared.grounding_max_tokens, expected.grounding_max_tokens);
     }
 }
 

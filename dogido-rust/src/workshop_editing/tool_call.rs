@@ -52,8 +52,8 @@ fn tool_lines(expected: &str) -> Result<Vec<String>> {
 }
 
 /// 呼び手が渡す現在の句・未採用案と今回の原文に、stage_player_editの引数を照合する。
-/// 元句の全行照合→既存の原文・意味検証→Engine::run用のplayer_edit入力、の順に変換する。
-/// 現在句と原文はコード側の値を使う。返り値は読み・音数・hard制約検査への入力であり、
+/// 元句の全行照合→原文にある引数の補完→Engine::run用のplayer_edit入力、の順に変換する。
+/// 現在句と原文はコード側の値を使う。返り値は行差分を組み立てる入力であり、
 /// 採用・保存は行わない。保存時の元句一致確認は既存Pendingの担当。
 pub fn normalize_player_edit_tool(
     workshop: &Value,
@@ -118,13 +118,12 @@ pub fn normalize_player_edit_tool(
             "target_conflict"
         );
         args.replacement_text = replacement[selected].clone();
-        args.target_fragment = working[selected].reading_text.clone();
+        args.target_fragment = working[selected].surface_text.clone();
     } else {
         ensure!(replacement.len() == 1, "invalid_replacement_verse");
     }
 
-    // Do not repair evidence or copy an older candidate. Exact raw grounding is
-    // required before the existing semantic/negation/quotation validator runs.
+    // 操作根拠は今回の原文に必須。元句・行ID・confidence・evidenceは補完しない。
     ensure!(
         !args.evidence.is_empty()
             && args.evidence.chars().count() <= 120
@@ -132,11 +131,73 @@ pub fn normalize_player_edit_tool(
         "tool_evidence_not_in_original"
     );
     ensure!(
-        !args.replacement_text.is_empty()
-            && args.replacement_text.chars().count() <= 48
-            && original.contains(&args.replacement_text),
+        !args.replacement_text.is_empty() && args.replacement_text.chars().count() <= 48,
         "tool_replacement_not_in_original"
     );
+    ensure!(
+        args.target_fragment.chars().count() <= 48,
+        "tool_fragment_too_long"
+    );
+    // 原文に含まれるだけでは「うつろいの」の一部「うつろい」も通る。
+    // 明示されたA/Bを原文から取り直し、モデルによる短縮・補作・前の案の再利用を捨てる。
+    // ここでは語句の範囲だけを補完する。操作意思を語形から再判定しない。
+    if let Some(verbatim) = parse::verbatim_edit(original)? {
+        let fragment = parse::fragment_prefix(verbatim.target);
+        let fragment = parse::unquote(&fragment);
+        let literal = working
+            .iter()
+            .flat_map(|line| [&line.surface_text, &line.reading_text])
+            .any(|line| !fragment.is_empty() && line.contains(fragment));
+        let line_reference =
+            args.target_fragment.is_empty() && args.line_reference_evidence == verbatim.target;
+        // 明示置換の新語は原文から補完する。矢印の後の話し言葉を、既に原文にある新語へ足さない。
+        if !(original.contains("->") || original.contains('→'))
+            || !original.contains(&args.replacement_text)
+        {
+            args.replacement_text = verbatim.replacement.into();
+        }
+        // 現在句への対応または原文Aの短縮が確認できる場合に旧語を補完する。
+        // 読点で分かれた前置きは旧語へ足さず、漢字の原文Aは後段の辞書照合へ渡す。
+        if literal || line_reference || verbatim.target == args.target_fragment {
+            let references = parse::explicit_lines(verbatim.target);
+            if !verbatim.target_quoted
+                && ((args.target_fragment.is_empty()
+                && args.line_reference_evidence == verbatim.target)
+                || (references.len() == 1
+                    && references.contains(&selected)
+                    && parse::fragment_prefix(verbatim.target).is_empty())
+                // 「それ」は既存の相談対象を参照する。保持した対象とtool行が一致する時だけ
+                // 省略形の処理を維持し、引用された句中語や別の行へ読み替えない。
+                || (verbatim.target == "それ" && args.target_fragment.is_empty()
+                    && crate::workshop_target::Target::from_view(workshop, working)
+                        .is_some_and(|target| target.line_index == selected)))
+            {
+                args.target_fragment.clear();
+            } else {
+                // 漢字を含む旧語の読みは、後続Engineの既存辞書照合で確定する。
+                // 「中七のくろい」の行呼称は既存の切り分けを使い、句中の語だけを渡す。
+                let fragment = if verbatim.target_quoted {
+                    verbatim.target.to_owned()
+                } else if !args.line_reference_evidence.is_empty()
+                    && let Some(fragment) = verbatim
+                        .target
+                        .strip_prefix(&args.line_reference_evidence)
+                        .and_then(|s| s.strip_prefix('の'))
+                {
+                    fragment.to_owned()
+                } else {
+                    parse::fragment_prefix(verbatim.target)
+                };
+                args.target_fragment = parse::unquote(&fragment).into();
+            }
+        }
+    } else {
+        // A/Bを原文から一意に確定できない自由形では、従来どおり原文にない語を拒否する。
+        ensure!(
+            original.contains(&args.replacement_text),
+            "tool_replacement_not_in_original"
+        );
+    }
     ensure!(
         args.target_fragment.chars().count() <= 48,
         "tool_fragment_too_long"
@@ -155,8 +216,11 @@ pub fn normalize_player_edit_tool(
     // Preserve the existing semantic line-reference path for player wording
     // such as 冒頭の五音. A line ID alone cannot move a retained target.
     if !args.line_reference_evidence.is_empty() {
-        ensure!(args.line_reference_evidence.chars().count() <= 48
-            && original.contains(&args.line_reference_evidence), "tool_line_reference_rejected");
+        ensure!(
+            args.line_reference_evidence.chars().count() <= 48
+                && original.contains(&args.line_reference_evidence),
+            "tool_line_reference_rejected"
+        );
         frame["payload"]["line_reference"] = json!({
             "found":true,"concept_id":args.line_id,
             "evidence":args.line_reference_evidence,"confidence":args.confidence});
@@ -164,8 +228,10 @@ pub fn normalize_player_edit_tool(
     let details = workshop_projection::details_for(&frame)?;
     let validation = workshop_validation::validate(&frame, &details)?;
     if !args.line_reference_evidence.is_empty() {
-        ensure!(validation["step"]["analysis"]["line_reference"]["line_index"] == selected,
-            "tool_line_reference_rejected");
+        ensure!(
+            validation["step"]["analysis"]["line_reference"]["line_index"] == selected,
+            "tool_line_reference_rejected"
+        );
     }
     ensure!(
         validation["step"]["action"] == "stage_player_edit",

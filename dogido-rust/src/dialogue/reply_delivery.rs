@@ -1,5 +1,5 @@
 //! 会話の返答が届いたと確認できた時点の反映。文字と音声のどちらでも同じ確定処理を一度だけ行う。
-use super::{Data, Dialogue, language_runtime, web_runtime};
+use super::{Data, Dialogue};
 use serde_json::{Value, json};
 use std::time::Instant;
 
@@ -68,10 +68,6 @@ impl Dialogue {
         let workshop_reply =
             workshop_id.is_some() && result["workshop_action"] != "unrelated" && !knowledge_detour;
         let s = d.sessions.get_mut(sid).unwrap();
-        web_runtime::completed(s, turn, &player_text, result);
-        if text && let Some(p) = s.address.as_mut() {
-            p.displayed(turn);
-        }
         if let Some(revision) = result["observation_revision"].as_u64() {
             s.conversation_observation.considered(revision);
         }
@@ -121,7 +117,6 @@ impl Dialogue {
         }
         if !workshop_reply
             && !result["memory_action"].is_null()
-            && result["web_private"] != true
             && let Some(text) = result["text"].as_str().filter(|text| !text.is_empty())
         {
             // 想起・保存結果も実発話として共有する。通常雑談の対や新しい句の材料にはしない。
@@ -133,9 +128,8 @@ impl Dialogue {
         // 生成や再生開始だけでは「話した履歴」にしない。音声完了、または
         // Minecraftやテキスト相談室の表示確認を受けてから確定する。ここで成立した
         // 通常雑談の対だけを、後の川柳の会話材料へ渡す。
-        if !workshop_reply && result["memory_action"].is_null() && result["web_private"] != true {
+        if !workshop_reply && result["memory_action"].is_null() {
             s.last_completed_conversation = Some(now);
-            language_runtime::completed(s, result);
             s.history
                 .push(turn, "assistant", result["text"].as_str().unwrap_or(""));
             s.foreground.completed(
@@ -169,7 +163,6 @@ impl Dialogue {
             && let Some(row) = d.rows.iter_mut().find(|r| r["turn_id"] == turn)
             && row["shared_story_recorded"] != true
             && row["workshop_record_private"] != true
-            && result["web_private"] != true
         {
             row["shared_story_recorded"] = true.into();
             let text = result["text"].as_str().unwrap_or("");

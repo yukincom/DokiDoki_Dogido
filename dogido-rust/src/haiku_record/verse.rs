@@ -42,6 +42,21 @@ pub fn reading(lines: &[HaikuLine]) -> String {
         .collect::<Vec<_>>()
         .join("\n")
 }
+/// 編集・表示連携用の本文。確定読みがない行は表記を保ち、空行へ潰さない。
+/// 読みの確定状況は各行のreading_textで保持し、音数照会はこの代替本文を使わない。
+pub fn editing_text(lines: &[HaikuLine]) -> String {
+    lines
+        .iter()
+        .map(|line| {
+            if line.reading_text.is_empty() {
+                line.surface_text.as_str()
+            } else {
+                line.reading_text.as_str()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
 pub fn surface(lines: &[HaikuLine]) -> String {
     lines
         .iter()
@@ -68,12 +83,12 @@ impl<'a> TryFrom<&'a [HaikuLine]> for ResolvedLines<'a> {
                 position.matches(line),
                 "invalid canonical haiku line identity at {index}"
             );
-            for text in [&line.surface_text, &line.reading_text] {
-                ensure!(
-                    !text.trim().is_empty() && !text.contains(['\n', '\r']),
-                    "empty or multiline canonical haiku line at {index}"
-                );
-            }
+            ensure!(
+                !line.surface_text.trim().is_empty()
+                    && !line.surface_text.contains(['\n', '\r'])
+                    && !line.reading_text.contains(['\n', '\r']),
+                "empty or multiline canonical haiku line at {index}"
+            );
             ensure!(
                 !line.provenance.trim().is_empty(),
                 "missing line provenance at {index}"

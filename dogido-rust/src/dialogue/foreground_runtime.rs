@@ -4,15 +4,10 @@ use anyhow::{Result, ensure};
 
 impl Dialogue {
     pub(super) fn tick_foreground(&self, d: &mut Data, sid: &str) {
-        self.tick_address(d, sid);
         if let Some(s) = d.sessions.get_mut(sid) {
             let now = self.clock.elapsed().as_millis() as u64;
             let ttl = self.config.combat.ms("conversation_active_ttl_ms");
-            super::web_runtime::tick(s, now, ttl);
-            if s.foreground.route == Route::Web && !s.web.state.active() {
-                s.foreground.clear(now);
-            }
-            s.foreground.tick(now, s.web.state.ttl(ttl));
+            s.foreground.tick(now, ttl);
             if matches!(
                 s.foreground.route,
                 Route::HaikuPreparation | Route::HaikuWorkshop
@@ -94,7 +89,7 @@ mod tests {
         }
         assert!(
             dialogue
-                .select_foreground("s", "cancelled", 0, Route::Learning)
+                .select_foreground("s", "cancelled", 0, Route::Knowledge)
                 .is_err()
         );
         assert!(!dialogue.update(

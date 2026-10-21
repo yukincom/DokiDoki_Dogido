@@ -75,3 +75,21 @@ fn current_verse_save_confirmation_comes_only_from_the_runtime_flag() {
         assert_eq!(input, before);
     }
 }
+
+#[test]
+fn pending_allows_explicit_close_only_during_the_decision_phase() {
+    let fixture: Value = serde_json::from_str(include_str!("fixtures.json")).unwrap();
+    let case = fixture["projection"].as_array().unwrap().iter()
+        .find(|row| row["op"] == "details" && row["input"]["workshop"]["pending"].is_object())
+        .unwrap();
+    let mut input = case["input"].clone();
+    for phase in ["decide", "after_inspection", "after_validation"] {
+        input["phase"] = phase.into();
+        input["allowed_actions"] = json!(crate::workshop::allowed_actions(phase, true, false));
+        let before = input.clone();
+        let details = details_for(&input).unwrap();
+        assert_eq!(details["allowed_actions"].as_array().unwrap()
+            .iter().any(|action| action == "close_workshop"), phase == "decide");
+        assert_eq!(input, before);
+    }
+}

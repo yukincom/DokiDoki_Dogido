@@ -1,4 +1,4 @@
-//! 自動川柳6種の読み取り専用prompt組立。生成・検査・再生成・辞書は呼出側の所有。
+//! 自動川柳の読み取り専用prompt組立。生成・再生成・辞書は呼出側の所有。
 use crate::text_format::{self, ContainerFormat::SpacedJson};
 mod blocks;
 #[cfg(test)]
@@ -10,7 +10,7 @@ use crate::{
 };
 use anyhow::{Context, Result, ensure};
 use blocks::*;
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::LazyLock,
@@ -51,29 +51,6 @@ fn row_lines(value: &Value, f: impl Fn(&Value) -> String) -> String {
         "なし".into()
     }
 }
-fn grounding_example(d: &Value) -> Value {
-    let requested: Vec<_> = array(&d["grounding_lines"])
-        .iter()
-        .filter(|r| r.is_object() && integer(&r["line_index"]))
-        .map(|r| r["line_index"].clone())
-        .collect();
-    let numbers = d["grounding_atom_numbers"].as_object();
-    let mut example_numbers: Vec<_> = array(&d["source_atoms"])
-        .iter()
-        .filter_map(|r| r["atom_id"].as_str())
-        .filter_map(|id| numbers.and_then(|n| n.get(id)).cloned())
-        .collect();
-    if example_numbers.is_empty() {
-        example_numbers.push(json!(1));
-    }
-    let mut verdicts = Map::new();
-    for index in &requested {
-        verdicts.insert(text_format::value_text(index, SpacedJson), json!("pass"));
-    }
-    let assessments:Vec<_>=requested.iter().enumerate().map(|(p,i)|json!({"line_index":i,"atom_ids":[example_numbers[p.min(example_numbers.len()-1)].clone()]})).collect();
-    json!({"verdicts":verdicts,"assessments":assessments,"failure_reasons":{}})
-}
-
 pub fn messages(request: &StructuredRequest) -> Result<Vec<ChatMessage>> {
     let kind = request.kind.as_str();
     ensure!(
@@ -82,7 +59,6 @@ pub fn messages(request: &StructuredRequest) -> Result<Vec<ChatMessage>> {
             "haiku_irony"
                 | "haiku_scene"
                 | "haiku_draft"
-                | "haiku_line_grounding"
                 | "haiku_line_regeneration"
                 | "haiku_workshop_revision"
         ),
@@ -161,35 +137,6 @@ pub fn messages(request: &StructuredRequest) -> Result<Vec<ChatMessage>> {
     slots.insert("grounding_scene".into(), grounding_scene(&d));
     slots.insert("workshop_context".into(), context(&d));
     slots.insert(
-        "revision_block".into(),
-        if d["revision_edits"].is_array() {
-            format!(
-                "【今回の修正差分】\n{}{}",
-                spaced_json(&d["revision_edits"]),
-                asset("grounding_revision_note")
-            )
-        } else {
-            String::new()
-        },
-    );
-    slots.insert(
-        "line_block".into(),
-        row_lines(&d["grounding_lines"], |r| {
-            format!(
-                "- {}: {}",
-                text_format::value_text(&r["line_index"], SpacedJson),
-                text_format::value_text(&r["text"], SpacedJson)
-            )
-        }),
-    );
-    slots.insert(
-        "json_tail".into(),
-        format!(
-            "返事は JSON オブジェクト1つだけ。\n形: {}",
-            spaced_json(&grounding_example(&d))
-        ),
-    );
-    slots.insert(
         "current".into(),
         if kind == "haiku_workshop_revision" {
             row_lines(&d["current_lines"], |r| {
@@ -255,6 +202,29 @@ pub fn messages(request: &StructuredRequest) -> Result<Vec<ChatMessage>> {
         }),
     );
     slots.insert("retry_block".into(), edit_retry(&d));
+    if d["available_line_materials"].is_array() {
+        // 初案・再生成で使える材料は呼出元が絞ったものだけ。元の全材料を別欄で再提示しない。
+        let available = available_materials(&d);
+        for key in ["materials", "source_atoms", "atoms"] {
+            slots.insert(key.into(), available.clone());
+        }
+        for key in [
+            "candidates",
+            "tensions",
+            "scene_block",
+            "irony_block",
+            "grounding_scene",
+            "workshop_context",
+        ] {
+            slots.insert(key.into(), String::new());
+        }
+        let shared = join(&d["shared_poetic_context"], "\n");
+        if !shared.is_empty() {
+            let shared = format!("一句全体の雰囲気の参考（実測事実ではない）: {shared}");
+            slots.insert("scene_block".into(), shared.clone());
+            slots.insert("grounding_scene".into(), shared);
+        }
+    }
     let mut result: Vec<ChatMessage> = ASSETS[kind]
         .as_array()
         .context("missing haiku template")?
@@ -270,9 +240,8 @@ pub fn messages(request: &StructuredRequest) -> Result<Vec<ChatMessage>> {
             })
         })
         .collect::<Result<_>>()?;
-    // The pinned grounding builder intentionally bypasses generic structured retry additions.
     let retry = &d["__dogido_structured_contract_retry"];
-    if kind != "haiku_line_grounding" && retry.is_object() {
+    if retry.is_object() {
         let errors = if retry["errors"].is_array() {
             join(&retry["errors"], "、")
         } else {

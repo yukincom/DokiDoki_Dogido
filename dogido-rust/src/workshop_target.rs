@@ -112,7 +112,6 @@ impl Target {
             || index >= 3
             || evidence.chars().count() < 2
             || !player.contains(evidence)
-            || reference["confidence"].as_f64()? < 0.75
         {
             return None;
         }

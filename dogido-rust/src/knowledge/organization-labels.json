@@ -1,11 +1,8 @@
 {
   "org.mext": "文部科学省",
   "org.bunka": "文化庁",
-  "org.nier": "国立教育政策研究所",
   "org.ndl": "国立国会図書館",
   "org.nijl": "国文学研究資料館",
-  "org.ninjal": "国立国語研究所",
-  "org.u-gakugei": "東京学芸大学",
   "org.aap": "Academy of American Poets",
   "org.poetry-foundation": "Poetry Foundation",
   "org.unesco": "UNESCO",
@@ -24,6 +21,5 @@
   "org.kyoto": "京都大学",
   "org.tmd": "東京医科歯科大学",
   "org.iwate": "岩手大学",
-  "org.uryukyu": "琉球大学",
-  "org.unicode": "Unicode Consortium"
+  "org.uryukyu": "琉球大学"
 }

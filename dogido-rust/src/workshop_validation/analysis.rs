@@ -64,21 +64,12 @@ fn reference(raw: &Value, player: &str) -> Value {
     let evidence = cut(&raw["evidence"], 48);
     let ec = compact_kana(&evidence);
     if !(0.0..=1.0).contains(&confidence)
-        || confidence < 0.75
         || ec.chars().count() < 2
         || !compact_kana(player).contains(&ec)
     {
         return Value::Null;
     }
-    let explicit = explicit_lines(player);
-    let ev = explicit_lines(&evidence);
-    let index = concept["line_index"].as_u64().unwrap() as usize;
-    if explicit.len() > 1
-        || (ev.len() == 1 && !ev.contains(&index))
-        || (!explicit.is_empty() && !explicit.contains(&index))
-    {
-        return Value::Null;
-    }
+    // 呼称の意味はモデルが返した既知の行概念を受け取る。原文の別の行名で上書きしない。
     let mut result = concept.clone();
     result.as_object_mut().unwrap().remove("reference_examples");
     result["evidence"] = json!(evidence);
@@ -99,11 +90,6 @@ pub(super) fn finalize(
         "propose_revision" => "request_repair",
         _ => "other_haiku",
     };
-    let intent = if confidence >= 0.75 {
-        intent
-    } else {
-        "soft_default"
-    };
     let reference = reference(&payload["line_reference"], player);
     let verse = lines(text(&d["working_reading"]));
     let mut findings = Vec::new();
@@ -122,10 +108,7 @@ pub(super) fn finalize(
         let index = matching(&verse, &fragment);
         let problem = sanitize::strip(text(&row["problem"]));
         let confidence = row["confidence"].as_f64().unwrap_or(0.);
-        if !strings(&ASSETS["problems"]).contains(problem)
-            || !(0.0..=1.0).contains(&confidence)
-            || confidence < 0.65
-        {
+        if !strings(&ASSETS["problems"]).contains(problem) || !(0.0..=1.0).contains(&confidence) {
             continue;
         }
         findings.push(json!({"line_index":index,"fragment":fragment,"problem":problem,"note":cut(&row["note"],120),"confidence":confidence}));
@@ -144,7 +127,6 @@ pub(super) fn finalize(
         let concept = reference["line_index"].as_u64().map(|n| n as usize);
         let conflict = target.is_some() && concept.is_some() && target != concept;
         if (0.0..=1.0).contains(&confidence)
-            && confidence >= 0.75
             && !rc.is_empty()
             && !pc.is_empty()
             && pc.contains(&rc)
