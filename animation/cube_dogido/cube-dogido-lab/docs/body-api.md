@@ -1,6 +1,17 @@
-# Body API v9
+# Body API v10
 
-身体Mod **0.7.10 / protocol 9** の実装契約です。自他姿勢・owner視認・身体地点の感覚に加え、FOLLOWの制御状態を公開し、検証済み対象への観察移動を接続します。[安心度と統合判断の仕様・確認状態](../../../../docs/2026-10-20-reassurance.md)を参照してください。
+## v10の明示注視（BERT完成時に接続）
+
+`LOOK_AT`を追加。`destination`へ注視するワールド座標（block）を送り、その場で向きを変えます。移動先には使いません。実装・自動検証の範囲と未接続箇所は[準備仕様](../../../../docs/2026-10-22-body-look-preparation.md)を参照してください。
+
+- entrypointは`dogido:body_bridge_v10`、payloadは`body_request_v10`／`body_snapshot_v10`。身体Modとadapterを組で更新します。HTTP観測v3・自律制御v2は変更しません。
+- `foodId=null`、`movePurpose=INSPECT`（既存コンストラクタの既定値）。64block以内の有限な点を受け、所有者・context・sequence・期限・重複は既存action受付で検査します。
+- 待機・通常探索中だけ受け、呼び戻し・進行中action・追従・危険回避を優先します。実行中も優先行動が始まれば解除します。
+- yaw最大6度/tick・pitch最大4度/tickで合わせ、適用後の両角度が1度以内なら`SUCCEEDED/facing_target`。受付から最大100tickだけ注視を保持し、未到達の期限切れは`EXPIRED/look_timeout`。通常の上下浮遊は継続します。
+- `BodyLookController.direction`と`player`はBERT完成時に接続する準備コードです。現在の受付・自然文・モデル分類からは呼びません。稼働中のModへの導入と実機確認は未実施です。
+
+
+身体Mod **0.7.10 / protocol 9** の既存仕様を引き継ぎ、上記の準備コードを **protocol 10** として追加した実装契約です。自他姿勢・owner視認・身体地点の感覚に加え、FOLLOWの制御状態を公開し、検証済み対象への観察移動を接続します。[安心度と統合判断の仕様・確認状態](../../../../docs/2026-10-20-reassurance.md)を参照してください。
 
 ## 0.7.10の帰還後の顔確認
 
@@ -110,7 +121,7 @@
 - v2当時は初回bind／再読み込み／失効／復活後にDIRECT待機。v7では登録・旧保存読込み・復活の既定をFOLLOWへ変更（外部lease失効は停止を維持）
 - v1の固定追従・探索・退避はローカル試験コマンドに限定
 
-v1〜v8のクラスやJARをv9として扱いません。entrypointとprotocolの両方を照合します。旧entrypoint／payloadの受信口はありません。
+v1〜v9のクラスやJARをv10として扱いません。entrypointとprotocolの両方を照合します。旧entrypoint／payloadの受信口はありません。
 
 ## 公開APIとスレッド
 
@@ -128,13 +139,13 @@ public interface BodyBridge {
 }
 ```
 
-adapterはprotocol 9の`cube-dogido-lab-*-body-api.jar`を**compileOnly**で参照します。0.7.9で安心度とowner接近目的を加えたAPIへ更新しました。現在の追従範囲で観察先を選ぶ修正を含むadapterを組み合わせます。APIクラスをadapterへ重複同梱しません。身体Mod不在でもadapterを読み込めるよう、任意連携クラスを分けます。
+adapterはprotocol 10の`cube-dogido-lab-*-body-api.jar`を**compileOnly**で参照します。0.7.9で安心度とowner接近目的を加えたAPIへ更新しました。現在の追従範囲で観察先を選ぶ修正を含むadapterを組み合わせます。APIクラスをadapterへ重複同梱しません。身体Mod不在でもadapterを読み込めるよう、任意連携クラスを分けます。
 
 `available()`と送信はMinecraftのclient thread上で行います。`snapshot()`は不変データを読むだけで、HTTP workerから参照できます。受信後3秒を過ぎたsnapshotは空です。HTTP転送時はclient threadでsnapshotと経過msを続けて読み、3秒未満だけを現在値として送ります。受信登録と10client tickごとのポーリングは身体Modが所有します。
 
 ## 最小例
 
-次のクラスをロードする前に、呼び出し側で`FabricLoader.getInstance().isModLoaded("dogido_experiment")`とv8 entrypointの存在を確認します。
+次のクラスをロードする前に、呼び出し側で`FabricLoader.getInstance().isModLoaded("dogido_experiment")`とv10 entrypointの存在を確認します。
 
 ```java
 BodyBridge bridge = FabricLoader.getInstance()
@@ -165,7 +176,7 @@ var request = new BodyProtocol.ActionRequest(
 bridge.requestAction(request);
 ```
 
-`MOVE_TO/INSPECT`は`destination`へ身体の足元のワールド座標を入れ、`foodId=null`。`MOVE_TO/OWNER_NEAR`・`OWNER_FACE`は両方nullとし、現在ownerへの位置を身体側で選ぶ。`EAT`は直近の`food.targets[].id`を`foodId`へ入れ、`destination=null`。`REST`・`WAIT`・`CALL`は両方nullで、`movePurpose`もnullです。行き先・食料を省略して別の行動へ補完する処理はありません。
+`MOVE_TO/INSPECT`は`destination`へ身体の足元のワールド座標を入れ、`foodId=null`。`MOVE_TO/OWNER_NEAR`・`OWNER_FACE`は両方nullとし、現在ownerへの位置を身体側で選ぶ。`EAT`は直近の`food.targets[].id`を`foodId`へ入れ、`destination=null`。`REST`・`WAIT`・`CALL`は両方nullで、`movePurpose=INSPECT`（コンストラクタの既定値）です。行き先・食料を省略して別の行動へ補完する処理はありません。
 
 `revision`と`actionSequence`は同じContext内で単調増加させます。更新されたsnapshotを基に送る際にも、古いモデル結果に新しいContextを付け直しません。
 
@@ -183,6 +194,7 @@ bridge.requestAction(request);
 
 | action | 意味 | 実行結果 |
 |---|---|---|
+| `LOOK_AT` | 64block以内の点へその場で向く | 実回転後に`SUCCEEDED/facing_target`。最大100tick保持 |
 | `MOVE_TO` | 身体から32ブロック以内の読み込み済み座標へ移動 | 到着で`SUCCEEDED/arrived`。途中の停止理由はsnapshotへ |
 | `REST` | 現在地で休息する | 実際に静止して`SUCCEEDED/resting`。全回復を意味しない |
 | `WAIT` | 現在地で待つ | 実際に静止して`SUCCEEDED/waiting`。休息回復なし |

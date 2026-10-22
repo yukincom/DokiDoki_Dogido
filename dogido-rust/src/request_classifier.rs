@@ -9,6 +9,11 @@ use sha2::{Digest, Sha256};
 use std::{path::Path, time::Duration};
 use tokio::sync::watch;
 
+// TODO(BERT, 2026-10-22): 分類区分は見直し中。「これ見て」の意図もBERTの分類対象へ追加する。
+// 新しい区分と学習済みモデルの確定後に、Label・確率配列・共通受付の振り分けを合わせて更新する。
+// TODO(BERT): 指定方向（ドギドの現在向き基準の8方向）とプレイヤー注視は、完成後に
+// FabricのBodyLookController.direction / playerへ接続する。LOOK_ATの注視座標送信まで準備し、
+// 現在の5分類や「これ見て」へ暫定接続しない。docs/2026-10-22-body-look-preparation.md参照。
 /// 学習時の整数ID順。確信度の閾値や別分類への読み替えは行わない。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

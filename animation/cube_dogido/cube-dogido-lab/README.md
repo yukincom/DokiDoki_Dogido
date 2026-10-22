@@ -99,7 +99,7 @@ Java 21以上でビルドします。
 - `build/libs/cube-dogido-lab-0.7.10-body-api.jar`：adapterのコンパイル用。`mods`へ入れない
 - `build/libs/cube-dogido-lab-0.7.10-sources.jar`：ソース
 
-[API v9と最小例](docs/body-api.md) · [本線へ合体するときの対応表・検証手順](docs/mainline-integration.md)
+[API v10と最小例](docs/body-api.md) · [本線へ合体するときの対応表・検証手順](docs/mainline-integration.md)
 
 ## 確認状態
 

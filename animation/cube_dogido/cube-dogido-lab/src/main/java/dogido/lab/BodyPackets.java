@@ -14,12 +14,12 @@ public final class BodyPackets {
         public Message(int version, String kind, StateRequest state, ActionRequest action) { this(version,kind,state,action,null,null); }
     }
     public record Request(String json) implements CustomPayload {
-        public static final Id<Request> ID = new Id<>(Identifier.of("dogido_experiment","body_request_v9"));
+        public static final Id<Request> ID = new Id<>(Identifier.of("dogido_experiment","body_request_v10"));
         public static final PacketCodec<RegistryByteBuf,Request> CODEC = PacketCodec.tuple(PacketCodecs.string(8192),Request::json,Request::new);
         @Override public Id<Request> getId() { return ID; }
     }
     public record Response(String json) implements CustomPayload {
-        public static final Id<Response> ID = new Id<>(Identifier.of("dogido_experiment","body_snapshot_v9"));
+        public static final Id<Response> ID = new Id<>(Identifier.of("dogido_experiment","body_snapshot_v10"));
         public static final PacketCodec<RegistryByteBuf,Response> CODEC = PacketCodec.tuple(PacketCodecs.string(8192),Response::json,Response::new);
         @Override public Id<Response> getId() { return ID; }
     }

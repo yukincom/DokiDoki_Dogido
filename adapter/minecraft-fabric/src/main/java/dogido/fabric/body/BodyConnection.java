@@ -25,8 +25,12 @@ public final class BodyConnection {
             this(context,sequence,actionId,observedServerTick,validForTicks,destination,BodyInspectProtocol.Purpose.INSPECT);
         }
     }
+    /** 注視点は移動先ではない。同じaction配送で所有者・世代・期限・重複を検査する。 */
+    public record LookRequest(BodyInspectProtocol.Context context,long sequence,UUID actionId,
+            long observedServerTick,int validForTicks,BodyInspectProtocol.Point target) {}
     interface Source {
         Frame capture(UUID owner, String dimension);
+        default String lookAt(LookRequest request) { return "unavailable"; }
         default String moveTo(MoveRequest request) { return "unavailable"; }
         default void observeOwnerWork(boolean working) {}
         default void observeSpeechGaze(BodyInspectProtocol.Context context,long sequence,long tick,net.minecraft.util.math.Vec3d point) {}
@@ -42,7 +46,7 @@ public final class BodyConnection {
         FabricLoader loader = FabricLoader.getInstance();
         if (!loader.isModLoaded("dogido_experiment")) return;
         reason = "version_mismatch";
-        if (loader.getEntrypointContainers("dogido:body_bridge_v9",Object.class).isEmpty()) return;
+        if (loader.getEntrypointContainers("dogido:body_bridge_v10",Object.class).isEmpty()) return;
         try { source = BodySnapshotReader.open(); }
         catch (RuntimeException | LinkageError error) { source = null; }
     }
@@ -63,6 +67,13 @@ public final class BodyConnection {
         resolve();
         if (source == null) return "unavailable";
         try { return source.moveTo(request); }
+        catch (RuntimeException | LinkageError error) { return "bridge_error"; }
+    }
+    /** TODO(BERT): 学習済み分類の完成後にBodyLookControllerから呼ぶ。現行受付には接続しない。 */
+    public String lookAt(LookRequest request) {
+        resolve();
+        if (source == null) return "unavailable";
+        try { return source.lookAt(request); }
         catch (RuntimeException | LinkageError error) { return "bridge_error"; }
     }
     public Frame captureFrame(UUID owner, String dimension) {

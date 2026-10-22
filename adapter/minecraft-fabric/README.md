@@ -7,7 +7,7 @@
 ## できること
 
 - 既存の会話snapshotから実再生中の対象を受け、現在観測の座標へ身体を向ける（[発話と視線](../../docs/2026-10-18-body-speech-gaze.md)）。
-- 任意の身体Mod 0.7.9／Body API v9から、自他姿勢・owner視認と身体基準の周辺感覚を`body_observation` v3で送信。取得不能時は理由を送り、playerの感覚で補完しない（[観測移行仕様](../../docs/2026-10-13-body-observation-origin.md)）。FOLLOWの制御状態・候補は`body_autonomy` v2、観察移動は`body.inspect_target.v2`を使う（[移動接続](../../docs/2026-10-16-body-motion-start.md)・[安心度と発話・行動の統合](../../docs/2026-10-20-reassurance.md)）。
+- 任意の身体Mod／Body API v10から、自他姿勢・owner視認と身体基準の周辺感覚を`body_observation` v3で送信。取得不能時は理由を送り、playerの感覚で補完しない（[観測移行仕様](../../docs/2026-10-13-body-observation-origin.md)）。FOLLOWの制御状態・候補は`body_autonomy` v2、観察移動は`body.inspect_target.v2`を使う（[移動接続](../../docs/2026-10-16-body-motion-start.md)・[安心度と発話・行動の統合](../../docs/2026-10-20-reassurance.md)）。
 - 現在の `player.block_breaking_active` を通常観測と身体の立ち位置判断で共有する（[呼び寄せ仕様](../../docs/2026-10-16-body-recall.md)）。
 - プレイヤー本人の `position / yaw / pitch / health / hunger / held_item / inventory`
 - `player.hotbar`（0〜8、選択中slot、item ID、耐久、main-hand攻撃属性、武器候補種別）

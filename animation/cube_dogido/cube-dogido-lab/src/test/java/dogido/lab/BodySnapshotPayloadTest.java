@@ -31,11 +31,11 @@ class BodySnapshotPayloadTest {
         return result;
     }
 
-    @Test void ordinarySnapshotRoundTripsV9AndPreservesUnknownPitch() {
+    @Test void ordinarySnapshotRoundTripsV10AndPreservesUnknownPitch() {
         Snapshot original = snapshot("holding",List.of(),sounds());
         String encoded = BodySnapshotPayload.encode(original);
         Snapshot decoded = JSON.fromJson(encoded,Snapshot.class);
-        assertEquals(9,decoded.version());
+        assertEquals(10,decoded.version());
         assertEquals(new ControlObservation(true,Mode.FOLLOW,16,24,new Reassurance(87.5,2.1,true,true,false)),decoded.control());
         assertEquals(original,decoded);
         assertNull(decoded.hearing().sounds().getFirst().pitch());

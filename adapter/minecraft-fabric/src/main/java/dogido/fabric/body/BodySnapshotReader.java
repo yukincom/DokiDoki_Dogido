@@ -4,7 +4,7 @@ import dogido.lab.api.BodyBridge;
 import dogido.lab.api.BodyProtocol;
 import net.fabricmc.loader.api.FabricLoader;
 
-/** API v9導入時だけロードする接続実体。snapshot・MOVE_TO・作業・発話注視を同じbridgeへ接続する。 */
+/** API v10導入時だけロードする接続実体。snapshot・MOVE_TO・作業・発話注視を同じbridgeへ接続する。 */
 final class BodySnapshotReader {
     private BodySnapshotReader() {}
     static BodyConnection.Source open() {
@@ -19,6 +19,14 @@ final class BodySnapshotReader {
                 var value = snapshot.get();
                 var observation = BodyObservationJson.observed(value,bridge.snapshotAgeMillis(),owner,dimension);
                 return new BodyConnection.Frame(observation,hearing(value),autonomy(value,observation));
+            }
+            public String lookAt(BodyConnection.LookRequest request) {
+                var c = request.context(); var p = request.target();
+                return bridge.requestAction(new BodyProtocol.ActionRequest(
+                    new BodyProtocol.Context(c.ownerId(),c.bodyId(),c.epoch(),c.dimension()),
+                    request.sequence(),request.actionId(),request.observedServerTick(),request.validForTicks(),
+                    BodyProtocol.Action.LOOK_AT,new BodyProtocol.Position(p.x(),p.y(),p.z()),null))
+                    .name().toLowerCase(java.util.Locale.ROOT);
             }
             public String moveTo(BodyConnection.MoveRequest request) {
                 var context = request.context(); var point = request.destination();

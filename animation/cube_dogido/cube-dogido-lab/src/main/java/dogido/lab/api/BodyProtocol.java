@@ -5,8 +5,8 @@ import java.util.List;
 
 /** 身体の実測と操作を不変データで渡す。HP/食料は身体の情報で、player観測や嗅覚へ混入させない。 */
 public final class BodyProtocol {
-    public static final int VERSION = 9;
-    public static final String ENTRYPOINT = "dogido:body_bridge_v9";
+    public static final int VERSION = 10;
+    public static final String ENTRYPOINT = "dogido:body_bridge_v10";
     /** FOLLOWが高さを合わせ直す幅（block）。身体とadapterの停止位置計算で共有する。 */
     public static final double FOLLOW_HEIGHT_DISTANCE = 4;
     /** ownerの目の高さと身体の実寸から、通常追従する身体底面の高さを足元基準で返す。 */
@@ -22,7 +22,7 @@ public final class BodyProtocol {
     public enum Mode { DIRECT, FOLLOW, EXPLORE, HOLD }
     public enum Activity { UNBOUND, OWNER_ABSENT, HOLDING, FOLLOWING, EXPLORING, CALLING, RETREATING, MOVING, RESTING, DOWNED }
     public enum Presence { PRESENT, NOT_BOUND, UNLOADED, OWNER_UNAVAILABLE }
-    public enum Action { CALL, MOVE_TO, REST, WAIT, EAT }
+    public enum Action { CALL, MOVE_TO, LOOK_AT, REST, WAIT, EAT }
     /** MOVE_TOの目的。ownerへの接近先は身体が現在のowner姿勢から計算し、外部座標を受けない。 */
     public enum MovePurpose { INSPECT, OWNER_NEAR, OWNER_FACE }
     public enum Outcome { ACCEPTED, SUCCEEDED, REJECTED, INTERRUPTED, EXPIRED }
@@ -44,6 +44,7 @@ public final class BodyProtocol {
     /** observedServerTick bounds transport age; basedOnSnapshot is traceability, not equality. */
     public record StateRequest(Context context, long revision, long basedOnSnapshot,
             long observedServerTick, int leaseTicks, boolean enabled, Mode mode, boolean retreat) {}
+    /** LOOK_ATのdestinationは注視点（block）。移動せず最大100tick保持し、向きが合ってから成功を返す。 */
     public record ActionRequest(Context context, long sequence, UUID actionId,
             long observedServerTick, int validForTicks, Action action, Position destination, String foodId, MovePurpose movePurpose) {
         public ActionRequest(Context context, long sequence, UUID actionId, long observedServerTick,

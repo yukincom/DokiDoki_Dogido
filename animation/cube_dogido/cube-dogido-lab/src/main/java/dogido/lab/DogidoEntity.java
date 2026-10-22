@@ -56,6 +56,7 @@ public final class DogidoEntity extends PathAwareEntity {
     private final BodyFood food = new BodyFood(this);
     private final BodyHearing hearing = new BodyHearing();
     private final OwnerWorkState ownerWork = new OwnerWorkState();
+    private final dogido.lab.control.DirectedLook directedLook = new dogido.lab.control.DirectedLook();
     private final dogido.lab.control.SpeechGaze speechGaze = new dogido.lab.control.SpeechGaze();
     private final IdleMotion.FloatCycle floatingMotion = new IdleMotion.FloatCycle();
     private BodyController.CallContinuation transferringCall;
@@ -105,7 +106,7 @@ public final class DogidoEntity extends PathAwareEntity {
             administrativeRemoval = true; super.onDeath(source); return;
         }
         // 通常の撃破で個体・所有関係を削除しない。HP0のまま復活待ちへ移し、loot/XPを発生させない。
-        vitals.collapse(tuning); directed.clear(); idleRecovery.clear(); controller.reset(); hearing.clear();
+        vitals.collapse(tuning); directed.clear(); directedLook.clear(); idleRecovery.clear(); controller.reset(); hearing.clear();
         control.completeAction(Outcome.INTERRUPTED,"body_downed"); control.pause();
         activity = Activity.DOWNED; reason = "respawn_wait"; motion = Vec3d.ZERO; setVelocity(Vec3d.ZERO);
         setPose(EntityPose.DYING); snapshotRevision++;
@@ -161,7 +162,7 @@ public final class DogidoEntity extends PathAwareEntity {
             getEntityWorld().getRegistryKey().getValue().toString()));
         // ローカルのFOLLOW等は接続し直しても維持する。外部の期限付き要求は新しい世代で再照合する。
         if (localControl) control.local(mode,retreat);
-        controller.reset(); directed.clear(); idleRecovery.clear(); food.clear(); hearing.clear(); ownerWork.clear(); speechGaze.clear(); motion = Vec3d.ZERO;
+        controller.reset(); directed.clear(); directedLook.clear(); idleRecovery.clear(); food.clear(); hearing.clear(); ownerWork.clear(); speechGaze.clear(); motion = Vec3d.ZERO;
         floatingMotion.reset(); reassurance.reset();
         transferringCall = null; transferringFollow = false;
         snapshotRevision++;
@@ -203,10 +204,10 @@ public final class DogidoEntity extends PathAwareEntity {
             localControl = false;
             transferringCall = null; transferringFollow = false;
             if (before != control.mode()) {
-                directed.clear(); idleRecovery.clear(); controller.reset(); control.completeAction(Outcome.INTERRUPTED,"control_mode_changed");
+                directed.clear(); directedLook.clear(); idleRecovery.clear(); controller.reset(); control.completeAction(Outcome.INTERRUPTED,"control_mode_changed");
             }
             if (!control.enabled() || control.retreat()) {
-                directed.clear(); idleRecovery.clear();
+                directed.clear(); directedLook.clear(); idleRecovery.clear();
                 controller.cancelCall(control.retreat() ? "retreat_has_priority" : "control_inactive");
                 control.completeAction(Outcome.INTERRUPTED,control.retreat() ? "retreat_has_priority" : "control_inactive");
             }
@@ -222,7 +223,12 @@ public final class DogidoEntity extends PathAwareEntity {
         if (admission.execute()) {
             idleRecovery.clear();
             transferringCall = null; transferringFollow = false;
-            if (request.action() == Action.CALL) {
+            directedLook.clear();
+            if (request.action() == Action.LOOK_AT) {
+                // TODO(BERT): 完成後に明示方向／プレイヤー注視の分類から接続する。移動先には使わない。
+                directedLook.begin(result.actionId(),request.destination(),serverTick());
+                motion = Vec3d.ZERO;
+            } else if (request.action() == Action.CALL) {
                 directed.clear(); controller.call(result.actionId(),pose(player),serverTick());
             } else if (request.action() == Action.MOVE_TO && control.mode() == Mode.FOLLOW) {
                 directed.clear();
@@ -256,6 +262,13 @@ public final class DogidoEntity extends PathAwareEntity {
         String problem = BodyRequests.action(request,control.mode(),vitals.downed(),new Position(getX(),getY(),getZ()));
         if (problem != null) return problem;
         if (request == null || request.action() == null) return null; // 外形はControlLeaseで検査する。
+        if (request.action() == Action.LOOK_AT) {
+            ServerPlayerEntity player = owner();
+            if (player == null || player.getEntityWorld() != getEntityWorld()) return "owner_unavailable";
+            return dogido.lab.control.DirectedLook.priority(control.enabled(),control.retreat(),controller.calling(),
+                control.hasActiveAction(),activity,controller.following() || transferringFollow,
+                new BodySpace((ServerWorld)getEntityWorld(),this).safety(player,getEntityPos()).threatened(getEntityPos()));
+        }
         if (request.action() == Action.MOVE_TO) {
             BodySpace space = new BodySpace((ServerWorld)getEntityWorld(),this);
             if (control.mode() == Mode.FOLLOW) {
@@ -287,7 +300,7 @@ public final class DogidoEntity extends PathAwareEntity {
     }
     void localMode(Mode mode, boolean retreat) {
         requireServerThread(); localControl = true; control.local(mode,retreat);
-        directed.clear(); idleRecovery.clear(); controller.reset(); control.completeAction(Outcome.INTERRUPTED,"local_control_changed");
+        directed.clear(); directedLook.clear(); idleRecovery.clear(); controller.reset(); control.completeAction(Outcome.INTERRUPTED,"local_control_changed");
         transferringCall = null; transferringFollow = false;
         if (retreat || mode == Mode.HOLD) {
             controller.cancelCall(retreat ? "retreat_has_priority" : "local_hold");
@@ -372,7 +385,7 @@ public final class DogidoEntity extends PathAwareEntity {
         lifecycleTick = serverTick();
         control.expire(serverTick());
         if (!control.enabled()) {
-            directed.clear();
+            directed.clear(); directedLook.clear();
             if (!IdleRecovery.controlAllowsRecovery(control,localControl)) idleRecovery.clear();
         }
     }
@@ -518,6 +531,16 @@ public final class DogidoEntity extends PathAwareEntity {
             ? directed.plan(position) : controller.plan(position,player == null ? null : pose(player),serverTick(),control.enabled(),
                 control.mode(),control.retreat(),tuning,(p,walls) -> direct ? space.loaded(BodyMotion.box(p))
                     : space.target(p,walls,currentOwner,control.retreat()) && safety.safeTarget(p),safety);
+        // 身体の通常planで優先行動を確認してから、その場の注視だけを上書きする。
+        // FOLLOW以外も注視中だけ現在の危険を検査する。通常移動の安全方針には混ぜない。
+        boolean lookDanger = directedLook.active() && player != null
+            && (safeFollow ? safety : space.safety(player,position)).threatened(position);
+        String lookPriority = !directedLook.active() ? null : dogido.lab.control.DirectedLook.priority(control.enabled(),control.retreat(),controller.calling(),
+            false,plan.activity(),controller.following() || transferringFollow || player == null,
+            lookDanger || idleRecovery.target(position) != null);
+        var lookEnd = directedLook.stop(serverTick(),lookPriority);
+        if (lookEnd != null) control.completeAction(lookEnd.actionId(),lookEnd.outcome(),lookEnd.reason());
+        if (directedLook.active()) plan = new BodyController.Plan(position,Activity.HOLDING,"requested_look",true);
         activity = ownerId == null ? Activity.UNBOUND : plan.activity();
         reason = ownerId == null ? "bind_existing_body" : control.expired() ? "control_lease_expired" : plan.reason();
         if (controller.takeArrived()) control.completeAction(Outcome.SUCCEEDED,"arrived");
@@ -573,13 +596,13 @@ public final class DogidoEntity extends PathAwareEntity {
         move(MovementType.SELF,step);
         // 慣性には基本移動だけを戻す。上下波を次tickへ二重加算して振幅を増やさない。
         motion = locomotion; setVelocity(Vec3d.ZERO); fallDistance = 0;
-        if (direct && step.length() < .03 && (activity == Activity.RESTING || activity == Activity.HOLDING))
+        if (direct && !directedLook.active() && step.length() < .03 && (activity == Activity.RESTING || activity == Activity.HOLDING))
             control.completeAction(Outcome.SUCCEEDED,activity == Activity.RESTING ? "resting" : "waiting");
         if (step.lengthSquared() < 1e-9 && active && position.distanceTo(target) > .4) reason = "path_blocked";
         Vec3d facing = activity == Activity.CALLING && player != null ? player.getEntityPos().subtract(getEntityPos()) : step;
         // 待機時の見回しも実yawへ反映する。次の身体snapshotの視野・遮蔽判定はこの向きを使う。
         Vec3d gaze = control.enabled() && activity != Activity.CALLING && activity != Activity.DOWNED
-            && activity != Activity.RESTING ? speechGaze.target(serverTick()) : null;
+            && activity != Activity.RESTING ? (directedLook.active() ? directedLook.target() : speechGaze.target(serverTick())) : null;
         if (gaze == null && safeFollow && controller.lookingAtOwner(serverTick())) gaze = player.getEyePos();
         Float idleYaw = gaze == null && safeFollow && activity == Activity.HOLDING ? controller.idleYaw(serverTick(),getYaw()) : null;
         if (gaze != null) {
@@ -595,6 +618,8 @@ public final class DogidoEntity extends PathAwareEntity {
             setYaw(MathHelper.stepUnwrappedAngleTowards(getYaw(),yaw,6)); setBodyYaw(getYaw()); setHeadYaw(getYaw());
         }
         if (gaze == null) setPitch(MathHelper.stepTowards(getPitch(),0,4));
+        UUID looked = directedLook.reached(getEyePos(),getYaw(),getPitch());
+        if (looked != null) control.completeAction(looked,Outcome.SUCCEEDED,"facing_target");
         snapshotRevision++;
     }
 

@@ -42,16 +42,17 @@ public final class BodyRequests {
             if (mode != Mode.FOLLOW) return "owner_approach_requires_follow";
             if (request.destination() != null) return "unexpected_destination";
         }
-        if (request.action() != Action.CALL && mode != Mode.DIRECT
+        if (request.action() != Action.CALL && request.action() != Action.LOOK_AT && mode != Mode.DIRECT
                 && !(mode == Mode.FOLLOW && request.action() == Action.MOVE_TO)) return "direct_mode_required";
-        if (request.action() != Action.MOVE_TO && request.destination() != null) return "unexpected_destination";
+        if (request.action() != Action.MOVE_TO && request.action() != Action.LOOK_AT && request.destination() != null) return "unexpected_destination";
         if (request.action() != Action.EAT && request.foodId() != null) return "unexpected_food_id";
         if (request.action() == Action.EAT && (request.foodId() == null || request.foodId().isBlank() || request.foodId().length() > 128)) return "invalid_food_id";
-        if (request.action() == Action.MOVE_TO && request.movePurpose() == MovePurpose.INSPECT) {
+        if (request.action() == Action.LOOK_AT || request.action() == Action.MOVE_TO && request.movePurpose() == MovePurpose.INSPECT) {
             Position p = request.destination();
             if (p == null || !Double.isFinite(p.x()) || !Double.isFinite(p.y()) || !Double.isFinite(p.z())) return "invalid_destination";
             double x = p.x()-current.x(), y = p.y()-current.y(), z = p.z()-current.z();
-            if (x*x+y*y+z*z > 32*32) return "destination_too_far";
+            double limit = request.action() == Action.LOOK_AT ? 64 : 32;
+            if (x*x+y*y+z*z > limit*limit) return "destination_too_far";
         }
         return null;
     }
