@@ -59,14 +59,33 @@ pub(super) async fn render(
     input: &Value,
     cancel: &mut watch::Receiver<bool>,
 ) -> Result<Value> {
+    render_image(config,llm,input,cancel,None).await
+}
+/// 通常の環境判断と同じ一回生成へ静止画像を添える。画像だけの前段モデルや再生成は作らない。
+pub(super) async fn render_image(
+    config: &DialogueConfig,llm: &RigLlm,input: &Value,cancel: &mut watch::Receiver<bool>,
+    image: Option<&crate::chat_image::Attachment>,
+) -> Result<Value> {
     // Keep the former bridge's whole-turn budget even though wording is now native.
     let deadline = tokio::time::Instant::now() + Duration::from_secs(95);
     if input["kind"] == crate::environment::reaction::KIND {
-        let prepared = crate::environment::reaction::Prepared::new(input, &config.model)?;
+        let mut prepared = crate::environment::reaction::Prepared::new(input, &config.model)?;
+        if image.is_some() {
+            prepared.request.messages[0].content.push_str("\n\n");
+            prepared.request.messages[0].content.push_str(crate::companion_prompt::chat_image());
+            if input["details"]["reaction_context"]["body_options"].is_object() {
+                prepared.request.messages[0].content.push_str("\n\n");
+                prepared.request.messages[0].content.push_str(crate::companion_prompt::image_move_notice());
+                if input["details"]["reaction_context"]["body_options"]["available_actions"].get("inspect_image").is_some() {
+                    prepared.request.messages[0].content.push_str("\n\n");
+                    prepared.request.messages[0].content.push_str(crate::companion_prompt::image_body_contract());
+                }
+            }
+        }
         let mut result = tokio::time::timeout_at(
             deadline,
             generate_environment_once(&prepared, cancel, |request| async move {
-                llm.generate(&request).await
+                match image { Some(image)=>llm.generate_with_image(&request,image).await, None=>llm.generate(&request).await }
             }),
         )
         .await
@@ -112,15 +131,17 @@ async fn generate_environment_once<F: Future<Output = Result<GenerationReport>>>
         !*cancel.borrow() && cancel.has_changed().is_ok(),
         "cancelled"
     );
-    let (text, outcome) = prepared.finish(response.as_ref().ok().map(|r| &r.generated));
+    let generated = response.as_ref().ok().map(|r| &r.generated);
+    let (text, outcome) = prepared.finish(generated);
+    let body_action = prepared.body_action(generated);
     let report = match response {
         Ok(report) => serde_json::to_value(report)?,
         Err(error) => json!({"kind":crate::environment::reaction::KIND,"error":error.to_string()}),
     };
     tracing::info!(event = "environment_reaction", outcome);
-    Ok(
-        json!({"op":"result","text":text,"spoken_text":text,"llm_reports":[report],"environment_reaction_outcome":outcome}),
-    )
+    let mut result = json!({"op":"result","text":text,"spoken_text":text,"llm_reports":[report],"environment_reaction_outcome":outcome});
+    if let Some(action) = body_action { result["body_action"] = action; }
+    Ok(result)
 }
 async fn read_speech(
     config: &DialogueConfig,

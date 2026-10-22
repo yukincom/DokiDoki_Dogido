@@ -127,7 +127,7 @@ workshop中の一般知識質問は専用枝で一度だけ答え、pin、未採
 | `dogido-rust/src/knowledge/query.rs` | 明示質問の抽出。操作依頼へ昇格させない |
 | `dogido-rust/src/knowledge/` | 正本DB検索、短い事実・出典、回答用の検査 |
 | `dogido-rust/src/dialogue/chat_runtime.rs` | 通常会話と限定国語から検索へ接続 |
-| `dogido-rust/src/dialogue/knowledge_queue.rs` | 戦闘中の有界な知識質問保留 |
+| `dogido-rust/src/dialogue/reply_queue.rs` | 警告中の通常会話・知識質問の有界保留と未回答入力の復帰 |
 | `dogido-rust/src/dialogue/knowledge_display.rs` | 発話IDと参考資料を対応させる読み取り用表示 |
 | `dogido-rust/src/dialogue/audio.rs` · `sentences.rs` | 文単位の配送、取消、実再生結果 |
 | `dogido-rust/src/dialogue/workshop_runtime.rs` | workshop中の知識回答と句の状態不変 |

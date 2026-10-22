@@ -493,7 +493,7 @@
 
           const tag = document.createElement('span');
           tag.className = `tag ${item.category === 'knowledge' ? 'knowledge' : ''}`;
-          tag.textContent = item.playback_status ? ({routing:'内容を確認中',waiting_for_safety:'安全になるまで保留',not_selected:'発話なし',generating:'生成中',queued:'音声準備中',started:'再生中',completed:'再生完了',cancelled:'取消',failed:'失敗',quiet:'発話なし',unsupported:'未接続'}[item.playback_status] || item.playback_status) : (categoryLabels[item.category] || '発言');
+          tag.textContent = item.playback_status ? ({routing:'内容を確認中',waiting_for_warning:'回答を保留中',not_selected:'発話なし',generating:'生成中',queued:'音声準備中',started:'再生中',completed:'再生完了',cancelled:'取消',failed:'失敗',quiet:'発話なし',unsupported:'未接続'}[item.playback_status] || item.playback_status) : (categoryLabels[item.category] || '発言');
           meta.appendChild(tag);
 
           if (Array.isArray(item.reference_ids) && item.reference_ids.length) {

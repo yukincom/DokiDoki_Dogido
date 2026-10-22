@@ -1,5 +1,5 @@
-//! 照明コメントの限定判定。観測・発話権限・クールダウンは既存ambientが所有する。
-//! プロンプトとstructured契約をRustで検査し、JSON不正時の無言と契約一回再試行を保つ。
+//! 照明への反応選択と本文を一回で生成する。観測・発話権限・クールダウンは既存ambientが所有する。
+//! 返答はactionとspeechだけ。外形不正・生成失敗は無言にし、モデルへ再試行しない。
 #[cfg(test)]
 mod tests;
 mod validation;
@@ -31,78 +31,34 @@ fn actions(details: &Value) -> BTreeSet<&str> {
         .filter(|s| !s.is_empty())
         .collect()
 }
-fn basis(details: &Value) -> BTreeSet<&str> {
-    details["facts"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(|v| v["basis_id"].as_str())
-        .filter(|s| !s.is_empty())
-        .collect()
-}
-// 再試行promptの許可値一覧は既存のASCII表記に固定する。非ASCII文字はUTF-16単位でescapeする。
-fn ascii_json(value: &Value) -> String {
-    let mut out = String::new();
-    for ch in spaced_json(value).chars() {
-        if ch.is_ascii() {
-            out.push(ch);
-        } else {
-            for unit in ch.encode_utf16(&mut [0; 2]) {
-                use std::fmt::Write;
-                write!(out, "\\u{unit:04x}").expect("string write");
-            }
-        }
-    }
-    out
+/// 既存の共有人格と、反応選択・本文をまとめた一回分の指示を作る。
+/// 個数や入手方法を推定せず、コードが段階化した観測だけを渡す。
+pub fn messages(details: &Value) -> Vec<ChatMessage> {
+    vec![
+        ChatMessage {
+            role: Role::System,
+            content: [
+                crate::companion_prompt::base(),
+                crate::companion_prompt::grounding(),
+                PROMPTS["instruction"].as_str().unwrap(),
+                PROMPTS["contract"].as_str().unwrap(),
+            ]
+            .join("\n\n"),
+        },
+        ChatMessage {
+            role: Role::User,
+            content: spaced_json(details),
+        },
+    ]
 }
 
-pub fn messages(details: &Value, retry: Option<(&[String], &Value)>) -> Vec<ChatMessage> {
-    let mut slots = json!({
-        "actions":spaced_json(details.get("allowed_actions").filter(|v| !v.is_null()).unwrap_or(&json!([]))),
-        "facts":spaced_json(details.get("facts").filter(|v| !v.is_null()).unwrap_or(&json!([])))
-    });
-    if let Some((errors, previous)) = retry {
-        slots["errors"] = errors.join("、").into();
-        slots["previous"] = spaced_json(previous)
-            .chars()
-            .take(2400)
-            .collect::<String>()
-            .into();
-        slots["sorted_actions"] = ascii_json(&json!(actions(details))).into();
-        slots["sorted_basis"] = ascii_json(&json!(basis(details))).into();
-    }
-    PROMPTS
-        .as_array()
-        .unwrap()
-        .iter()
-        .take(if retry.is_some() { 3 } else { 2 })
-        .map(|template| ChatMessage {
-            role: if template["role"] == "system" {
-                Role::System
-            } else {
-                Role::User
-            },
-            content: template["segments"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|part| {
-                    part["literal"]
-                        .as_str()
-                        .unwrap_or_else(|| slots[part["slot"].as_str().unwrap()].as_str().unwrap())
-                })
-                .collect(),
-        })
-        .collect()
-}
-
-fn request(model: &str, details: &Value, retry: Option<(&[String], &Value)>) -> GenerationRequest {
+fn request(model: &str, details: &Value) -> GenerationRequest {
     GenerationRequest {
         schema_version: 1,
         kind: KIND.into(),
         model: model.into(),
-        messages: messages(details, retry),
-        temperature: 0.0,
+        messages: messages(details),
+        temperature: 0.48,
         max_tokens: 160,
         enable_thinking: false,
     }
@@ -141,14 +97,14 @@ async fn run_bounded<F, Fut>(
     generate: F,
 ) -> Result<Value>
 where
-    F: FnMut(GenerationRequest) -> Fut,
+    F: FnOnce(GenerationRequest) -> Fut,
     Fut: Future<Output = Result<GenerationReport>>,
 {
     ensure!(
         details.is_object() && fallback.is_object(),
         "invalid light planner input"
     );
-    tokio::select! {
+    let result = tokio::select! {
         biased;
         _ = async {
             loop {
@@ -157,74 +113,52 @@ where
         } => anyhow::bail!("cancelled"),
         result = tokio::time::timeout(deadline, run_inner(model, details, fallback, generate)) =>
             result.context("light planner timed out")?,
-    }
+    };
+    // 生成futureの同じpoll内で取消が届いても、完成結果を配送へ返さない。
+    ensure!(
+        !*cancel.borrow() && cancel.has_changed().is_ok(),
+        "cancelled"
+    );
+    result
 }
 
 async fn run_inner<F, Fut>(
     model: &str,
     details: &Value,
     fallback: &Value,
-    mut generate: F,
+    generate: F,
 ) -> Result<Value>
 where
-    F: FnMut(GenerationRequest) -> Fut,
+    F: FnOnce(GenerationRequest) -> Fut,
     Fut: Future<Output = Result<GenerationReport>>,
 {
-    let mut reports = Vec::new();
-    let mut retry: Option<(Vec<String>, Value)> = None;
-    for attempt in 0..2 {
-        let request = request(
-            model,
-            details,
-            retry.as_ref().map(|(e, p)| (e.as_slice(), p)),
-        );
-        let generated = match generate(request).await {
-            Ok(report) => {
-                tracing::info!(kind=KIND, elapsed_ms=report.elapsed_ms as u64,
-                    completion_tokens=?report.generated.completion_tokens, finish_reason=?report.generated.finish_reason);
-                let generated = report.generated.clone();
-                reports.push(serde_json::to_value(report)?);
-                generated
-            }
-            Err(error) => {
-                reports.push(json!({"error":error.to_string()}));
-                return Ok(frame(
-                    fallback.clone(),
-                    if attempt == 0 {
-                        "generation_error"
-                    } else {
-                        "schema_contract_error"
-                    },
-                    reports,
-                ));
-            }
-        };
-        let Some(payload) = extract_object(&generated.text) else {
-            let status = if attempt > 0 {
-                "schema_contract_error"
-            } else if matches!(
-                generated.finish_reason.as_deref(),
-                Some("length" | "max_tokens" | "MAX_TOKENS")
-            ) {
-                "output_truncated"
-            } else {
-                "invalid_json"
-            };
-            return Ok(frame(fallback.clone(), status, reports));
-        };
-        let errors = contract_errors(&payload, details);
-        if errors.is_empty() {
-            return Ok(frame(payload, "accepted", reports));
+    let report = match generate(request(model, details)).await {
+        Ok(report) => report,
+        Err(error) => {
+            return Ok(frame(
+                fallback.clone(),
+                "generation_error",
+                vec![json!({"error":error.to_string()})],
+            ));
         }
-        tracing::info!(
-            kind = KIND,
-            result = "schema_contract_error",
-            attempt,
-            ?errors
-        );
-        retry = Some((errors, payload));
-        // Give cancellation a scheduling boundary before the single permitted retry.
-        tokio::task::yield_now().await;
+    };
+    tracing::info!(kind=KIND, elapsed_ms=report.elapsed_ms as u64,
+        completion_tokens=?report.generated.completion_tokens, finish_reason=?report.generated.finish_reason);
+    let generated = &report.generated;
+    let reports = vec![serde_json::to_value(&report)?];
+    if matches!(
+        generated.finish_reason.as_deref(),
+        Some("length" | "max_tokens" | "MAX_TOKENS")
+    ) {
+        return Ok(frame(fallback.clone(), "output_truncated", reports));
     }
-    Ok(frame(fallback.clone(), "schema_contract_error", reports))
+    let Some(payload) = extract_object(&generated.text) else {
+        return Ok(frame(fallback.clone(), "invalid_json", reports));
+    };
+    let errors = contract_errors(&payload, details);
+    if !errors.is_empty() {
+        tracing::info!(kind = KIND, result = "schema_contract_error", ?errors);
+        return Ok(frame(fallback.clone(), "schema_contract_error", reports));
+    }
+    Ok(frame(payload, "accepted", reports))
 }

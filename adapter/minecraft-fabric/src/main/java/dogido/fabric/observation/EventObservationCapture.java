@@ -28,11 +28,20 @@ public final class EventObservationCapture {
     private final java.util.function.LongSupplier tickSource;
     private final java.util.function.Supplier<String> userText;
     private final java.util.function.Supplier<JsonObject> bodyObservation;
+    private final java.util.function.Supplier<JsonObject> bodyAutonomy;
 
     public EventObservationCapture(PlayerObserver playerObserver, WorldObserver worldObserver,
             SmellObserver smellObserver, AmbientMobObserver ambientMobObserver, CombatObserver combatObserver,
             java.util.function.LongSupplier nextSequence, java.util.function.LongSupplier tickSource,
             java.util.function.Supplier<String> userText, java.util.function.Supplier<JsonObject> bodyObservation) {
+        this(playerObserver,worldObserver,smellObserver,ambientMobObserver,combatObserver,nextSequence,tickSource,userText,bodyObservation,() -> null);
+    }
+    public EventObservationCapture(PlayerObserver playerObserver, WorldObserver worldObserver,
+            SmellObserver smellObserver, AmbientMobObserver ambientMobObserver, CombatObserver combatObserver,
+            java.util.function.LongSupplier nextSequence, java.util.function.LongSupplier tickSource,
+            java.util.function.Supplier<String> userText, java.util.function.Supplier<JsonObject> bodyObservation,
+            java.util.function.Supplier<JsonObject> bodyAutonomy) {
+        this.bodyAutonomy = bodyAutonomy;
         this.playerObserver = playerObserver;
         this.worldObserver = worldObserver;
         this.smellObserver = smellObserver;
@@ -46,7 +55,7 @@ public final class EventObservationCapture {
 
     private EventJsonBuilder baseEnvelope(String name, String source, String priority, String certainty) {
         return new EventJsonBuilder(name, source, priority, certainty,
-            OffsetDateTime.now().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME), this.smellObserver.current()).bodyObservation(this.bodyObservation.get());
+            OffsetDateTime.now().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME), this.smellObserver.current()).bodyObservation(this.bodyObservation.get()).bodyAutonomy(this.bodyAutonomy.get());
     }
 
     public JsonObject buildStatusSnapshot(

@@ -1,0 +1,8 @@
+2026-10-17 — 本棚の左上に使う開いた巻物
+Method: built-in image_gen, edit from a generated reference, transparent background.
+Original style reference: bookshelf-app-icon.png. The app icon itself was not changed.
+User revisions: no ribbon; no blue sheet; horizontal unrolling; compact width; symbolic simplicity; brown only on the projecting axle tips.
+Final asset: bookshelf-open-scroll-v4.png
+
+Final prompt:
+Simplify this existing compact open-scroll icon one more step. Keep its compact near-square silhouette, blank ivory parchment, vertical ivory paper rolls at LEFT and RIGHT, and dark forest-green outline. DELETE THE FOUR WIDE TAN / BROWN COLLARS OR DECORATIVE RINGS around the ends of the paper rolls. There must be NO wide brown bands around either roll. The ONLY brown parts are four SMALL, PLAIN SHORT WOODEN AXLE TIPS: a tiny rectangular rod end projecting above and below each vertical ivory paper roll, matching the narrow central rod. The paper rolls themselves, including their simple curved ends, are entirely the same warm ivory as the central paper. Reduce the icon to an extremely simple clean flat pictogram, 3 solid colors only: warm ivory paper, dark forest green outline, muted brown for the tiny projecting axle tips. Thin consistent bold outline suitable for 40px display; no shading, no gradients, no grain, no pixel texture, no shadow, no symbols or text inside the parchment. No ribbon, no blue sheet, no background panel. Preserve the compact dimensions, do not widen the sheet. Square canvas, genuine transparent background, small even margins. Output one final icon.

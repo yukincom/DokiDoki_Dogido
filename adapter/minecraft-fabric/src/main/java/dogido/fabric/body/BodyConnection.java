@@ -14,10 +14,23 @@ public final class BodyConnection {
         public Hearing { sounds = List.copyOf(sounds); }
         public static Hearing unavailable() { return new Hearing(false,-1,List.of(),false); }
     }
-    public record Frame(JsonObject observation, Hearing hearing) {
-        static Frame unavailable(String reason) { return new Frame(BodyConnection.unavailable(reason),Hearing.unavailable()); }
+    public record Frame(JsonObject observation, Hearing hearing, JsonObject autonomy) {
+        public Frame(JsonObject observation, Hearing hearing) { this(observation,hearing,BodyInspectProtocol.unavailable("not_sampled")); }
+        static Frame unavailable(String reason) { return new Frame(BodyConnection.unavailable(reason),Hearing.unavailable(),BodyInspectProtocol.unavailable(reason)); }
     }
-    interface Source { Frame capture(UUID owner, String dimension); }
+    public record MoveRequest(BodyInspectProtocol.Context context, long sequence, UUID actionId,
+            long observedServerTick, int validForTicks, BodyInspectProtocol.Point destination, BodyInspectProtocol.Purpose purpose) {
+        public MoveRequest(BodyInspectProtocol.Context context,long sequence,UUID actionId,
+                long observedServerTick,int validForTicks,BodyInspectProtocol.Point destination) {
+            this(context,sequence,actionId,observedServerTick,validForTicks,destination,BodyInspectProtocol.Purpose.INSPECT);
+        }
+    }
+    interface Source {
+        Frame capture(UUID owner, String dimension);
+        default String moveTo(MoveRequest request) { return "unavailable"; }
+        default void observeOwnerWork(boolean working) {}
+        default void observeSpeechGaze(BodyInspectProtocol.Context context,long sequence,long tick,net.minecraft.util.math.Vec3d point) {}
+    }
     private Source source;
     private boolean resolved;
     private String reason = "not_installed";
@@ -29,7 +42,7 @@ public final class BodyConnection {
         FabricLoader loader = FabricLoader.getInstance();
         if (!loader.isModLoaded("dogido_experiment")) return;
         reason = "version_mismatch";
-        if (loader.getEntrypointContainers("dogido:body_bridge_v5",Object.class).isEmpty()) return;
+        if (loader.getEntrypointContainers("dogido:body_bridge_v9",Object.class).isEmpty()) return;
         try { source = BodySnapshotReader.open(); }
         catch (RuntimeException | LinkageError error) { source = null; }
     }
@@ -45,10 +58,31 @@ public final class BodyConnection {
     public JsonObject capture(UUID owner, String dimension) {
         return captureFrame(owner,dimension).observation();
     }
+    /** 既存MOVE_TOだけを任意APIへ送る。DIRECTや追従の有効化をここから変更しない。 */
+    public String moveTo(MoveRequest request) {
+        resolve();
+        if (source == null) return "unavailable";
+        try { return source.moveTo(request); }
+        catch (RuntimeException | LinkageError error) { return "bridge_error"; }
+    }
     public Frame captureFrame(UUID owner, String dimension) {
         resolve();
         if (source == null) return Frame.unavailable(reason);
         try { return source.capture(owner,dimension); }
         catch (RuntimeException | LinkageError error) { return Frame.unavailable("bridge_error"); }
+    }
+    /** client tickで取得した既存作業観測を任意身体へ送る。未導入・版違いは通常観測を止めない。 */
+    public void observeOwnerWork(boolean working) {
+        resolve();
+        if (source == null) return;
+        try { source.observeOwnerWork(working); }
+        catch (RuntimeException | LinkageError ignored) { }
+    }
+    /** 同じ任意APIに実再生中の注視点を渡す。nullは終了で、移動要求には変換しない。 */
+    public void observeSpeechGaze(BodyInspectProtocol.Context context,long sequence,long tick,net.minecraft.util.math.Vec3d point) {
+        resolve();
+        if (source == null) return;
+        try { source.observeSpeechGaze(context,sequence,tick,point); }
+        catch (RuntimeException | LinkageError ignored) { }
     }
 }

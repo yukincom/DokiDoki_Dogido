@@ -9,11 +9,14 @@
 //! 取消通知で処理を止めるとともに、完了時にも世代を再照合して古い結果の混入を防ぐ。
 mod assist_runtime;
 mod audio;
+mod body_gaze_runtime;
+mod body_interest_runtime;
 mod body_runtime;
 mod bridge;
 mod chat_context;
 mod chat_leaf_runtime;
 mod chat_runtime;
+mod chat_tools_runtime;
 mod combat_runtime;
 mod environment_runtime;
 mod episode_runtime;
@@ -22,7 +25,6 @@ mod haiku_runtime;
 mod history;
 mod horse_recall_runtime;
 mod knowledge_display;
-mod knowledge_queue;
 mod memory_runtime;
 mod monitor;
 mod observe;
@@ -30,14 +32,18 @@ mod poem_runtime;
 mod reaction_runtime;
 mod reading_runtime;
 mod reply_delivery;
+mod reply_queue;
 mod story;
 mod submit;
 mod text_delivery;
 mod tts_runtime;
 mod turn;
 mod update;
+mod visual_runtime;
 pub use haiku_runtime::Settings as HaikuSettings;
 mod combat_classifier;
+mod request_runtime;
+pub use request_runtime::Settings as RequestClassifierSettings;
 mod sentences;
 mod voice_input_runtime;
 mod warnings;
@@ -91,6 +97,8 @@ pub struct DialogueConfig {
     pub warnings: crate::threats::Settings,
     pub combat: crate::combat::model::Settings,
     pub haiku: HaikuSettings,
+    pub request_classifier: RequestClassifierSettings,
+    pub chat_image: crate::chat_image_settings::Settings,
 }
 impl Default for DialogueConfig {
     fn default() -> Self {
@@ -116,6 +124,8 @@ impl Default for DialogueConfig {
             warnings: crate::threats::Settings::default(),
             combat: crate::combat::model::Settings::default(),
             haiku: HaikuSettings::default(),
+            request_classifier: RequestClassifierSettings::default(),
+            chat_image: crate::chat_image_settings::Settings::default(),
         }
     }
 }
@@ -131,6 +141,11 @@ struct Session {
     player_uuid: Option<String>,
     /// 生eventだけから更新する身体実測と前回値。会話開始時に鮮度を再検査する。
     body_observation: crate::body::State,
+    /// 実視認候補と興味選択命令の有界台帳。生成中の取消口と実行capabilityを分ける。
+    body_autonomy: crate::body::autonomy::State,
+    body_interest_pending: Option<body_interest_runtime::Pending>,
+    body_interest_notice: body_interest_runtime::BoundaryNotice,
+    body_interest_enabled: bool,
     /// ゲーム観測なしの対話試験か。trueなら通常の観測鮮度条件を免除する。
     preview: bool,
     /// workshop_textが設定する、音声を伴わない共同編集試験の入口。
@@ -168,6 +183,10 @@ struct Session {
     pending_vocalization: Option<voice_input_runtime::Pending>,
     /// haiku_runtimeが持つ生成状態・現在句・workshopの正本。発句時計はforegroundが所有する。
     haiku: haiku_runtime::State,
+    /// 保存済み発句に固定した自動撮影の依頼と保存ACK。
+    screenshots: crate::screenshot::State,
+    /// 一回の通常会話だけで使う画像要求。終了時のACKまで所有する。
+    visual: visual_runtime::State,
     /// 戦闘の出来事を保持する短い文脈。combat_runtimeが更新する。
     combat_digest: VecDeque<String>,
     /// 敵の同一性・接近・被弾を追跡し、workshop暫定再開の安全条件に使う。
@@ -200,14 +219,15 @@ struct Session {
     last_player_input: Option<u64>,
     /// casual/knowledge/workshop等、現在どの会話を優先するかの状態。
     foreground: crate::foreground::State,
-    /// 高優先発話の後へ回す知識質問。knowledge_queueが先着順・安全復帰時の再送・取消を管理する。
-    knowledge_queue: VecDeque<knowledge_queue::Pending>,
-    /// 先に分類済みの知識質問。内部再送を同じ入力世代へ結ぶ。
-    knowledge_checked: Option<knowledge_queue::Checked>,
+    /// 警告中と緊急中断後の未回答入力。reply_queueが受理順・警告後の再送・取消を管理する。
+    reply_queue: VecDeque<reply_queue::Pending>,
+    /// 先に分類済みの保留入力。内部再送を同じ入力世代へ結ぶ。
+    reply_checked: Option<reply_queue::Checked>,
     /// 会話の実再生完了またはテキスト表示確認時の経過ミリ秒。話題の新しさの判定に使う。
     last_completed_conversation: Option<u64>,
     /// 新規入力や割込みで進める世代。内部再送が後の入力を追い越すことを防ぐ。
     input_generation: u64,
+    request_classification: request_runtime::State,
     /// 受理時の世代と記録制限。内部再送にも同じ制限を引き継ぐ。
     record_private_generation: Option<(u64, bool)>,
     /// 進行中の照明コメント判定への取消通知口。発話の寿命は警告配送側が扱う。
@@ -240,6 +260,7 @@ pub struct Dialogue {
     audio: audio::Audio,
     haiku_routes: haiku_runtime::Routes,
     combat_classifier: combat_classifier::Classifier,
+    request_classifier: tokio::sync::Mutex<Option<crate::request_classifier::Classifier>>,
     episodes: Option<Arc<crate::episode_log::Recorder>>,
     /// 状態の短い照合・更新区間だけで保持し、ネットワークや音声の完了待ちへ持ち越さない。
     data: Mutex<Data>,
@@ -301,6 +322,8 @@ impl Dialogue {
     /// 設定を検査して各I/Oの所有者を構築する。会話処理はregister後のobserve/submitから始まる。
     pub fn new(mut config: DialogueConfig) -> Result<Arc<Self>> {
         config.warnings.validate()?;
+        config.request_classifier.validate()?;
+        config.chat_image.validate()?;
         config.combat = crate::combat::model::Settings::merged(&config.combat.0)?;
         anyhow::ensure!(config.helper.is_file(), "dictionary helper missing");
         anyhow::ensure!(
@@ -328,6 +351,7 @@ impl Dialogue {
             audio: audio::Audio::new()?,
             haiku_routes: haiku_runtime::Routes::new(&config)?,
             combat_classifier: combat_classifier::Classifier::default(),
+            request_classifier: tokio::sync::Mutex::new(None),
             episodes: if config.haiku.memory_enabled {
                 match crate::episode_log::Recorder::new(config.haiku.memory_dir.clone()) {
                     Ok(recorder) => Some(Arc::new(recorder)),
@@ -357,6 +381,10 @@ impl Dialogue {
                 name: name.into(),
                 player_uuid: None,
                 body_observation: crate::body::State::default(),
+                body_autonomy: crate::body::autonomy::State::default(),
+                body_interest_pending: None,
+                body_interest_notice: body_interest_runtime::BoundaryNotice::default(),
+                body_interest_enabled: false,
                 preview,
                 text_workshop: false,
                 delivery: text_delivery::State::new(self.config.audio_enabled),
@@ -375,6 +403,8 @@ impl Dialogue {
                 haiku_context: crate::haiku::preparation::RuntimeSnapshot::default(),
                 pending_vocalization: None,
                 haiku: haiku_runtime::State::default(),
+                screenshots: crate::screenshot::State::default(),
+                visual: visual_runtime::State::default(),
                 combat_digest: VecDeque::new(),
                 stable_threat: crate::workshop_combat_input::StableThreat::default(),
                 combat_input: None,
@@ -391,10 +421,11 @@ impl Dialogue {
                 conversation_observation: crate::conversation_observation::State::default(),
                 last_player_input: None,
                 foreground: crate::foreground::State::default(),
-                knowledge_queue: VecDeque::new(),
-                knowledge_checked: None,
+                reply_queue: VecDeque::new(),
+                reply_checked: None,
                 last_completed_conversation: None,
                 input_generation: 0,
+                request_classification: request_runtime::State::default(),
                 record_private_generation: None,
                 light_cancel: None,
                 deferred_input: None,
@@ -410,7 +441,7 @@ impl Dialogue {
     pub fn close(&self, session_id: &str) {
         let before = self.workshop_record_state(session_id);
         let mut d = self.data.lock().unwrap();
-        self.cancel_knowledge_queue(&mut d, session_id, "session_closed");
+        self.cancel_reply_queue(&mut d, session_id, "session_closed");
         Self::cancel_haiku(&mut d, session_id, "session_closed");
         Self::cancel_chat(&mut d, session_id, "session_closed");
         Self::cancel_combat_input(&mut d, session_id);
@@ -499,7 +530,7 @@ impl Dialogue {
     /// 接続の進行中処理を取り消し、保留入力と世代を更新して遅れた結果の反映を止める。
     pub fn interrupt(&self, session_id: &str) {
         let mut d = self.data.lock().unwrap();
-        self.cancel_knowledge_queue(&mut d, session_id, "manual_interrupt");
+        self.cancel_reply_queue(&mut d, session_id, "manual_interrupt");
         Self::cancel_haiku(&mut d, session_id, "manual_interrupt");
         Self::cancel_chat(&mut d, session_id, "manual_interrupt");
         Self::cancel_combat_input(&mut d, session_id);
@@ -507,6 +538,7 @@ impl Dialogue {
         Self::cancel_assist(&mut d, session_id);
         Self::cancel_light(&mut d, session_id);
         if let Some(s) = d.sessions.get_mut(session_id) {
+            body_interest_runtime::cancel(s);
             s.pending_vocalization = None;
             if !s.foreground.combat_active {
                 s.history.end_danger(
@@ -531,7 +563,7 @@ impl Dialogue {
             .filter(|r| selected.is_none_or(|id| r["session_id"] == id))
             .collect::<Vec<_>>();
         json!({"revision":d.revision,"phase":"dialogue","audio_enabled":self.config.audio_enabled,"llm_enabled":self.config.llm_enabled,
-            "sessions":d.sessions.iter().map(|(id,s)|json!({"session_id":id,"session_instance":s.instance_id,"voice_enabled":s.delivery.voice_enabled,"voice_generation":s.delivery.generation,"voice_inputs":s.delivery.voice_inputs,"text_enabled":s.delivery.enabled,"name":s.name,"status":s.status,"observation_mode":if s.preview{"none"}else{"minecraft"},"history":s.history.rows(),"history_retention":s.history.retention_status(),"foreground":s.foreground.snapshot(self.clock.elapsed().as_millis() as u64),"workshop_history":s.haiku.workshop.as_ref().map(|w| &w.dialogue),"workshop_followup":s.haiku.workshop.as_ref().map(|w| w.followup),"workshop_discussion_target":s.haiku.workshop.as_ref().and_then(|w| w.discussion_target.as_ref()),"state":s.mode,"chat_allowed":fresh(s),"horse_recall":horse_recall_runtime::snapshot(s),"body_observation":s.body_observation.project(Instant::now())})).collect::<Vec<_>>(),
+            "sessions":d.sessions.iter().map(|(id,s)|json!({"session_id":id,"session_instance":s.instance_id,"voice_enabled":s.delivery.voice_enabled,"voice_generation":s.delivery.generation,"voice_inputs":s.delivery.voice_inputs,"text_enabled":s.delivery.enabled,"name":s.name,"status":s.status,"observation_mode":if s.preview{"none"}else{"minecraft"},"history":s.history.rows(),"history_retention":s.history.retention_status(),"foreground":s.foreground.snapshot(self.clock.elapsed().as_millis() as u64),"workshop_history":s.haiku.workshop.as_ref().map(|w| &w.dialogue),"workshop_followup":s.haiku.workshop.as_ref().map(|w| w.followup),"workshop_discussion_target":s.haiku.workshop.as_ref().and_then(|w| w.discussion_target.as_ref()),"state":s.mode,"chat_allowed":fresh(s),"horse_recall":horse_recall_runtime::snapshot(s),"body_observation":s.body_observation.project(Instant::now()),"body_probe":s.body_observation.diagnostic_sample(Instant::now()),"chat_image":json!({"enabled":self.config.chat_image.enabled,"wait_ms":self.config.chat_image.wait_ms,"state":s.visual.snapshot()}),"body_gaze":body_gaze_runtime::snapshot(s,&d.rows)})).collect::<Vec<_>>(),
             "utterances":rows,"references":knowledge_display::collect(&rows)})
     }
     pub fn cancel_all(&self) {
@@ -540,13 +572,16 @@ impl Dialogue {
             d.stopped = true;
             let ids = d.sessions.keys().cloned().collect::<Vec<_>>();
             for sid in ids {
-                self.cancel_knowledge_queue(&mut d, &sid, "server_shutdown");
+                self.cancel_reply_queue(&mut d, &sid, "server_shutdown");
                 Self::cancel_haiku(&mut d, &sid, "server_shutdown");
                 Self::cancel_chat(&mut d, &sid, "server_shutdown");
                 Self::cancel_combat_input(&mut d, &sid);
                 Self::cancel_warning(&mut d, &sid, "server_shutdown");
                 Self::cancel_assist(&mut d, &sid);
                 Self::cancel_light(&mut d, &sid);
+                if let Some(s) = d.sessions.get_mut(&sid) {
+                    body_interest_runtime::cancel(s);
+                }
             }
         }
     }
@@ -584,6 +619,9 @@ impl Dialogue {
         self.workshop_records.flush().await;
         self.workshop_records.forget_all();
         self.combat_classifier.close().await;
+        if let Some(classifier) = self.request_classifier.lock().await.take() {
+            let _ = classifier.close().await;
+        }
         if let Some(recorder) = &self.episodes {
             let recorder = recorder.clone();
             let _ = tokio::task::spawn_blocking(move || recorder.close()).await;

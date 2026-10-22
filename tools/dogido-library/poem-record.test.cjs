@@ -1,0 +1,31 @@
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const M=require('./model.js'),record=require('./poem-record.js'),app=fs.readFileSync(__dirname+'/app.js','utf8');
+test('rating has no model, UI, sort, styling or save contract',()=>{
+ assert.equal(M.createRatings,undefined);
+ for(const name of ['app.js','model.js','live-library.js','poem-metadata.css','readability.css'])assert.doesNotMatch(fs.readFileSync(__dirname+'/'+name,'utf8'),/rating|ratings|stars|星で評価/);
+});
+test('records escape stored text, preserve repetition, and never render operation events',()=>{
+ const e={materials:{interpretation:'<解釈>',source_atoms:[{text:'<候補>'}],line_sources:[{text:'最初の行',sources:[{text:'<出典>'}]}]},dialogue:[{time:'2026-10-19T01:23:00Z',player:'<質問>',dogido:'<返答>'},{time:'2026-10-19T01:24:00Z',player:'<質問>',dogido:'<返答>'}],history:[{action:'SECRET_OPERATION'}]};
+ const before=JSON.stringify(e),html=record.render(e);
+ assert.match(html,/&lt;解釈&gt;/);assert.match(html,/&lt;候補&gt;/);assert.match(html,/&lt;出典&gt;/);assert.match(html,/10:23/);
+ assert.equal((html.match(/&lt;質問&gt;/g)||[]).length,2);assert.doesNotMatch(html,/<質問>|SECRET_OPERATION/);assert.equal(JSON.stringify(e),before);
+ const empty=record.render({});assert.match(empty,/対話.*ありません/);assert.match(empty,/材料の記録はありません/);assert.equal(record.time('invalid'),'時刻未記録');
+});
+test('original and current verses sit together next to the photo, before records and notes',()=>{
+ const detail={innerHTML:''},e={id:'root:1',date:'2026-10-19',lines:['<修正>','二','三'],originalLines:['<最初>','元二','元三'],revised:true},scope={e,window:{DogidoPoemRecord:record},state:{favorites:new Set()},playerNotes:{get:()=>''},poemTags:()=>'',esc:value=>String(value??'').replaceAll('<','&lt;').replaceAll('>','&gt;'),$:()=>detail};
+ vm.runInNewContext(app.slice(app.indexOf('function renderPoem('),app.indexOf('function renderNavigation('))+'renderPoem(e);',scope);
+ const html=detail.innerHTML;assert.match(html,/最初の句/);assert.match(html,/編集後の句/);assert.match(html,/&lt;最初&gt;/);assert.match(html,/&lt;修正&gt;/);
+ assert(html.indexOf('最初の句')<html.indexOf('編集後の句'));
+ const layout=fs.readFileSync(__dirname+'/poem-record.css','utf8');
+ assert.match(layout,/\.poem-pair>\.verse-card:first-child\{grid-column:2;grid-row:1\}/);
+ assert.match(layout,/\.poem-pair>\.verse-card:last-child\{grid-column:1;grid-row:1\}/);
+ assert(html.indexOf('poem-overview')<html.indexOf('poem-record'));assert(html.indexOf('poem-record')<html.indexOf('id="player-note"'));assert.equal((html.match(/datetime="2026-10-19"/g)||[]).length,1);
+});
+test('list toolbar keeps clear above count beside icons and bookmark aligns right in the metadata header',()=>{
+ const controls=fs.readFileSync(__dirname+'/bookshelf-controls.css','utf8'),metadata=fs.readFileSync(__dirname+'/poem-metadata.css','utf8');
+ assert.match(controls,/\.poem-menu-actions>\.result-meta\{[^}]*flex-direction:column;[^}]*margin:0 0 0 auto/);
+ assert.match(controls,/\.poem-menu-actions #clear\{order:0/);assert.match(controls,/\.poem-menu-actions #result-count\{order:1/);
+ assert.match(metadata,/\.poem-page-meta \.bookmark-button\{margin-left:auto/);
+ assert.doesNotMatch(fs.readFileSync(__dirname+'/live-library.js','utf8'),/星は並べ替え用です|ドギドの学習には使いません/);
+ assert.match(fs.readFileSync(__dirname+'/readability.css','utf8'),/\.desk,\.desk\.list-open \{ grid-template-columns:340px minmax\(0,1fr\); \}/);
+});

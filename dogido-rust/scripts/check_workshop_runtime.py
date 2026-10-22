@@ -82,8 +82,9 @@ def native_mock_message(payload, prompt, number):
         "function":{"name":name, "arguments":json.dumps(arguments, ensure_ascii=False)}}]}
 
 
-def ready(base, send, rows):
-    sid = register(base, preview=False)
+# 身体観測のownerと登録プレイヤーを一致させて発句を準備する。
+def ready(base, send, rows, *, body=True):
+    sid = register(base, preview=False, body=body)
     send(sid)
     wait_for(lambda: any(r["turn_id"].endswith(":poem") and r["playback_status"] == "completed" for r in rows(sid)))
     return sid
@@ -178,13 +179,13 @@ def main():
 
         def inspect(text, prompt, n):
             if "段階: decide" in prompt:
-                return step(text, "inspect", checks=["meter", "reading", "source"])
-            assert '"mora_count": 5' in prompt and '"mora_count": 7' in prompt
+                return step(text, "inspect", checks=["reading", "source"])
+            assert '"mora_count"' not in prompt and '"meter_delta"' not in prompt
             assert '"source_status": "recorded"' in prompt
-            return step(text, speech="音数は五・七・五やで。三行とも出典の記録があるわ。")
+            return step(text, speech="三行とも読みと出典の記録があるわ。")
         calls2 = install(control, inspect)
         send(sid)
-        turn = submit(base, sid, "音数と読みと出典を確認して")
+        turn = submit(base, sid, "保存されている読みと出典を教えて")
         result = wait_for(lambda: row(base, turn, {"completed"}))
         assert result["workshop_action"] == "explain" and len(calls2) == 2, result
         assert [s["action"] for s in result["workshop_steps"]] == ["inspect", "explain"]
@@ -285,12 +286,12 @@ def main():
         assert result["workshop_action"] == "explain" and len(calls) == 2
         passed.append("schema_retry_once_then_accepted")
 
-        calls2 = install(control, lambda text, prompt, n: step(text, "inspect", checks=["meter"]))
+        calls2 = install(control, lambda text, prompt, n: step(text, "inspect", checks=["reading"]))
         send(sid)
-        turn = submit(base, sid, "音数を確認して")
+        turn = submit(base, sid, "保存されている読みを教えて")
         result = wait_for(lambda: row(base, turn, {"completed"}))
         assert len(calls2) == 3 and result["workshop_action"] == "fallback", result
-        assert result["text"].startswith("音数は上から5・7・5"), result
+        assert "音数" not in result["text"] and "5音" not in result["text"], result
         passed.append("inspection_not_repeated_after_replan_failure")
 
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):

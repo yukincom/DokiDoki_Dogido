@@ -53,20 +53,25 @@ public final class BodyMotion {
     }
     public static Vec3d clip(Box a, Vec3d step, List<Box> obstacles) {
         double fraction = 1;
+        boolean overlapping = false, improving = false;
         for (Box obstacle : obstacles) {
             double startDepth = penetration(a, obstacle);
             if (startDepth > 0) {
-                // Permit escape from an externally introduced overlap, never a crossing through it.
+                overlapping = true;
+                // 外から生じた重なりは、全障害物で増やさず少なくとも一つ減らす移動で脱出する。
                 double depth = startDepth;
                 for (int sample = 1; sample <= 4; sample++) {
                     double next = penetration(a.offset(step.multiply(sample/4.0)), obstacle);
                     if (next > depth + EPS) return Vec3d.ZERO;
                     depth = next;
                 }
-                if (depth >= startDepth - EPS) return Vec3d.ZERO;
+                if (depth < startDepth - EPS) improving = true;
             } else fraction = Math.min(fraction, contact(a, step, obstacle));
         }
-        return step.multiply(fraction < 1 ? Math.max(0, fraction-EPS) : 1);
+        if (overlapping && !improving) return Vec3d.ZERO;
+        Vec3d clipped = step.multiply(fraction < 1 ? Math.max(0, fraction-EPS) : 1);
+        if (overlapping && overlapDepth(a.offset(clipped),obstacles) >= overlapDepth(a,obstacles)-EPS) return Vec3d.ZERO;
+        return clipped;
     }
     public static double clearance(Box a, Box b) {
         double x = Math.max(0,Math.max(a.minX-b.maxX,b.minX-a.maxX));
@@ -173,10 +178,30 @@ public final class BodyMotion {
             step = clip(body,step,obstacles);
             if (step.lengthSquared() < 1e-10 || !stepAllowed.test(step)) continue;
             double progress = delta.length()-routeTarget.distanceTo(position.add(step));
-            double score = progress + step.length()*.12 - step.subtract(previous).length()*.08;
+            // 目標への進捗と速度の連続性で選ぶ。移動量そのものを加点すると、開けた水平移動でも
+            // 不要な上下候補が選ばれてガタつく。浮遊は安全検査後の小さな波として別に重ねる。
+            double score = progress - step.subtract(previous).length()*.08;
             score += 100*(overlap-overlapDepth(body.offset(step),obstacles));
             if (score > bestScore) { bestScore = score; best = step; }
         }
         return best;
+    }
+
+    public record HoverTarget(Vec3d position, boolean applied) {}
+    /** 位相を足した目標自体も検査する。低い天井等で入れない場合は基準目標へ戻し、呼出し側はそのtickの浮遊を休止する。 */
+    public static HoverTarget hoverTarget(Vec3d target, double offset, Predicate<Vec3d> targetAllowed) {
+        Vec3d floating = target.add(0,offset,0);
+        boolean applied = targetAllowed.test(floating);
+        return new HoverTarget(applied ? floating : target,applied);
+    }
+
+    /** 安全な基本移動へ小さな浮遊差分を足す。追加分が衝突・境界・危険経路へ入る場合は基本移動を保つ。 */
+    public record HoverStep(Vec3d movement, boolean applied) {}
+    public static HoverStep withHover(Vec3d position, Vec3d step, double vertical,
+            List<Box> obstacles, Predicate<Vec3d> stepAllowed) {
+        Vec3d floating = step.add(0,vertical,0);
+        Vec3d clipped = clip(box(position),floating,obstacles);
+        boolean applied = clipped.squaredDistanceTo(floating) < 1e-14 && stepAllowed.test(floating);
+        return new HoverStep(applied ? floating : step,applied);
     }
 }

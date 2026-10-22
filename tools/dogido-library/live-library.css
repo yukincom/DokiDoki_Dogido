@@ -1,0 +1,13 @@
+.library-save-control { position:relative; flex-shrink:0; }
+.library-save-control:focus-visible { outline:3px solid #a66725; outline-offset:4px; }
+.library-save-control>button { font-size:18px; padding:10px 18px; min-height:48px; white-space:nowrap; background:#f8f0df; color:#333a2e; border:1px solid #a89a79; }
+.library-save-control>button:disabled { opacity:.8; }
+.library-save-control>button.has-changes { background:#485b40; color:#fff6df; border-color:#344834; }
+.library-save-tooltip { position:absolute; right:0; top:100%; width:min(360px,calc(100vw - 32px)); margin:0; padding:14px 18px; background:#fff9e9; border:1px solid #b9a681; box-shadow:0 5px 15px #3c33222b; color:#333a2e; font-size:16px; line-height:1.75; visibility:hidden; z-index:30; }
+.library-save-control:hover .library-save-tooltip,.library-save-control:focus-within .library-save-tooltip,.library-save-control.has-notice .library-save-tooltip { visibility:visible; }
+.library-save-control.help-dismissed .library-save-tooltip { visibility:hidden; }
+.empty-slot { min-height:110px; display:flex; flex-direction:column; justify-content:center; align-items:center; gap:10px; background:#eee4ce; border:1px dashed #a28c66; }
+.empty-slot span { font-size:16px; }
+[hidden] { display:none !important; }
+.poem-scene { min-height:340px; background:#efe4cb; }
+@media(max-width:440px) { .library-save-control>button { padding:8px 10px; } }

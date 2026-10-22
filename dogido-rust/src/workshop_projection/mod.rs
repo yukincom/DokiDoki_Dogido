@@ -300,7 +300,7 @@ pub fn build_workshop_agent_details(
     json!({"phase":phase,"conversation_stage":stage,"canonical_verse":workshop.display_surface(),"canonical_reading":workshop.display_line(),
         "working_verse":workshop.editing_surface(),"working_reading":workshop.editing_line(),"pending_verse":if workshop.has_pending(){Some(workshop.editing_surface())}else{None},
         "player_text":strip(player),"original_player_text":strip(original.unwrap_or(player)),"workshop_context":context,"tool_observation":observation,
-        "turn_steps":steps,"allowed_actions":allowed_actions(workshop,phase),"allowed_purposes":RULES["purposes"],"allowed_checks":["meter","reading","source"],"allowed_problem_types":RULES["problems"],"line_concepts":RULES["concepts"]})
+        "turn_steps":steps,"allowed_actions":allowed_actions(workshop,phase),"allowed_purposes":RULES["purposes"],"allowed_checks":["reading","source"],"allowed_problem_types":RULES["problems"],"line_concepts":RULES["concepts"]})
 }
 /// Only the details portion of prepare_details. Fixed edit extraction remains a
 /// separate operation until its neutral-reading and local-edit port is complete.

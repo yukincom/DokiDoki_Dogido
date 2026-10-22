@@ -16,7 +16,7 @@ import net.minecraft.util.Identifier;
 
 import static net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.literal;
 
-/** A read-only scroll. Voice editing stays on the server; this HUD never sends edits. */
+/** 受信した句と選択行を縦書きの掛け軸へ描画する。編集・保存は本体が所有し、このHUDは表示だけを行う。 */
 public final class DogidoWorkshopHud {
     private final WorkshopDisplayState state = new WorkshopDisplayState();
     private boolean enabled = true;
@@ -104,7 +104,8 @@ public final class DogidoWorkshopHud {
         }
         if (snapshot.editing() && state.showing()) {
             for (int i = 0; i < 3; i++) {
-                int bx = x + Math.round(width * (.12f + i * .265f));
+                // 上=0・中=1・下=2の対応を保ち、本文と同じ右から左へ配置する。
+                int bx = x + Math.round(width * (.12f + (2 - i) * .265f));
                 int bw = Math.round(width * .23f);
                 boolean selected = snapshot.selectedLine() != null && snapshot.selectedLine() == i;
                 context.fill(bx, y + 2, bx + bw, y + top - 2, color(selected ? 0x51341d : 0x6d6854, opacity));

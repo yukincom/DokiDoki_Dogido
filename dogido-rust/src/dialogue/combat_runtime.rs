@@ -1,8 +1,15 @@
+//! 戦闘判断と現在の会話配送を照合し、緊急警告・非緊急発話の開始順を決める。
+//! 未配送の通常入力はreply_queueへ預け、取消・警告jobの発行を同じsessionロック下で行う。
 use super::{Data, Dialogue, warnings};
 use crate::combat::{core::Decision, model::Speech};
 use std::sync::Arc;
 use tokio::task::JoinHandle;
 
+/// 戦闘配送の割込み指定から、通常回答を中断する緊急警告だけを選ぶ。
+/// 撃破・安堵の割込み指定はworkshop等の既存配送用で、通常の質問には割り込まない。
+fn interrupts_reply(action: &Speech) -> bool {
+    action.interrupt && !matches!(action.kind, "aftermath" | "hostile_defeated")
+}
 /// 戦闘判断を適用する入力と、会話中断の理由・優先度。
 pub(super) struct DecisionContext<'a> {
     pub input: Option<&'a str>,
@@ -225,7 +232,20 @@ impl Dialogue {
                 self.mark_workshop_combat_priority(d, sid);
             }
             Self::cancel_haiku(d, sid, reason.unwrap_or("combat_priority"));
-            Self::cancel_chat(d, sid, reason.unwrap_or("combat_priority"));
+            let s = &d.sessions[sid];
+            let ordinary = d.rows.iter().any(|r| r["session_id"] == sid
+                && r["turn_id"] == s.current_turn && r["combat_resumable"] == true);
+            let urgent = decision.actions.iter().any(interrupts_reply);
+            let reset = decision.dimension_changed
+                || decision.actions.iter().any(|a| a.kind == "death");
+            // 通常会話の割込みは、既存警告が持つ緊急性で決める。
+            // 敵が居続けるフレームや撃破後の安堵だけでは質問を取り消さない。
+            if !ordinary || urgent || reset || input.is_some() {
+                if ordinary && urgent && !reset && input.is_none() {
+                    self.retain_interrupted_reply(d, sid);
+                }
+                Self::cancel_chat(d, sid, reason.unwrap_or("combat_priority"));
+            }
         }
         if decision.dimension_changed || (decision.stop_audio && !defer_relief) {
             Self::cancel_warning(
@@ -263,6 +283,11 @@ impl Dialogue {
     ) {
         let s = d.sessions.get_mut(sid).unwrap();
         if s.warning.is_some() || jobs.len() >= 16 {
+            return;
+        }
+        if s.cancel.is_some() && s.pending_warning.as_ref().is_some_and(|actions| {
+            actions.iter().all(|a| a.delivery == crate::combat::model::Delivery::Combat && !interrupts_reply(a))
+        }) {
             return;
         }
         let Some(actions) = s.pending_warning.take() else {

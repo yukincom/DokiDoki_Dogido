@@ -53,9 +53,10 @@ class MockPlan:
             prompt = json.dumps(incoming["messages"], ensure_ascii=False)
             if self.capability:
                 names = [t["function"]["name"] for t in incoming.get("tools", [])]
-                expected = {"selection": ["select_horse"], "selection_unavailable": [],
-                            "ordinary": ["list_horses"], "fallback_chat": []}
-                assert names == expected[stage], names
+                expected = {"selection": [["select_horse"]], "selection_unavailable": [[]],
+                            "ordinary": [["list_horses"]],
+                            "fallback_chat": [[]]}
+                assert names in expected[stage], names
             else:
                 assert not incoming.get("tools"), "missing capability exposed tools"
             assert WORLD_ID not in prompt and PLAYER_ID not in prompt and HORSE_ID not in prompt, "UUID leaked to model"
@@ -69,9 +70,7 @@ class MockPlan:
                     raise AssertionError("mock selection gate was not released")
             else:
                 assert HORSE_NAME not in prompt and RENAMED not in prompt, "candidate names reached ordinary chat"
-                if self.capability and stage != "fallback_chat":
-                    assert "list_horses" in prompt, "ordinary chat lacks list_horses contract"
-                else:
+                if not self.capability or stage == "fallback_chat":
                     assert "list_horses" not in prompt and "select_horse" not in prompt, "ordinary fallback or unsupported capability exposed horse action"
             if self.capability and stage != "fallback_chat":
                 if response["action"] in ("list_horses", "select_horse"):
@@ -79,6 +78,8 @@ class MockPlan:
                     return {"role": "assistant", "content": None, "tool_calls": [{
                         "id": f"mock-horse-{index}", "type": "function", "function": {
                             "name": response["action"], "arguments": json.dumps(arguments, ensure_ascii=False)}}]}
+                return {"role": "assistant", "content": response["speech"], "tool_calls": []}
+            if incoming.get("tools") and response.get("action") in ("speak", "silent"):
                 return {"role": "assistant", "content": response["speech"], "tool_calls": []}
             return response
         except BaseException as error:

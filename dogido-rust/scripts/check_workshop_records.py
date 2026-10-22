@@ -38,7 +38,7 @@ def finished(folder, sid, turn):
 def model(text, prompt, n):
     # 操作は現行のモデル応答で選ぶ。旧い固定語ルートへ委ねない。
     if "段階: after_validation" in prompt:
-        return step(text, "respond", "音数が合わへんかったな。別の言葉を考えよか。")
+        raise AssertionError("failed edit must not trigger another model call")
     if text == "今の句":
         return step(text, "show_current")
     if text == "終了でいいよ":

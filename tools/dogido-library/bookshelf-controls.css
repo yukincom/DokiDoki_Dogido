@@ -1,0 +1,55 @@
+.bookshelf-dialog{width:min(740px,90vw);max-height:85vh;border:1px solid #77603c;border-radius:12px;padding:24px;color:#3e3529;background:#fffaf0;box-shadow:0 18px 80px #0005}
+.bookshelf-dialog::backdrop{background:#2b271e70}
+.bookshelf-dialog header{display:flex;align-items:center;justify-content:space-between;gap:20px}
+.bookshelf-dialog h2{margin:0 0 16px}
+.bookshelf-dialog button,.catalog-reading button,.readings-page button{padding:8px 12px;border:1px solid #b8a788;border-radius:6px;background:#fffef9;cursor:pointer}
+.bookshelf-dialog input,.catalog-reading input,.readings-page input:not([type=checkbox]){min-width:0;padding:9px;border:1px solid #b8a788;border-radius:5px;background:white;color:inherit}
+[data-reading-add]{display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin-block:16px}
+[data-reading-add] label{display:grid;gap:5px;flex:1;min-width:120px}
+[data-reading-add] input{width:100%}
+.reading-error{flex-basis:100%;margin:0}
+.reading-editor-list,.trash-list{list-style:none;padding:0}
+.reading-editor-row{display:grid;grid-template-columns:minmax(100px,1fr) auto minmax(120px,1fr) auto;align-items:center;gap:12px;margin-block:9px}
+.trash-list li{display:flex;gap:20px;justify-content:space-between;align-items:center;border-top:1px solid #ded2be;padding:16px 0}
+.trash-list small{display:block;margin-top:7px}
+.dialog-actions{display:flex;justify-content:flex-end;gap:12px;margin-top:22px}
+.danger-button{color:#913c30!important;border:1px solid #b98c81!important;background:#fff5f0!important;padding:9px 15px;border-radius:6px;cursor:pointer}
+.header-actions>.text-button{white-space:nowrap;font-size:13px;color:#f3eddc}
+.header-actions>.library-icon-button{display:inline-grid;place-items:center;line-height:1;padding:8px;color:#e2d1a2;text-decoration:none}
+.library-icon-button svg{display:block;fill:currentColor}
+/* 「すべての句」の一覧枠内だけに、削除と復元を置く。 */
+.poem-menu-actions{display:flex;align-items:center;gap:10px;margin:12px 0 4px}
+.poem-menu-actions>.result-meta{display:flex;flex:0 1 auto;min-width:0;flex-direction:column;align-items:flex-end;gap:0;margin:0 0 0 auto}
+#categories .poem-menu-actions #clear{order:0;min-height:0;padding:0;font-size:12px;line-height:1.7;white-space:nowrap}
+#categories .poem-menu-actions #result-count{order:1;font-size:12px;line-height:1.7;white-space:nowrap}
+#categories .poem-menu-actions .poem-delete-menu{display:flex;align-items:center;justify-content:center;gap:6px;min-width:44px;min-height:44px;padding:9px;border:1px solid #d9b0a1;background:#fff5ed;color:#803d31}
+.poem-delete-menu svg,.library-restore-menu svg{display:block;fill:currentColor}
+.poem-selection-count{font-size:13px}
+#categories .library-restore-menu,.album-sidebar .library-restore-menu{display:flex;width:44px;min-height:44px;padding:9px;border:1px solid #d9b0a1;background:#fff5ed;color:#803d31;align-items:center;justify-content:center;font-size:14px}
+.album-sidebar .library-restore-menu{margin-top:16px}
+#categories .poem-delete-menu:disabled{opacity:.55}
+.poem-delete-preview{max-height:45vh;overflow:auto;padding-left:24px;margin:14px 0}
+.poem-delete-preview li{padding:10px 0;border-bottom:1px solid var(--line);line-height:1.8}
+.header-actions{gap:20px}
+#categories .catalog-reading-menu{margin-top:18px;padding-top:18px;border-top:1px solid #cbbb8666;color:#f3eddc}
+@media(max-width:850px){.header-actions{flex-wrap:wrap;gap:14px}}
+
+/* あんちょこの通常ページ。読みと表記を横一列に並べる。 */
+#categories .catalog-reading-menu[aria-pressed=true]{background:#ffffff1a;border-left:3px solid #e1c279;color:#fff5df}
+.readings-page{max-width:900px;margin:0 auto}
+.readings-page .entry-heading{padding-bottom:6px}
+.reading-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:28px 0 14px}
+.reading-toolbar>span{color:var(--muted);font-size:13px}
+.reading-table{width:100%;border-collapse:collapse;table-layout:fixed}
+.reading-table th,.reading-table td{text-align:left;padding:12px 18px;border-bottom:1px solid var(--line);font-size:17px;overflow-wrap:anywhere}
+.reading-table th{font-weight:500;color:var(--muted);font-size:13px}
+.reading-table th:nth-child(3),.reading-table td:nth-child(3){border-left:1px solid var(--line)}
+.reading-table .reading-check{width:42px;padding:12px 9px;text-align:center}
+.reading-table input[type=checkbox]{width:17px;height:17px;accent-color:var(--accent);cursor:pointer}
+.reading-table input[data-reading-key]{width:100%;font:inherit;background:transparent;border-color:transparent;padding:7px 4px}
+.reading-table input[data-reading-key]:hover,.reading-table input[data-reading-key]:focus{background:#fffdf6;border-color:#b8a788}
+.reading-add-section{border-bottom:1px solid var(--line);margin:12px 0 24px;padding-bottom:12px}
+.reading-add-section h3{font-size:17px;margin:0}
+.reading-empty{padding:20px 0;color:var(--muted)}
+[data-reading-page-status]{min-height:1.5em;font-size:14px}
+@media(max-width:650px){.reading-table th,.reading-table td{padding:10px 8px;font-size:15px}.reading-toolbar{align-items:flex-start;flex-direction:column}}

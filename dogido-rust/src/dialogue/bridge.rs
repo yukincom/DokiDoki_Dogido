@@ -14,6 +14,8 @@ pub(super) struct Input {
     pub context: Option<crate::input_context::Context>,
     pub retained_history_count: usize,
     pub horse_recall: Option<super::horse_recall_runtime::Request>,
+    pub request_classification: Option<crate::request_classifier::Classification>,
+    pub visual: Option<super::visual_runtime::Source>,
 }
 
 impl Input {
@@ -28,6 +30,8 @@ impl Input {
             context: None,
             retained_history_count: 0,
             horse_recall: None,
+            request_classification: None,
+            visual: None,
         }
     }
 }
@@ -39,6 +43,8 @@ impl From<Value> for Input {
             context: None,
             retained_history_count: 0,
             horse_recall: None,
+            request_classification: None,
+            visual: None,
             frame,
         }
     }
@@ -113,6 +119,7 @@ async fn render_with_budget(
         .await;
     }
     let prepared = input["text"].as_str().map(crate::player_text::prepare);
+    // 既存FIFOの知識抽出。分類済み入力は三つの依頼性をここで再判定しない。
     if input["op"] == "assist_route" {
         let prepared = prepared
             .as_ref()
@@ -123,21 +130,35 @@ async fn render_with_budget(
         );
         // The assist fast path needs neither a helper nor a reading dictionary/DB.
         return Ok(
-            json!({"knowledge_query":crate::knowledge::query::from_normalized(&prepared.normalized_text).is_some()}),
+            json!({"knowledge_query":match &input.request_classification {
+                Some(result) if matches!(result.prediction.label,
+                    crate::request_classifier::Label::NotRequest | crate::request_classifier::Label::OtherRequest)
+                    => crate::knowledge::query::extract(&prepared.normalized_text).is_some(),
+                Some(_) => false,
+                None => crate::knowledge::query::from_normalized(&prepared.normalized_text).is_some(),
+            }}),
         );
+    }
+    // 環境leafは入力の読み辞書を使わない。直前に固定した観測で判断を始める。
+    if input["op"] == "combat_leaf" {
+        return super::reaction_runtime::render(config, llm, &input, cancel).await;
     }
     let overlay = super::reading_runtime::load_overlay(config).await?;
     input["reading_corrections"] = json!(overlay);
     if let Some(prepared) = prepared {
-        let context = crate::input_context::Context::from_prepared(
+        let mut context = crate::input_context::Context::from_prepared(
             &prepared,
             &overlay,
             chrono::Local::now().fixed_offset(),
         );
+        if let Some(classification) = &input.request_classification {
+            ensure!(
+                classification.text == prepared.raw_text,
+                "request classification input mismatch"
+            );
+            context.apply_request_classification(classification);
+        }
         input.context = Some(context);
-    }
-    if input["op"] == "combat_leaf" {
-        return super::reaction_runtime::render(config, llm, &input, cancel).await;
     }
     super::chat_runtime::render(
         config,

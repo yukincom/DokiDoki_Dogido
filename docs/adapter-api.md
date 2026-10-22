@@ -149,18 +149,36 @@ client受信経過＋HTTPイベント経過＋Rust受信後経過が3秒未満�
 通常会話・匂い質問・環境反応・川柳の自分の感覚には、受理した身体観測だけを使う。元のtop-level player・戦闘・所持品・指差しは各所有者の情報として維持する。身体不在や失効時にplayerの視界・匂いで補完しない。HTTP v1/v2をv3へ補完せず拒否するため、身体Mod・adapter・Rustを対応版へ同時に更新する。[移行と実機確認](2026-10-13-body-observation-origin.md)。
 
 <a id="body-autonomy-v1"></a>
+<a id="body-autonomy-v2"></a>
 
-### 身体の観察移動（v1、2026-10-16）
+### 身体の安心度と行動（v2、2026-10-20）
 
-Body API v6対応時、観測capabilityに`body_autonomy.v1`、実行capabilityに`body.inspect_target.v1`を追加する。既存`game-events`へ任意の`body_autonomy`を添付し、同じ応答の`commands`を使う。
+Body API v9対応時、観測capabilityは`body_autonomy.v2`、実行capabilityは`body.inspect_target.v2`。既存`game-events`の任意`body_autonomy`と、同じ応答の`commands`を使う。v1の補完はしない。
 
-- observed: `version:1,status:"observed",context,server_tick,snapshot_revision,age_ms,enabled,mode,follow_distance,warp_distance,activity,reason,candidates`。任意の`action_result`は`action_id,sequence,outcome,reason`。`body_observation`の受理済みcontext・tick・revisionと一致し、合計年齢3秒未満の値だけを使う。
-- unavailable: `version:1,status:"unavailable",reason`。前回候補を現在値へ補完しない。
-- candidates: 最大24件。各候補は`id,kind,type_id,label,position`と、entityのみ`entity_id`を持つ。entity IDは`e:UUID`、block IDは`b:x,y,z:type_id`、block位置はセル中心。現在のownerから16ブロック以内にある、身体から実際に見えている対象を収集する。
-- command: `type:"inspect_body_target",command_id,issued_at,expires_at,context,target`。`target`は選択した候補を保持し、開始期限は5秒以内。同一ID・同一内容で再送し、結果待ちは発行から最大35秒。
-- result: `command_type:"inspect_body_target",command_id,status,executed_at,detail_code,body_id,epoch`。既存の`command_results`とACKを使う。受付と到着を分け、終端`arrived`だけを到着成功として扱う。
+- observed: `version:2,status:"observed",context,server_tick,snapshot_revision,age_ms,enabled,mode,follow_distance,warp_distance,reassurance,attention,activity,reason,candidates`。任意の`action_result`は`action_id,sequence,outcome,reason`。受理済み`body_observation`のcontext・tick・revisionと一致し、合計年齢3秒未満だけを使う。
+- `reassurance`: `value`（0〜100）、`owner_distance`（block）、`owner_visible,face_visible,owner_working`（bool）。身体server tickで更新し、実行受付・到着成功から回復を作らない。
+- `attention`: `scope`は`target_only/narrow/ambient/ordinary`、`expansion`は0〜1。同じframeへ実適用した範囲であり、世界の種類変化とは別の材料。
+- unavailable: `version:2,status:"unavailable",reason`。前回候補を現在値へ補完しない。
+- candidates: 最大24件。`id,kind,type_id,label,position`とentityだけ`entity_id`。entity IDは`e:UUID`、block IDは`b:x,y,z:type_id`、block位置はセル中心。現在の注意範囲で実視認でき、ownerの`follow_distance`内にある候補だけを選択へ渡す。
+- command: `type:"inspect_body_target",command_id,issued_at,expires_at,context,purpose,target`。purposeは`inspect/owner_near/owner_face`。inspectだけ選択した候補をtargetに保持し、owner行動はtarget=null。開始期限は5秒以内、同一ID・内容で再送し、結果待ちは発行から最大35秒。
+- result: `command_type:"inspect_body_target",command_id,status,executed_at,detail_code,body_id,epoch`。既存の結果とACKを使う。受付と到着を分け、終端`arrived`だけを到着成功として扱う。
 
-adapterはclient threadで身体世代・FOLLOW・観測の鮮度・選択対象の現物と移動量（1.5ブロック以内）を再照合する。対象と重ならない着地点を選び、送信直前にもHTTP sessionと期限を照合して既存BodyBridgeのMOVE_TOへ渡す。外部からFOLLOWを有効にしない。詳細は[身体移動の仕様と検証](2026-10-16-body-motion-start.md)。
+発話と行動は同じ`environment_reaction`で選び、独立した`body_interest`生成は使わない。コードが今回許可した行動と説明だけを`body_options.available_actions`へ渡し、返答をその集合に照合する。作業中はowner_face、候補なしならinspectを提示しない。移動は現在の身体世代・距離・安全・期限を再照合した既存MOVE_TOで実行する。[仕様と検証](2026-10-20-reassurance.md)。
+
+### 身体視点の画像取得（2026-10-21）
+
+通常会話用の `capture_body_view` は既存の応答・結果・ACKを使う。capabilityは `client.body_view.capture.v1`。身体contextと期限を検証し、成功時だけ192px PNGを一件添える。[画像契約](2026-10-21-chat-image.md#既存通信への接続)。
+
+句集用は実行capability `client.screenshot.body_view.v1` の接続で、新しい自動川柳の材料を固定して生成を開始するときに、既存の応答 `commands` へ `capture_screenshot` を配送する。本棚への登録は同じ生成の保存成功後だけ。LLMによる選択・保存判断は行わない。
+
+- 命令: `type,command_id,session_id,poem_id,dimension,body_entity_uuid,body_epoch,owner_uuid,issued_at,expires_at` の閉じた10項目。IDは `shot_<UUID>`。`poem_id` は生成専用の予約キー `session:<session_id>:capture:<haiku_job_id>` で、adapterはそのまま返す。保存先・ファイル名の指定はない。
+- 開始期限は発句開始から10秒。adapterは同じIDを一度だけ実行し、現在接続・world・dimension・身体・期限・画面未開放を再検査する。次の描画frameを共通の身体カメラで取得し、元のcameraへ復帰する。材料の固定と撮影は通信を挟むため、同一frameではない。
+- 句集の画像は枠・文字なしの原寸PNG。Minecraft標準の `screenshots` に `dogido_YYYY-MM-DD_HH.mm.ss.png` として保存し、同名なら `_2` 以降を付ける。一時会話画像の24時間削除には含めない。
+- 成功結果はSHA-256、実ファイル名、親ディレクトリ、撮影開始時刻、撮影frameの身体とcamera復帰を表す `capture_view` を返す。保存済み結果は同一sessionの次元移動でも保持し、実切断・session交換では破棄する。
+- 本体は受理→同じ生成の保存成功→正本IDへの対応確定→永続登録→ACK。生成の既存timeout＋120秒まで未ACKで待て、保存後のI/O再試行は最大120秒。画像取得10秒・PNG保存完了120秒の期限は発句開始から数え、再撮影しない。取消・失敗した予約は次の句へ付けない。先に撮影した原画像は生成取消でも削除しない。
+- 本棚は最初の空き写真枠へ参照だけを追加する。既存枠やごみ箱内参照を上書きせず、満杯なら写真一覧への登録のみ。Minecraft原本は移動・複製・削除しない。過去のプレイヤー視点写真はそのまま閲覧できる。
+
+保存先設定・画面更新・削除規則は [本棚の自動撮影仕様](2026-10-13-bookshelf-integration.md#発句時の自動撮影と参照登録2026-10-20)。
 
 ## 8. `POST /api/v1/game-events`
 
@@ -561,9 +579,10 @@ Rustの `voice-input`（マイク）とMinecraftの `/dogido`・会話画面・�
 - 通常会話は受付時に `generating` の行を作り、jobを開始する。新しい別入力は先行する通常会話の生成・再生を取り消すため、全入力を先着順に蓄える共通FIFOではない。
 - 受付検査を通り、処理中または保留中の同一本文に一致した場合は、`voice` / `text` をまたいでも `deduplicated: true` で既存入力を返す。これは処理中・保留中の重複防止であり、完了後の同文を永久に拒むものではない。
 - Dialogue全体の未完了jobが16件以上なら `input_queue_full`。これは未完了の処理数の上限であり、sessionごとの入力16件を保存する待ち列ではない。
-- 危険中・警告中などに届く入力は知識質問かを別jobで分類できる。受付時は `queued: true`・`reason: "knowledge_input_routing"`、表示は `routing`。明示知識質問と確定すると `waiting_for_safety` となり、安全な観測と先行処理の終了後に同じ `turn_id` で先着順に再開する。
-- この知識保留枠はsessionごとに最大9件（再開のため取り出した一件を含む）。満杯なら `knowledge_queue_full` とし、古い質問を落とさない。一般のjob上限16件とは別に検査する。
-- 戦闘の限定質問、剣支援、句の戦闘中断中入力は各専用経路が採否を決める。通常会話を始められない場合は `fresh_safe_snapshot_required`。安全な観測があり緊急環境音声だけを待つ場合は一件保留でき、`reason: "after_environment_warning"` を返す。
+- 戦闘中も通常会話を受け付ける。警告中の通常会話・知識質問は別jobで振り分け、受付時は `queued: true`・`reason: "reply_input_routing"`、表示は `routing`。保持対象と確定すると `waiting_for_warning` となり、警告と先行処理の終了後に同じ `turn_id` で先着順に再開する。現在観測が有効なら戦闘終了を待たない。workshop中の知識質問は従来のworkshop復帰条件を使う。
+- 緊急警告で未配送の通常回答を取り消した場合も、原文と元 `turn_id` を保持して自動再開する。再開時の表示行・生成epoch・display IDは更新し、音声完了または文字表示ACKで既に届いた回答は再実行しない。再開後の `resolution` は `reply_resumed`。
+- この保留枠はsessionごとに最大9件（再開予約と中断に備えた進行中の一件を含む）。満杯なら `reply_queue_full` とし、古い質問を落とさない。一般のjob上限16件とは別に検査する。
+- 戦闘の限定質問、剣支援、句の戦闘中断中入力は各専用経路が採否を決める。観測が古い場合や専用経路の安全条件を満たさない場合は `fresh_safe_snapshot_required`、保留対象外で警告中なら `warning_in_progress`。安全な観測があり緊急環境音声だけを待つ場合は一件保留でき、`reason: "after_environment_warning"` を返す。
 - 叫声だけの `voice` 入力は `reason: "situation_vocalization"` として受け付け、生成中の会話等を中断し状況記録へ渡す。この経路はjob上限と観測鮮度の検査を迂回するが、通常会話・句の操作には流さない。
 
 経路によって `turn_id` が未発行または `null` の受付もあります。`queued`・`deduplicated`・`reason` は該当時だけ返り、すべての成功応答に同じ項目が揃うとは限りません。
@@ -580,15 +599,15 @@ Rustの `voice-input`（マイク）とMinecraftの `/dogido`・会話画面・�
 }
 ```
 
-危険中の知識質問の振り分け受付:
+警告中の通常会話・知識質問の振り分け受付:
 
 ```json
 {
   "accepted": true,
   "queued": true,
   "session_id": "session_…",
-  "turn_id": "knowledge_…",
-  "reason": "knowledge_input_routing"
+  "turn_id": "reply_…",
+  "reason": "reply_input_routing"
 }
 ```
 
@@ -607,8 +626,9 @@ Rustの `voice-input`（マイク）とMinecraftの `/dogido`・会話画面・�
 | `select_one_session` | session未指定で、一件に決められない |
 | `unknown_session_id` | 指定sessionが存在しない |
 | `input_queue_full` | 未完了jobが16件以上 |
-| `knowledge_queue_full` | 対象sessionの知識保留枠が満杯 |
-| `fresh_safe_snapshot_required` | 観測が古い、または現在の危険・警告等によりその入力を開始できない |
+| `reply_queue_full` | 対象sessionの通常会話・知識質問の保留枠が満杯 |
+| `fresh_safe_snapshot_required` | 観測が古い、または専用経路の安全条件を満たさない |
+| `warning_in_progress` | 警告中で、その入力は保留対象外 |
 | `server_stopping` | 本体が停止処理中 |
 | `voice_disabled` / `stale_voice_generation` | 音声休止中、または切替前の録音期間から遅れて届いた音声入力 |
 | `chat_context_unavailable` | 現在観測から会話用snapshotを構築できない |
@@ -628,7 +648,7 @@ curl -X POST http://127.0.0.1:5055/api/v1/player-input \
 
 複数sessionがある場合は本文に `session_id` を指定します。authが有効なときは `Authorization: Bearer <token>` を付けます。接続先ポートは実際の起動設定に合わせてください。
 
-現在の受付の実装は `dogido-rust/src/server/contracts.rs`・`server/runtime.rs`、採否とjob開始は `dialogue/mod.rs`、知識保留は `dialogue/knowledge_queue.rs` です。接続診断だけの `serve` は会話を接続しないため、この本体契約の確認には使いません。
+現在の受付の実装は `dogido-rust/src/server/contracts.rs`・`server/runtime.rs`、採否とjob開始は `dialogue/submit.rs`、通常会話・知識質問の保留は `dialogue/reply_queue.rs` です。接続診断だけの `serve` は会話を接続しないため、この本体契約の確認には使いません。
 
 ## 22. `GET /api/v1/voice-input/context`
 

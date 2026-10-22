@@ -74,7 +74,9 @@ def main():
             wait_for(lambda: row(base, turn, {"completed"}))
             note = situation_prompt()
             assert ("近くの敵対モブを視認" in note) == (i < 3), note
-            assert "うわああ" not in note
+            # 引用やtyped入力は通常会話の履歴に残る。叫声だけでは行もモデル呼出しも増えない。
+            assert sum(r["text"] == "うわああ！" and r["role"] == "user"
+                       for r in session(base, sid)["history"]) <= 1
         assert "voice_situation" in log.read_text() and "player_vocalization" in log.read_text()
         passed.append("observed_situation_reaches_chat_and_expires_after_three_inputs")
 

@@ -27,6 +27,11 @@ pub struct State {
     context_limit_reached: bool,
 }
 impl State {
+    /// 同一観測から作った操作候補の照合用。生eventではなく、owner・世代・鮮度を受理済みのsampleを返す。
+    pub(crate) fn accepted(&self, now: Instant) -> Option<&Sample> {
+        self.current.as_ref().filter(|r| r.age(now) < FRESH_MS).map(|r| &r.sample)
+    }
+
     /// 会話・環境・川柳が使う感覚用コピー。検証済みの現世代と鮮度を満たした感覚だけを渡す。
     /// 元eventのplayer/combat/指差しは変えず、未取得時もプレイヤーの感覚へ戻さない。
     pub(crate) fn sensory_event(
@@ -135,7 +140,20 @@ impl State {
         self.watermark = Some(sample.clone());
         self.unavailable = None;
     }
-    /// 会話開始時の不変コピー。UUIDは運搬照合用なのでモデルへ渡さず、実測と座標規約だけを出す。
+    /// 既存の診断snapshotだけへ、受理済み姿勢と系列識別子を一組で返す。
+    /// ageは取得からのms。3秒以上は姿勢を返さず、再送や別世代を連続移動として採点するのを防ぐ。
+    /// 会話の観測投影・changesとは別の読み取り専用コピーで、保存や状態更新は行わない。
+    pub(crate) fn diagnostic_sample(&self, now: Instant) -> Value {
+        let Some(reading) = self.current.as_ref().filter(|r| r.age(now) < FRESH_MS) else {
+            return json!({"version":1,"status":"unavailable",
+                "reason":self.unavailable.as_deref().unwrap_or(if self.current.is_some() {"stale"} else {"not_sampled"})});
+        };
+        let s = &reading.sample;
+        json!({"version":1,"status":"observed","age_ms":reading.age(now),
+            "context":s.context,"server_tick":s.server_tick,"snapshot_revision":s.snapshot_revision,
+            "self_pose":s.self_pose,"player_pose":s.player_pose,"vision":s.vision})
+    }
+    /// 内部の差分比較と診断用の不変コピー。モデルへ渡す際はContext::for_modelで姿勢を除く。
     pub fn project(&self, now: Instant) -> Option<Value> {
         let Some(reading) = &self.current else {
             return self
@@ -158,7 +176,7 @@ impl State {
     }
 }
 fn raw(s: &Sample) -> Value {
-    json!({"vision":s.vision,"senses":s.senses.summary(),"self":{"subject":"ドギド","position":s.self_pose.position,"eye_position":s.self_pose.eye_position,
+    json!({"vision":s.vision,"senses":s.senses.summary(),"position_relation":super::position::calculate(s),"self":{"subject":"ドギド","position":s.self_pose.position,"eye_position":s.self_pose.eye_position,
             "yaw":s.self_pose.yaw,"view_yaw":s.self_pose.view_yaw,"view_pitch":s.self_pose.view_pitch},
         "player":{"subject":"プレイヤー","position":s.player_pose.position,"yaw":s.player_pose.yaw,"pitch":s.player_pose.pitch}})
 }

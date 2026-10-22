@@ -25,7 +25,7 @@ class BodyObservationJsonTest {
         return new Snapshot(BodyProtocol.VERSION,presence,new Context(OWNER,
             UUID.fromString("22222222-2222-4222-8222-222222222222"),UUID.fromString("33333333-3333-4333-8333-333333333333"),WORLD),
             WORLD,100,200,position,yaw,Activity.HOLDING,"test",0,null,null,Sensors.BODY_VISION_AND_HEARING,null,null,
-            pose,vision,new HearingObservation(ObservationStatus.OBSERVED,100,java.util.List.of(),false));
+            pose,vision,new HearingObservation(ObservationStatus.OBSERVED,100,java.util.List.of(),false),new ControlObservation(false,Mode.HOLD,16,24));
     }
     @Test void poseWireMatchesRustFixtureAndLeavesUncollectedSensesUnavailable() throws Exception {
         var actual = BodyObservationJson.observed(snapshot(Presence.PRESENT,new Position(10,64,20),360),25,OWNER,WORLD);
@@ -116,6 +116,13 @@ class BodyObservationJsonTest {
                 int.class,double.class,settings.getClass()).newInstance(org.slf4j.LoggerFactory.getLogger("absence-test"),
                     (java.util.function.LongSupplier)() -> 0L,10,16.0,settings);
             collectorType.getMethod("reset").invoke(collector);
+            var runtimeType = loader.loadClass("dogido.fabric.body.BodyInspectRuntime");
+            var submissionType = loader.loadClass("dogido.fabric.body.BodyInspectRuntime$Submission");
+            var submission = java.lang.reflect.Proxy.newProxyInstance(loader,new Class<?>[]{submissionType},(proxy,call,args) -> "unavailable");
+            var runtime = runtimeType.getConstructor(connection,collectorType,java.util.function.Consumer.class,java.util.function.Predicate.class,submissionType)
+                .newInstance(instance,collector,(java.util.function.Consumer<com.google.gson.JsonObject>) value -> {},
+                    (java.util.function.Predicate<dogido.fabric.protocol.DogidoEventClient.SessionRef>) ref -> false,submission);
+            runtimeType.getMethod("clear").invoke(runtime);
             assertNotNull(loader.loadClass("dogido.fabric.DogidoClientAdapter").getConstructor().newInstance());
         }
     }

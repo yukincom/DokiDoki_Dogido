@@ -27,7 +27,9 @@ current_verse_savedは現在句だけの保存状態や。trueで現在句をそ
 
 ### 終了の必要項目
 
-close_workshopの例: {"action":"close_workshop","purpose":"finish_workshop","confidence":0.95,"evidence":"今回はここまでにしよう","speech":"うん、また話そな。","checks":[]}。例のevidenceは、今回の認識原文に置き換えてな。
+close_workshopの例: {"action":"close_workshop","purpose":"finish_workshop","confidence":0.95,"evidence":"今回はここまでにしよう","speech":"うん、また聞いてな","checks":[]}。例のevidenceは、今回の認識原文に置き換えてな。
+
+2026-10-20、終了時の発話例をユーザー指定の「うん、また聞いてな」へ更新した。
 
 ### 相談案の保持
 

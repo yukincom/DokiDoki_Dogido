@@ -32,9 +32,11 @@ impl Pending {
 
 impl Dialogue {
     pub(super) fn accept_vocalization(&self, d: &mut Data, sid: &str, text: &str) -> Value {
-        Self::cancel_chat(d, sid, "voice_vocalization");
-        Self::cancel_haiku(d, sid, "voice_vocalization");
-        Self::cancel_warning(d, sid, "voice_vocalization");
+        if !super::reply_queue::playback_started(d, sid) {
+            Self::cancel_chat(d, sid, "voice_vocalization");
+            Self::cancel_haiku(d, sid, "voice_vocalization");
+            Self::cancel_warning(d, sid, "voice_vocalization");
+        }
         Self::cancel_light(d, sid);
         let s = d.sessions.get_mut(sid).unwrap();
         s.history.begin_danger();

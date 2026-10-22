@@ -42,7 +42,11 @@ public final class AmbientMobObserver {
         this.logger = logger;
     }
 
-    public void resetRangeTracking() { this.nearbyMobKinds.reset(); this.nearbyMobComposition = NearbyComposition.mobs(List.of()); }
+    public record VisibleMob(java.util.UUID entityId,String typeId,String label,Vec3d position) {}
+    private List<VisibleMob> bodyVisibleMobs = List.of();
+    public List<VisibleMob> bodyVisibleMobs() { return bodyVisibleMobs; }
+
+    public void resetRangeTracking() { this.bodyVisibleMobs = List.of(); this.nearbyMobKinds.reset(); this.nearbyMobComposition = NearbyComposition.mobs(List.of()); }
     public JsonObject copyNearbyComposition() { return this.nearbyMobComposition.deepCopy(); }
 
     public List<AmbientMobObservation> scanAmbientMobs(ClientPlayerEntity player, ClientWorld world, boolean captureNearbyKinds) {
@@ -57,6 +61,8 @@ public final class AmbientMobObserver {
         );
 
         List<AmbientMobObservation> mobs = new ArrayList<>();
+        List<VisibleMob> visibleMobs = new ArrayList<>();
+        this.bodyVisibleMobs = List.of();
         for (Entity entity : entities) {
             if (origin.isSelf(entity) || !(entity instanceof LivingEntity living)) {
                 continue;
@@ -76,6 +82,8 @@ public final class AmbientMobObserver {
             }
 
             Vec3d entityPosition = new Vec3d(entity.getX(), entity.getY(), entity.getZ());
+            if (origin.body() && distance <= AMBIENT_MOB_DISTANCE)
+                visibleMobs.add(new VisibleMob(entity.getUuid(),Registries.ENTITY_TYPE.getId(entity.getType()).toString(),entity.getName().getString(),entityPosition));
             Boolean isBaby = null;
             String profession = null;
             String villagerType = null;
@@ -102,6 +110,7 @@ public final class AmbientMobObserver {
             );
         }
 
+        this.bodyVisibleMobs = List.copyOf(visibleMobs);
         // Routine encounter priority stays unchanged. Extra companions are retained only as conversation candidates.
         mobs.sort(Comparator.comparing((AmbientMobObservation mob) -> mob.identity().tamed())
             .thenComparingDouble(AmbientMobObservation::distance));

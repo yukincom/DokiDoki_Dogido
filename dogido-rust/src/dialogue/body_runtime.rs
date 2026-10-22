@@ -36,6 +36,8 @@ pub(super) fn observe(s: &mut Session, event: &GameEvent) {
         Instant::now(),
         transport_age,
     );
+    let now = Instant::now();
+    s.body_autonomy.observe(event.body_autonomy.as_ref(),s.body_observation.accepted(now),now,transport_age);
 }
 /// 姿勢の受理台帳から、その判断一回分の身体感覚を固定する。
 pub(super) fn event(s: &Session, raw: &GameEvent) -> GameEvent {
@@ -45,16 +47,37 @@ pub(super) fn context(s: &Session) -> Option<Context> {
     let raw = s.environment_latest.as_ref().or(s.latest.as_ref())?;
     Some(context_for(s, &event(s, raw)))
 }
-/// 視認を先頭へ置き、同じ身体snapshotの姿勢・前回値を診断と会話へ残す。
+/// 視認・感覚と計算済みの位置関係を会話へ渡す。生姿勢は内部比較と診断にだけ残す。
 /// 失効後は過去の環境欄を持ち越さず、プレイヤーの観測への代用もしない。
 pub(super) fn context_for(s: &Session, event: &GameEvent) -> Context {
+    // 停止通知直後の新鮮なsnapshotも、停止中の現在位置として使わない。
+    if s.foreground.game_paused {
+        return Context {
+            observations: serde_json::json!({"body_observation":{"status":"unavailable","reason":"game_paused"},
+                "observer":"dogido","sensory_status":"unavailable"}),
+            ..Context::default()
+        };
+    }
     let origin = event.body_origin().expect("accepted body sensory view");
     let c = if origin.available {
         s.conversation_observation.context().unwrap_or_default()
     } else {
         Context::default()
     };
-    with_context(c, event)
+    let mut c = with_context(c, event).for_model();
+    if let Some(reassurance) = s.body_autonomy.reassurance(Instant::now()) {
+        c.observations["reassurance"] = reassurance_context(serde_json::json!(reassurance));
+    }
+    if let Some(attention) = s.body_autonomy.attention(Instant::now()) {
+        c.observations["attention"] = attention;
+    }
+    c
+}
+/// 共通観測には実測値と尺度のラベルだけを渡す。回復・視野の計算規則は身体コードに置く。
+pub(super) fn reassurance_context(mut value: serde_json::Value) -> serde_json::Value {
+    value["label"] = serde_json::json!("安心度");
+    value["scale"] = serde_json::json!([0,100]);
+    value
 }
 /// 同じ身体材料を共有観測・周期通知にも一回だけ添える。
 pub(super) fn with_context(mut c: Context, event: &GameEvent) -> Context {
@@ -82,6 +105,10 @@ pub(super) fn with_context(mut c: Context, event: &GameEvent) -> Context {
 pub(super) fn attach_input(result: &mut serde_json::Value, details: &serde_json::Value) {
     if let Some(body) = details.pointer("/world_context/observations/body_observation") {
         result["body_observation_input"] = body.clone();
+        if let Some(changes) = details.pointer("/world_context/changes").and_then(serde_json::Value::as_array) {
+            result["body_position_changes_input"] = serde_json::json!(changes.iter()
+                .filter(|change| change["kind"] == "body_position_relation").collect::<Vec<_>>());
+        }
     }
 }
 

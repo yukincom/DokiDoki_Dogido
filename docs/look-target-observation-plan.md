@@ -96,11 +96,11 @@
 - Rustの[イベント型](../dogido-rust/src/events/models.rs)が受理し、[会話観測](../dogido-rust/src/chat_observation.rs)と[planner](../dogido-rust/src/planner/)が指差し・在否・戦況を区別する。
 - 固定の入力補正は[player_text](../dogido-rust/src/player_text.rs)。[contextual_asr](../dogido-rust/src/contextual_asr.rs)の音近傍補正は、音声かつworkshop内で、現在句・未採用案・保存材料を候補に使う。解釈面だけを補正し、原文を操作根拠として保持する。
 
-受け入れ例は実機で確認する条件であり、この文書の更新による確認済みの宣言ではない。
+※上記の受け入れ例は実機で確認すべき検証条件であり、本ドキュメントの記述更新をもって確認完了とみなすものではありません。
 
 ## 8. 改訂
 
-2026-08の実装記録は旧Python本体の時点。現行Rustの状態は第4節を正とする。
+※2026-08時点の実装記録は旧Python本体での実績です。現行Rustでの実装状況については第4節の内容を正とします。
 
 | 日付 | 内容 |
 |------|------|

@@ -26,6 +26,8 @@ final class BodyNetworking {
                 switch (message.kind()) {
                     case "state" -> body.applyState(player,message.state());
                     case "action" -> body.requestAction(player,message.action());
+                    case "owner_work" -> body.observeOwnerWork(player,message.ownerWork());
+                    case "speech_gaze" -> body.observeSpeechGaze(player,message.speechGaze());
                     case "snapshot" -> { }
                     default -> { return; }
                 }

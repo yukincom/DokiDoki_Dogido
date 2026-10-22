@@ -29,6 +29,7 @@
     "player_chat_hearing_retention_ms": 20000,
     "player_chat_name_correction_retention_ms": 10000,
     "hostile_comment_cooldown_ms": 60000,
+    "hostile_callout_playback_rate": 1.15,
     "hostile_count_surge_min_total": 4,
     "hostile_count_surge_threshold": 3,
     "hostile_mass_callout_threshold": 4,
@@ -99,5 +100,16 @@
     "heartbeat_interval_ms": 5000,
     "max_batch_size": 25,
     "max_body_kb": 256
+  },
+  "request_classifier": {
+    "model_root": null,
+    "python": null,
+    "load_timeout_ms": 60000,
+    "timeout_ms": 5000
+  },
+  "chat_image": {
+    "enabled": false,
+    "wait_ms": 2500,
+    "stop_reactions_enabled": true
   }
 }

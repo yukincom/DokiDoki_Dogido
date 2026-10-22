@@ -40,7 +40,7 @@ fn native_edit_keeps_verified_target_and_returns_failure_to_same_call() {
         "しろい"
     );
     let observation = json!({"kind":"player_edit_validation","status":"rejected",
-        "validation_codes":["meter_not_exact"],"canonical_unchanged":true});
+        "validation_codes":["expected_text_mismatch"],"canonical_unchanged":true});
     let messages = call.result_messages(&observation);
     assert_eq!(messages[0], message);
     assert_eq!(messages[1]["tool_call_id"], "edit-1");
@@ -99,16 +99,37 @@ fn inspection_and_edit_cannot_enter_through_content_json() {
 fn native_inspection_preserves_candidate_text_and_target_line() {
     let message = json!({"role":"assistant","content":null,"tool_calls":[{
         "id":"inspect-word","type":"function","function":{"name":"inspect_verse",
-        "arguments":json!({"checks":["reading","meter"],"inspect_text":"白い骨","inspect_line_index":0}).to_string()}
+        "arguments":json!({"checks":["reading"],"inspect_text":"白い骨","inspect_line_index":0}).to_string()}
     }]});
     let call = Call::decode(message, &view(), "白い骨の読みは？").unwrap();
     assert_eq!(
         call.payload(),
-        json!({"action":"inspect","checks":["reading","meter"],
+        json!({"action":"inspect","checks":["reading"],
         "inspect_text":"白い骨","inspect_line_index":0})
     );
     assert_eq!(
         call.trace(),
         json!({"name":"inspect_verse","id":"inspect-word"})
     );
+}
+
+#[test]
+fn native_tool_contract_does_not_offer_or_accept_removed_meter_checks() {
+    let definitions = definitions(&["inspect", "stage_player_edit"]);
+    let inspection = &definitions[0]["function"];
+    assert_eq!(
+        inspection["parameters"]["properties"]["checks"]["items"]["enum"],
+        json!(["reading", "source"])
+    );
+    assert!(
+        !definitions[1]["function"]["description"]
+            .as_str()
+            .unwrap()
+            .contains("音数")
+    );
+    for checks in [json!(["meter"]), json!(["reading", "meter"])] {
+        let message = json!({"tool_calls":[{"id":"legacy-check", "type":"function", "function":{
+            "name":"inspect_verse", "arguments":json!({"checks":checks}).to_string()}}]});
+        assert!(Call::decode(message, &view(), "上の句をひのあかりに変更して").is_err());
+    }
 }

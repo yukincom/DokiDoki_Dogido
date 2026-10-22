@@ -22,7 +22,7 @@ class BodySnapshotPayloadTest {
             new Vitals(Life.ACTIVE,20,20,true,"survival",0,0,0,0,null),
             new FoodObservation(ObservationStatus.OBSERVED,30,food,false),
             new PoseObservation(POSITION,POSITION,180,0,0,0),BodyVisionGeometry.unavailable(30,"area_unloaded"),
-            new HearingObservation(ObservationStatus.OBSERVED,30,sounds,false));
+            new HearingObservation(ObservationStatus.OBSERVED,30,sounds,false),new ControlObservation(true,Mode.FOLLOW,16,24,new Reassurance(87.5,2.1,true,true,false)));
     }
     private static List<HeardSound> sounds() {
         var result = new ArrayList<HeardSound>();
@@ -31,11 +31,12 @@ class BodySnapshotPayloadTest {
         return result;
     }
 
-    @Test void ordinarySnapshotRoundTripsV5AndPreservesUnknownPitch() {
+    @Test void ordinarySnapshotRoundTripsV9AndPreservesUnknownPitch() {
         Snapshot original = snapshot("holding",List.of(),sounds());
         String encoded = BodySnapshotPayload.encode(original);
         Snapshot decoded = JSON.fromJson(encoded,Snapshot.class);
-        assertEquals(5,decoded.version());
+        assertEquals(9,decoded.version());
+        assertEquals(new ControlObservation(true,Mode.FOLLOW,16,24,new Reassurance(87.5,2.1,true,true,false)),decoded.control());
         assertEquals(original,decoded);
         assertNull(decoded.hearing().sounds().getFirst().pitch());
         assertTrue(encoded.getBytes(StandardCharsets.UTF_8).length <= BodySnapshotPayload.MAX_BYTES);
@@ -44,7 +45,7 @@ class BodySnapshotPayloadTest {
     @Test void hearingIsTrimmedToPacketBudgetWithoutChangingOtherObservations() {
         var food = new ArrayList<FoodTarget>();
         for (int i=0;i<BodyFood.MAX_TARGETS;i++) food.add(new FoodTarget("drop:"+UUID.randomUUID(),FoodKind.DROPPED_ITEM,
-            POSITION,"minecraft:"+"a".repeat(110),6));
+            POSITION,"minecraft:"+"a".repeat(80),6));
         // recordの直列化長を推測せず、実測から送信上限を1byte超えるfixtureを作る。
         Snapshot seed = snapshot("",food,sounds());
         int padding = BodySnapshotPayload.MAX_BYTES+1-JSON.toJson(seed).getBytes(StandardCharsets.UTF_8).length;
@@ -55,6 +56,7 @@ class BodySnapshotPayloadTest {
         assertTrue(encoded.getBytes(StandardCharsets.UTF_8).length <= BodySnapshotPayload.MAX_BYTES);
         Snapshot decoded = JSON.fromJson(encoded,Snapshot.class);
         assertEquals(original.food(),decoded.food());
+        assertEquals(original.control(),decoded.control());
         assertEquals(original.pose(),decoded.pose());
         assertEquals(original.vision(),decoded.vision());
         assertEquals(original.snapshotRevision(),decoded.snapshotRevision());
@@ -62,6 +64,20 @@ class BodySnapshotPayloadTest {
         assertTrue(decoded.hearing().sounds().size() < original.hearing().sounds().size());
         assertFalse(decoded.hearing().sounds().isEmpty());
         assertEquals(original.hearing().sounds().getLast(),decoded.hearing().sounds().getLast());
+    }
+
+    @Test void maximumFoodAndSoundSamplesStillFitWithReassuranceAfterTrimming() {
+        var food = new ArrayList<FoodTarget>();
+        for (int i=0;i<BodyFood.MAX_TARGETS;i++) food.add(new FoodTarget("drop:"+UUID.randomUUID(),FoodKind.DROPPED_ITEM,
+            POSITION,"minecraft:"+"a".repeat(110),6));
+        Snapshot original = snapshot("holding",food,sounds());
+        String encoded = BodySnapshotPayload.encode(original);
+        assertTrue(encoded.getBytes(StandardCharsets.UTF_8).length <= BodySnapshotPayload.MAX_BYTES);
+        Snapshot decoded = JSON.fromJson(encoded,Snapshot.class);
+        assertEquals(original.food(),decoded.food());
+        assertEquals(original.control(),decoded.control());
+        assertTrue(decoded.hearing().truncated());
+        assertFalse(decoded.hearing().sounds().isEmpty());
     }
 
     @Test void utf8LimitIsCheckedAndOversizedNonHearingValuesFailBeforeSend() {

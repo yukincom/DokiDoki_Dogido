@@ -227,9 +227,10 @@ fn pending_close(dialogue: &Dialogue) -> (u64, Value, crate::haiku_record::Works
     proposal[0].provenance = "player_explicit".into();
     proposal[0].source_atom_ids.clear();
     proposal[0].source_atoms.clear();
-    w.pending = Some(crate::workshop_edit::Pending::stage(
-        &w.current_lines, &w.current_lines, proposal, 0,
-    ).unwrap());
+    w.pending = Some(
+        crate::workshop_edit::Pending::stage(&w.current_lines, &w.current_lines, proposal, 0)
+            .unwrap(),
+    );
     w.begin_editing(Some(0));
     w.revision_id = Some("kept_revision".into());
     w.version = 7;
@@ -260,12 +261,31 @@ async fn pending_close_keeps_canonical_and_confirms_its_text_once_after_version_
     }
     f.d.update("s", "close", epoch, Status::AudioDisabled, Some(&result));
     let snapshot = f.d.snapshot(Some("s"));
-    let id = snapshot["utterances"].as_array().unwrap().iter()
-        .find(|row| row["turn_id"] == "close").unwrap()["display_id"].as_str().unwrap().to_owned();
-    assert_eq!(f.d.acknowledge_display("s", std::slice::from_ref(&id))["displayed"], json!([id]));
+    let id = snapshot["utterances"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["turn_id"] == "close")
+        .unwrap()["display_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert_eq!(
+        f.d.acknowledge_display("s", std::slice::from_ref(&id))["displayed"],
+        json!([id])
+    );
     f.d.acknowledge_display("s", &[id]);
     f.d.update("s", "close", epoch, Status::Completed, Some(&result));
-    assert_eq!(f.d.data.lock().unwrap().sessions["s"].haiku.workshop.as_ref().unwrap().dialogue.len(), 1);
+    assert_eq!(
+        f.d.data.lock().unwrap().sessions["s"]
+            .haiku
+            .workshop
+            .as_ref()
+            .unwrap()
+            .dialogue
+            .len(),
+        1
+    );
     f.finish().await;
 }
 
@@ -282,11 +302,16 @@ async fn stale_or_paused_pending_close_cannot_discard_the_current_proposal() {
                 "version" => w.version += 1,
                 "workshop" => w.hud_id = "replacement_workshop".into(),
                 "epoch" => s.epoch += 1,
-                "combat" => { w.pause(std::time::Instant::now()); }
+                "combat" => {
+                    w.pause(std::time::Instant::now());
+                }
                 _ => unreachable!(),
             }
         }
-        assert!(!f.d.update("s", "close", epoch, Status::Queued, Some(&result)), "{cause}");
+        assert!(
+            !f.d.update("s", "close", epoch, Status::Queued, Some(&result)),
+            "{cause}"
+        );
         {
             let data = f.d.data.lock().unwrap();
             let w = data.sessions["s"].haiku.workshop.as_ref().unwrap();

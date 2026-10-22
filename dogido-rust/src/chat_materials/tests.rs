@@ -216,7 +216,7 @@ fn named_sound_uses_latest_name_normalized_longest_match_and_actual_sound_kind()
     let context = individuals::context(&snap, "クロちゃんが助けてくれた", "", false);
     assert!(context.contains("クロちゃん") && !context.contains("オオカミ"));
     let answer = individuals::hearing(&snap, "くろの音？");
-    assert!(answer.summary.contains("くろの音") && !answer.summary.contains("くろの声"));
+    assert!(answer.summary.contains("くろの足音") && !answer.summary.contains("くろの声"));
     let duplicate = individual_event(
         "2026-09-30T01:00:00Z",
         json!({"ambient_sounds":[heard_pet(),
@@ -348,4 +348,52 @@ fn current_companion_name_survives_the_retained_name_table_limit() {
             .iter()
             .any(|row| row.entity_id == "cat-31")
     );
+}
+
+#[test]
+fn block_sound_actions_reach_both_ordinary_chat_and_sound_question_requests() {
+    let event = individual_event(
+        "2026-10-18T01:00:00Z",
+        json!({"ambient_sounds":[
+            {"type":"block:stone","source_id":"same-place","sound_event":"block.stone.step"},
+            {"type":"block:stone","source_id":"same-place","sound_event":"block.stone.break"},
+            {"type":"block:stone","source_id":"same-place","sound_event":"block.stone.place"}
+        ]}),
+    );
+    let snapshot = individual_snapshot(&event);
+    for asks_about_sound in [false, true] {
+        let text = if asks_about_sound {
+            "今の音は何？"
+        } else {
+            "少し休もう"
+        };
+        let input = PlayerInput {
+            raw_text: text.into(),
+            semantic_text: text.into(),
+            asks_about_sound,
+            ..Default::default()
+        };
+        let Prepared::Reply(reply) = prepare(
+            &event,
+            &Settings::default(),
+            &input,
+            &Context::default(),
+            &snapshot,
+            &labels(),
+        )
+        .unwrap() else {
+            panic!("expected ordinary reply");
+        };
+        let request = reply.request("test", 72).unwrap();
+        assert_eq!(request.kind, "player_chat");
+        let facts = &request.messages[1].content;
+        for text in [
+            "石系の足音",
+            "石系ブロックの破壊音",
+            "石系ブロックの設置音",
+            "発音者未確定",
+        ] {
+            assert!(facts.contains(text), "missing {text} in {facts}");
+        }
+    }
 }

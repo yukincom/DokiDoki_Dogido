@@ -91,6 +91,7 @@ impl Context {
             return context;
         }
         let p = input_policy::classify(raw, normalized);
+        // 分類器未設定時の既存認識。共通分類がある場合はapply_request_classificationで置換する。
         context.requests_sword =
             crate::assist::intent::is_explicit_select_sword_request(normalized);
         if context.requests_sword {
@@ -119,6 +120,30 @@ impl Context {
             .as_ref()
             .and_then(|q| q.biome_id.clone());
         context
+    }
+    /// 共通受付の結果で三つの依頼フラグを置換し、ここでは依頼性を再判定しない。
+    pub fn apply_request_classification(
+        &mut self,
+        result: &crate::request_classifier::Classification,
+    ) {
+        use crate::request_classifier::Label;
+        self.requests_sword = result.prediction.label == Label::EquipSword;
+        self.assist_intent_source = "modernbert".into();
+        self.assist_intent_evidence = result.text.clone();
+        self.assist_intent_confidence = result.prediction.probabilities[2];
+        if result.prediction.label != Label::EnemyInformation {
+            self.asks_hostile_count = false;
+            self.asks_hostile_direction = false;
+            self.asks_dragon_direction = false;
+        }
+        self.knowledge_query = if matches!(
+            result.prediction.label,
+            Label::NotRequest | Label::OtherRequest
+        ) {
+            query::extract(&self.normalized_text)
+        } else {
+            None
+        };
     }
 }
 

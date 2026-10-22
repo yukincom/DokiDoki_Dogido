@@ -18,7 +18,7 @@ impl Dialogue {
     pub(super) fn observe_inner(
         self: &Arc<Self>,
         session_id: &str,
-        event: GameEvent,
+        mut event: GameEvent,
         key: Option<&str>,
         private: bool,
     ) -> Value {
@@ -38,11 +38,86 @@ impl Dialogue {
             return json!({"accepted":false,"reason":"unknown_session_id"});
         };
         let duplicate = s.sequences.admit(sequence, key) != Admission::New;
-        let results = s.assist.observe_results(
-            &event.command_results,
+        let mut screenshot_acks = Vec::new();
+        let mut assist_results = Vec::new();
+        for result in &event.command_results {
+            if result.command_type
+                == crate::events::AdapterCommandResultCommandType::CaptureBodyView
+                || s.visual.owns(&result.command_id)
+            {
+                if s.visual
+                    .receive(result, chrono::Utc::now())
+                {
+                    screenshot_acks.push(result.command_id.clone());
+                }
+            } else if result.command_type
+                == crate::events::AdapterCommandResultCommandType::CaptureScreenshot
+                || s.screenshots.owns(&result.command_id)
+            {
+                let (ack, receipt) = s.screenshots.receive(result, chrono::Utc::now());
+                if ack {
+                    screenshot_acks.push(result.command_id.clone());
+                }
+                if let Some(receipt) = receipt {
+                    let owner = self.clone();
+                    let sid = session_id.to_owned();
+                    let instance = s.instance_id.clone();
+                    let command_id = result.command_id.clone();
+                    let store = crate::bookshelf::store::Store {
+                        memory: self.config.haiku.memory_dir.clone(),
+                        screenshots: self
+                            .config
+                            .haiku
+                            .screenshot_dir
+                            .clone()
+                            .unwrap_or_else(crate::screenshot::default_directory),
+                        photos: std::path::PathBuf::new(),
+                    };
+                    jobs.push(tokio::spawn(async move {
+                        let write_id = command_id.clone();
+                        let saved = tokio::task::spawn_blocking(move || {
+                            store.register_capture(&write_id, &receipt)
+                        })
+                        .await;
+                        let terminal = match &saved {
+                            Ok(Ok(())) => true,
+                            Ok(Err(error)) => crate::bookshelf::captures::terminal_error(error),
+                            Err(_) => false,
+                        };
+                        match &saved {
+                            Ok(Ok(())) => tracing::info!(
+                                event = "haiku_screenshot_registered",
+                                session_id = sid,
+                                command_id
+                            ),
+                            error => tracing::warn!(
+                                event = "haiku_screenshot_registration_failed",
+                                session_id = sid,
+                                command_id,
+                                terminal,
+                                ?error
+                            ),
+                        }
+                        if let Some(s) = owner.data.lock().unwrap().sessions.get_mut(&sid)
+                            && s.instance_id == instance
+                        {
+                            s.screenshots
+                                .registered(&command_id, terminal, chrono::Utc::now());
+                        }
+                    }));
+                }
+            } else {
+                assist_results.push(result.clone());
+            }
+        }
+        // 画像は専用の最新一枚へ受理済み。以後の観測コピー・履歴・episodeへ保持しない。
+        event.discard_command_images();
+        let mut results = s.assist.observe_results(
+            &assist_results,
             chrono::Utc::now(),
             s.warning.is_some() || s.pending_warning.is_some() || s.cancel.is_some(),
         );
+        results.acknowledged_ids.extend(screenshot_acks);
         for observed in &results.observed {
             tracing::info!(event="assist_result",session_id=session_id,result=%json!(observed));
         }
@@ -64,6 +139,7 @@ impl Dialogue {
                 s.foreground
                     .set_game_paused(now, event.world.game_paused.unwrap_or(false));
             }
+            super::body_interest_runtime::observe_boundary(s, Instant::now());
             if complete || recent && event.event.source_kind == SourceKind::Auditory {
                 s.audio_latest = Some(event.clone());
                 s.audio_received = recent.then(Instant::now);
@@ -138,11 +214,15 @@ impl Dialogue {
                 Self::cancel_assist(&mut d, session_id);
                 Self::cancel_light(&mut d, session_id);
                 let s = d.sessions.get_mut(session_id).unwrap();
+                super::body_interest_runtime::cancel(s);
                 s.input_generation = s.input_generation.wrapping_add(1);
                 input_generation = Some(s.input_generation);
                 s.record_private_generation = Some((s.input_generation, private));
                 s.last_player_input = Some(now);
                 s.ambient.note_player_input(now);
+            }
+            if input_generation.is_some() {
+                Self::cancel_request_classification(&mut d, session_id);
             }
             self.tick_workshop(&mut d, session_id);
             self.tick_foreground(&mut d, session_id);
@@ -154,8 +234,9 @@ impl Dialogue {
             if recent {
                 let s = d.sessions.get_mut(session_id).unwrap();
                 let busy = s.warning.is_some() || s.pending_warning.is_some() || jobs.len() >= 16;
-                let workshop_event = (!text.trim().is_empty() && workshop_focus::quiet(s))
-                    .then(|| event.without_player_input());
+                let workshop_event = (!text.trim().is_empty()
+                    && (workshop_focus::quiet(s) || self.config.request_classifier.enabled()))
+                .then(|| event.without_player_input());
                 let decision = s.combat.observe(
                     workshop_event.as_ref().unwrap_or(&event),
                     now,
@@ -191,10 +272,7 @@ impl Dialogue {
                 // combat_ended待ちへ入ると、明るくなっても発句が止まる。
                 if event.event.name != EventName::PlayerDied && conversation_threat {
                     s.history.begin_danger();
-                    s.foreground.start_combat(
-                        now,
-                        self.config.combat.ms("conversation_suspended_player_turns"),
-                    );
+                    s.foreground.start_combat();
                 }
                 input_handled = decision.input_handled;
                 let combat_priority = if decision
@@ -221,7 +299,7 @@ impl Dialogue {
                     s.deferred_input = None;
                 }
                 if event.event.name == EventName::PlayerDied || decision.dimension_changed {
-                    self.cancel_knowledge_queue(&mut d, session_id, "world_context_changed");
+                    self.cancel_reply_queue(&mut d, session_id, "world_context_changed");
                 }
                 self.apply_combat_decision(
                     &mut d,
@@ -280,7 +358,7 @@ impl Dialogue {
         drop(d);
         drop(jobs);
         if !duplicate && recent && complete_observation(&event) && text.trim().is_empty() {
-            self.resume_knowledge_input(session_id);
+            self.resume_reply_input(session_id);
         }
         if !duplicate
             && recent
@@ -308,13 +386,29 @@ impl Dialogue {
             Value::Null
         };
         let commands = {
-            let d = self.data.lock().unwrap();
+            let mut d = self.data.lock().unwrap();
             if let Some((before, _, _, actions)) = episode_snapshot.as_mut() {
                 actions.extend(before.input_actions(&d, session_id, &text));
             }
             d.sessions
-                .get(session_id)
-                .map(|s| s.assist.commands(chrono::Utc::now()))
+                .get_mut(session_id)
+                .map(|s| {
+                    super::body_interest_runtime::refresh(s,self.clock.elapsed().as_millis() as u64);
+                    let utc = chrono::Utc::now();
+                    // ACKは共有台帳。到着の確定は今回の姿勢・休止・入力による取消を反映してから行う。
+                    // 同一イベント内の古いarrivedで、取消済み対象の再訪待ち時間を作らない。
+                    for result in s.body_autonomy.observe_results(&event.command_results,Instant::now(),utc) {
+                        tracing::info!(event="body_interest_result",session_id=session_id,result=%result);
+                    }
+                    let mut commands: Vec<Value> = s.assist.commands(utc).iter().map(|command| json!(command)).collect();
+                    commands.extend(s.body_autonomy.commands(Instant::now(),utc));
+                    commands.extend(s.screenshots.commands(utc));
+                    let capture_context = (self.config.chat_image.enabled && !s.preview && !s.foreground.game_paused)
+                        .then(|| s.body_observation.accepted(Instant::now()).map(|v| v.context.clone())).flatten();
+                    s.visual.arm(session_id,capture_context,utc);
+                    commands.extend(s.visual.commands(utc));
+                    commands
+                })
                 .unwrap_or_default()
         };
         let event_id = id("evt");

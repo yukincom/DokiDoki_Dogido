@@ -12,7 +12,7 @@
     "client": [
       "dogido.lab.client.DogidoLabClient"
     ],
-    "dogido:body_bridge_v5": [
+    "dogido:body_bridge_v9": [
       "dogido.lab.client.BodyClientBridge"
     ]
   },

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""会話所有権・発句時計・戦闘退避を実HTTPと模擬音声で確認する。"""
+"""会話所有権・発句時計・戦闘中の会話継続を実HTTPと模擬音声で確認する。"""
 import json
 import time
 from check_dialogue import register, request, row, snapshot, submit, wait_for
@@ -53,22 +53,23 @@ def main():
         send(sid, visual_threats=[{"type":"zombie", "entity_id":"z", "distance":5,
                                   "direction":{"horizontal":"front"}}])
         state = foreground(base, sid)
-        assert state["combat_active"] and state["route"] == "none", state
-        assert state["suspended"]["source_turn_ids"] == [turn], state
+        assert state["combat_active"] and state["route"] == "knowledge", state
+        assert state["suspended"] is None, state
         for _ in range(12): send(sid)
-        assert foreground(base, sid)["suspended"]["remaining_player_turns"] == 10
+        assert foreground(base, sid)["suspended"] is None
         assert foreground(base, sid)["combat_active"]
-        send(sid, event={"name":"combat_ended", "source_kind":"system", "priority_hint":"background", "certainty":"high"})
-        assert not foreground(base, sid)["combat_active"]
         wait_for(lambda: all(r["playback_status"] in {"completed", "cancelled", "failed"} for r in rows(sid)))
         send(sid)
         resume = submit(base, sid, "さっきの話の続き")
         wait_for(lambda: row(base, resume, {"completed"}))
-        assert foreground(base, sid)["route"] == "knowledge"
+        assert foreground(base, sid)["route"] == "casual"
+        assert foreground(base, sid)["combat_active"]
         assert foreground(base, sid)["suspended"] is None
         prompts = "\n".join(m["content"] for r in seen if r["path"] == "/v1/chat/completions" for m in r["body"]["messages"])
-        assert "プレイヤーが明示的に再開した保留話題:" in prompts
-        passed.append("combat_bookmark_survives_ticks_and_resumes_only_on_player_turn")
+        assert "プレイヤーが明示的に再開した保留話題:" not in prompts
+        passed.append("combat_keeps_knowledge_until_followup_switches_to_chat")
+        send(sid, event={"name":"combat_ended", "source_kind":"system", "priority_hint":"background", "certainty":"high"})
+        assert not foreground(base, sid)["combat_active"]
 
         # 通常会話と死亡イベントで戦闘状態が解放される。
         turn = submit(base, sid, "ドギド、こんにちは")

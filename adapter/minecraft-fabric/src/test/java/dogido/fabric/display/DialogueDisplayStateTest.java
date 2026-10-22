@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class DialogueDisplayStateTest {
     private static DialoguePayload.Snapshot snapshot(String instance, DialoguePayload.Row... rows) {
         return new DialoguePayload.Snapshot(new DialoguePayload.Scope("session", instance), false, "voice-1", true,
-            List.of(rows));
+            List.of(rows),null);
     }
 
     private static DialoguePayload.Row row(String turn, String display, String text, String status) {

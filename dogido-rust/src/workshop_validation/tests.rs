@@ -288,10 +288,10 @@ fn inspection_needs_only_the_requested_tool_arguments() {
         assert!(result["step"].is_null(), "{result}");
         assert_eq!(result["reason"], "inspection_check_required");
     }
-    frame["payload"] = json!({"action":"inspect","checks":["reading","meter","reading"],"inspect_text":"白い骨","inspect_line_index":2});
+    frame["payload"] = json!({"action":"inspect","checks":["reading","source","reading"],"inspect_text":"白い骨","inspect_line_index":2});
     let result = validate(&frame, &details).unwrap();
     assert_eq!(result["reason"], "accepted");
-    assert_eq!(result["step"]["checks"], json!(["reading", "meter"]));
+    assert_eq!(result["step"]["checks"], json!(["reading", "source"]));
     assert_eq!(result["step"]["inspect_text"], "白い骨");
     assert_eq!(result["step"]["inspect_line_index"], 2);
     frame["payload"]["inspect_line_index"] = json!(3);
@@ -507,4 +507,13 @@ fn reported_natural_close_needs_the_missing_authority_fields() {
     frame["payload"]["evidence"] = "では終了で！".into();
     let accepted = validate(&frame, &details).unwrap();
     assert_eq!(accepted["step"]["action"], "close_workshop", "{accepted}");
+}
+
+#[test]
+fn retired_meter_check_is_not_a_workshop_action_requirement() {
+    let (mut frame, details) = conversation("上の句をひのあかりに変更して", "", "inspect");
+    frame["payload"] = json!({"action":"inspect", "checks":["meter"]});
+    let result = validate(&frame, &details).unwrap();
+    assert_eq!(result["reason"], "invalid_checks");
+    assert!(result["step"].is_null());
 }

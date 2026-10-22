@@ -8,13 +8,13 @@ from check_workshop_runtime import install, ready, session, step
 from check_workshop_edits import finish, revisions
 from check_workshop_followup import followup
 from check_workshop_revision import wire
-from check_workshop_combat import SETTINGS, enter, end, returned, drive
+from check_workshop_combat import SETTINGS, MOB, enter, end, returned, drive
 
 
 def enqueue(base, sid, text):
     # 後続の解析を待たず連続配送し、同時入力でも質問が失われないことを試す。
     response=request(base, "/api/v1/player-input", {"session_id":sid,"text":text,"source":"voice"})
-    assert response.get("reason")=="knowledge_input_routing" and response["accepted"], response
+    assert response.get("reason")=="reply_input_routing" and response["accepted"], response
     return response["turn_id"]
 
 
@@ -95,7 +95,7 @@ def main():
         enter(send, rows, sid)
         a = enqueue(base, sid, "枕詞って何？")
         b = enqueue(base, sid, "ソネットの形式は？")
-        for turn in [a, b]: wait_for(lambda: row(base, turn, {"waiting_for_safety"}))
+        for turn in [a, b]: wait_for(lambda: row(base, turn, {"waiting_for_warning"}))
         dup = request(base, "/api/v1/player-input", {"session_id":sid,"text":"枕詞って何？","source":"text"})
         assert dup["deduplicated"] and dup["turn_id"] == a, dup
         end(send, rows, sid)
@@ -111,17 +111,24 @@ def main():
 
     with fixture(enabled=False, combat_settings=SETTINGS) as f:
         base, _, log, control, seen, _, _, _, send, hud, rows, stored, folder = f
-        sid = register(base, preview=False); send(sid); enter(send, rows, sid)
+        def warning_started(sid):
+            (folder / "player_mode").write_text("slow")
+            send(sid, visual_threats=[MOB], combat={"combat_active_hint": True})
+            return wait_for(lambda: next((r for r in rows(sid)
+                if r["playback_status"] == "started" and r.get("combat_actions")), None))
+
+        sid = register(base, preview=False); send(sid); warning_started(sid)
         questions = ["枕詞って何？", "ソネットの形式は？", "川柳の決まりを教えて", "ソネットとは？",
                      "一の読みを教えて", "漢字の3は何年生で習うの？", "国語で幻の枕詞って何？",
                      "ダイヤモンドの剣のIDは？", "ダイヤモンドの剣の耐久値は？"]
         turns = [enqueue(base, sid, text) for text in questions]
-        for turn in turns: wait_for(lambda: row(base, turn, {"waiting_for_safety"}))
+        for turn in turns: wait_for(lambda: row(base, turn, {"waiting_for_warning"}))
         rejected = request(base, "/api/v1/player-input", {"session_id":sid,"text":"枕詞とは？","source":"voice"})
-        assert rejected == {"accepted":False,"reason":"knowledge_queue_full"}, rejected
+        assert rejected == {"accepted":False,"reason":"reply_queue_full"}, rejected
         assert not session(base, sid)["history"]
         request(base, "/api/v1/rust-dialogue/interrupt", {"session_id":sid})
         assert all(row(base, t, {"cancelled"}) for t in turns)
+        (folder / "player_mode").write_text("ok")
         aftermath = end(send, rows, sid)
         for _ in range(5): send(sid); time.sleep(.1)
         assert all(row(base, t, {"cancelled"}) for t in turns)
@@ -130,23 +137,30 @@ def main():
             "role": "assistant", "text": aftermath["text"]}]
         passed.append("bounded_queue_cancels_questions_and_keeps_only_completed_aftermath_history")
 
-        enter(send, rows, sid)
+        sid = register(base, preview=False); send(sid)
+        warning = warning_started(sid)
         spoken_before = [r for r in session(base, sid)["history"] if r["role"] == "assistant"]
         first = enqueue(base, sid, "枕詞って何？")
         second = enqueue(base, sid, "ソネットの形式は？")
-        for turn in [first,second]: wait_for(lambda: row(base, turn, {"waiting_for_safety"}))
+        for turn in [first,second]: wait_for(lambda: row(base, turn, {"waiting_for_warning"}))
         (folder / "player_mode").write_text("fail")
-        # 安堵音声も失敗させたまま、安全観測で待ち列が進むことを確認。
-        send(sid, event={"name":"combat_ended","source_kind":"system","priority_hint":"background","certainty":"high"})
-        for turn in [first,second]: drive(send,sid,lambda:row(base,turn,{"failed"}))
+        # 戦闘継続中も、先行警告が終端すれば失敗した回答の次へ進む。
+        for turn in [first,second]: wait_for(lambda:row(base,turn,{"failed"}))
         history = session(base, sid)["history"]
-        assert [r for r in history if r["role"] == "assistant"] == spoken_before
+        terminal_warning = row(base, warning["turn_id"], {"completed", "failed"})
+        assert terminal_warning
+        expected_spoken = list(spoken_before)
+        if terminal_warning["playback_status"] == "completed":
+            expected_spoken.append({"turn_id":warning["turn_id"] + ":reply",
+                "role":"assistant", "text":terminal_warning["text"]})
+        assert [r for r in history if r["role"] == "assistant"] == expected_spoken
+        assert session(base, sid)["foreground"]["combat_active"]
         assert not any(r["turn_id"] in {first + ":reply", second + ":reply"} for r in history)
         (folder / "player_mode").write_text("ok")
         passed.append("failed_answer_does_not_block_next_question_or_commit_assistant_history")
 
         for change in ["death", "dimension", "close"]:
-            other = register(base, preview=False); send(other); enter(send, rows, other)
+            other = register(base, preview=False); send(other); warning_started(other)
             turn = enqueue(base, other, "枕詞って何？")
             if change == "death":
                 send(other, event={"name":"player_died","source_kind":"system","priority_hint":"background","certainty":"high"},

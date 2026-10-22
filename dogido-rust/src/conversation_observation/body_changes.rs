@@ -3,15 +3,16 @@
 use super::{Change, Context};
 use serde_json::{Value, json};
 
-const KINDS: [&str; 5] = [
+const KINDS: [&str; 6] = [
     "body_self_position",
     "body_player_position",
     "body_self_orientation",
     "body_player_orientation",
     "body_player_visibility",
+    "body_position_relation",
 ];
 
-fn fields(current: &Value) -> [Value; 5] {
+fn fields(current: &Value) -> [Value; 6] {
     [
         current["self"]["position"].clone(),
         current["player"]["position"].clone(),
@@ -20,6 +21,7 @@ fn fields(current: &Value) -> [Value; 5] {
         json!({"yaw":current["player"]["yaw"],"pitch":current["player"]["pitch"]}),
         json!({"player_visibility":current["vision"]["player_visibility"],
             "reason":current["vision"]["reason"]}),
+        current["position_relation"].clone(),
     ]
 }
 

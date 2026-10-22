@@ -80,4 +80,16 @@ public final class BodyClientBridge implements BodyBridge {
         if (result == Submission.QUEUED) ClientPlayNetworking.send(new BodyPackets.Request(JSON.toJson(new BodyPackets.Message(BodyProtocol.VERSION,"action",null,request))));
         return result;
     }
+    @Override public Submission observeOwnerWork(OwnerWorkObservation observation) {
+        Submission result = ready(observation == null ? null : observation.context());
+        if (result == Submission.QUEUED) ClientPlayNetworking.send(new BodyPackets.Request(JSON.toJson(
+            new BodyPackets.Message(BodyProtocol.VERSION,"owner_work",null,null,observation,null))));
+        return result;
+    }
+    @Override public Submission observeSpeechGaze(SpeechGazeObservation observation) {
+        Submission result = ready(observation == null ? null : observation.context());
+        if (result == Submission.QUEUED) ClientPlayNetworking.send(new BodyPackets.Request(JSON.toJson(
+            new BodyPackets.Message(BodyProtocol.VERSION,"speech_gaze",null,null,null,observation))));
+        return result;
+    }
 }

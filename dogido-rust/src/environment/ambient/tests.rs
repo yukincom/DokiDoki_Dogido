@@ -114,7 +114,7 @@ fn light_request(a: &mut Ambient, f: &AmbientFocus) -> (GameEvent, LightPlanRequ
     (e, req)
 }
 #[test]
-fn light_planner_is_bounded_and_does_not_choose_speech_itself() {
+fn light_response_is_consumed_once_without_another_leaf() {
     let f = AmbientFocus {
         light: LightContext {
             surroundings_reasonably_lit: true,
@@ -129,7 +129,7 @@ fn light_planner_is_bounded_and_does_not_choose_speech_itself() {
         json!(["stay_silent", "acknowledge_supply_gain"])
     );
     assert!(!r.details.to_string().contains("previous_count"));
-    let payload = json!({"action":"acknowledge_supply_gain","basis_ids":["first_light_supply"],"confidence":0.85});
+    let payload = json!({"action":"acknowledge_supply_gain","speech":"備えが増えたな。"});
     assert!(
         a.resolve_light_plan(r.request_id + 1, &payload, &e, 2, &f, &Settings::default())
             .is_none()
@@ -138,13 +138,112 @@ fn light_planner_is_bounded_and_does_not_choose_speech_itself() {
         .resolve_light_plan(r.request_id, &payload, &e, 2, &f, &Settings::default())
         .unwrap();
     assert_eq!(line.kind, "light_source_gain");
+    assert_eq!(line.text, "備えが増えたな。");
+    assert!(line.leaf.is_none());
+    assert!(still_applicable(&line, &e));
+    assert!(!still_applicable(
+        &line,
+        &event(json!({"inventory":{"torch":2}}))
+    ));
+    assert!(still_applicable(
+        &line,
+        &event(json!({"inventory":{"torch":1},
+        "world":{"biome":"desert","time_phase":"day"}}))
+    ));
     assert!(
         a.resolve_light_plan(r.request_id, &payload, &e, 3, &f, &Settings::default())
             .is_none()
     );
 }
 #[test]
-fn light_invalid_none_low_confidence_and_unobserved_basis_are_silent() {
+fn light_comment_survives_ordinary_lighting_and_scene_changes() {
+    let payload = json!({"action":"acknowledge_supply_gain","speech":"備えが増えたな。"});
+    for (previous, current, change) in (0..4).flat_map(|change| [(0, 1, change), (1, 2, change)]) {
+        let mut a = Ambient::default();
+        let mut focus = AmbientFocus::default();
+        let settings = Settings::default();
+        a.update(&event(json!({"inventory":{"torch":previous}})), 0, true, &settings);
+        let mut e = event(json!({"inventory":{"torch":current}}));
+        a.update(&e, 1, true, &settings);
+        a.actions(&e, 1, Mode::Normal, false, &focus, &settings);
+        let request = a.take_light_plan().unwrap();
+        match change {
+            0 => focus.light.surroundings_reasonably_lit = true,
+            1 => focus.light.nearby_light_present = true,
+            2 => {
+                e = event(
+                    json!({"inventory":{"torch":current},"world":{"biome":"desert","time_phase":"day"}}),
+                )
+            }
+            _ => {
+                e = event(
+                    json!({"inventory":{"torch":current},"world":{"biome":"plains","time_phase":"night"}}),
+                )
+            }
+        }
+        // 備えのコメントは通常の移動・時間帯・照明の変化でも配送する。危険な暗さは別試験。
+        assert!(
+            a.resolve_light_plan(
+                request.request_id,
+                &payload,
+                &e,
+                2,
+                &focus,
+                &Settings::default()
+            )
+            .is_some(),
+            "change {change}"
+        );
+    }
+}
+#[test]
+fn light_generated_for_an_old_body_epoch_is_discarded() {
+    let with_epoch = |e: &GameEvent, epoch: &str| {
+        e.with_body_senses(
+            None,
+            crate::body::senses::Origin {
+                context: Some(crate::body::contracts::Context {
+                    owner_id: "owner".into(),
+                    body_id: "body".into(),
+                    epoch: epoch.into(),
+                    dimension: "minecraft:overworld".into(),
+                }),
+                revision: Some(1),
+                position: None,
+                available: true,
+                age_ms: 0,
+                body: json!({}),
+                player_safety: e.world.clone(),
+                player_observed_at: e.observed_at.clone(),
+            },
+        )
+    };
+    for next_epoch in ["old", "new"] {
+        let mut a = Ambient::default();
+        let s = Settings::default();
+        let f = AmbientFocus::default();
+        let old = with_epoch(&event(json!({})), "old");
+        let supplied = event(json!({"inventory":{"torch":1}}));
+        let current = with_epoch(&supplied, "old");
+        a.update(&old, 0, true, &s);
+        a.update(&current, 1, true, &s);
+        a.actions(&current, 1, Mode::Normal, false, &f, &s);
+        let request = a.take_light_plan().unwrap();
+        let later = with_epoch(&supplied, next_epoch);
+        let response = a.resolve_light_plan(
+            request.request_id,
+            &json!({"action":"acknowledge_supply_gain","speech":"備えが増えたな。"}),
+            &later,
+            2,
+            &f,
+            &s,
+        );
+        assert_eq!(response.is_some(), next_epoch == "old");
+    }
+}
+
+#[test]
+fn light_invalid_action_or_speech_is_silent() {
     let f = AmbientFocus {
         light: LightContext {
             surroundings_reasonably_lit: true,
@@ -154,10 +253,10 @@ fn light_invalid_none_low_confidence_and_unobserved_basis_are_silent() {
     };
     for payload in [
         Value::Null,
-        json!({"action":"relief_after_darkness","basis_ids":["dark_push_recovered"],"confidence":1}),
-        json!({"action":"acknowledge_supply_gain","basis_ids":["first_light_supply"],"confidence":0.7}),
-        json!({"action":"acknowledge_supply_gain","basis_ids":["fabricated"],"confidence":1}),
-        json!({"action":"acknowledge_supply_gain","basis_ids":["first_light_supply","first_light_supply"],"confidence":1}),
+        json!({"action":"relief_after_darkness","speech":"明るくなってほっとしたわ。"}),
+        json!({"action":"acknowledge_supply_gain","speech":""}),
+        json!({"action":"acknowledge_supply_gain","speech":3}),
+        json!({"action":"stay_silent","speech":"話すで。"}),
     ] {
         let mut a = Ambient::default();
         let (e, r) = light_request(&mut a, &f);
@@ -178,7 +277,7 @@ fn light_recovery_is_past_fact_but_new_darkness_or_input_cancels() {
         },
         ..Default::default()
     };
-    let payload = json!({"action":"relief_after_darkness","basis_ids":["dark_push_recovered"],"confidence":1});
+    let payload = json!({"action":"relief_after_darkness","speech":"明るくなってほっとしたわ。"});
     let mut a = Ambient::default();
     let (e, r) = light_request(&mut a, &f);
     let later = AmbientFocus {
@@ -367,7 +466,7 @@ fn light_result_must_be_in_the_original_offered_actions() {
         r.details["allowed_actions"],
         json!(["stay_silent", "relief_after_darkness"])
     );
-    let payload = json!({"action":"acknowledge_supply_gain","basis_ids":["first_light_supply"],"confidence":1});
+    let payload = json!({"action":"acknowledge_supply_gain","speech":"備えが増えたな。"});
     let later = AmbientFocus {
         light: LightContext {
             surroundings_reasonably_lit: true,

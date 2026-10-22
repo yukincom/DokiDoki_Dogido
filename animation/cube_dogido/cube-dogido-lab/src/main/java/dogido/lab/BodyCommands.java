@@ -24,7 +24,7 @@ final class BodyCommands {
                 Entity entity = EntityArgumentType.getEntity(c,"body");
                 if (!(entity instanceof DogidoEntity body)) return say(c.getSource(),"3Dドギドを指定してください。",false);
                 String result = body.bind(c.getSource().getPlayerOrThrow());
-                return say(c.getSource(),result.equals("bound") ? "持ち主を登録しました。DIRECTで行動指定を待っています。" : result,result.equals("bound"));
+                return say(c.getSource(),result.equals("bound") ? "持ち主を登録しました。FOLLOWを開始します。" : result,result.equals("bound"));
             })));
             for (String operation : new String[]{"direct","rest","wait","follow","explore","hold","retreat","safe","call","unbind"})
                 root.then(CommandManager.literal(operation).executes(c -> operate(c.getSource(),operation)));
@@ -71,6 +71,10 @@ final class BodyCommands {
     private static int operate(ServerCommandSource source, String operation) {
         ServerPlayerEntity player = source.getPlayer();
         if (!player.isAlive() || player.isSpectator()) return say(source,"現在は身体を操作できません。",false);
+        if (operation.equals("call")) {
+            ActionResult result = BodyManager.recall(player);
+            return say(source,"呼び寄せ: "+result.outcome()+" / "+result.reason(),result.outcome() == Outcome.ACCEPTED);
+        }
         DogidoEntity body = BodyManager.body(player);
         if (body == null) return unavailable(source);
         switch (operation) {
@@ -83,10 +87,6 @@ final class BodyCommands {
             case "retreat" -> body.localRetreat();
             case "safe" -> body.localSafe();
             case "unbind" -> body.unbind(player);
-            case "call" -> {
-                ActionResult result = body.localCall(player);
-                return say(source,"呼び寄せ: "+result.outcome()+" / "+result.reason(),result.outcome() == Outcome.ACCEPTED);
-            }
             default -> { return 0; }
         }
         return say(source,"身体操作: "+operation,true);

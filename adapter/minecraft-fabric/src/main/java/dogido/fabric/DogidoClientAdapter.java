@@ -67,7 +67,10 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     // client tickで一度採る身体実測。各イベントは同じ不変コピーを送信する。
     private final dogido.fabric.body.BodyConnection bodyConnection = new dogido.fabric.body.BodyConnection();
     private com.google.gson.JsonObject bodyObservation;
+    private com.google.gson.JsonObject bodyAutonomy;
+    private dogido.fabric.body.BodyInspectRuntime bodyInspect;
     private dogido.fabric.body.BodySensesCollector bodySenses;
+    private final dogido.fabric.body.BodySpeechGaze bodySpeechGaze = new dogido.fabric.body.BodySpeechGaze(bodyConnection);
     private final SmellObserver smellObserver = new SmellObserver();
 
     private long tickCounter = 0;
@@ -105,6 +108,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         INSTANCE = this;
+        dogido.fabric.screenshot.BodyViewCapture.register(this.bodyConnection);
         this.workshopHud = DogidoWorkshopHud.register();
         this.characterHud = DogidoCharacterHud.register();
         this.config = DogidoConfig.load();
@@ -131,14 +135,25 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         HorseRecallParticles.registerClient();
         this.horseRecall = new HorseRecallRuntime(LOGGER, result -> this.eventClient.rememberCommandResult(result),
             ref -> this.eventClient != null && this.eventClient.isCurrent(ref));
+        this.bodyInspect = new dogido.fabric.body.BodyInspectRuntime(this.bodyConnection,this.bodySenses,
+            result -> this.eventClient.rememberCommandResult(result),ref -> this.eventClient != null && this.eventClient.isCurrent(ref),
+            (ref,command,request) -> this.eventClient.submitBodyInspect(ref,command,request,this.bodyConnection::moveTo));
+        var screenshots = new dogido.fabric.screenshot.ScreenshotRuntime();
         this.eventClient = new DogidoEventClient(LOGGER,
             new DogidoEventClient.ConnectionSettings(this.config.enabled, this.config.serverBaseUrl, this.config.authToken),
-            hotbarCommands::handleSelectHotbarCommand, this.horseRecall::handle, this.horseRecall::available);
+            hotbarCommands::handleSelectHotbarCommand, this.horseRecall::handle, this.horseRecall::available, this.bodyInspect::handle,
+            (command,ref) -> screenshots.execute(command,ref,this.eventClient),
+            (command,ref) -> dogido.fabric.screenshot.BodyViewCapture.request(command,
+                () -> this.eventClient.isCurrent(ref),result -> this.eventClient.rememberBodyViewResult(ref,result)),
+            dogido.fabric.screenshot.BodyViewCapture::acknowledged);
         this.eventClient.rememberVoicePreference(this.config.voiceEnabled());
-        this.dialogueChat = DogidoDialogueChat.register(this.eventClient, this.config::saveVoiceEnabled);
+        this.dialogueChat = DogidoDialogueChat.register(this.eventClient, this.config::saveVoiceEnabled, snapshot -> {
+            var ref=this.eventClient.currentSession();
+            this.bodySpeechGaze.receive(snapshot,() -> this.eventClient.isCurrent(ref));
+        });
         this.eventCapture = new EventObservationCapture(this.playerObserver, this.worldObserver, this.smellObserver,
             this.ambientMobObserver, this.combatObserver, this.eventClient::nextSequence,
-            () -> this.tickCounter, () -> null, () -> this.bodyObservation);
+            () -> this.tickCounter, () -> null, () -> this.bodyObservation, () -> this.bodyAutonomy);
         ClientTickEvents.END_CLIENT_TICK.register(this::onClientTick);
         ClientPlayerBlockBreakEvents.AFTER.register((world, player, pos, state) -> {
             this.worldObserver.rememberBlockBreak(state, this.tickCounter);
@@ -205,6 +220,8 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private void onClientTick(MinecraftClient client) {
         if (!this.config.enabled) {
             this.horseRecall.clear();
+            this.bodyInspect.clear();
+            this.bodySpeechGaze.clear();
             this.characterHud.reset();
             return;
         }
@@ -259,7 +276,11 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.lastPlayerZ = player.getZ();
 
         this.tickCounter += 1;
-        this.bodyObservation = this.bodySenses.capture(this.bodyConnection.captureFrame(player.getUuid(),currentDimensionId),client);
+        var bodyFrame = this.bodyConnection.captureFrame(player.getUuid(),currentDimensionId);
+        if (this.tickCounter % 5 == 0) this.bodyConnection.observeOwnerWork(PlayerObserver.blockBreakingActive(client));
+        this.bodyObservation = this.bodySenses.capture(bodyFrame,client);
+        this.bodyAutonomy = this.bodySenses.autonomy(bodyFrame,this.bodyObservation);
+        this.bodyInspect.tick();
         this.eventClient.ensureSession(this.playerObserver.resolvePlayerName(player),player.getUuid(),this.bodyConnection.supported());
         this.soundObserver.expireSoundObservations();
         this.worldObserver.expireBlockBreakObservations(this.tickCounter);
@@ -291,7 +312,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         List<AudioThreatObservation> ambientSounds = this.soundObserver.scanAmbientSounds(player, currentSoundSources);
         List<AudioThreatObservation> unseenAudioThreats = filterUnseenAudioThreats(visibleThreats, audioThreats);
         this.smellObserver.observe(player, world, this.tickCounter, this.config.snapshotIntervalTicks);
-        boolean captureNearbyKinds = shouldSendSnapshot();
+        boolean captureNearbyKinds = this.eventClient.consumeFreshSnapshotRequest() || shouldSendSnapshot();
         List<AmbientMobObservation> ambientMobs = this.ambientMobObserver.scanAmbientMobs(player, world, captureNearbyKinds);
         this.threatObserver.updateCombatTracking(visibleThreats, audioThreats);
         boolean deadNow = this.playerObserver.isPlayerDead(player);
@@ -382,6 +403,13 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             || this.tickCounter - this.threatObserver.lastDamageTick() <= this.config.combatEndedQuietTicks;
         this.workshopHud.danger(displayDanger, displayDangerChanged, displayBarrier);
         this.characterHud.danger(displayDanger, displayDangerChanged, displayBarrier);
+        // 発話の対象IDを現在の同じcollectorで照合する。固定警告にはplayer側で実視認した敵も使う。
+        var gazeTargets=new java.util.ArrayList<>(this.bodySenses.speechTargets());
+        for (var threat : visibleThreats) if (threat.lineOfSight())
+            gazeTargets.add(new dogido.fabric.body.BodySpeechGaze.Target("player","entity",threat.uuid().toString(),new net.minecraft.util.math.Vec3d(threat.x(),threat.y(),threat.z())));
+        for (var sound : this.soundObserver.spatialSounds())
+            gazeTargets.add(new dogido.fabric.body.BodySpeechGaze.Target("player","sound",sound.sourceId(),sound.position()));
+        this.bodySpeechGaze.tick(bodyFrame,gazeTargets);
         if (this.tickCounter % 8 == 0) this.dialogueChat.poll();
         if (this.tickCounter % 8 == 0) this.eventClient.pollWorkshopDisplay(snapshot -> {
             this.workshopHud.receive(snapshot);
@@ -392,6 +420,9 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private void resetTransientState() {
         if (this.bodySenses != null) this.bodySenses.reset();
         this.bodyObservation = null;
+        this.bodyAutonomy = null;
+        this.bodyInspect.clear();
+        this.bodySpeechGaze.clear();
         this.ambientMobObserver.resetRangeTracking();
         this.worldObserver.resetRangeTracking();
         this.worldObserver.resetPortalTracking();

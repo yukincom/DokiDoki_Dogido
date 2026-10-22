@@ -33,6 +33,56 @@ pub fn resolve_engine(explicit: Option<&str>, environment: Option<&str>) -> Engi
 pub fn has_kanji(text: &str) -> bool {
     text.chars().any(|c| ('\u{4e00}'..='\u{9fff}').contains(&c))
 }
+/// プレイヤーが明示登録した読みだけを、UniDicより先に音声用コピーへ反映する。
+/// 長い表記を優先し、「山」の訂正で「火山」を変えない。置換結果を再置換しない。
+pub fn apply_corrections(text: &str, rows: &[serde_json::Value]) -> String {
+    fn ideograph(c: char) -> bool {
+        matches!(c, '\u{3400}'..='\u{9fff}' | '\u{f900}'..='\u{faff}' | '\u{20000}'..='\u{323af}' | '々' | '〆')
+    }
+    fn joined(a: char, b: char) -> bool {
+        (ideograph(a) && ideograph(b))
+            || (a.is_ascii_alphanumeric() && b.is_ascii_alphanumeric())
+            || (('ァ'..='ヶ').contains(&a) && ('ァ'..='ヶ').contains(&b))
+    }
+    let mut pairs: Vec<_> = rows
+        .iter()
+        .filter_map(|row| {
+            let surface = row["surface"].as_str()?;
+            let reading = row["reading"].as_str()?;
+            (!surface.is_empty()
+                && !reading.is_empty()
+                && reading
+                    .chars()
+                    .all(|c| ('ぁ'..='ん').contains(&c) || c == 'ー'))
+            .then_some((surface, reading))
+        })
+        .collect();
+    pairs.sort_by_key(|(surface, _)| std::cmp::Reverse(surface.len()));
+    let mut result = String::with_capacity(text.len());
+    let mut offset = 0;
+    while offset < text.len() {
+        let rest = &text[offset..];
+        if let Some((surface, reading)) = pairs.iter().find(|(surface, _)| {
+            rest.starts_with(surface)
+                && !text[..offset]
+                    .chars()
+                    .next_back()
+                    .is_some_and(|c| joined(c, surface.chars().next().unwrap()))
+                && !rest[surface.len()..]
+                    .chars()
+                    .next()
+                    .is_some_and(|c| joined(surface.chars().next_back().unwrap(), c))
+        }) {
+            result.push_str(reading);
+            offset += surface.len();
+        } else {
+            let c = rest.chars().next().unwrap();
+            result.push(c);
+            offset += c.len_utf8();
+        }
+    }
+    result
+}
 /// Preserve the canonical table's sequence, including compounds before the final 朝.
 pub fn apply_manual(text: &str) -> String {
     let mut result = text.to_owned();
@@ -65,7 +115,7 @@ pub fn prepare(text: &str, engine: Option<&str>, environment: Option<&str>) -> S
 /// None means unavailable/failed UniDic and retains the prepared original.
 /// Cancellation, timeout and broken IPC are caller errors, not a None fallback.
 /// A successful empty result remains empty; only a failed lookup uses the original.
-/// Do not trim/NFKC/fold here, and do not apply catalog overlays to free-form TTS.
+/// ここでは再度trim/NFKCしない。明示読みの反映は辞書処理前に呼出側で行う。
 pub fn finish(source: &str, unidic_output: Option<&str>) -> String {
     apply_manual(unidic_output.unwrap_or(source))
 }
@@ -73,6 +123,22 @@ pub fn finish(source: &str, unidic_output: Option<&str>) -> String {
 mod tests {
     use super::*;
     use serde_json::Value;
+    #[test]
+    fn explicit_readings_are_longest_first_and_preserve_compounds_and_display() {
+        let rows = serde_json::json!([
+            {"surface":"山","reading":"やま"},
+            {"surface":"草地","reading":"くさっぱら"},
+            {"surface":"雪原","reading":"ゆきはら"},
+            {"surface":"ゆきはら","reading":"べつのよみ"}
+        ]);
+        let original = "草地や雪原。火山と山。";
+        assert_eq!(
+            apply_corrections(original, rows.as_array().unwrap()),
+            "くさっぱらやゆきはら。火山とやま。"
+        );
+        assert_eq!(original, "草地や雪原。火山と山。");
+        assert_eq!(apply_corrections("山", &[]), "山");
+    }
     #[test]
     fn pure_tts_boundary_matches_fixture() {
         let cases: Vec<Value> =

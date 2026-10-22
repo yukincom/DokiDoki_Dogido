@@ -37,7 +37,7 @@ def wire(control, stored, sid, *, bad=False, blocked=None, inspect=False):
             return step(text, "show_current")
         if "段階: after_validation" in prompt:
             raise AssertionError("editing must not trigger another conversation call")
-        if inspect and "段階: decide" in prompt: return step(text,"inspect",checks=["meter"])
+        if inspect and "段階: decide" in prompt: return step(text,"inspect",checks=["source"])
         return proposal(original_text)
     steps=install(control,select)
     return calls,steps

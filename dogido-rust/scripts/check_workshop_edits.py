@@ -94,8 +94,8 @@ def main():
         (folder/"player_mode").write_text("ok")
         r=finish(base,send,sid,"直った？")
         assert r["workshop_action"]=="show_current" and "さくらいろ" in r["text"]
-        assert row(base,turn,{"cancelled"}) and len(revisions(folder,sid))==1
-        passed.append("confirmation_interrupts_started_speech_and_reads_current_without_reapplying")
+        assert row(base,turn,{"completed"}) and len(revisions(folder,sid))==1
+        passed.append("confirmation_waits_for_started_speech_and_reads_current_without_reapplying")
         install(control,lambda text,prompt,n:edit_or_command(text,index=2,replacement="あさひかる",reference="下五"))
         r=finish(base,send,sid,"下五を『あさひかる』にして")
         assert r["workshop_outcome"]=="player_edit_saved" and not hud(sid)["pending_lines"],r

@@ -36,7 +36,7 @@ pub(super) fn validate(raw: &Value, details: &Value) -> Value {
         for check in requested {
             let Some(check) = check
                 .as_str()
-                .filter(|c| matches!(*c, "reading" | "meter" | "source"))
+                .filter(|c| matches!(*c, "reading" | "source"))
             else {
                 return reject("invalid_checks");
             };

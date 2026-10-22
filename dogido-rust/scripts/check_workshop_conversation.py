@@ -45,8 +45,7 @@ def main():
             if text == "下五の意味を教えて":
                 return step(text, speech="『あさのいろ』の明るさに、気持ちもほどける感じがするな。")
             if "段階: after_validation" in prompt:
-                assert '"status": "rejected"' in prompt
-                return step(text, "respond", "『さくら』だけやと三音になるな。今の上五からもう少し一緒に考えよか。")
+                raise AssertionError("failed edit must not call the model again")
             if text.startswith("それを"):
                 replacement = "さくら" if "さくら" in text else "あさひかる"
                 p = edit(text, replacement=replacement, reference="")
@@ -78,32 +77,32 @@ def main():
             assert session(base, sid)["workshop_discussion_target"]["line_index"] == 2
         passed.append("target_survives_more_than_four_turns_without_forced_ending")
         r = finish(base, send, sid, "それを『あさひかる』にして")
-        assert r["workshop_outcome"] == "player_edit_saved", r
+        assert r.get("workshop_outcome") == "player_edit_saved", r
         assert hud(sid)["canonical_lines"] == [*LINES[:2], "あさひかる"]
         assert r["text"] == "\n".join([*LINES[:2], "あさひかる"]) and len(revisions(folder, sid)) == 1
         assert r["workshop_steps"][0]["transport"] == "native_tool", r
         passed.append("native_edit_with_omitted_target_uses_retained_line_and_confirmed_verse")
         r = finish(base, send, sid, "冒頭の五音を『さくらいろ』にして")
-        assert r["workshop_outcome"] == "player_edit_saved", r
+        assert r.get("workshop_outcome") == "player_edit_saved", r
         assert hud(sid)["canonical_lines"] == ["さくらいろ", LINES[1], "あさひかる"]
         assert session(base, sid)["workshop_discussion_target"]["line_index"] == 0
         passed.append("model_resolves_new_line_reference_outside_fixed_aliases")
         r = finish(base, send, sid, "それを『さくら』にして")
-        assert r["workshop_action"] == "respond" and len(r["llm_reports"]) == 2, r
-        assert r["text"].startswith("『さくら』だけやと三音") and len(revisions(folder, sid)) == 2
-        passed.append("failed_edit_returns_observation_to_model_and_keeps_canonical")
+        assert r["workshop_action"] == "respond" and len(r["llm_reports"]) == 1, r
+        assert "元の句" in r["text"] and len(revisions(folder, sid)) == 2
+        passed.append("failed_edit_returns_code_result_and_keeps_canonical")
         r = finish(base, send, sid, "きょうはここらで区切っとこか")
         assert r["workshop_action"] == "close_workshop" and hud(sid)["state"] == "closed", r
         assert r["text"] == "うん、今日はここまでや。またこの句を話そな。"
         passed.append("natural_close_uses_model_selected_action_and_reply")
 
     # A discussed candidate keeps its own target through a detour. A failed
-    # candidate must get a fresh response, never reuse a pre-validation success claim.
+    # candidate gets the code result, never a pre-validation success claim.
     for replacement, succeeds in [("さくらいろ", True), ("さくら", False)]:
         with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
             def model(text, prompt, n):
                 if "段階: after_validation" in prompt:
-                    return step(text, "respond", "その案は音が足りんかったな。元の上五を残して、続き考えよか。")
+                    raise AssertionError("failed candidate must not call the model again")
                 if text == "さっきの案にして":
                     p = step(text, "stage_conversation_candidate")
                     p["purpose"] = "improve_wording"
@@ -116,14 +115,14 @@ def main():
             finish(base, send, sid, "下五の意味を教えて")
             r = finish(base, send, sid, "さっきの案にして")
             if succeeds:
-                assert r["workshop_outcome"] == "player_edit_saved", r
+                assert r.get("workshop_outcome") == "player_edit_saved", r
                 assert hud(sid)["canonical_lines"] == [replacement, *LINES[1:]]
                 assert session(base, sid)["workshop_discussion_target"]["line_index"] == 0
             else:
-                assert r["workshop_action"] == "respond" and len(r["llm_reports"]) == 2, r
+                assert r["workshop_action"] == "respond" and len(r["llm_reports"]) == 1, r
                 assert "直したで" not in r["text"] and hud(sid)["canonical_lines"] == LINES
                 assert not revisions(folder, sid)
-            passed.append("candidate_selection_after_detour_" + ("saved" if succeeds else "replanned_on_failure"))
+            passed.append("candidate_selection_after_detour_" + ("saved" if succeeds else "kept_on_failure"))
 
     # Malformed tool arguments must not execute or borrow an older candidate.
     # The bounded recovery is conversation-only after a tool decoding failure.

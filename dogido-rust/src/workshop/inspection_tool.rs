@@ -1,5 +1,5 @@
-//! 読み・音数・保存済み出典の確認を、一つのnative toolと既存inspectの間で変換する。
-//! 検査そのものはworkshop::inspect、実行時期と再判断の上限はworkshop_runtimeが所有する。
+//! 辞書の読み・保存済み資料の参照を、一つのnative toolと既存inspectの間で変換する。
+//! 参照内容はworkshop::inspect、実行時期と会話の上限はworkshop_runtimeが所有する。句の合否は扱わない。
 use anyhow::{Context, Result, ensure};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -7,9 +7,9 @@ use serde_json::{Value, json};
 pub fn definition() -> Value {
     json!({"type":"function","function":{
         "name":"inspect_verse",
-        "description":"今相談している句の三行について、保存された読み・音数・出典を確認する。checksに必要な項目を一つ以上指定する。読みはreading、音数はmeter、出典はsource。相談中の語や候補はinspect_textへ入れると辞書の読み・音数を確認でき、置く行が決まっていればinspect_line_indexも指定する。結果を受け取ってから答える。句の変更や保存はしない。",
+        "description":"本人から読み方や保存された材料を尋ねられ、手元の情報だけで答えられないときに参照する。checksはreadingまたはsource。語の辞書読みはinspect_textで指定し、行が決まっていればinspect_line_indexを添えられる。編集の前提確認には使わず、句の変更・採否・保存は行わない。",
         "parameters":{"type":"object","properties":{
-            "checks":{"type":"array","items":{"type":"string","enum":["reading","meter","source"]},"minItems":1,"maxItems":3,"uniqueItems":true},
+            "checks":{"type":"array","items":{"type":"string","enum":["reading","source"]},"minItems":1,"maxItems":2,"uniqueItems":true},
             "inspect_text":{"type":"string","minLength":1,"maxLength":160},
             "inspect_line_index":{"type":"integer","minimum":0,"maximum":2}},
             "required":["checks"],"additionalProperties":false}
@@ -52,11 +52,11 @@ impl Call {
                 .context("invalid tool arguments")?,
         )?;
         ensure!(
-            (1..=3).contains(&args.checks.len())
+            (1..=2).contains(&args.checks.len())
                 && args
                     .checks
                     .iter()
-                    .all(|check| matches!(check.as_str(), "reading" | "meter" | "source")),
+                    .all(|check| matches!(check.as_str(), "reading" | "source")),
             "invalid inspection checks"
         );
         ensure!(

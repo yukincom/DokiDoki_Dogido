@@ -90,7 +90,7 @@ def main():
             current = obs["body_observation"]["current"]
             assert list(current)[0] == "vision", current
             assert current["vision"]["player_visibility"] == "visible", current
-            assert current["self"]["position"]["y"] == 80, current
+            assert "self" not in current and "player" not in current, current
             assert obs["location_biome"]["id"] == "plains", obs
             assert "cow" in json.dumps(obs) and "pig" not in json.dumps(obs), obs
             assert "oak_log" in json.dumps(obs) and "cactus" not in json.dumps(obs), obs
@@ -103,12 +103,42 @@ def main():
             context, _ = ask("もう少し話そう")
             body = context["observations"]["body_observation"]
             assert body["current"]["vision"]["player_visibility"] == "not_visible", body
-            assert body["previous"]["vision"]["player_visibility"] == "visible", body
+            assert "previous" not in body and "coordinate_system" not in body, body
             changes = {c["kind"]: c for c in context["changes"]}
             assert changes["body_player_visibility"]["before"]["player_visibility"] == "visible", changes
             assert changes["body_player_visibility"]["now"]["player_visibility"] == "not_visible", changes
-            assert changes["body_self_orientation"]["now"]["yaw"] == -180, changes
+            assert changes["body_self_orientation"]["before"] is None, changes
+            assert changes["body_self_orientation"]["now"] == {"changed": True}, changes
             passed.append("current_visibility_switch_and_orientation_changes_reach_normal_reply")
+
+            # 一回の入力に現在値を固定し、生成中の更新は次の判断へ渡す。
+            send(event())
+            position_calls = []
+            def position_handler(incoming):
+                position_calls.append(incoming)
+                assert not incoming.get("tools"), incoming
+                assert "get_body_position" not in json.dumps(incoming), incoming
+                context = world_context(incoming)
+                current = context["observations"]["body_observation"]["current"]["position_relation"]
+                assert current["distance_blocks"] == (3.0 if len(position_calls) == 1 else 9.0), context
+                if len(position_calls) == 1:
+                    newer = event()
+                    newer["body_observation"]["sample"]["player_pose"]["position"]["z"] = 29
+                    send(newer)
+                return {"action": "speak", "speech": f"オレから見て前、{current['distance_blocks']:.1f}ブロックやで。"}
+            control["structured_handler"] = position_handler
+            first, reply = ask("今はどのくらい離れてる？")
+            assert reply["body_observation_input"]["current"]["position_relation"]["distance_blocks"] == 3.0, reply
+            second, reply = ask("今はどのくらい離れてる？")
+            relation_changes = [c for c in second["changes"] if c["kind"] == "body_position_relation"]
+            assert len(relation_changes) == 1 and relation_changes[0]["now"]["distance_blocks"] == 9.0, second
+            assert reply["body_position_changes_input"] == relation_changes, reply
+            third, reply = ask("今はどのくらい離れてる？")
+            assert not [c for c in third["changes"] if c["kind"] == "body_position_relation"], third
+            assert len(position_calls) == 3, position_calls
+            assert "body_position_requested" not in reply, reply
+            del control["structured_handler"]
+            passed.append("position_is_in_every_first_request_changes_ack_only_offered_revision")
 
             for label in ("unavailable", "owner_mismatch", "stale", "senses_unavailable"):
                 value = event()
@@ -126,6 +156,11 @@ def main():
                 context, _ = ask("今の様子を教えて")
                 obs = context["observations"]
                 assert obs["sensory_status"] == "unavailable", (label, obs)
+                if label == "senses_unavailable":
+                    assert obs["body_observation"]["current"]["position_relation"]["distance_blocks"] == 3.0, obs
+                else:
+                    assert obs["body_observation"]["status"] == "unavailable", obs
+                    assert "current" not in obs["body_observation"], obs
                 assert context.get("changes", []) == [], (label, context)
                 assert "location_biome" not in obs and "smell" not in obs and "nearby_mob_types" not in obs, (label, obs)
                 assert "cactus" not in json.dumps(obs) and "pig" not in json.dumps(obs), (label, obs)

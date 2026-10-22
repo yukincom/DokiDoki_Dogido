@@ -9,7 +9,7 @@ from typing import Literal
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from dogido_server.runtime_settings import COMBAT_DEFAULTS, SERVER_DEFAULTS, warn_retired_settings
+from dogido_server.runtime_settings import COMBAT_DEFAULTS, SERVER_DEFAULTS, DEFAULTS, warn_retired_settings
 
 LLM_PROVIDER = Literal["local", "openai", "openrouter", "claude", "grok", "gemini", "custom"]
 LLM_BACKEND = Literal["mlx", "openai_compatible", "chat_completions", "noop"]
@@ -82,7 +82,17 @@ class Settings(BaseSettings):
     heartbeat_interval_ms: int = Field(default=SERVER_DEFAULTS["heartbeat_interval_ms"], ge=1)
     default_call_name: str = COMBAT_DEFAULTS["default_call_name"]
 
+    # 通常会話一回のために撮影する任意画像。既定は文字会話。
+    chat_image_enabled: bool = DEFAULTS["chat_image"]["enabled"]
+    chat_image_stop_reactions_enabled: bool = DEFAULTS["chat_image"]["stop_reactions_enabled"]
+    chat_image_wait_ms: int = Field(default=DEFAULTS["chat_image"]["wait_ms"], ge=100, le=5000)
+
     audio_enabled: bool = True
+    # 採用記録を置くルートを指定したときだけ既存受付の依頼判定に使う。
+    request_classifier_model_root: Path | None = DEFAULTS["request_classifier"]["model_root"]
+    request_classifier_python: Path | None = DEFAULTS["request_classifier"]["python"]
+    request_classifier_load_timeout_ms: int = Field(default=DEFAULTS["request_classifier"]["load_timeout_ms"], ge=1, le=300000)
+    request_classifier_timeout_ms: int = Field(default=DEFAULTS["request_classifier"]["timeout_ms"], ge=1, le=300000)
     conversation_active_ttl_ms: int = Field(default=COMBAT_DEFAULTS["conversation_active_ttl_ms"], ge=30000, le=3600000)
     # 雑談後の非敵対モブコメント抑止。会話の文脈保持期限とは分ける。
     surroundings_notice_interval_ms: int = Field(default=COMBAT_DEFAULTS["surroundings_notice_interval_ms"], ge=1000, le=3600000)
@@ -111,6 +121,8 @@ class Settings(BaseSettings):
     tts_reading_engine: Literal["auto", "unidic", "off"] = "auto"
     memory_enabled: bool = True
     memory_dir: Path = Path(".dogido_memory")
+    # 未設定ならMinecraftのOS標準screenshots。独自gameDirだけ明示指定する。
+    minecraft_screenshots_dir: Path | None = None
 
     # Rust音声入力の起動設定。voice_settings.pyで解決しlaunch_dialogue.py --voiceから渡す。
     # whisper のパスは未設定なら ~/AI_assistant/whisper.cpp/ などから自動検出する
@@ -193,6 +205,7 @@ class Settings(BaseSettings):
     rear_warning_distance: float = COMBAT_DEFAULTS["rear_warning_distance"]
     panic_distance: float = COMBAT_DEFAULTS["panic_distance"]
     hostile_query_distance: float = COMBAT_DEFAULTS["hostile_query_distance"]
+    hostile_callout_playback_rate: float = Field(default=COMBAT_DEFAULTS["hostile_callout_playback_rate"], gt=0.0, le=2.0)
     hostile_mass_callout_threshold: int = COMBAT_DEFAULTS["hostile_mass_callout_threshold"]
     # 「ぎょうさん」一括コールアウトはディメンション移動直後の群れ限定
     mass_callout_warp_window_ms: int = COMBAT_DEFAULTS["mass_callout_warp_window_ms"]

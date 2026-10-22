@@ -287,6 +287,11 @@ impl MemoryStore {
         let _guard = SAVE_LOCK
             .lock()
             .map_err(|_| anyhow::anyhow!("haiku save mutex poisoned"))?;
+        let _poems = crate::poem_trash::lock(self.root())?;
+        ensure!(
+            !crate::poem_trash::is_deleted(self.root(), &original.entry_id())?,
+            "poem_deleted"
+        );
         let mut file = locked_file(&self.root().join("long_term/haiku_revisions.jsonl"))?;
         let rows: Vec<Value> = BufReader::new(&file)
             .lines()

@@ -246,6 +246,11 @@ public final class WorldObserver {
         return json;
     }
 
+    /** 直前の身体用種類走査で実際に見えた各種類の最寄り一点。player観測へは混ぜない。 */
+    public record VisibleBlock(BlockPos position,String typeId,String label) {}
+    private java.util.List<VisibleBlock> bodyVisibleBlocks = java.util.List.of();
+    public java.util.List<VisibleBlock> bodyVisibleBlocks() { return bodyVisibleBlocks; }
+
     public JsonObject buildNearbyBlocks(ClientPlayerEntity player, ClientWorld world, boolean captureNearbyKinds) {
         return buildNearbyBlocks(ObservationOrigin.player(player),world,captureNearbyKinds);
     }
@@ -256,38 +261,50 @@ public final class WorldObserver {
         Map<String, String> resourceTypes = new LinkedHashMap<>();
         java.util.Set<String> observedTypes = new java.util.TreeSet<>();
 
+        bodyVisibleBlocks = java.util.List.of();
+        java.util.List<VisibleBlock> visibleBlocks = new java.util.ArrayList<>();
         int margin = captureNearbyKinds ? NearbyComposition.BLOCK_MARGIN : 0;
+        java.util.List<BlockPos> samples = new java.util.ArrayList<>();
         for (int dx = -8 - margin; dx <= 8 + margin; dx += 1) {
             for (int dy = -3 - margin; dy <= 4 + margin; dy += 1) {
                 for (int dz = -8 - margin; dz <= 8 + margin; dz += 1) {
-                    BlockPos sample = origin.add(dx, dy, dz);
-                    BlockState state = world.getBlockState(sample);
-                    if (state.isAir()) continue;
-                    double padding = NearbyComposition.blockPadding(dx, dy, dz);
-                    String blockId = Registries.BLOCK.getId(state.getBlock()).toString();
-                    boolean candidate = captureNearbyKinds && !observedTypes.contains(blockId)
-                        && this.nearbyBlockKinds.allows(blockId, padding);
-                    if ((padding > 0 && !candidate) || !isAirExposedNearbyResource(world, sample)) continue;
-                    String resourceName = nearbyResourceNameForBlock(state);
-                    boolean visible = !receiver.body();
-                    if (receiver.body() && (candidate || padding == 0 && resourceName != null)) {
-                        visible = receiver.visible(world,Vec3d.ofCenter(sample),sample,21.0);
-                    } else if (candidate) {
-                        // player経路のOUTLINE/流体条件は従来通り。身体は共有Body APIの視認判定を使う。
-                        BlockHitResult hit = world.raycast(new RaycastContext(receiver.eyePosition(),
-                            Vec3d.ofCenter(sample), RaycastContext.ShapeType.OUTLINE,
-                            RaycastContext.FluidHandling.ANY, receiver.player()));
-                        visible = hit.getType() == HitResult.Type.MISS || hit.getBlockPos().equals(sample);
-                    }
-                    if (candidate && visible) observedTypes.add(blockId);
-                    if (receiver.body() && !visible) continue;
-                    if (padding == 0 && resourceName != null) {
-                        double distance = Math.sqrt(sample.getSquaredDistance(origin));
-                        mergeNearbyResource(resourceTypes, nearestDistances, "block", resourceName, distance);
-                    }
+                    samples.add(origin.add(dx,dy,dz));
                 }
             }
         }
+        // 既存範囲を近い順にたどり、一種類につき最初の実視認点だけを操作候補へ残す。
+        if (receiver.body()) samples.sort(java.util.Comparator.comparingDouble(pos -> Vec3d.ofCenter(pos).squaredDistanceTo(receiver.position())));
+        for (BlockPos sample : samples) {
+            int dx = sample.getX()-origin.getX(), dy = sample.getY()-origin.getY(), dz = sample.getZ()-origin.getZ();
+            BlockState state = world.getBlockState(sample);
+            if (state.isAir()) continue;
+            double padding = NearbyComposition.blockPadding(dx, dy, dz);
+            String blockId = Registries.BLOCK.getId(state.getBlock()).toString();
+            boolean candidate = captureNearbyKinds && !observedTypes.contains(blockId)
+                && this.nearbyBlockKinds.allows(blockId, padding);
+            if ((padding > 0 && !candidate) || !isAirExposedNearbyResource(world, sample)) continue;
+            String resourceName = nearbyResourceNameForBlock(state);
+            boolean visible = !receiver.body();
+            if (receiver.body() && (candidate || padding == 0 && resourceName != null)) {
+                visible = receiver.visible(world,Vec3d.ofCenter(sample),sample,21.0);
+            } else if (candidate) {
+                // player経路のOUTLINE/流体条件は従来通り。身体は共有Body APIの視認判定を使う。
+                BlockHitResult hit = world.raycast(new RaycastContext(receiver.eyePosition(),
+                    Vec3d.ofCenter(sample), RaycastContext.ShapeType.OUTLINE,
+                    RaycastContext.FluidHandling.ANY, receiver.player()));
+                visible = hit.getType() == HitResult.Type.MISS || hit.getBlockPos().equals(sample);
+            }
+            if (candidate && visible) {
+                observedTypes.add(blockId);
+                if (receiver.body()) visibleBlocks.add(new VisibleBlock(sample.toImmutable(),blockId,state.getBlock().getName().getString()));
+            }
+            if (receiver.body() && !visible) continue;
+            if (padding == 0 && resourceName != null) {
+                double distance = Math.sqrt(sample.getSquaredDistance(origin));
+                mergeNearbyResource(resourceTypes, nearestDistances, "block", resourceName, distance);
+            }
+        }
+        bodyVisibleBlocks = java.util.List.copyOf(visibleBlocks);
 
         for (Entity entity : world.getOtherEntities(receiver.player(), new net.minecraft.util.math.Box(
             origin.getX() - 8.0, origin.getY() - 3.0, origin.getZ() - 8.0,

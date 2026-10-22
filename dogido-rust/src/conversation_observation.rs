@@ -31,6 +31,23 @@ pub struct Change {
 }
 
 impl Context {
+    /// 内部の比較台帳を保ったまま、モデル用コピーから位置計算の入力を除く。
+    pub fn for_model(mut self) -> Self {
+        if let Some(body) = self.observations.get_mut("body_observation") {
+            *body = if body["status"] == "observed" {
+                json!({"status":"observed", "current":{
+                    "vision":body["current"]["vision"], "senses":body["current"]["senses"],
+                    "position_relation":body["current"]["position_relation"]}})
+            } else { json!({"status":"unavailable","reason":body["reason"]}) };
+        }
+        for change in &mut self.changes {
+            if matches!(change.kind.as_str(), "body_self_position" | "body_player_position" | "body_self_orientation" | "body_player_orientation") {
+                change.before = Value::Null;
+                change.now = json!({"changed":true});
+            }
+        }
+        self
+    }
     pub fn for_reaction(mut self, kind: &str, details: &Value) -> Self {
         let mut knowledge = self.catalog_knowledge.take().unwrap_or_default();
         knowledge.extend(crate::catalog_knowledge::for_reaction(kind, details));
@@ -201,7 +218,7 @@ impl State {
         self.notice_last_sample = Some(now);
     }
     pub fn noticing_context(&self) -> Option<Context> {
-        self.notice_pending.clone()
+        self.notice_pending.clone().map(Context::for_model)
     }
     pub fn finish_notice_opportunity(&mut self) {
         self.notice_pending = None;

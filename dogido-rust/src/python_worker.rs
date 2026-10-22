@@ -120,7 +120,14 @@ impl Helper {
             .is_none()
             .then(|| std::env::var("DOGIDO_TTS_READING_ENGINE").ok())
             .flatten();
-        let spoken = match tts_reading::prepare(text, engine, environment.as_deref()) {
+        let corrected = tts_reading::apply_corrections(
+            text,
+            frame["reading_corrections"]
+                .as_array()
+                .map(Vec::as_slice)
+                .unwrap_or(&[]),
+        );
+        let spoken = match tts_reading::prepare(&corrected, engine, environment.as_deref()) {
             Step::Ready(spoken) => spoken,
             Step::NeedsUnidic { source } => {
                 let request_id = uuid::Uuid::new_v4().to_string();

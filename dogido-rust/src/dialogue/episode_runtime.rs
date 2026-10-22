@@ -89,7 +89,7 @@ impl Before {
 }
 fn state(s: &Session) -> Value {
     json!({"mode":s.mode,"pending_haiku_after_preface":s.haiku.active.is_some(),
-        "player_input_queued":s.pending_input.is_some()||s.deferred_input.is_some()||!s.knowledge_queue.is_empty(),
+        "player_input_queued":s.pending_input.is_some()||s.deferred_input.is_some()||!s.reply_queue.is_empty(),
         "workshop":s.haiku.workshop.as_ref().map_or("none",|w|if w.combat_paused(){"combat_paused"}else if w.open{"open"}else{"none"})})
 }
 fn layer(s: &Speech) -> &'static str {

@@ -24,6 +24,7 @@ from pathlib import Path
 import sys,time
 root=Path(__file__).parent
 with (root/'played').open('a') as f:f.write(sys.argv[1]+'\\n')
+with (root/'rates').open('a') as f:f.write(' '.join(sys.argv[1:])+'\\n')
 p=root/'slow'
 time.sleep(2 if p.exists() else .08)
 '''); player.chmod(0o700)
@@ -51,6 +52,9 @@ time.sleep(2 if p.exists() else .08)
             assert [str(Path(p).relative_to(cues)) for p in played()[before:]]==[
                 'panic/freesound_community-male-gasp-1-7183.mp3','mob/zombie.mp3','common/counts/2.mp3',
                 'mob/skeleton.mp3','common/counts/1.mp3','common/phrases/orude.mp3']
+            rate_lines = (folder/'rates').read_text().splitlines()
+            assert all('-r 1.15 -q 1' in line for line in rate_lines if '/mob/' in line or '/common/' in line), rate_lines
+            assert all('-r' not in line for line in rate_lines if '/panic/' in line), rate_lines
             passed.append('group_fragments_order_no_tts_llm_reorder_or_direction_restart');close(sid)
 
             # 一片不足なら前半断片を鳴らさず、本文すべてをTTSに戻す。
@@ -58,7 +62,7 @@ time.sleep(2 if p.exists() else .08)
             sid=fresh(); before=len(played()); calls=len(seen); send(sid,['zombie']*3)
             wt=wait_for(lambda:warnings(sid))[-1]['turn_id']; wait_for(lambda:row(base,wt,{'completed'}))
             assert not any('/mob/' in p or '/common/' in p for p in played()[before:])
-            assert any(r['path'].startswith('/synthesis') and r['body'].get('test_text')=='ゾンビ3体おるで。' for r in seen[calls:])
+            assert any(r['path'].startswith('/synthesis') and r['body'].get('test_text')=='ゾンビ3体おるで。' and r['body']['speedScale']==1.15 for r in seen[calls:])
             passed.append('missing_fragment_uses_whole_body_tts');close(sid);missing.write_bytes(b'fixture')
 
             # 話し始めた三体の報告は、途中で二体になっても断片を切らず完走する。

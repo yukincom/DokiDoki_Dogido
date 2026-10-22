@@ -25,6 +25,27 @@ pub(super) async fn render(
     })
     .await
 }
+/// 任意画像も同じ一回生成・取消・出力検査を使う。画像の寿命は呼出元のleaseが所有する。
+pub(super) async fn render_image(
+    mut request: GenerationRequest,
+    llm: &RigLlm,
+    cancel: &mut watch::Receiver<bool>,
+    image: Option<&crate::chat_image::Attachment>,
+) -> Result<Run> {
+    if image.is_none() { return render(request, llm, cancel).await; }
+    if image.is_some() {
+        if let Some(system) = request.messages.iter_mut().find(|m| m.role == crate::types::Role::System) {
+            system.content.push('\n');
+            system.content.push_str(crate::companion_prompt::chat_image());
+        }
+    }
+    render_with(request, cancel, |request| async move {
+        match image {
+            Some(image) => llm.generate_with_image(&request, image).await,
+            None => llm.generate(&request).await,
+        }
+    }).await
+}
 async fn render_with<F: Future<Output = Result<GenerationReport>>>(
     request: GenerationRequest,
     cancel: &mut watch::Receiver<bool>,

@@ -19,6 +19,32 @@ fn accept(s: &mut State, o: &Observation, at: Instant) {
     s.observe(Some(o), Some(OWNER), Some(WORLD), at, Some(0));
 }
 #[test]
+fn diagnostic_sample_preserves_identity_age_and_does_not_refresh_stale_pose() {
+    let now = Instant::now();
+    let mut state = State::default();
+    assert_eq!(state.diagnostic_sample(now)["status"], "unavailable");
+    let mut input = observation(100, 23.0);
+    if let Observation::Observed { age_ms, .. } = &mut input {
+        *age_ms = 200;
+    }
+    accept(&mut state, &input, now);
+    let later = now + Duration::from_millis(100);
+    let before = state.project(later);
+    let sample = state.diagnostic_sample(later);
+    assert_eq!(sample["age_ms"], 300);
+    assert_eq!(sample["context"], fixture()["sample"]["context"]);
+    assert_eq!(sample["server_tick"], 100);
+    assert_eq!(sample["snapshot_revision"], 200);
+    assert_eq!(sample["player_pose"]["position"]["z"], 23.0);
+    assert_eq!(state.project(later), before);
+    accept(&mut state, &input, later);
+    assert_eq!(state.diagnostic_sample(later)["age_ms"], 300);
+    let stale = state.diagnostic_sample(now + Duration::from_millis(2800));
+    assert_eq!(stale["reason"], "stale");
+    assert!(stale.get("context").is_none());
+    assert!(stale.get("self_pose").is_none());
+}
+#[test]
 fn body_wire_rejects_missing_wrong_version_unknown_field_and_invalid_pose() {
     let o: Observation = serde_json::from_value(fixture()).unwrap();
     o.validate().unwrap();
@@ -209,14 +235,17 @@ fn body_retains_raw_previous_without_prelabeling_departure() {
     assert_eq!(v["current"]["player"]["position"]["z"], 28.0);
     assert_eq!(v["previous"]["player"]["position"]["z"], 23.0);
     assert_eq!(v["sample_interval_ticks"], 10);
-    for hidden in [
-        "distance",
-        "forward",
-        "right",
-        "moved_away",
-        OWNER,
-        "snapshot_revision",
-    ] {
+    assert_eq!(v["current"]["position_relation"]["distance_blocks"], 8.0);
+    assert_eq!(v["previous"]["position_relation"]["distance_blocks"], 3.0);
+    assert_eq!(
+        v["current"]["position_relation"]["relative_positions"][0]["horizontal"],
+        "front"
+    );
+    assert_eq!(
+        v["current"]["position_relation"]["relative_positions"][1]["horizontal"],
+        "right"
+    );
+    for hidden in ["forward", "moved_away", OWNER, "snapshot_revision"] {
         assert!(!v.to_string().contains(hidden));
     }
 }

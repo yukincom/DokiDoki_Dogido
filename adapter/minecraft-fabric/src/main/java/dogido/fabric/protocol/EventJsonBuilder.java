@@ -28,6 +28,10 @@ public final class EventJsonBuilder {
         if (observation != null) root.add("body_observation", observation.deepCopy());
         return this;
     }
+    public EventJsonBuilder bodyAutonomy(JsonObject autonomy) {
+        if (autonomy != null) root.add("body_autonomy",autonomy.deepCopy());
+        return this;
+    }
     public void sequence(long sequence) { root.addProperty("sequence", sequence); }
     public void player(JsonObject player) { root.add("player", player); }
     public void world(JsonObject world) { root.add("world", world); }

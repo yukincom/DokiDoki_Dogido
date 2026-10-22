@@ -18,7 +18,7 @@
 | 会話へ渡す材料 | [chat_materials.rs](../dogido-rust/src/chat_materials.rs)・[共通観測](../dogido-rust/src/conversation_observation.rs) |
 | 返答の一回再考・検査 | [chat_leaf_runtime.rs](../dogido-rust/src/dialogue/chat_leaf_runtime.rs)・[chat_validation.rs](../dogido-rust/src/chat_validation.rs) |
 
-現在の検証は`./dogido-rust/cargo.sh test --locked --test chat_topics --test chat_grounding --test planner`から始める。以下のPR表・旧関数名・Pythonテスト名は当時の記録であり、現在の起動・検証手順ではない。過去の完了表をRust本体の実機確認済みへ読み替えない。
+※現在の検証は `./dogido-rust/cargo.sh test --locked --test chat_topics --test chat_grounding --test planner` から開始します。以下のPR進捗表・旧関数名・Pythonテスト名は当時の記録であり、現行の起動・検証手順ではありません。また、過去の完了表をRust本体の実機確認完了として読み替えないでください。
 
 ---
 

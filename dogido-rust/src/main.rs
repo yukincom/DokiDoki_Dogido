@@ -26,6 +26,13 @@ struct Cli {
 // 一度だけ解析する起動引数。サーバーの反復処理・待ち列へこのenumは保持しない。
 #[allow(clippy::large_enum_variant)]
 enum Command {
+    /// 本棚だけ起動する。ゲーム・モデル・音声入力は不要。
+    ServeBookshelf {
+        #[arg(long)]
+        config: String,
+        #[arg(long, default_value_t = 0)]
+        port: u16,
+    },
     /// 既存AEC・whisper.cppを使う音声入力。設定JSONに認証値は含めない。
     VoiceInput {
         #[arg(long)]
@@ -93,6 +100,10 @@ enum Command {
         combat_settings: String,
         #[arg(long, default_value = "{}")]
         haiku_settings: String,
+        #[arg(long, default_value = "{}")]
+        request_classifier_settings: String,
+        #[arg(long, default_value = "{}")]
+        chat_image_settings: String,
         #[arg(long, default_value = "/usr/bin/afplay")]
         audio_player: PathBuf,
         #[arg(long, default_value = ".dogido_tmp/rust-dialogue")]
@@ -130,6 +141,9 @@ enum Command {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
+        Command::ServeBookshelf { config, port } => {
+            dogido_rust::bookshelf::run(serde_json::from_str(&config)?, port).await?;
+        }
         Command::BuildChatPrompt { request } => {
             let details = serde_json::from_str(&std::fs::read_to_string(request)?)?;
             println!(
@@ -220,6 +234,8 @@ async fn main() -> Result<()> {
             server_settings,
             combat_settings,
             haiku_settings,
+            request_classifier_settings,
+            chat_image_settings,
             audio_player,
             audio_dir,
             no_audio,
@@ -246,6 +262,8 @@ async fn main() -> Result<()> {
                     &combat_settings,
                 )?)?,
                 haiku: serde_json::from_str(&haiku_settings)?,
+                request_classifier: serde_json::from_str(&request_classifier_settings)?,
+                chat_image: serde_json::from_str(&chat_image_settings)?,
                 player: audio_player,
                 audio_dir,
                 audio_enabled: !no_audio,
@@ -257,6 +275,7 @@ async fn main() -> Result<()> {
                 volume,
                 output_sampling_rate,
             })?;
+            dialogue.prepare_request_classifier().await?;
             serve(listen, Some(dialogue), server_settings).await?;
         }
         Command::Check { request } => {

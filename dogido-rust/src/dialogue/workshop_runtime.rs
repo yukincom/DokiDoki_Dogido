@@ -17,7 +17,7 @@ use crate::{
 };
 use anyhow::{Context, ensure};
 
-const CONVERSATION_PROTOCOL: &str = "現在の会話プロトコル: 現在句・未採用案・直近対話・discussion_targetを読み、次の返答またはfunction callをあなたが選ぶ。実行方法と可能な処理は、今回提示されたtoolsと本文JSONのaction一覧に従う。本人の意思を文脈から理解し、今回許可されている一手だけを選ぶ。「終了ー」「お開きー」など言い方によらず終了意思を読む。「いい句だね」などの称賛だけでは終了を決めない。未採用案があり採否が不明な終了希望にはaskで採用か破棄かを確認し、勝手に閉じない。採否と終了がともに明確ならaccept_pendingまたはreject_pendingにclose_after_actionと各意思の根拠を付ける。コードが対象・元句一致・音数・保存結果を確定する。新しい対象を本人が指定するまではdiscussion_targetの行と語を保ち、話題が分かっているのに『どこを見たいか』を聞き直さない。意味・由来・連想は自由に話し、検査を必須にしない。読み・音数・出典の確認は必要と判断したときだけinspect_verseのfunction callを使う。相談中の語や候補はinspect_textに渡せる。どの行へ置くか決まっていたらinspect_line_index（上五0・中七1・下五2）も付ける。結果のmeter_statusはtoo_long=字余り、too_short=字足らず、exact=一致、unavailable=未確定。meter_deltaの正数は超過、負数は不足の音数なので、結果を受けて自然に説明や相談を続ける。function callでは本文の返事を付けず、propose_revisionのspeechも空文字列にして結果を待つ。ほかの本文JSONのactionでは、unrelatedを除いてspeechに自然な返事を入れる。採用の返事はコードが実行に成功してから再生する。まだ行っていない操作を別のactionのspeechで実行済みとは言わない。句本文はコードが付けるのでspeechに三行を再生成しない。acknowledge_meaningは納得への返事だけで、終了確認へ進めない。本人が話を続けている、訂正している、困っているだけなら、終了を勧めずその話に応じる。";
+const CONVERSATION_PROTOCOL: &str = "現在の会話プロトコル: 現在句・未採用案・直近対話・discussion_targetを読み、次の返答またはfunction callをあなたが選ぶ。実行方法と可能な処理は、今回提示されたtoolsと本文JSONのaction一覧に従う。本人の意思を文脈から理解し、今回許可されている一手だけを選ぶ。「終了ー」「お開きー」など言い方によらず終了意思を読む。「いい句だね」などの称賛だけでは終了を決めない。未採用案があり採否が不明な終了希望にはaskで採用か破棄かを確認し、勝手に閉じない。採否と終了がともに明確ならaccept_pendingまたはreject_pendingにclose_after_actionと各意思の根拠を付ける。コードは出力を受け取り、既知情報を補完して対象へ適用し、元句・版・保存結果を管理する。新しい対象を本人が指定するまではdiscussion_targetの行と語を保ち、話題が分かっているのに『どこを見たいか』を聞き直さない。意味・由来・連想は自由に話す。本人の指定語はそのまま編集へ渡し、句の品質や表現の形式を実行の前提にしない。本人から読み方や保存材料を尋ねられて手元の情報で答えられないときだけ、inspect_verseで参照できる。function callでは本文の返事を付けず、propose_revisionのspeechも空文字列にして結果を待つ。ほかの本文JSONのactionでは、unrelatedを除いてspeechに自然な返事を入れる。採用の返事はコードが実行に成功してから再生する。まだ行っていない操作を別のactionのspeechで実行済みとは言わない。句本文はコードが付けるのでspeechに三行を再生成しない。acknowledge_meaningは納得への返事だけで、終了確認へ進めない。本人が話を続けている、訂正している、困っているだけなら、終了を勧めずその話に応じる。";
 
 impl Dialogue {
     /// 現在句のsnapshotから、返答と検証済みの行為候補を作る。
@@ -114,7 +114,8 @@ impl Dialogue {
             let reply = crate::knowledge::render(&lookup);
             let reading = helper
                 .exchange(json!({"op":"reading", "text":reply.text,
-                "reading_engine":self.config.reading_engine}))
+                "reading_engine":self.config.reading_engine,
+                "reading_corrections":self.reading_overlay().await?}))
                 .await?;
             return Ok(
                 json!({"text":reply.text, "spoken_text":reading["spoken_text"],
@@ -203,12 +204,12 @@ impl Dialogue {
                         );
                         if allowed.contains(&"inspect") {
                             instruction
-                                .push_str("現在句の読み・音数・出典の確認はinspect_verseや。");
+                                .push_str("本人から尋ねられた読み方・保存材料の参照はinspect_verseや。編集の前提確認には使わへん。");
                         }
                         if allowed.contains(&"stage_player_edit") {
                             instruction.push_str("本人が今回、新しい語を指定してその語への変更を頼んだらstage_player_editを呼ぶ。置換語を指定せず新しい案を考えてほしい場合だけpropose_revisionの本文JSONや。expected_textは変更前の対象行全体。「AをBに変えて」ならtarget_fragmentはA、replacement_textはBだけで、変更後の行は作らない。evidenceも今回の原文から抜く。以前の案を選ぶだけの返事はstage_conversation_candidateや。");
                         }
-                        instruction.push_str("本文JSONは会話の返答と、本文JSONで使えるaction一覧の処理に使う。tool呼出し時は本文の返事を付けず結果を待つ。句の変更・読み・音数・保存の成否はコードが決めるで。");
+                        instruction.push_str("本文JSONは会話の返答と、本文JSONで使えるaction一覧の処理に使う。tool呼出し時は本文の返事を付けず結果を待つ。コードが対象へ差分を適用し、保存結果を返すで。");
                         let system = prepared["messages"][0]["content"].as_str().unwrap_or("");
                         prepared["messages"][0]["content"] =
                             format!("{system}\n{instruction}").into();
@@ -346,7 +347,7 @@ impl Dialogue {
                             "validation_codes":[reason],"checks":[],"evidence":""}));
                         if attempt == 0 {
                             frame["retry"] = json!({"reason":reason,
-                                "instruction":"その本文JSONの操作は実行してへんで。読み・音数・出典の確認はinspect_verse、今回の語句変更はstage_player_editのfunction callだけで渡してな。今回toolsに無い操作はできへんから、必要ならrespond/explain/askで相談を続けてな。"});
+                                "instruction":"その本文JSONの操作は実行してへんで。読み方・保存材料の参照はinspect_verse、今回の語句変更はstage_player_editのfunction callで渡してな。今回toolsに無い操作はできへんから、必要ならrespond/explain/askで相談を続けてな。"});
                             continue;
                         }
                         break;
@@ -522,10 +523,7 @@ impl Dialogue {
                 if a == "inspect" {
                     let checks: Vec<String> = serde_json::from_value(step["checks"].clone())?;
                     if let Some(target) = step["inspect_text"].as_str() {
-                        let reading = if checks
-                            .iter()
-                            .any(|c| matches!(c.as_str(), "reading" | "meter"))
-                        {
+                        let reading = if checks.iter().any(|c| c == "reading") {
                             Some(helper.neutral_reading(target).await?)
                         } else {
                             None
@@ -806,7 +804,7 @@ impl Dialogue {
                 );
             } else if matches!(action.as_str(), "fallback" | "show_current") {
                 speech = format!(
-                    "今回は検査に通る案を作れんかったわ。元の句はそのままやで。\n{}",
+                    "今回は案を反映できんかったわ。元の句はそのままやで。\n{}",
                     workshop_edit::surface(&current)
                 );
             }
@@ -824,7 +822,8 @@ impl Dialogue {
         } else {
             let response = helper
                 .exchange(
-                    json!({"op":"reading","text":speech,"reading_engine":self.config.reading_engine}),
+                    json!({"op":"reading","text":speech,"reading_engine":self.config.reading_engine,
+                "reading_corrections":self.reading_overlay().await?}),
                 )
                 .await?;
             response["spoken_text"]
@@ -911,12 +910,12 @@ fn prepare_conversation_retry(
     allowed.retain(|a| {
         matches!(
             *a,
-            "respond" | "explain" | "ask" | "inspect" | "compare" | "show_current"
+            "respond" | "explain" | "ask" | "compare" | "show_current"
         )
     });
     frame["allowed_actions"] = json!(allowed);
     frame["retry"] = json!({"reason":reason,"payload":payload,
-        "instruction":"前の一手は実行していない。相談対象と直近の会話を引き継いで、今回の発言に返答してな。対象をもう一度聞き直さず、終了や採否には進まないでな。実際の検査が必要なら許可されたinspect_verseのfunction callを使ってな。"});
+        "instruction":"前の一手は実行していない。相談対象と直近の会話を引き継いで、今回の発言に返答してな。対象をもう一度聞き直さず、終了や採否には進まないでな。今回は追加の確認toolへ回らず、返された実行結果の範囲で答えてな。"});
 }
 
 // Match the former helper request/response limits even when no IPC is needed.
@@ -954,4 +953,27 @@ async fn prepare_consultation(
     let prepared = json!({"details":details});
     projection_response(&prepared)?;
     Ok((prompt::prepare(&prepared, frame.get("retry"))?, details))
+}
+
+#[cfg(test)]
+mod removed_check_tests {
+    use super::*;
+
+    #[test]
+    fn rejected_edit_cannot_detour_into_another_inspection() {
+        let mut frame = json!({});
+        let mut allowed = workshop::allowed_actions("decide", true, false);
+        prepare_conversation_retry(
+            &mut frame,
+            &mut allowed,
+            "native_tool_rejected:stale_tool_edit",
+            &Value::Null,
+        );
+        assert!(!allowed.contains(&"inspect"));
+        assert!(tools::definitions(&allowed).is_empty());
+        assert!(allowed.contains(&"respond"));
+        assert!(allowed.contains(&"show_current"));
+        assert!(!CONVERSATION_PROTOCOL.contains("音数"));
+        assert!(!frame.to_string().contains("inspect_verse"));
+    }
 }

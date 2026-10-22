@@ -93,7 +93,7 @@ public final class PlayerObserver {
         MinecraftClient client = MinecraftClient.getInstance();
         json.addProperty(
             "block_breaking_active",
-            client.interactionManager != null && client.interactionManager.isBreakingBlock()
+            blockBreakingActive(client)
         );
         json.add("hotbar", buildHotbar(player));
         JsonObject vehicle = buildVehicleState(player);
@@ -111,6 +111,11 @@ public final class PlayerObserver {
         }
         json.add("active_status_effects", activeEffects);
         return json;
+    }
+
+    /** 通常観測と身体の立ち位置で共有する現在の破壊操作。完了済みの採掘履歴や持ち物から推測しない。 */
+    public static boolean blockBreakingActive(MinecraftClient client) {
+        return client != null && client.interactionManager != null && client.interactionManager.isBreakingBlock();
     }
 
     private JsonObject buildVehicleState(ClientPlayerEntity player) {

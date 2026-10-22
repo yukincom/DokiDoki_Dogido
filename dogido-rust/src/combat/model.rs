@@ -54,6 +54,15 @@ pub enum Delivery {
     PlayerReply,
 }
 
+/// 一回の生成で完成した照明コメントの配送根拠。個数・身体世代はコード内だけで保持し、
+/// 生成後に在庫や視点が変わったときの取消と、元の生成レポートの表示へ使う。
+#[derive(Clone, Debug)]
+pub struct LightComment {
+    pub source_count: i64,
+    pub body_context: Value,
+    pub reports: Vec<Value>,
+}
+
 #[derive(Clone, Debug, Serialize)]
 pub struct Speech {
     #[serde(skip)]
@@ -74,6 +83,11 @@ pub struct Speech {
     /// コードが選んだ出来事の言い回しだけを生成する。textが失敗時の正本fallback。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub leaf: Option<LeafRequest>,
+    #[serde(skip)]
+    pub light_comment: Option<LightComment>,
+    /// 当回の静止画像だけを生成まで保持する。履歴・episodeへのserializeでは本文を落とす。
+    #[serde(skip)]
+    pub image: Option<std::sync::Arc<crate::chat_image::Attachment>>,
 }
 impl Speech {
     pub fn new(kind: &'static str, text: impl Into<String>) -> Self {
@@ -89,6 +103,8 @@ impl Speech {
             rain_after_window: None,
             visual_plan: None,
             leaf: None,
+            light_comment: None,
+            image: None,
         }
     }
     pub fn visual(kind: &'static str, text: impl Into<String>, ids: Vec<String>) -> Self {

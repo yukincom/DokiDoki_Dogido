@@ -1,6 +1,6 @@
 //! 学習済みModernBERTの依頼5分類を、既存Python Helper経由で受け取る。
 //! 原文履歴の整形・応答検証・取消はRust、重みの検証と数値計算はPythonが担当する。
-//! このモジュールは本体の入力経路には未接続。分類から操作や会話状態を変更しない。
+//! 本体の共通受付が結果を使い、実際の操作・会話状態と履歴の確定は各runtimeが所有する。
 use crate::python_worker::Helper;
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
@@ -95,12 +95,26 @@ pub struct Limits {
     pub truncation: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Prediction {
     pub label: Label,
     pub probabilities: [f64; 5],
     pub token_count: usize,
     pub inference_ms: f64,
+}
+
+/// 原文と入力元に結びついた一回の結果。内部保留・再送も同じ結果を引き継ぐ。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Classification {
+    pub text: String,
+    pub source: String,
+    pub manifest_sha256: String,
+    pub prediction: Prediction,
+}
+impl Classification {
+    pub fn matches(&self, text: &str, source: &str) -> bool {
+        self.text == text && self.source == source
+    }
 }
 
 /// 単一モデルを直列に呼ぶ所有ハンドル。失敗後は閉じ、呼出元が再作成を決める。
@@ -224,6 +238,10 @@ impl Classifier {
         if let Some(helper) = self.helper.take() {
             let _ = helper.finish(true).await;
         }
+    }
+
+    pub fn manifest_sha256(&self) -> &str {
+        &self.manifest_sha256
     }
 
     /// EOFを送り正常終了を待つ。失敗後に呼んでも二重回収しない。

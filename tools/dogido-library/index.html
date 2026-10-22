@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ドギドの本棚</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="photo-layout.css">
+  <link rel="stylesheet" href="poem-metadata.css">
+  <link rel="stylesheet" href="library-navigation.css">
+  <link rel="stylesheet" href="readability.css">
+  <link rel="stylesheet" href="catalog-player-notes.css">
+  <link rel="stylesheet" href="cover.css">
+  <link rel="stylesheet" href="photo-library.css">
+  <link rel="stylesheet" href="live-library.css">
+  <link rel="stylesheet" href="bookshelf-controls.css">
+  <link rel="stylesheet" href="poem-record.css">
+  <script defer src="bootstrap.js"></script>
+  <script defer src="model.js"></script>
+  <script defer src="catalog-player-notes.js"></script>
+  <script defer src="poem-record.js"></script>
+  <script defer src="app.js"></script>
+  <script defer src="photo-model.js"></script>
+  <script defer src="photo-library-model.js"></script>
+  <script defer src="reading-model.js"></script>
+  <script defer src="bookshelf-controls.js"></script>
+  <script defer src="live-library.js"></script>
+  <script defer src="photo-library.js"></script>
+  <script defer src="poem-export.js"></script>
+</head>
+<body class="library-cover">
+  <header class="topbar">
+    <a class="brand" href="#cover" aria-label="ドギドの本棚・表紙へ"><span class="brand-mark" aria-hidden="true"><img src="assets/bookshelf-open-scroll-v4.png" alt="" width="44" height="44"></span>ドギドの本棚</a>
+    <div class="header-actions"><nav class="books" aria-label="本を選ぶ"><button data-book="poems" aria-pressed="false">句集</button><button data-book="catalog" aria-pressed="true">あんちょこ</button><button data-book="photos" aria-pressed="false">フォトブック</button></nav></div>
+  </header>
+  <main>
+    <section class="cover-page" id="library-cover" aria-label="本棚の表紙">
+      <img class="cover-art" src="assets/bookshelf-cover-v1.png" alt="本棚と羽ペン、エンチャントテーブルの上でほのかに光る魔法の本" width="1448" height="1086">
+      <nav class="cover-choices" aria-label="ひらく本を選ぶ">
+        <button class="cover-book cover-poems" data-book="poems">句集<span aria-hidden="true">→</span></button>
+        <button class="cover-book cover-catalog" data-book="catalog">あんちょこ<span aria-hidden="true">→</span></button>
+        <button class="cover-book cover-photos" data-book="photos">フォトブック<span aria-hidden="true">→</span></button>
+      </nav>
+    </section>
+    <section id="book-cover" class="book-cover-page" aria-labelledby="book-cover-title" hidden>
+      <h1 id="book-cover-title"></h1>
+      <img id="book-cover-art" class="book-cover-art" alt="" width="1254" height="1254">
+    </section>
+    <section id="photo-library" class="photo-library-page" aria-label="フォトブック" hidden></section>
+    <dialog id="photo-picker" aria-labelledby="photo-picker-title"></dialog>
+    <section class="desk" aria-label="本の閲覧画面">
+      <aside class="binding"><div class="book-label"><small id="volume">世界を知る</small><h2 id="book-title">ドギドの<br>あんちょこ</h2><span class="seal" aria-hidden="true">図鑑</span></div><nav id="categories" aria-label="カテゴリ"></nav><div class="companion"><img src="assets/character.png" alt="ドギド"><p>なんでもない発見も、<br>ことばの種になるんやな。</p><small>案内文は試作用</small></div></aside>
+      <div class="pages"><section class="index-page" aria-label="項目の一覧"><div class="index-head"><span class="eyebrow" id="index-kicker">目 録</span><h2 id="index-title">すべての項目</h2><label class="search"><span aria-hidden="true">⌕</span><input id="search" type="search" aria-label="名前・読み・説明で検索" placeholder="名前・読み・説明で探す"></label><div id="filters" hidden><label>場所<select id="biome"><option value="all">すべて</option><option>森林</option><option>平原</option><option>河川</option></select></label><label>期間<select id="period"><option value="all">すべて</option><option value="2026-09">2026年9月</option><option value="2026-08">2026年8月</option></select></label></div><div class="result-meta"><span id="result-count" role="status"></span><button class="text-button" id="clear">条件をクリア</button></div></div><div id="entry-list" class="entry-list"></div><p class="index-foot" id="index-foot">既存カタログから抜粋 / 閲覧専用</p></section><article class="detail-page" id="detail" aria-label="選んだ項目の詳細"></article></div>
+    </section>
+    <footer><span><i></i> 見た目と操作を試すための画面です。ゲーム・個人の保存記録とは未接続。</span><a href="../character-placement/">ドギドの配置プレビューへ ↗</a></footer>
+  </main>
+</body>
+</html>

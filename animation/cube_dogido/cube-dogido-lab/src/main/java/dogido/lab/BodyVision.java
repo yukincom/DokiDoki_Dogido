@@ -34,6 +34,17 @@ final class BodyVision {
             target -> BodyVisibility.trace(world,space::loaded,eye,target,ShapeContext.of(body),BodyVisibility.Purpose.VISION,null));
     }
 
+    /** 顔の点が身体から見通せ、身体もownerの顔の前にいる場合だけtrue。背中や壁越しを顔の確認へ昇格させない。 */
+    static boolean faceVisible(DogidoEntity body, ServerPlayerEntity owner, PoseObservation pose, long tick) {
+        if (body.downed() || owner == null || pose == null || body.getEntityWorld() != owner.getEntityWorld()) return false;
+        Vec3d eye=new Vec3d(pose.eyePosition().x(),pose.eyePosition().y(),pose.eyePosition().z());
+        Vec3d face=owner.getEyePos();
+        ServerWorld world=(ServerWorld)body.getEntityWorld();
+        BodySpace space=new BodySpace(world,body);
+        return BodyVisionGeometry.ownerFaceVisible(tick,eye,pose.viewYaw(),pose.viewPitch(),face,owner.getYaw(),owner.getPitch(),
+            target -> BodyVisibility.trace(world,space::loaded,eye,target,ShapeContext.of(body),BodyVisibility.Purpose.VISION,null));
+    }
+
     /** 未取得のowner視認も共有APIと同じ距離・視野定数で返す。 */
     static VisionObservation unavailable(long tick, String reason) {
         return BodyVisionGeometry.unavailable(tick,reason);

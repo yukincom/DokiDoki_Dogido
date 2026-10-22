@@ -144,24 +144,15 @@ pub(super) fn hearing(snapshot: &Snapshot, user: &str) -> HearingAnswer {
                     .count()
                     == 1
             });
-        let line = if let Some(name) = known_name {
-            let vocal = memo.sound_event.as_deref().is_some_and(|event| {
-                matches!(
-                    event.rsplit('.').next().unwrap_or(""),
-                    "ambient"
-                        | "growl"
-                        | "pant"
-                        | "whine"
-                        | "hurt"
-                        | "death"
-                        | "purr"
-                        | "purreow"
-                        | "hiss"
-                )
-            });
+        let line = if let Some(name) = known_name.filter(|_| memo.emitter.is_none()) {
             format!(
-                "{name}の{} {} {}{}",
-                if vocal { "声" } else { "音" },
+                "{} {} {}{}",
+                crate::chat_observation::sound_description(
+                    Some(name),
+                    &memo.kind,
+                    memo.sound_event.as_deref(),
+                    true,
+                ),
                 memo.direction,
                 memo.distance_band,
                 if candidate.current {
@@ -174,9 +165,11 @@ pub(super) fn hearing(snapshot: &Snapshot, user: &str) -> HearingAnswer {
             crate::chat_observation::line(
                 memo.label_ja.as_deref(),
                 &memo.kind,
+                memo.sound_event.as_deref(),
                 &memo.direction,
                 &memo.distance_band,
                 !candidate.current,
+                memo.emitter.as_deref(),
             )
         };
         if !lines.contains(&line) {

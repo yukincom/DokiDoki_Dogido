@@ -3,6 +3,9 @@
 use super::IntentEvidence;
 use serde::Serialize;
 use serde_json::{Value, json};
+// TODO(request-classifier): equip_sword を同一入力の入口判定へ接続したら、
+// explicit / disqualified / direct_prefix 等の依頼・否定・引用の語句判定を撤去する。
+// normalize・音声補正・workshop共有関数は参照元を確認し、このモジュール全体は消さない。
 const TARGETS: &[&str] = &["剣", "けん", "つるぎ", "ソード", "そーど"];
 const DIRECT: &[&str] = &[
     "剣",
@@ -496,6 +499,9 @@ pub fn interpret_voice_select_sword_request(text: &str) -> Option<String> {
     }
     None
 }
+// TODO(request-classifier): 剣の依頼を分類結果で受け取る契約に移したら、この旧LLM
+// JSON検証と依頼性の語句による再判定を撤去する。分類結果の入力ID・世代・確信度等の
+// 受理条件は移行先で定義し、ゲーム状態と実行対象の検証は state::issue 側に残す。
 pub fn validate_payload(
     payload: &Value,
     player_text: &str,
@@ -549,6 +555,9 @@ pub struct Message {
     pub role: &'static str,
     pub content: String,
 }
+// TODO(request-classifier): 剣の生成LLMを置き換えたら messages / schema /
+// contract_errors / repair_messages と専用の契約テストを撤去・更新する。
+// 固定ラベルの分類結果には、旧JSONの生成指示・復号・修復用再生成は不要。
 pub fn messages(text: &str) -> Vec<Message> {
     vec![Message { role: "system", content: concat!(
         "あなたはMinecraftの限定意図抽出器。返すのはJSONオブジェクト1件だけ。",

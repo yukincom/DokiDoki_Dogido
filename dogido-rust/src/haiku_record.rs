@@ -176,6 +176,11 @@ impl MemoryStore {
         let _guard = SAVE_LOCK
             .lock()
             .map_err(|_| anyhow::anyhow!("haiku save mutex poisoned"))?;
+        let _poems = crate::poem_trash::lock(self.root())?;
+        anyhow::ensure!(
+            !crate::poem_trash::is_deleted(self.root(), &emission.entry_id())?,
+            "poem_deleted"
+        );
         let path = self.entries_path();
         let mut file = locked_file(&path)?;
         let entry_id = emission.entry_id();

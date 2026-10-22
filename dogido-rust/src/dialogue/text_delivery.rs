@@ -32,6 +32,11 @@ pub(super) struct State {
 }
 
 impl State {
+    /// 同じturnを新しいepochで回答し直す前に、旧回答の表示ACK宛先を取り除く。
+    pub(super) fn forget_reply(&mut self, turn: &str) {
+        self.pending.retain(|p| p.turn != turn);
+    }
+
     pub fn new(voice_enabled: bool) -> Self {
         Self {
             enabled: false,
@@ -96,7 +101,7 @@ impl Dialogue {
         }
         if s.delivery.voice_enabled != enabled {
             // 同じ切替を再送しても、次の会話や新しく始まった録音を取り消さない。
-            self.cancel_knowledge_queue(&mut d, sid, "voice_mode_changed");
+            self.cancel_reply_queue(&mut d, sid, "voice_mode_changed");
             Self::cancel_haiku(&mut d, sid, "voice_mode_changed");
             Self::cancel_chat(&mut d, sid, "voice_mode_changed");
             Self::cancel_combat_input(&mut d, sid);

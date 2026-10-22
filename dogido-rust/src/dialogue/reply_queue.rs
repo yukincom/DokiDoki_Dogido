@@ -1,7 +1,9 @@
-//! 危険中・警告中の知識質問を一度だけ分類し、安全な観測で先着順に戻す。
+//! 警告中の質問と緊急警告で未回答になった通常入力を、有界FIFOへ保持する。
+//! 原文・分類・元turnを保持し、警告終了後に新しいepochと現在観測で同じ受付へ戻す。
+//! 操作・保存・workshopの再実行は所有者へ任せ、配送確認済みの回答は保持しない。
 use super::*;
-/// 警告後に再送する知識質問。input_atはDialogue時計の経過ミリ秒。
-/// 元turn・入力時刻・記録制限を保持し、再送時の表示と記録へ引き継ぐ。
+/// 警告後に再送する元の入力。input_atはDialogue時計の経過ミリ秒。
+/// 元turnと受理時の分類・記録制限を保持し、新しい依頼として二重実行しない。
 #[derive(Clone, Debug)]
 pub(super) struct Request {
     pub turn: String,
@@ -9,38 +11,155 @@ pub(super) struct Request {
     pub source: String,
     pub input_at: u64,
     pub record_private: bool,
+    pub classification: Option<crate::request_classifier::Classification>,
 }
+
+#[cfg(test)]
+#[path = "combat_reply_tests.rs"]
+mod combat_reply_tests;
 
 pub(super) struct Pending {
     pub request: Request,
     ready: bool,
+    dispatch_input: bool,
     cancel: watch::Sender<bool>,
     audit: super::workshop_record::Attempt,
 }
 pub(super) struct Checked {
+    pub dispatch_input: bool,
     pub generation: u64,
     pub original: Option<Request>,
     pub audit: Option<super::workshop_record::Attempt>,
 }
 
-fn safe(s: &Session) -> bool {
-    (s.preview && fresh(s)) || super::workshop_combat_runtime::clear_for_resume(s)
+/// 取消所有者が残る実再生中の台詞だけを確認する。生成待ち・表示ACKは含めない。
+pub(super) fn playback_started(d: &Data, sid: &str) -> bool {
+    let Some(s) = d.sessions.get(sid) else {
+        return false;
+    };
+    s.warning.as_ref().is_some_and(|w| w.started)
+        || d.rows.iter().any(|r| {
+            r["session_id"] == sid
+                && r["playback_status"] == "started"
+                && (s.cancel.is_some() && r["turn_id"] == s.current_turn
+                    || s.haiku
+                        .active
+                        .as_ref()
+                        .is_some_and(|a| r["haiku_job_id"] == a.id))
+        })
+}
+
+fn ready(s: &Session) -> bool {
+    if super::workshop_focus::active(s) {
+        (s.preview && fresh(s)) || super::workshop_combat_runtime::clear_for_resume(s)
+    } else {
+        observation_fresh(s)
+    }
+}
+
+/// 再実行してよい通常会話だけを選ぶ。既存の操作・保存判定をここで拡張しない。
+pub(super) fn ordinary(
+    s: &Session,
+    text: &str,
+    classification: Option<&crate::request_classifier::Classification>,
+) -> bool {
+    !super::workshop_focus::active(s)
+        && crate::poem_input::parse(text, false).is_none()
+        && !crate::haiku_memory::clear_requested(text)
+        && !crate::haiku_memory::memory_candidate(text)
+        && !crate::combat::core::wants_quiet(text)
+        && classification.is_none_or(|c| {
+            matches!(
+                c.prediction.label,
+                crate::request_classifier::Label::NotRequest
+                    | crate::request_classifier::Label::OtherRequest
+            )
+        })
+}
+
+fn combat_delivery(s: &Session) -> bool {
+    s.warning.as_ref().is_some_and(|w| {
+        w.actions
+            .iter()
+            .any(|a| a.delivery == crate::combat::model::Delivery::Combat)
+    }) || s.pending_warning.as_ref().is_some_and(|actions| {
+        actions
+            .iter()
+            .any(|a| a.delivery == crate::combat::model::Delivery::Combat)
+    })
 }
 
 impl Dialogue {
-    pub(super) fn cancel_knowledge_queue(&self, d: &mut Data, sid: &str, reason: &str) {
+    /// 緊急警告で取り消す直前に、まだ届いていない通常返答の元入力を保持する。
+    /// ACK確認と同じdataロック下で判定するため、表示済みの回答を再送へ戻さない。
+    pub(super) fn retain_interrupted_reply(&self, d: &mut Data, sid: &str) {
+        let Some(s) = d.sessions.get_mut(sid) else {
+            return;
+        };
+        if s.cancel.is_none() {
+            return;
+        }
+        let Some(row) = d
+            .rows
+            .iter_mut()
+            .find(|r| r["session_id"] == sid && r["turn_id"] == s.current_turn)
+        else {
+            return;
+        };
+        if row["combat_resumable"] != true
+            || row["delivery_confirmed"] == true
+            || !row["horse_command_id"].is_null()
+            || s.reply_queue
+                .iter()
+                .any(|p| row["turn_id"] == p.request.turn)
+        {
+            return;
+        }
+        let request = Request {
+            turn: s.current_turn.clone(),
+            text: row["player_input_text"].as_str().unwrap_or("").into(),
+            source: row["source"].as_str().unwrap_or("text").into(),
+            input_at: row["input_at_ms"].as_u64().unwrap_or(0),
+            record_private: row["workshop_record_private"] == true,
+            classification: serde_json::from_value(row["request_classification"].clone()).ok(),
+        };
+        let audit = super::workshop_record::Attempt::new(
+            row["workshop_state_before"].clone(),
+            super::workshop_record::Input {
+                raw: request.text.clone(),
+                semantic: row["interpreted_player_input_text"]
+                    .as_str()
+                    .map(str::to_owned),
+                private: request.record_private,
+                epoch: row["epoch"].as_u64(),
+            },
+        );
+        // 新しい待機入力の受付時に進行中の一件も上限へ数え、ここへ戻す枠を確保する。
+        s.reply_queue.push_front(Pending {
+            request,
+            audit,
+            ready: true,
+            dispatch_input: false,
+            cancel: watch::channel(false).0,
+        });
+        row["resolution"] = "reply_interrupted".into();
+        s.delivery.forget_reply(&s.current_turn);
+    }
+
+    pub(super) fn cancel_reply_queue(&self, d: &mut Data, sid: &str, reason: &str) {
+        Self::cancel_request_classification(d, sid);
         let Some(s) = d.sessions.get_mut(sid) else {
             return;
         };
         s.input_generation = s.input_generation.wrapping_add(1);
         let after = super::workshop_record::state(s.haiku.workshop.as_ref());
         let mut cancelled = Vec::new();
-        if let Some(checked) = s.knowledge_checked.take()
+        if let Some(checked) = s.reply_checked.take()
             && let Some(original) = checked.original
         {
             cancelled.push((original.turn, checked.audit));
         }
-        for pending in s.knowledge_queue.drain(..) {
+        for pending in s.reply_queue.drain(..) {
             let _ = pending.cancel.send(true);
             cancelled.push((pending.request.turn, Some(pending.audit)));
         }
@@ -60,34 +179,41 @@ impl Dialogue {
         d.revision += 1;
     }
 
-    pub(super) fn queue_knowledge_input(
+    pub(super) fn queue_reply_input(
         self: &Arc<Self>,
         d: &mut Data,
         jobs: &mut Vec<tokio::task::JoinHandle<()>>,
         sid: &str,
         text: &str,
         source: &str,
+        allow_conversation: bool,
     ) -> Option<Value> {
+        let dispatch_input = playback_started(d, sid);
         let s = d.sessions.get_mut(sid)?;
-        if super::workshop_focus::quiet(s)
-            || s.knowledge_checked
-                .as_ref()
-                .is_some_and(|c| c.generation == s.input_generation)
-            || (safe(s) && s.warning.is_none() && s.knowledge_queue.is_empty())
+        if !dispatch_input
+            && (super::workshop_focus::quiet(s)
+                || s.reply_checked
+                    .as_ref()
+                    .is_some_and(|c| c.generation == s.input_generation)
+                || (ready(s)
+                    && s.warning.is_none()
+                    && s.pending_warning.is_none()
+                    && s.reply_queue.is_empty()))
         {
             return None;
         }
         // 分類済みの予約枠と待機中の質問を合わせて上限9件。満杯なら新規受付を断り、先の質問を守る。
         let reserved = usize::from(
-            s.knowledge_checked
+            s.reply_checked
                 .as_ref()
                 .is_some_and(|c| c.original.is_some()),
         );
-        if s.knowledge_queue.len() + reserved >= 9 {
-            return Some(json!({"accepted":false,"reason":"knowledge_queue_full"}));
+        if s.reply_queue.len() + reserved + usize::from(s.cancel.is_some()) >= 9 {
+            return Some(json!({"accepted":false,"reason":"reply_queue_full"}));
         }
-        let private = s.record_private_generation
-                .is_some_and(|(g, private)| g == s.input_generation && private);
+        let private = s
+            .record_private_generation
+            .is_some_and(|(g, private)| g == s.input_generation && private);
         let audit = super::workshop_record::Attempt::new(
             super::workshop_record::state(s.haiku.workshop.as_ref()),
             super::workshop_record::Input {
@@ -97,19 +223,25 @@ impl Dialogue {
                 epoch: Some(s.epoch),
             },
         );
+        let instance = s.instance_id.clone();
         let request = Request {
-            turn: id("knowledge"),
+            classification: super::request_runtime::classification(s, text, source).cloned(),
+            turn: id("reply"),
             text: text.into(),
             source: source.into(),
             input_at: self.clock.elapsed().as_millis() as u64,
             record_private: private,
         };
         let generation = s.input_generation;
+        // 雷・夕方の専用保留は従来の所有者へ返す。戦闘警告中の通常会話を同じFIFOへ加える。
+        let retain_conversation =
+            allow_conversation && (combat_delivery(s) || !s.reply_queue.is_empty());
         let (cancel, rx) = watch::channel(false);
-        s.knowledge_queue.push_back(Pending {
+        s.reply_queue.push_back(Pending {
             request: request.clone(),
             audit: audit.clone(),
             ready: false,
+            dispatch_input,
             cancel,
         });
         if d.rows.len() == 200 {
@@ -123,37 +255,61 @@ impl Dialogue {
         let session = sid.to_owned();
         let turn = request.turn.clone();
         jobs.push(tokio::spawn(async move {
-            this.classify_knowledge_input(session, request, generation, rx, audit)
-                .await;
+            this.classify_reply_input(
+                session,
+                request,
+                generation,
+                rx,
+                audit,
+                instance,
+                retain_conversation,
+                dispatch_input,
+            )
+            .await;
         }));
         Some(
-            json!({"accepted":true,"queued":true,"session_id":sid,"turn_id":turn,"reason":"knowledge_input_routing"}),
+            json!({"accepted":true,"queued":true,"session_id":sid,"turn_id":turn,"reason":"reply_input_routing"}),
         )
     }
 
-    async fn classify_knowledge_input(
+    #[allow(clippy::too_many_arguments)]
+    async fn classify_reply_input(
         self: Arc<Self>,
         sid: String,
-        request: Request,
+        mut request: Request,
         generation: u64,
         mut cancel: watch::Receiver<bool>,
         audit: super::workshop_record::Attempt,
+        instance: String,
+        retain_conversation: bool,
+        dispatch_input: bool,
     ) {
-        // Parserのみ。DB検索・モデル・音声は安全な観測まで実行しない。
-        // bridge内のRust parserだけで完了する。取消・世代検査は従来どおり維持。
-        let result = {
-            let work = bridge::render(
-                &self.config,
-                &self.llm,
-                json!({"op":"assist_route","text":request.text}),
-                &mut cancel,
-            );
+        // 危険中も依頼の種類だけはCPUで判定する。操作・知識回答・音声はここでは行わない。
+        let classified =
+            if self.config.request_classifier.enabled() && request.classification.is_none() {
+                self.classify_request(&request.text, &request.source, &mut cancel)
+                    .await
+                    .map(|result| {
+                        request.classification = Some(result);
+                    })
+            } else {
+                Ok(())
+            };
+        let result = if let Err(error) = classified {
+            Err(error)
+        } else if dispatch_input {
+            // 再生中の入力は行為も意味もまだ実行しない。分類だけ保持し、終了後に通常受付へ戻す。
+            Ok(json!({"knowledge_query":true}))
+        } else {
+            let mut input = bridge::Input::from(json!({"op":"assist_route","text":request.text}));
+            input.request_classification = request.classification.clone();
+            let work = bridge::render(&self.config, &self.llm, input, &mut cancel);
             tokio::pin!(work);
             tokio::select! {
                 result=&mut work=>result,
                 _=tokio::time::sleep(Duration::from_secs(3))=>{
                     if let Some(p) = self.data.lock().unwrap().sessions.get(&sid)
-                        .and_then(|s| s.knowledge_queue.iter().find(|p| p.request.turn == request.turn)) {
+                        .and_then(|s| s.reply_queue.iter().find(|p| p.request.turn == request.turn)) {
                         let _ = p.cancel.send(true);
                     }
                     work.await
@@ -168,26 +324,47 @@ impl Dialogue {
             let Some(s) = d.sessions.get_mut(&sid) else {
                 return;
             };
+            if s.instance_id != instance {
+                return;
+            }
             let Some(index) = s
-                .knowledge_queue
+                .reply_queue
                 .iter()
                 .position(|p| p.request.turn == request.turn)
             else {
                 return;
             };
-            let knowledge = result
-                .as_ref()
-                .ok()
-                .and_then(|r| r["knowledge_query"].as_bool());
-            tracing::info!(event="knowledge_input_routed",session_id=sid,turn_id=request.turn,
-                knowledge=?knowledge,queue_size=s.knowledge_queue.len());
-            let forward = knowledge == Some(false) && generation == s.input_generation;
-            if knowledge == Some(true) {
-                s.knowledge_queue[index].ready = true;
+            if s.reply_queue[index].request.text != request.text
+                || s.reply_queue[index].request.source != request.source
+            {
+                return;
+            }
+            s.reply_queue[index].request.classification = request.classification.clone();
+            let retained = if *cancel.borrow() {
+                None
             } else {
-                s.knowledge_queue.remove(index);
+                result
+                    .as_ref()
+                    .ok()
+                    .and_then(|r| r["knowledge_query"].as_bool())
+                    .map(|knowledge| {
+                        knowledge
+                            || retain_conversation
+                                && ordinary(s, &request.text, request.classification.as_ref())
+                    })
+            };
+            tracing::info!(event="reply_input_routed",session_id=sid,turn_id=request.turn,
+                retained=?retained,queue_size=s.reply_queue.len());
+            let forward = retained == Some(false) && generation == s.input_generation;
+            if retained == Some(true) {
+                s.reply_queue[index].ready = true;
+            } else {
+                s.reply_queue.remove(index);
                 if forward {
-                    s.knowledge_checked = Some(Checked {
+                    s.request_classification
+                        .restore(generation, request.classification.clone());
+                    s.reply_checked = Some(Checked {
+                        dispatch_input: false,
                         generation,
                         original: None,
                         audit: None,
@@ -195,17 +372,17 @@ impl Dialogue {
                 }
             }
             if let Some(row) = d.rows.iter_mut().find(|r| r["turn_id"] == request.turn) {
-                row["playback_status"] = match knowledge {
-                    Some(true) => "waiting_for_safety",
+                row["playback_status"] = match retained {
+                    Some(true) => "waiting_for_warning",
                     Some(false) => "not_selected",
                     None => "failed",
                 }
                 .into();
-                row["resolution"] = match knowledge {
-                    Some(true) => "knowledge_queued",
+                row["resolution"] = match retained {
+                    Some(true) => "reply_queued",
                     Some(false) if forward => "other_input",
                     Some(false) => "superseded_input",
-                    None => "knowledge_route_failed",
+                    None => "reply_route_failed",
                 }
                 .into();
                 if let Err(error) = &result {
@@ -213,16 +390,21 @@ impl Dialogue {
                 }
             }
             d.revision += 1;
-            (forward, knowledge == Some(true))
+            (forward, retained == Some(true))
         };
         if forward {
-            let response = self.submit_inner(
+            let response = self.submit_recorded_guarded(
                 Some(&sid),
                 &request.text,
                 &request.source,
                 false,
                 Some((generation, None)),
                 false,
+                super::workshop_record::Admission {
+                    forwarded: true,
+                    private: request.record_private,
+                },
+                Some(&instance),
             );
             let mut d = self.data.lock().unwrap();
             if let Some(row) = d.rows.iter_mut().find(|r| r["turn_id"] == request.turn) {
@@ -232,82 +414,114 @@ impl Dialogue {
         }
         if !retained {
             self.record_workshop_turn(&sid, &request.turn, &audit);
+        } else {
+            self.resume_reply_input(&sid);
         }
     }
 
-    pub(super) fn resume_knowledge_input(self: &Arc<Self>, sid: &str) {
-        let (pending, generation) = {
+    pub(super) fn resume_reply_input(self: &Arc<Self>, sid: &str) {
+        let (pending, generation, instance) = {
             let mut d = self.data.lock().unwrap();
-            if d.stopped {
+            if d.stopped || playback_started(&d, sid) {
                 return;
             }
             let Some(s) = d.sessions.get_mut(sid) else {
                 return;
             };
-            if !safe(s)
-                || s.warning.is_some()
+            let dispatch_input = s.reply_queue.front().is_some_and(|p| p.dispatch_input);
+            if !(if dispatch_input {
+                observation_fresh(s)
+            } else {
+                ready(s)
+            }) || s.warning.is_some()
                 || s.pending_warning.is_some()
                 || s.cancel.is_some()
                 || s.assist_pending.is_some()
+                || s.request_classification.pending.is_some()
+                || (self.config.request_classifier.enabled()
+                    && s.reply_queue
+                        .iter()
+                        .any(|p| p.request.classification.is_none()))
                 || s.combat_input.is_some()
                 || s.deferred_input.is_some()
                 || s.haiku.active.is_some()
-                || s.knowledge_checked
+                || s.reply_checked
                     .as_ref()
                     .is_some_and(|c| c.original.is_some())
-                || s.haiku
-                    .workshop
-                    .as_ref()
-                    .is_some_and(|w| w.open && w.combat_paused())
-                || s.knowledge_queue.front().is_none_or(|p| !p.ready)
+                || !dispatch_input
+                    && s.haiku
+                        .workshop
+                        .as_ref()
+                        .is_some_and(|w| w.open && w.combat_paused())
+                || s.reply_queue.front().is_none_or(|p| !p.ready)
             {
                 return;
             }
-            let pending = s.knowledge_queue.pop_front().unwrap();
+            let pending = s.reply_queue.pop_front().unwrap();
             s.input_generation = s.input_generation.wrapping_add(1);
             let generation = s.input_generation;
-            s.knowledge_checked = Some(Checked {
+            s.request_classification
+                .restore(generation, pending.request.classification.clone());
+            s.reply_checked = Some(Checked {
+                dispatch_input: pending.dispatch_input,
                 generation,
                 original: Some(pending.request.clone()),
                 audit: Some(pending.audit.clone()),
             });
-            (pending, generation)
+            (pending, generation, s.instance_id.clone())
         };
-        let response = self.submit_recorded(
+        let response = self.submit_recorded_guarded(
             Some(sid),
             &pending.request.text,
             &pending.request.source,
-            true,
-            Some((generation, None)),
-            true,
+            !pending.dispatch_input,
+            Some((generation, Some(pending.request.turn.clone()))),
+            !pending.dispatch_input,
             super::workshop_record::Admission {
                 forwarded: true,
                 private: pending.audit.input.private,
             },
+            Some(&instance),
         );
         let mut d = self.data.lock().unwrap();
         if let Some(s) = d.sessions.get_mut(sid)
+            && s.instance_id == instance
             && let Some(c) = s
-                .knowledge_checked
+                .reply_checked
                 .as_mut()
                 .filter(|c| c.generation == generation)
         {
             c.original = None;
             c.audit = None;
         }
+        if response["accepted"] == true && response["turn_id"] != pending.request.turn {
+            if let Some(row) = d
+                .rows
+                .iter_mut()
+                .find(|r| r["turn_id"] == pending.request.turn)
+            {
+                row["playback_status"] = "not_selected".into();
+                row["resolution"] = "input_dispatched".into();
+                row["forwarded_input"] = response.clone();
+            }
+            d.revision += 1;
+        }
         if response["accepted"] != true {
-            // ロックを離した間の危険化/満杯だけ戻す。手動停止・新入力・終了は復活させない。
+            // ロックを離した間の警告開始・観測失効・満杯だけ戻す。手動停止・新入力・終了は復活させない。
             let retry = !d.stopped
                 && matches!(
                     response["reason"].as_str(),
-                    Some("fresh_safe_snapshot_required" | "input_queue_full")
+                    Some(
+                        "fresh_safe_snapshot_required" | "input_queue_full" | "warning_in_progress"
+                    )
                 );
             if let Some(s) = d.sessions.get_mut(sid)
+                && s.instance_id == instance
                 && s.input_generation == generation
                 && retry
             {
-                s.knowledge_checked = None;
-                s.knowledge_queue.push_front(pending);
+                s.reply_checked = None;
+                s.reply_queue.push_front(pending);
                 d.revision += 1;
                 return;
             } else if let Some(row) = d
@@ -344,6 +558,7 @@ mod tests {
         Pending {
             audit: super::super::workshop_record::Attempt::new(Value::Null, Default::default()),
             request: Request {
+                classification: None,
                 record_private: false,
                 turn: turn.into(),
                 text: "枕詞って何？".into(),
@@ -351,6 +566,7 @@ mod tests {
                 input_at: 7,
             },
             ready,
+            dispatch_input: false,
             cancel: watch::channel(false).0,
         }
     }
@@ -362,25 +578,26 @@ mod tests {
         {
             let mut d = dialogue.data.lock().unwrap();
             let s = d.sessions.get_mut("s").unwrap();
-            s.knowledge_queue
+            s.reply_queue
                 .extend([pending("first", false), pending("second", true)]);
         }
-        dialogue.resume_knowledge_input("s");
+        dialogue.resume_reply_input("s");
         {
             let mut d = dialogue.data.lock().unwrap();
             let s = d.sessions.get_mut("s").unwrap();
-            assert_eq!(s.knowledge_queue.len(), 2);
-            s.knowledge_queue[0].ready = true;
-            s.knowledge_checked = Some(Checked {
+            assert_eq!(s.reply_queue.len(), 2);
+            s.reply_queue[0].ready = true;
+            s.reply_checked = Some(Checked {
+                dispatch_input: false,
                 generation: 0,
                 audit: None,
                 original: Some(pending("reserved", true).request),
             });
         }
-        dialogue.resume_knowledge_input("s");
+        dialogue.resume_reply_input("s");
         assert_eq!(
             dialogue.data.lock().unwrap().sessions["s"]
-                .knowledge_queue
+                .reply_queue
                 .len(),
             2
         );
@@ -393,14 +610,15 @@ mod tests {
         dialogue.register("s", "試験", true);
         {
             let mut d = dialogue.data.lock().unwrap();
-            d.sessions.get_mut("s").unwrap().knowledge_checked = Some(Checked {
+            d.sessions.get_mut("s").unwrap().reply_checked = Some(Checked {
+                dispatch_input: false,
                 generation: 0,
                 audit: None,
                 original: Some(pending("reserved", true).request),
             });
             d.rows
-                .push_back(json!({"turn_id":"reserved","playback_status":"waiting_for_safety"}));
-            dialogue.cancel_knowledge_queue(&mut d, "s", "world_context_changed");
+                .push_back(json!({"turn_id":"reserved","playback_status":"waiting_for_warning"}));
+            dialogue.cancel_reply_queue(&mut d, "s", "world_context_changed");
         }
         let result = dialogue.submit_inner(
             Some("s"),
@@ -443,13 +661,13 @@ mod tests {
             d.sessions
                 .get_mut("s")
                 .unwrap()
-                .knowledge_queue
+                .reply_queue
                 .push_back(pending("evicted", true));
             for i in 0..200 {
                 d.rows.push_back(json!({"turn_id":format!("old-{i}")}));
             }
         }
-        dialogue.resume_knowledge_input("s");
+        dialogue.resume_reply_input("s");
         {
             let d = dialogue.data.lock().unwrap();
             assert_eq!(d.rows.len(), 200);
@@ -496,14 +714,18 @@ mod tests {
         dialogue.register("s", "試験", true);
         {
             let mut d = dialogue.data.lock().unwrap();
-            d.sessions.get_mut("s").unwrap().chat_allowed = false;
+            d.sessions.get_mut("s").unwrap().pending_warning =
+                Some(vec![crate::combat::model::Speech::new(
+                    "creeper_fuse",
+                    "危ない！",
+                )]);
         }
         let response = dialogue.submit(Some("s"), "枕詞って何？", "voice");
-        assert_eq!(response["reason"], "knowledge_input_routing");
+        assert_eq!(response["reason"], "reply_input_routing");
         dialogue.interrupt("s");
         dialogue.shutdown().await;
         let d = dialogue.data.lock().unwrap();
-        assert!(d.sessions["s"].knowledge_queue.is_empty());
+        assert!(d.sessions["s"].reply_queue.is_empty());
         assert_eq!(d.rows.back().unwrap()["playback_status"], "cancelled");
         assert_eq!(d.rows.back().unwrap()["resolution"], "manual_interrupt");
     }
@@ -518,7 +740,7 @@ mod tests {
             .unwrap()
             .chat_allowed = false;
         let result = f.d.submit(Some("s"), "枕詞って何？", "voice");
-        assert_eq!(result["reason"], "knowledge_input_routing");
+        assert_eq!(result["reason"], "reply_input_routing");
         f.d.interrupt("s");
         f.d.interrupt("s");
         let jobs = std::mem::take(&mut *f.d.jobs.lock().unwrap());
@@ -553,6 +775,7 @@ mod tests {
             );
             let (tx, rx) = watch::channel(cancelled);
             let request = Request {
+                classification: None,
                 turn: "route-only".into(),
                 text: "こんにちは".into(),
                 source: "text".into(),
@@ -563,16 +786,18 @@ mod tests {
                 let mut data = f.d.data.lock().unwrap();
                 let s = data.sessions.get_mut("s").unwrap();
                 s.input_generation = 2; // The non-knowledge input was superseded, so it cannot forward.
-                s.knowledge_queue.push_back(Pending {
+                s.reply_queue.push_back(Pending {
                     request: request.clone(),
                     ready: false,
+                    dispatch_input: false,
                     cancel: tx,
                     audit: audit.clone(),
                 });
                 data.rows.push_back(json!({"session_id":"s","turn_id":request.turn,"epoch":0,"playback_status":"routing"}));
             }
+            let instance = f.d.data.lock().unwrap().sessions["s"].instance_id.clone();
             f.d.clone()
-                .classify_knowledge_input("s".into(), request, 1, rx, audit)
+                .classify_reply_input("s".into(), request, 1, rx, audit, instance, false, false)
                 .await;
             let rows = f.records().await;
             assert_eq!(rows.len(), 1, "{rows:?}");
@@ -584,14 +809,14 @@ mod tests {
             assert_eq!(
                 rows[0]["result"]["resolution"],
                 if cancelled {
-                    "knowledge_route_failed"
+                    "reply_route_failed"
                 } else {
                     "superseded_input"
                 }
             );
             assert!(
                 f.d.data.lock().unwrap().sessions["s"]
-                    .knowledge_queue
+                    .reply_queue
                     .is_empty()
             );
             f.finish().await;
@@ -619,9 +844,10 @@ mod tests {
                 data.sessions
                     .get_mut("s")
                     .unwrap()
-                    .knowledge_queue
+                    .reply_queue
                     .push_back(Pending {
                         request: Request {
+                            classification: None,
                             turn: "reused-id".into(),
                             text: "気にせんで".into(),
                             source: "text".into(),
@@ -629,11 +855,12 @@ mod tests {
                             record_private: private,
                         },
                         ready: true,
+                        dispatch_input: false,
                         cancel: watch::channel(false).0,
                         audit: audit.clone(),
                     });
             }
-            f.d.resume_knowledge_input("s");
+            f.d.resume_reply_input("s");
             let jobs = std::mem::take(&mut *f.d.jobs.lock().unwrap());
             for job in jobs {
                 job.await.unwrap();
@@ -657,5 +884,134 @@ mod tests {
             }
             f.finish().await;
         }
+    }
+}
+
+#[cfg(test)]
+mod playback_completion_tests {
+    use super::*;
+
+    fn speaking(status: &str) -> (Arc<Dialogue>, watch::Receiver<bool>) {
+        let mut config = DialogueConfig::default();
+        config.haiku.memory_enabled = false;
+        let dialogue = Dialogue::new(config).unwrap();
+        dialogue.register("s", "試験", true);
+        let (tx, rx) = watch::channel(false);
+        {
+            let mut d = dialogue.data.lock().unwrap();
+            let s = d.sessions.get_mut("s").unwrap();
+            s.current_turn = "speaking".into();
+            s.cancel = Some(tx);
+            d.rows.push_back(json!({"session_id":"s","turn_id":"speaking",
+                "playback_status":status,"text":"最後まで話すで。","player_input_text":"前の質問"}));
+        }
+        (dialogue, rx)
+    }
+
+    #[tokio::test]
+    async fn acknowledgement_and_sneeze_queue_without_cancelling_started_reply() {
+        let (dialogue, rx) = speaking("started");
+        let first = dialogue.submit(Some("s"), "うん", "voice");
+        let second = dialogue.submit(Some("s"), "へっくしょん", "voice");
+        assert_eq!(first["queued"], true);
+        assert_eq!(second["queued"], true);
+        assert_eq!(
+            dialogue.submit(Some("s"), "うん", "voice")["deduplicated"],
+            true
+        );
+        for _ in 0..8 {
+            tokio::task::yield_now().await;
+        }
+        {
+            let mut d = dialogue.data.lock().unwrap();
+            dialogue.accept_vocalization(&mut d, "s", "うおおお");
+            assert!(!*rx.borrow());
+            assert_eq!(d.rows[0]["playback_status"], "started");
+            assert_eq!(d.sessions["s"].reply_queue.len(), 2);
+            assert!(
+                d.sessions["s"]
+                    .reply_queue
+                    .iter()
+                    .all(|p| p.ready && p.dispatch_input)
+            );
+        }
+        dialogue.resume_reply_input("s");
+        assert_eq!(
+            dialogue.data.lock().unwrap().sessions["s"]
+                .reply_queue
+                .len(),
+            2
+        );
+        dialogue.interrupt("s");
+        assert!(*rx.borrow());
+        assert!(
+            dialogue.data.lock().unwrap().sessions["s"]
+                .reply_queue
+                .is_empty()
+        );
+        dialogue.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn new_input_still_replaces_a_reply_before_playback_begins() {
+        let (dialogue, rx) = speaking("queued");
+        assert_eq!(
+            dialogue.submit(Some("s"), "ドギド、別の話やで", "text")["accepted"],
+            true
+        );
+        assert!(*rx.borrow());
+        assert!(
+            dialogue.data.lock().unwrap().sessions["s"]
+                .reply_queue
+                .is_empty()
+        );
+        dialogue.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn explicit_quiet_bypasses_stale_observation_and_keeps_manual_stop() {
+        let (dialogue, rx) = speaking("started");
+        dialogue
+            .data
+            .lock()
+            .unwrap()
+            .sessions
+            .get_mut("s")
+            .unwrap()
+            .preview = false;
+        let result = dialogue.submit(Some("s"), "静かにして", "voice");
+        assert_eq!(result["accepted"], true);
+        assert!(*rx.borrow());
+        assert!(
+            dialogue.data.lock().unwrap().sessions["s"]
+                .reply_queue
+                .is_empty()
+        );
+        dialogue.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn workshop_input_waits_without_changing_the_poem_or_pending() {
+        let f = super::super::workshop_record::tests::fixture();
+        let before = f.d.workshop_record_state("s");
+        let (tx, rx) = watch::channel(false);
+        {
+            let mut d = f.d.data.lock().unwrap();
+            let s = d.sessions.get_mut("s").unwrap();
+            s.current_turn = "explanation".into();
+            s.cancel = Some(tx);
+            d.rows.push_back(
+                json!({"session_id":"s","turn_id":"explanation","playback_status":"started"}),
+            );
+        }
+        let response = f.d.submit(Some("s"), "上五をあさひかるにして", "voice");
+        assert_eq!(response["queued"], true);
+        for _ in 0..8 {
+            tokio::task::yield_now().await;
+        }
+        assert!(!*rx.borrow());
+        assert_eq!(f.d.workshop_record_state("s"), before);
+        assert_eq!(f.d.data.lock().unwrap().sessions["s"].reply_queue.len(), 1);
+        f.finish().await;
     }
 }

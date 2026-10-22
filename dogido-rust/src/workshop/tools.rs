@@ -8,7 +8,7 @@ use serde_json::{Value, json};
 fn player_edit_definition() -> Value {
     json!({"type":"function","function":{
         "name":"stage_player_edit",
-        "description":"本人が今回の発話で頼んだ語句の差し替えをコードへ渡す。部分変更では旧語と新語だけを渡し、変更後の一行を自分で作らない。「AをBに変えて」ならtarget_fragmentはA、replacement_textはB。行の組み立てはコードが行う。現在句（未採用案があればその案）の対象行をline_idとexpected_textで指定し、置換語と行為のevidenceは今回の原文から抜く。音数・読み・他行が変わらないこと・保存の成否はコードが検査する。単なる相談、疑問、否定、引用、以前の案を選ぶだけの返事では呼ばない。",
+        "description":"本人が今回の発話で頼んだ語句の差し替えをコードへ渡す。部分変更では旧語と新語だけを渡し、変更後の一行を自分で作らない。「AをBに変えて」ならtarget_fragmentはA、replacement_textはB。行の組み立てはコードが行う。現在句（未採用案があればその案）の対象行をline_idとexpected_textで指定し、置換語と行為のevidenceは今回の原文から抜く。コードは指定された対象へ差分を適用し、元句・版・他行が変わらないこと・保存結果を管理する。本人が変更を望んでいるかは、今回の発話と会話の流れから判断する。以前の案を選ぶ場合は、その案の選択actionを使う。",
         "parameters":{"type":"object","properties":{
             "line_id":{"type":"string","enum":["line_1","line_2","line_3"]},
             "line_reference_evidence":{"type":"string","description":"今回の原文に行の呼び名がある場合だけ、その部分（例: 冒頭の五音）。対象を省略した発話なら省略する。以前の呼び名をコピーしない。"},

@@ -28,6 +28,7 @@ pub struct Settings {
     pub job_timeout_ms: u64,
     pub memory_enabled: bool,
     pub memory_dir: PathBuf,
+    pub screenshot_dir: Option<PathBuf>,
     pub workshop_idle_ms: u64,
     pub low_threat_resume_delay_ms: u64,
     pub platform_ai: super::combat_classifier::Settings,
@@ -49,6 +50,7 @@ impl Default for Settings {
             job_timeout_ms: 600_000,
             memory_enabled: true,
             memory_dir: PathBuf::from(".dogido_memory/rust-migration"),
+            screenshot_dir: None,
             workshop_idle_ms: crate::haiku_record::DEFAULT_IDLE_TIMEOUT.as_millis() as u64,
             low_threat_resume_delay_ms: 8_000,
             platform_ai: super::combat_classifier::Settings::default(),
@@ -111,7 +113,7 @@ struct Observation {
 }
 
 pub(super) struct Active {
-    id: String,
+    pub(super) id: String,
     cancel: watch::Sender<bool>,
 }
 pub(super) struct State {
@@ -137,22 +139,34 @@ impl State {
         self.active.is_some() || self.workshop.as_ref().is_some_and(Workshop::is_open)
     }
 }
-fn safe(s: &Session) -> bool {
-    !s.preview
-        && !s.foreground.game_paused
-        && fresh(s)
-        && s.mode == crate::combat::model::Mode::Normal
+fn safe(s: &Session, allow_scanned_hostiles: bool) -> bool {
+    let scanned_hostiles = allow_scanned_hostiles
         && s.latest
             .as_ref()
-            .is_some_and(|e| warnings::interruption_reason(e).is_none())
-        && s.audio_latest
-            .as_ref()
-            .is_none_or(|e| warnings::interruption_reason(e).is_none())
+            .is_some_and(super::workshop_focus::scanned_hostiles_only);
+    let mode_safe = s.mode == crate::combat::model::Mode::Normal
+        || scanned_hostiles && s.mode != crate::combat::model::Mode::Aftermath;
+    // combat_runtimeは視認由来のpanicでもchat_allowedをfalseにする。
+    // 採取中だけ、最新観測が視認／スキャンだけなら観測鮮度を保ったまま発句を継続する。
+    let observation_safe = fresh(s) || scanned_hostiles && observation_fresh(s);
+    let event_safe = |e: &crate::events::GameEvent| {
+        warnings::interruption_reason(e).is_none()
+            || allow_scanned_hostiles && super::workshop_focus::scanned_hostiles_only(e)
+    };
+    !s.preview
+        && !s.foreground.game_paused
+        && s.warning.is_none()
+        && s.pending_warning.is_none()
+        && observation_safe
+        && mode_safe
+        && (!s.foreground.combat_active || scanned_hostiles)
+        && s.latest.as_ref().is_some_and(event_safe)
+        && s.audio_latest.as_ref().is_none_or(event_safe)
 }
-fn current(d: &Data, sid: &str, job: &str) -> bool {
+fn current(d: &Data, sid: &str, job: &str, allow_scanned_hostiles: bool) -> bool {
     !d.stopped
         && d.sessions.get(sid).is_some_and(|s| {
-            safe(s)
+            safe(s, allow_scanned_hostiles)
                 && s.haiku
                     .active
                     .as_ref()
@@ -161,6 +175,10 @@ fn current(d: &Data, sid: &str, job: &str) -> bool {
 }
 impl Dialogue {
     pub(super) fn cancel_haiku(d: &mut Data, sid: &str, reason: &str) {
+        // adapterの文字イベントはsubmitより先に届く。開始済み発句をここで切らない。
+        if reason == "new_player_input" && super::reply_queue::playback_started(d, sid) {
+            return;
+        }
         let Some(s) = d.sessions.get_mut(sid) else {
             return;
         };
@@ -170,6 +188,10 @@ impl Dialogue {
         };
         if *active.cancel.borrow() {
             return;
+        }
+        // まだ句が完成していない取消だけ撮影予約も終える。保存job開始後は結果を待つ。
+        if s.haiku.workshop_generation != active.id {
+            s.screenshots.discard_unbound(&active.id);
         }
         let _ = active.cancel.send(true);
         s.status = PlaybackStatus::Cancelled;
@@ -302,16 +324,17 @@ impl Dialogue {
         let now = self.clock.elapsed().as_millis() as u64;
         s.foreground.clock.start(now);
         let casual = s.foreground.route == crate::foreground::Route::Casual;
-        if !safe(s)
-            || s.foreground.combat_active
-            || s.foreground.route.blocks_haiku()
+        if !safe(
+            s,
+            super::workshop_focus::TEMPORARY_ALLOW_SCANNED_HOSTILES_FOR_SENRYU_COLLECTION,
+        ) || s.foreground.route.blocks_haiku()
             || s.haiku.foreground()
             || s.cancel.is_some()
             || s.warning.is_some()
             || s.pending_warning.is_some()
             || s.assist_pending.is_some()
             || s.deferred_input.is_some()
-            || !s.knowledge_queue.is_empty()
+            || !s.reply_queue.is_empty()
             || s.foreground.clock.elapsed(now) < self.config.haiku.interval_ms
             || (!(casual || boundary)
                 && s.haiku.last_activity.elapsed()
@@ -326,10 +349,12 @@ impl Dialogue {
             .unwrap()
             .clone();
         let event = super::body_runtime::event(s, &event);
-        let mut runtime = s.haiku_context.clone();
+        // 身体の感覚が未取得・失効した瞬間は、所持品だけを残した観測で発句を始めない。
+        // 時計やqueueを消費せず戻り、次の有効な身体観測で同じ発句機会を再確認する。
         if event.body_origin().is_some_and(|o| !o.available) {
-            runtime.current_structure = None;
+            return;
         }
+        let runtime = s.haiku_context.clone();
         let observation = Observation { event, runtime };
         let completed = if casual {
             s.haiku.material_turns.iter().cloned().collect()
@@ -368,10 +393,30 @@ impl Dialogue {
         status: PlaybackStatus,
     ) -> bool {
         let mut d = self.data.lock().unwrap();
-        if !current(&d, sid, job) {
+        let turn = format!("{job}:{part}");
+        // 開始後の観測失効だけで、実際に完走した同じ行を失敗にしない。
+        // 次の行の開始・生成・保存は引き続きcurrentの鮮度・安全検査を通す。
+        let completed_owned = status == PlaybackStatus::Completed
+            && !d.stopped
+            && d.sessions.get(sid).is_some_and(|s| {
+                s.haiku
+                    .active
+                    .as_ref()
+                    .is_some_and(|a| a.id == job && !*a.cancel.borrow())
+            })
+            && d.rows.iter().any(|r| {
+                r["session_id"] == sid && r["turn_id"] == turn && r["playback_status"] == "started"
+            });
+        if !completed_owned
+            && !current(
+                &d,
+                sid,
+                job,
+                super::workshop_focus::TEMPORARY_ALLOW_SCANNED_HOSTILES_FOR_SENRYU_COLLECTION,
+            )
+        {
             return false;
         }
-        let turn = format!("{job}:{part}");
         if let Some(row) = d.rows.iter_mut().find(|r| r["turn_id"] == turn) {
             row["text"] = text.into();
             row["playback_status"] = status.into();
@@ -519,6 +564,28 @@ impl Dialogue {
         Ok(())
     }
     #[tracing::instrument(skip_all, fields(session_id = sid, job_id = job))]
+    /// 前置き生成の直前に、記録用の身体視点を既存撮影台帳へ予約する。
+    /// 将来はここで受け取る同じ画像を川柳材料へ加える予定。現在は画像を生成モデルへ渡さない。
+    /// 撮影完了か開始期限を待つため、有効な撮影が前置きの出力より後に始まることはない。
+    async fn prepare_haiku_photo(&self, sid: &str, job: &str, observation: &Observation) -> Result<()> {
+        {
+            let mut data=self.data.lock().unwrap();
+            let s=data.sessions.get_mut(sid).context("haiku session closed")?;
+            ensure!(s.haiku.active.as_ref().is_some_and(|active| active.id==job),"haiku cancelled");
+            if !self.config.haiku.memory_enabled || s.preview || s.text_workshop { return Ok(()); }
+            let Some(context)=observation.event.body_origin().and_then(|origin| origin.context.as_ref()) else { return Ok(()); };
+            s.screenshots.prepare(sid,job,context,chrono::Utc::now(),self.config.haiku.job_timeout_ms);
+        }
+        loop {
+            {
+                let data=self.data.lock().unwrap();
+                let s=data.sessions.get(sid).context("haiku session closed")?;
+                ensure!(s.haiku.active.as_ref().is_some_and(|active| active.id==job),"haiku cancelled");
+                if s.screenshots.capture_settled(job,chrono::Utc::now()) { return Ok(()); }
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    }
     async fn haiku_pipeline(
         self: &Arc<Self>,
         sid: &str,
@@ -534,6 +601,7 @@ impl Dialogue {
         let h = &self.config.haiku;
         let corrections = step!(self.reading_overlay());
         let lessons = step!(self.active_lessons());
+        step!(self.prepare_haiku_photo(sid,job,&observation));
         let (mut preparation, context) = Preparation::capture(haiku::preparation::Start {
             event: observation.event,
             runtime: observation.runtime,
@@ -605,7 +673,15 @@ impl Dialogue {
             // shutdownと同じjobs→data順。確定と保存job登録を一つの境界にする。
             let mut jobs = self.jobs.lock().unwrap();
             let mut d = self.data.lock().unwrap();
-            ensure!(current(&d, sid, job), "haiku superseded before commit");
+            ensure!(
+                current(
+                    &d,
+                    sid,
+                    job,
+                    super::workshop_focus::TEMPORARY_ALLOW_SCANNED_HOSTILES_FOR_SENRYU_COLLECTION,
+                ),
+                "haiku superseded before commit"
+            );
             let s = d.sessions.get_mut(sid).unwrap();
             s.haiku.workshop = Some(Workshop::open(emission.clone(), None, completed_clock));
             s.haiku.workshop_generation = job.into();
@@ -617,6 +693,7 @@ impl Dialogue {
                 .activate(crate::foreground::Route::HaikuWorkshop, now, None);
             s.haiku.material_turns.clear();
             let player_name = s.name.clone();
+            let capture_instance = s.instance_id.clone();
             d.revision += 1;
             tracing::info!(event="haiku_workshop_opened",session_id=sid,job_id=job,created_at=%completed_at);
             // 保存は実再生成功とは別。音声取消後も完成句の保存jobは継続する。
@@ -637,10 +714,19 @@ impl Dialogue {
                     match saved {
                         Ok(Ok(saved))=>{
                             let mut d=owner.data.lock().unwrap();
-                            if let Some(s)=d.sessions.get_mut(&save_sid) && s.haiku.workshop_generation==save_job
-                                && let Some(w)=s.haiku.workshop.as_mut() {w.entry_id=Some(saved.entry_id);}
+                            if let Some(s)=d.sessions.get_mut(&save_sid) && s.instance_id==capture_instance {
+                                if saved.inserted {
+                                    s.screenshots.bind(&save_job,&save_sid,&format!("session:{save_sid}:{}",saved.entry_id),chrono::Utc::now());
+                                } else { s.screenshots.discard_unbound(&save_job); }
+                                if s.haiku.workshop_generation==save_job
+                                    && let Some(w)=s.haiku.workshop.as_mut() {w.entry_id=Some(saved.entry_id);}
+                            }
                         },
-                        error=>tracing::error!(event="haiku_save_failed",session_id=save_sid,?error),
+                        error=>{
+                            tracing::error!(event="haiku_save_failed",session_id=save_sid,?error);
+                            if let Some(s)=owner.data.lock().unwrap().sessions.get_mut(&save_sid)
+                                && s.instance_id==capture_instance { s.screenshots.discard_unbound(&save_job); }
+                        },
                     }
                 }));
             }
@@ -674,7 +760,8 @@ impl Dialogue {
             loop {
                 tokio::select! {_=bridge::cancelled(&mut monitor_cancel)=>break,_=tokio::time::sleep(Duration::from_millis(100))=>{
                     let mut d=owner.data.lock().unwrap();
-                    if !current(&d,&monitor_sid,&monitor_job) || began.elapsed()>=Duration::from_millis(owner.config.haiku.job_timeout_ms) {
+                    if (!current(&d,&monitor_sid,&monitor_job,super::workshop_focus::TEMPORARY_ALLOW_SCANNED_HOSTILES_FOR_SENRYU_COLLECTION) || began.elapsed()>=Duration::from_millis(owner.config.haiku.job_timeout_ms))
+                        && !super::reply_queue::playback_started(&d,&monitor_sid) {
                         if d.sessions.get(&monitor_sid).is_some_and(|s|s.haiku.active.as_ref().is_some_and(|a|a.id==monitor_job)) { Self::cancel_haiku(&mut d,&monitor_sid,"stale_or_expired"); } break;
                     }
                 }}
@@ -694,6 +781,9 @@ impl Dialogue {
                 && s.haiku.active.as_ref().is_some_and(|a| a.id == job)
             {
                 let was_cancelled = s.haiku.active.as_ref().is_some_and(|a| *a.cancel.borrow());
+                if s.haiku.workshop_generation != job {
+                    s.screenshots.discard_unbound(&job);
+                }
                 s.haiku.active = None;
                 if !was_cancelled && s.haiku.workshop_generation != job {
                     s.foreground
@@ -720,6 +810,7 @@ impl Dialogue {
                 d.revision += 1;
             }
         }
+        self.resume_reply_input(&sid);
         tracing::info!(event="haiku_finished",session_id=sid,job_id=job,error=?outcome.err(),total_ms=began.elapsed().as_millis() as u64);
         // GETに副作用を持たせず、観測が止まった場合も完成後の表示時計を進める。
         loop {
@@ -735,5 +826,43 @@ impl Dialogue {
             }
             self.tick_workshop(&mut d, &sid);
         }
+    }
+}
+
+#[cfg(test)]
+mod completion_tests {
+    use super::*;
+    #[tokio::test]
+    async fn completed_audio_survives_stale_observation_but_next_part_does_not() {
+        let mut config = super::super::DialogueConfig::default();
+        config.haiku.memory_enabled = false;
+        let d = Dialogue::new(config).unwrap();
+        d.register("s", "試験", false);
+        let (tx, rx) = watch::channel(false);
+        {
+            let mut data = d.data.lock().unwrap();
+            data.sessions.get_mut("s").unwrap().haiku.active = Some(Active {
+                id: "job".into(),
+                cancel: tx,
+            });
+            data.rows.push_back(
+                json!({"session_id":"s","haiku_job_id":"job","turn_id":"job:preface",
+                "playback_status":"started","text":"一句できたで。"}),
+            );
+            Dialogue::cancel_haiku(&mut data, "s", "new_player_input");
+            assert!(!*rx.borrow());
+        }
+        assert!(d.haiku_row(
+            "s",
+            "job",
+            "preface",
+            "一句できたで。",
+            PlaybackStatus::Completed
+        ));
+        assert!(!d.haiku_row("s", "job", "poem", "古い句", PlaybackStatus::Queued));
+        assert_eq!(d.data.lock().unwrap().rows[0]["delivery_confirmed"], true);
+        Dialogue::cancel_haiku(&mut d.data.lock().unwrap(), "s", "manual_interrupt");
+        assert!(!d.haiku_row("s", "job", "preface", "旧結果", PlaybackStatus::Completed));
+        d.shutdown().await;
     }
 }

@@ -45,6 +45,10 @@ impl SavedPoem {
 
 pub fn directories(root: &Path) -> Result<Vec<PathBuf>> {
     let mut dirs = vec![root.to_owned()];
+    // 親のリンク経由でも別の保管庫を列挙しない。子リンクと同じ扱い。
+    if std::fs::symlink_metadata(root.join("sessions")).is_ok_and(|m| m.file_type().is_symlink()) {
+        return Ok(dirs);
+    }
     match std::fs::read_dir(root.join("sessions")) {
         Ok(entries) => {
             for entry in entries {

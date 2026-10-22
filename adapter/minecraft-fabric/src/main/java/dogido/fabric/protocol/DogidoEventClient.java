@@ -55,6 +55,14 @@ public final class DogidoEventClient {
     private final Consumer<DogidoCommandProtocol.SelectHotbarCommand> commandHandler;
     private final BiConsumer<HorseRecallProtocol.Command, SessionRef> horseCommandHandler;
     private final BooleanSupplier horseRecallAvailable;
+    private final BiConsumer<dogido.fabric.body.BodyInspectProtocol.Command,SessionRef> bodyCommandHandler;
+    private final BiConsumer<dogido.fabric.screenshot.ScreenshotProtocol.Command,SessionRef> screenshotHandler;
+    private final dogido.fabric.screenshot.ScreenshotProtocol.State screenshotState =
+        new dogido.fabric.screenshot.ScreenshotProtocol.State();
+    private final BiConsumer<dogido.fabric.screenshot.BodyViewProtocol.Command,SessionRef> bodyViewHandler;
+    private final Consumer<String> bodyViewAcknowledged;
+    private final dogido.fabric.screenshot.BodyViewProtocol.State bodyViewState=new dogido.fabric.screenshot.BodyViewProtocol.State();
+    private final AtomicBoolean freshSnapshotRequested=new AtomicBoolean();
     private volatile String sessionId;
     private java.util.UUID lastPlayerUuid;
     private boolean bodySupported;
@@ -75,6 +83,17 @@ public final class DogidoEventClient {
     public synchronized boolean isCurrent(SessionRef ref) {
         return ref != null && ref.worldEpoch() == this.worldEpoch.get()
             && ref.sessionId().equals(this.sessionId);
+    }
+
+    /** 身体命令のqueueだけを既存session変更と同じmonitorで確定する。世界の視認・衝突検査は呼出元で済ませる。 */
+    public synchronized String submitBodyInspect(SessionRef ref,dogido.fabric.body.BodyInspectProtocol.Command command,
+            dogido.fabric.body.BodyConnection.MoveRequest request,
+            java.util.function.Function<dogido.fabric.body.BodyConnection.MoveRequest,String> bodyMoveSender) {
+        if (!this.config.enabled || !isCurrent(ref)) return "stale_session";
+        String timeError=command.timeError(java.time.Instant.now());
+        if (timeError != null) return timeError;
+        if (!command.commandId().equals(request.actionId()) || !command.context().equals(request.context())) return "invalid_action";
+        return bodyMoveSender.apply(request);
     }
 
     public void rememberVoicePreference(Boolean enabled) { this.preferredVoiceEnabled = enabled; }
@@ -109,6 +128,31 @@ public final class DogidoEventClient {
         BiConsumer<HorseRecallProtocol.Command, SessionRef> horseCommandHandler,
         BooleanSupplier horseRecallAvailable
     ) {
+        this(logger,config,commandHandler,horseCommandHandler,horseRecallAvailable,null);
+    }
+    public DogidoEventClient(Logger logger,ConnectionSettings config,
+        Consumer<DogidoCommandProtocol.SelectHotbarCommand> commandHandler,
+        BiConsumer<HorseRecallProtocol.Command,SessionRef> horseCommandHandler,BooleanSupplier horseRecallAvailable,
+        BiConsumer<dogido.fabric.body.BodyInspectProtocol.Command,SessionRef> bodyCommandHandler) {
+        this(logger,config,commandHandler,horseCommandHandler,horseRecallAvailable,bodyCommandHandler,null);
+    }
+    public DogidoEventClient(Logger logger,ConnectionSettings config,
+        Consumer<DogidoCommandProtocol.SelectHotbarCommand> commandHandler,
+        BiConsumer<HorseRecallProtocol.Command,SessionRef> horseCommandHandler,BooleanSupplier horseRecallAvailable,
+        BiConsumer<dogido.fabric.body.BodyInspectProtocol.Command,SessionRef> bodyCommandHandler,
+        BiConsumer<dogido.fabric.screenshot.ScreenshotProtocol.Command,SessionRef> screenshotHandler) {
+        this(logger,config,commandHandler,horseCommandHandler,horseRecallAvailable,bodyCommandHandler,screenshotHandler,null,null);
+    }
+    public DogidoEventClient(Logger logger,ConnectionSettings config,
+        Consumer<DogidoCommandProtocol.SelectHotbarCommand> commandHandler,
+        BiConsumer<HorseRecallProtocol.Command,SessionRef> horseCommandHandler,BooleanSupplier horseRecallAvailable,
+        BiConsumer<dogido.fabric.body.BodyInspectProtocol.Command,SessionRef> bodyCommandHandler,
+        BiConsumer<dogido.fabric.screenshot.ScreenshotProtocol.Command,SessionRef> screenshotHandler,
+        BiConsumer<dogido.fabric.screenshot.BodyViewProtocol.Command,SessionRef> bodyViewHandler,Consumer<String> bodyViewAcknowledged) {
+        this.bodyViewHandler=bodyViewHandler;
+        this.bodyViewAcknowledged=bodyViewAcknowledged;
+        this.screenshotHandler = screenshotHandler;
+        this.bodyCommandHandler = bodyCommandHandler;
         this.logger = logger;
         this.config = config;
         this.commandHandler = commandHandler;
@@ -129,10 +173,30 @@ public final class DogidoEventClient {
 
     public long currentSequence() { return this.sequence.get(); }
 
-    public synchronized void invalidateDisplayRequests() { this.worldEpoch.incrementAndGet(); }
+    public synchronized void invalidateDisplayRequests() {
+        this.worldEpoch.incrementAndGet();
+        this.bodyViewState.clearResults();this.freshSnapshotRequested.set(false);
+    }
+    /** 次client tickで通常snapshotを新しく組み立てる合図。古い観測の再送や独立poll経路は作らない。 */
+    public boolean consumeFreshSnapshotRequest() { return this.freshSnapshotRequested.getAndSet(false); }
+    public synchronized void rememberBodyViewResult(SessionRef ref,JsonObject result) {
+        if(!isCurrent(ref))return;
+        this.bodyViewState.remember(result);this.freshSnapshotRequested.set(true);
+    }
+    private synchronized JsonArray bodyViewResults(SessionRef ref) {
+        return isCurrent(ref)?this.bodyViewState.results():new JsonArray();
+    }
+    public synchronized void rememberScreenshotResult(SessionRef ref,JsonObject result) {
+        // 撮影開始はworldEpochで検証済み。保存中のportal移動でも元の句へ通知できる。
+        if (ref != null && ref.sessionId().equals(this.sessionId)) this.screenshotState.remember(result);
+    }
+    private synchronized JsonArray screenshotResults(SessionRef ref) {
+        return isCurrent(ref) ? this.screenshotState.results() : new JsonArray();
+    }
 
     public synchronized void disconnected() {
         this.sessionId = null;
+        this.screenshotState.clearResults();
         this.nextRegistrationNanos = 0;
         invalidateDisplayRequests();
     }
@@ -194,7 +258,10 @@ public final class DogidoEventClient {
         if (this.preferredVoiceEnabled != null) payload.addProperty("voice_enabled", this.preferredVoiceEnabled);
         JsonArray capabilities = new JsonArray();
         capabilities.add("player_state");
-        if (this.bodySupported) capabilities.add("body_observation.v3");
+        if (this.bodySupported) {
+            capabilities.add("body_observation.v3");
+            if (this.bodyCommandHandler != null) capabilities.add("body_autonomy.v2");
+        }
         capabilities.add("inventory");
         capabilities.add("hotbar_slots");
         capabilities.add("visual_threats");
@@ -216,7 +283,10 @@ public final class DogidoEventClient {
         payload.add("capabilities", capabilities);
         JsonArray executionCapabilities = new JsonArray();
         executionCapabilities.add("client.hotbar.select.v1");
+        if (this.bodySupported && this.screenshotHandler != null) executionCapabilities.add(dogido.fabric.screenshot.ScreenshotProtocol.CAPABILITY);
         if (this.horseRecallAvailable.getAsBoolean()) executionCapabilities.add(HorseRecallProtocol.CAPABILITY);
+        if (this.bodySupported && this.bodyCommandHandler != null) executionCapabilities.add(dogido.fabric.body.BodyInspectProtocol.CAPABILITY);
+        if (this.bodySupported && this.bodyViewHandler!=null) executionCapabilities.add(dogido.fabric.screenshot.BodyViewProtocol.CAPABILITY);
         payload.add("execution_capabilities", executionCapabilities);
 
         try {
@@ -267,11 +337,18 @@ public final class DogidoEventClient {
         if (ref == null) return CompletableFuture.completedFuture(null);
 
         JsonObject outbound = payload.deepCopy();
-        outbound.add("command_results", this.commandState.pendingResultsJson());
+        JsonArray results=dogido.fabric.screenshot.ScreenshotProtocol.resultBatch(
+            this.commandState.pendingResultsJson(),screenshotResults(ref));
+        JsonArray bodyViews=bodyViewResults(ref);
+        boolean bodyViewDelivery=!bodyViews.isEmpty();
+        results=dogido.fabric.screenshot.BodyViewProtocol.resultBatch(results,bodyViews);
+        outbound.add("command_results", results);
+        String encoded=dogido.fabric.screenshot.BodyViewProtocol.encodeEvent(outbound,this.gson,
+            result->rememberBodyViewResult(ref,result));
         HttpRequest.Builder requestBuilder = HttpRequest.newBuilder(URI.create(this.config.eventEndpoint()))
             .timeout(Duration.ofSeconds(5))
             .header("Content-Type", "application/json")
-            .POST(HttpRequest.BodyPublishers.ofString(this.gson.toJson(outbound)));
+            .POST(HttpRequest.BodyPublishers.ofString(encoded));
 
         String requestSessionId = ref.sessionId();
         requestBuilder.header("X-Dogido-Session-Id", requestSessionId);
@@ -295,7 +372,7 @@ public final class DogidoEventClient {
                     this.logger.warn(
                         "Dogido event rejected: status={} body={}",
                         response.statusCode(),
-                        response.body()
+                        bodyViewDelivery ? "body_view_response_omitted" : response.body()
                     );
                     return;
                 }
@@ -318,7 +395,8 @@ public final class DogidoEventClient {
                 rejectedSessionId
             );
             this.sessionId = null;
-            this.worldEpoch.incrementAndGet();
+            this.screenshotState.clearResults();
+            invalidateDisplayRequests();
             this.nextRegistrationNanos = 0;
             playerName = this.lastPlayerName;
         }
@@ -330,6 +408,41 @@ public final class DogidoEventClient {
     }
 
     private void handleAcceptedResponse(String body, SessionRef ref) {
+        if(this.bodyViewHandler!=null) {
+            java.util.List<String> used;
+            synchronized(this) {
+                if(!isCurrent(ref))return;
+                used=this.bodyViewState.acknowledge(DogidoCommandProtocol.parseAcknowledgedCommandIds(body));
+            }
+            if(this.bodyViewAcknowledged!=null)used.forEach(this.bodyViewAcknowledged);
+            for(var command:dogido.fabric.screenshot.BodyViewProtocol.parseCommands(body)) {
+                synchronized(this) {
+                    if(!isCurrent(ref))return;
+                    if(!command.sessionId().equals(ref.sessionId()) || !this.bodyViewState.claim(command.id()))continue;
+                }
+                try {this.bodyViewHandler.accept(command,ref);}
+                catch(RuntimeException error) {
+                    rememberBodyViewResult(ref,dogido.fabric.screenshot.BodyViewProtocol.result(command,"failed","dispatch_failed",java.time.Instant.now()));
+                }
+            }
+        }
+        if (this.screenshotHandler != null) {
+            synchronized (this) {
+                if (!isCurrent(ref)) return;
+                this.screenshotState.acknowledge(DogidoCommandProtocol.parseAcknowledgedCommandIds(body));
+            }
+            for (var command : dogido.fabric.screenshot.ScreenshotProtocol.parseCommands(body)) {
+                synchronized (this) {
+                    if (!isCurrent(ref)) return;
+                    if (!command.sessionId().equals(ref.sessionId()) || !this.screenshotState.claim(command.id())) continue;
+                }
+                try { this.screenshotHandler.accept(command,ref); }
+                catch (RuntimeException error) {
+                    rememberScreenshotResult(ref,dogido.fabric.screenshot.ScreenshotProtocol.result(command,
+                        "failed","dispatch_failed",java.time.Instant.now()));
+                }
+            }
+        }
         this.commandState.acknowledge(
             DogidoCommandProtocol.parseAcknowledgedCommandIds(body)
         );
@@ -358,6 +471,14 @@ public final class DogidoEventClient {
                         "dispatch_failed"
                     )
                 );
+            }
+        }
+        if (this.bodyCommandHandler != null) for (var command : dogido.fabric.body.BodyInspectProtocol.parseCommands(body)) {
+            if (!this.commandState.markCommandSeen(command.commandId().toString())) continue;
+            try { this.bodyCommandHandler.accept(command,ref); }
+            catch (RuntimeException error) {
+                this.logger.warn("Dogido body command dispatch failed: command_id={} detail={}",command.commandId(),error.getMessage());
+                this.commandState.rememberResult(dogido.fabric.body.BodyInspectProtocol.result(command,"failed","dispatch_failed",java.time.Instant.now()));
             }
         }
         for (HorseRecallProtocol.Command command : HorseRecallProtocol.parseCommands(body)) {

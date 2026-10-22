@@ -13,6 +13,9 @@ public final class SoundObservationPolicy {
 
     public record Point(double x, double y, double z) {}
 
+    /** 音源IDは個体・注視に保持し、音種別を別のキー成分にする。 */
+    record SoundKey(String sourceId, String soundEvent) {}
+
     record MobSource(UUID id, String type, Point position) {}
 
     /** Activation is distinct from stopping, stepping on, placing or breaking the block. */

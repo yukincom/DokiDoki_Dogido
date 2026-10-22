@@ -2,8 +2,8 @@
 //! 待機中と実行中の取消・観測鮮度を監視し、状態反映は同じturnとepochを検証するupdateへ渡す。
 //! 実再生結果の反映後に通常会話からの発句再開を判定し、受付時の情報と実行結果をworkshop記録へ結ぶ。
 use super::{
-    Dialogue, bridge, chat_context, fresh, history, monitor, workshop_combat_input, workshop_focus,
-    workshop_record,
+    Dialogue, bridge, chat_context, fresh, history, monitor, observation_fresh,
+    workshop_combat_input, workshop_focus, workshop_record,
 };
 use crate::playback::Status as PlaybackStatus;
 use serde_json::{Value, json};
@@ -67,8 +67,11 @@ impl Dialogue {
                 && let Some((event, previous)) = input.snapshot.as_deref()
             {
                 let event = s.latest.as_ref().unwrap_or(event);
-                input.horse_recall =
-                    super::horse_recall_runtime::capture(s, input["text"].as_str().unwrap_or(""));
+                input.horse_recall = super::horse_recall_runtime::capture(
+                    s,
+                    input["text"].as_str().unwrap_or(""),
+                    input.request_classification.as_ref(),
+                );
                 let mut history = previous.context.history.clone();
                 history.conversation_turns = s.history.refresh_before_input(
                     &turn,
@@ -90,6 +93,7 @@ impl Dialogue {
                 }
             }
         }
+        input.visual = super::visual_runtime::Source::new(&self, &sid, &turn, epoch);
         // An earlier authorized save may have completed while this turn waited.
         // Rebuild the read-only context before planning against that new version.
         if input["workshop"].is_object() && input["poem_input"].is_null() {
@@ -108,12 +112,20 @@ impl Dialogue {
                 }
             }
         }
-        // 観測更新が途切れた場合も、古い場所の返答・音声を続けない。
+        // 観測失効は生成・再生前に検出する。開始後は台詞を完走し、危険・終了の取消は各所有者に任せる。
         let owner = self.clone();
         let monitor_sid = sid.clone();
         let mut monitor_cancel = cancel.clone();
         let workshop_id = input["workshop"]["workshop_id"].as_str().map(str::to_owned);
         let provisional_target = input["workshop"]["provisional"].as_str().map(str::to_owned);
+        let ordinary_reply = self
+            .data
+            .lock()
+            .unwrap()
+            .rows
+            .iter()
+            .find(|r| r["turn_id"] == turn)
+            .is_some_and(|r| r["combat_resumable"] == true);
         let monitor = monitor::Monitor::spawn(async move {
             loop {
                 tokio::select! {
@@ -129,10 +141,12 @@ impl Dialogue {
                             let workshop_allowed = workshop_id.is_some()
                                 && (workshop_focus::quiet_observation(s)
                                     || workshop_combat_input::provisional(s) || same_threat);
-                            s.epoch == epoch && !(fresh(s) || workshop_allowed)
+                            s.epoch == epoch && !super::reply_queue::playback_started(&d, &monitor_sid)
+                                && !(fresh(s) || workshop_allowed
+                                || ordinary_reply && observation_fresh(s))
                         });
                         if stale {Self::cancel_chat(&mut d,&monitor_sid,"stale_observation");break;}
-                        let expired = workshop_id.as_ref().is_some_and(|wid| d.sessions.get(&monitor_sid)
+                        let expired = !super::reply_queue::playback_started(&d, &monitor_sid) && workshop_id.as_ref().is_some_and(|wid| d.sessions.get(&monitor_sid)
                             .filter(|s| s.epoch==epoch).is_some_and(|s| s.haiku.workshop.as_ref()
                                 .is_none_or(|w| w.hud_id != *wid || (!w.is_open() && w.close_reason.as_deref()!=Some("explicit_close")))));
                         if expired {Self::cancel_chat(&mut d,&monitor_sid,"workshop_changed");break;}
@@ -210,6 +224,18 @@ impl Dialogue {
         };
         match result {
             Ok(mut result) => {
+                if result["horse_recall_requested"] == true || result["horse_choice"].is_object() {
+                    // ここで操作入力と確定した返答を、警告後の通常質問として再実行しない。
+                    // 発行直後との競合はretain側でも同じdataロックの命令IDを照合する。
+                    let mut d = self.data.lock().unwrap();
+                    if let Some(row) = d
+                        .rows
+                        .iter_mut()
+                        .find(|r| r["turn_id"] == turn && r["epoch"] == epoch)
+                    {
+                        row["combat_resumable"] = false.into();
+                    }
+                }
                 if let Err(error) = self.apply_horse_recall(
                     &sid,
                     &turn,
@@ -353,6 +379,15 @@ impl Dialogue {
         }
         monitor.finish().await;
         drop(permit);
+        {
+            let mut jobs = self.jobs.lock().unwrap();
+            jobs.retain(|j| !j.is_finished());
+            let mut d = self.data.lock().unwrap();
+            if !d.stopped && d.sessions.contains_key(&sid) {
+                self.start_pending(&mut d, &mut jobs, &sid);
+            }
+        }
+        self.resume_reply_input(&sid);
         if completed {
             self.try_start_haiku(&sid, true);
         }

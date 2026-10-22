@@ -1,6 +1,7 @@
 package dogido.lab;
 
 import dogido.lab.control.BodyMotion;
+import dogido.lab.control.BodySafety;
 import dogido.lab.control.BodyTuning;
 import java.util.ArrayList;
 import java.util.List;
@@ -8,9 +9,8 @@ import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.CampfireBlock;
 import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.mob.HostileEntity;
 import net.minecraft.entity.mob.MobEntity;
-import net.minecraft.entity.mob.SlimeEntity;
+import net.minecraft.entity.mob.Monster;
 import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.registry.tag.FluidTags;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -35,6 +35,23 @@ final class BodySpace {
     }
     List<LivingEntity> living(Box area) {
         return world.getEntitiesByClass(LivingEntity.class,area,e -> e != body && e.isAlive() && !e.isSpectator());
+    }
+    /** HostileEntityを継承しないPhantom/Ghastも含め、現在ownerか身体を攻撃する中立Mobを拾う。 */
+    private boolean enemy(LivingEntity entity, ServerPlayerEntity owner) {
+        return entity instanceof Monster || entity instanceof MobEntity mob && (mob.getTarget() == owner || mob.getTarget() == body);
+    }
+    /**
+     * 読込み済み実体だけを有界な範囲から採る。小さな移動boxだけでは離れた敵からownerへの射線を見落とすため、
+     * 身体とownerの周囲を両方含める。次元移動前の呼出しは移動先worldと移動先owner位置を渡す。
+     */
+    BodySafety safety(ServerPlayerEntity owner, Vec3d position) {
+        if (owner == null) return BodySafety.EMPTY;
+        Box nearBody = BodyMotion.box(position).expand(BodySafety.SCAN_RADIUS);
+        Box nearOwner = owner.getBoundingBox().expand(BodySafety.SCAN_RADIUS);
+        List<LivingEntity> seen = new ArrayList<>(living(nearBody));
+        for (LivingEntity entity : living(nearOwner)) if (!seen.contains(entity)) seen.add(entity);
+        return BodySafety.capture(owner.getBoundingBox().getCenter(),seen.stream().filter(e -> enemy(e,owner))
+            .map(e -> new BodySafety.Enemy(e.getBoundingBox(),e.getVelocity())).toList());
     }
     /** DIRECTでは生物との物理衝突だけを処理し、火/敵/壁を避ける行動は選ばない。 */
     List<Box> physicalObstacles(Box path) {
@@ -86,10 +103,8 @@ final class BodySpace {
     List<Box> motionObstacles(Box path, ServerPlayerEntity owner, boolean retreat) {
         List<Box> result = obstacles(path);
         if (retreat && owner != null) for (LivingEntity e : living(path.expand(5))) {
-            boolean hostile = e instanceof HostileEntity || e instanceof SlimeEntity
-                || e instanceof MobEntity mob && (mob.getTarget() == owner || mob.getTarget() == body);
             Box exclusion = e.getBoundingBox().expand(5);
-            if (hostile && exclusion.intersects(path)) result.add(exclusion);
+            if (enemy(e,owner) && exclusion.intersects(path)) result.add(exclusion);
         }
         return result;
     }

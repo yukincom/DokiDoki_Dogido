@@ -56,7 +56,7 @@ def fixture(*, combat_settings=None, extra_args=(), initial_lines=None, **settin
             binary = Path(os.environ.get("DOGIDO_RUST_BINARY", ROOT / "target/debug/dogido-rust"))
             with running(binary, folder, dep, haiku_settings=h, combat_settings=combat_settings, extra_args=extra_args) as (base, process, log):
                 state = {"sequence": 0}
-                def send(sid, **extra):
+                def send(sid, *, body_state="observed", **extra):
                     state["sequence"] += 1
                     e = {"schema_version": "2026-05-24", "adapter": "fixture", "sequence": state["sequence"],
                          "observed_at": datetime.now(timezone.utc).isoformat(),
@@ -64,7 +64,16 @@ def fixture(*, combat_settings=None, extra_args=(), initial_lines=None, **settin
                          "player": {"name": "試験", "dimension": "minecraft:overworld", "held_item": "minecraft:cherry_leaves"},
                          "world": {"biome": "minecraft:plains", "time_phase": "morning", "weather": "clear", "sky_visible": True, "ceiling_height": 20},
                          "inventory": {"minecraft:cherry_leaves": 1, "minecraft:netherite_axe": 1}, **extra}
-                    return request(base, "/api/v1/game-events", attach_body(e), sid=sid)
+                    e = attach_body(e, age_ms=3100 if body_state == "stale" else 0)
+                    if body_state == "missing":
+                        e.pop("body_observation")
+                    elif body_state == "unavailable":
+                        e["body_observation"]["sample"]["senses"] = {
+                            "status": "unavailable", "version": 1, "basis": "body_pose_client_world",
+                            "source_server_tick": state["sequence"], "reason": "not_sampled"}
+                    else:
+                        assert body_state in ("observed", "stale")
+                    return request(base, "/api/v1/game-events", e, sid=sid)
                 def hud(sid): return request(base, "/api/v1/haiku-workshop/snapshot?session_id=" + sid)
                 def rows(sid): return [r for r in snapshot(base)["utterances"] if r["session_id"] == sid]
                 def stored(sid):
@@ -77,6 +86,22 @@ def fixture(*, combat_settings=None, extra_args=(), initial_lines=None, **settin
 
 def main():
     passed = []
+    with fixture(interval_ms=700) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
+        sid = register(base, preview=False, body=True)
+        send(sid, body_state="missing")
+        time.sleep(.8)
+        for state in ("missing", "unavailable", "stale"):
+            send(sid, body_state=state)
+            time.sleep(.15)
+            assert not rows(sid) and not stored(sid), (state, rows(sid))
+            assert not any(r["path"] == "/v1/chat/completions" for r in seen), state
+            clock = next(s["foreground"] for s in snapshot(base)["sessions"] if s["session_id"] == sid)
+            assert clock["haiku_elapsed_ms"] >= 700, (state, clock)
+        # 待機で発句時計をresetしない。有効な観測が届けば、同じ期限で生成・保存まで進む。
+        send(sid)
+        wait_for(lambda: stored(sid))
+        assert checks["drafts"] > 0
+        passed.append("missing_unavailable_stale_body_waits_for_fresh_senses_without_inventory_only_poem")
     with fixture(interval_ms=1800) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         sid = register(base, preview=False, body=True); send(sid)
         time.sleep(.45)
@@ -217,7 +242,9 @@ def main():
                 wait_for(lambda: any(r["turn_id"].endswith(":poem") and r["playback_status"] == "completed" for r in rows(sid)))
                 assert not stored(sid), "fixture must actually block the append"
                 assert hud(sid)["state"] == "open"
-                send(sid, visual_threats=[{"type": "zombie", "entity_id": "z", "distance": 6,
+                # 一時データ採取では視認だけでworkshopを止めない。明示戦闘で割り込みを検査する。
+                send(sid, combat={"combat_active_hint": True},
+                     visual_threats=[{"type": "zombie", "entity_id": "z", "distance": 6,
                       "direction": {"horizontal": "front", "cardinal": "north"}}])
                 wait_for(lambda: any(r.get("combat_actions") and r["playback_status"] == "completed" for r in rows(sid)))
                 assert hud(sid)["state"] == "danger"

@@ -201,7 +201,6 @@ pub fn messages(request: &StructuredRequest) -> Result<Vec<ChatMessage>> {
             )
         }),
     );
-    slots.insert("retry_block".into(), edit_retry(&d));
     if d["available_line_materials"].is_array() {
         // 初案・再生成で使える材料は呼出元が絞ったものだけ。元の全材料を別欄で再提示しない。
         let available = available_materials(&d);

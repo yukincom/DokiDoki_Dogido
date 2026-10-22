@@ -126,6 +126,11 @@ impl Engine {
             now,
         )
     }
+    /// 一度受理した敵情報を、発話直前の観測で再計算する。依頼性を再判定しない。
+    pub fn answer_classified_query(&self, event: &GameEvent, text: &str, now: u64, s: &Settings) -> Option<Speech> {
+        queries::answer_classified(event, text, s,
+            self.last_named.as_ref().map(|(kind, at)| (kind.as_str(), *at)), now)
+    }
     /// 受信済みの観測と呼び手の時計から、優先警告・会話可否・音声停止を決める。
     /// completeは全視認を含むかを示す。falseなら直近の視認を補い、観測省略を敵の不在と誤認しない。
     #[allow(clippy::too_many_arguments)]
@@ -308,18 +313,22 @@ impl Engine {
         s: &Settings,
         ws: &threats::Settings,
     ) -> Option<Decision> {
+        self.input_with_enemy_request(event, text, now, s, ws, None)
+    }
+    /// Someは共通分類の結果。falseでは敵質問の旧語句認識を通さず、quiet等の既存制御は保つ。
+    #[allow(clippy::too_many_arguments)]
+    pub fn input_with_enemy_request(
+        &mut self, event: &GameEvent, text: &str, now: u64,
+        s: &Settings, ws: &threats::Settings, enemy_request: Option<bool>,
+    ) -> Option<Decision> {
         let previous = self.mode;
         let quiet = wants_quiet(text);
-        let query = if quiet {
+        let query = if quiet || enemy_request == Some(false) {
             None
+        } else if enemy_request == Some(true) {
+            self.answer_classified_query(event, text, now, s)
         } else {
-            queries::answer(
-                event,
-                text,
-                s,
-                self.last_named.as_ref().map(|(k, t)| (k.as_str(), *t)),
-                now,
-            )
+            self.answer_query(event, text, now, s)
         };
         if !quiet && query.is_none() {
             return None;

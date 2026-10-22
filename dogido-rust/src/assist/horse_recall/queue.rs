@@ -108,6 +108,7 @@ impl Queue {
         }
         let command = self.pending.take().expect("expired pending command");
         Some(AdapterCommandResult {
+            body_view: None,
             command_id: command.command_id,
             command_type: AdapterCommandResultCommandType::RecallHorse,
             status: AdapterCommandResultStatus::Expired,

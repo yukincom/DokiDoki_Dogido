@@ -80,6 +80,9 @@ fn payload(raw: &str, prefix_key: &str) -> Option<String> {
 }
 /// `normalized`の再正規化はせず、句本文だけは改行・引用を保持した`raw`から読む。
 /// slash commandの早期returnと保存可否は呼出側が既存の規則で判断する。
+// TODO(request-classifier): enemy_information 接続後は、下の敵数・方角・ドラゴン語句を
+// 「敵情報経路へ入れるか」の再判定に使わず、同一入力の分類結果で経路を決める。
+// 現5分類は数／方角／対象を区別しないため、その属性抽出や所持品・音・静粛判定は別課題。
 pub fn classify(raw: &str, normalized: &str) -> Projection {
     let text = fold(normalized);
     let has_dragon = words("DRAGON_KEYWORDS").any(|word| text.contains(&fold(word)));

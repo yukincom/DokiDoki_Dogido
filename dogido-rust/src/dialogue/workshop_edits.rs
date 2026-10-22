@@ -82,7 +82,10 @@ impl Dialogue {
                 // 本人の変更もAIの提案も、元句・版・対象の検証後に同じ編集画面へ入る。
                 // 表示は採用待ちとは別なので、本人編集を即保存しても画面と対象行を保つ。
                 let selected = if generated_proposal
-                    && proposed.generated_basis.as_ref().is_some_and(|basis| basis.target_indices.len() != 1)
+                    && proposed
+                        .generated_basis
+                        .as_ref()
+                        .is_some_and(|basis| basis.target_indices.len() != 1)
                 {
                     None
                 } else {
@@ -210,10 +213,13 @@ impl Dialogue {
                 }
                 .into();
                 result["workshop_revision_id"] = revision_id.into();
-                // 本人が指定した編集は、読み・音数・CASと実際の保存が成功してから通知する。
-                // 再度の採用確認や音数だけの説明には戻さず、句本文は共通の編集表示で示す。
-                if matches!(action.as_str(), "stage_player_edit" | "stage_conversation_candidate") {
-                    result["text"] = "変更しました。".into();
+                // 本人が指定した編集は、対象・元句・版の一致と実際の保存が成功してから通知する。
+                // 保存結果をそのまま通知し、句本文は共通の編集表示で示す。
+                if matches!(
+                    action.as_str(),
+                    "stage_player_edit" | "stage_conversation_candidate"
+                ) {
+                    result["text"] = "変更したで。".into();
                     result["spoken_text"] = result["text"].clone();
                 }
             }

@@ -13,6 +13,8 @@ static TEXT: LazyLock<Value> = LazyLock::new(|| {
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum Stage {
+    // TODO(request-classifier): recall_mount 接続後は Intent / list_horses 専用の
+    // prompt・tool定義・復号分岐を撤去する。Selection / select_horse は個体選択なので残す。
     Intent,
     Selection,
 }
@@ -34,6 +36,9 @@ pub enum Decision {
     Select(Choice),
     Conversation,
 }
+
+/// 通常会話の共通tool選択へ、既存の呼び寄せ条件を添える。
+pub fn guidance() -> String { TEXT["intent"].as_str().unwrap().replace("追加でできるのは、", "乗れる動物の呼び寄せについては、") }
 
 fn action(stage: Stage) -> &'static str {
     match stage {

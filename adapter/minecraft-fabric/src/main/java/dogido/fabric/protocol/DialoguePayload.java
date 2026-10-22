@@ -16,7 +16,7 @@ public final class DialoguePayload {
     public record Row(String turnId, String source, String playerInput, String displayId, String text,
                       String playbackStatus) {}
     public record Snapshot(Scope scope, boolean voiceEnabled, String voiceGeneration, boolean textEnabled,
-                           List<Row> rows) {}
+                           List<Row> rows, JsonObject bodyGaze) {}
     public record Reply(boolean accepted, String reason, Boolean voiceEnabled, String voiceGeneration) {
         public static Reply failure(String reason) { return new Reply(false, reason, null, ""); }
     }
@@ -64,7 +64,8 @@ public final class DialoguePayload {
                     optionalString(row, "text"), optionalString(row, "playback_status")));
             }
             return new Snapshot(scope, bool(session, "voice_enabled"), identifier(session, "voice_generation"),
-                bool(session, "text_enabled"), List.copyOf(rows));
+                bool(session, "text_enabled"), List.copyOf(rows),
+                session.get("body_gaze") == null || session.get("body_gaze").isJsonNull() ? null : session.getAsJsonObject("body_gaze"));
         } catch (RuntimeException invalid) {
             return null;
         }

@@ -57,6 +57,10 @@ fn named_kind(text: &str) -> Option<String> {
 }
 
 /// `last_named` は実際に選んだ単体警告の種と単調時計。15秒以内の追質問にだけ使う。
+// TODO(request-classifier): enemy_information 接続後は「敵情報を求めているか」の
+// 語句による入口判定を共通分類へ置換する。現5分類だけでは has_direction /
+// named_kind 等の質問属性・対象抽出は撤去できない。これらは詳細分類／候補選択の候補。
+// 実際の個数・距離・方位計算と、対象・観測鮮度の確認はコード側に残す。
 pub fn answer(
     event: &GameEvent,
     text: &str,
@@ -64,18 +68,34 @@ pub fn answer(
     last_named: Option<(&str, u64)>,
     now_ms: u64,
 ) -> Option<Speech> {
+    answer_impl(event, text, settings, last_named, now_ms, false)
+}
+
+/// 依頼性を共通分類で確定した入力。個数・対象等の詳細だけを既存規則で読み取る。
+/// 詳細指定がない場合は現在視認できる敵の方角・距離を返す。
+pub fn answer_classified(
+    event: &GameEvent, text: &str, settings: &Settings,
+    last_named: Option<(&str, u64)>, now_ms: u64,
+) -> Option<Speech> {
+    answer_impl(event, text, settings, last_named, now_ms, true)
+}
+
+fn answer_impl(
+    event: &GameEvent, text: &str, settings: &Settings,
+    last_named: Option<(&str, u64)>, now_ms: u64, classified: bool,
+) -> Option<Speech> {
     let text = folded(text.trim());
     if text.is_empty() {
         return None;
     }
-    if has_direction(&text) && text.contains("どらごん") {
+    if (classified || has_direction(&text)) && text.contains("どらごん") {
         return Some(dragon_direction(event));
     }
     let hostile_referent = contains_any(&text, &["敵", "モンスター", "モブ", "あいつ", "そいつ"]);
     if contains_any(
         &text,
         &["何体", "なんたい", "何匹", "残り", "何人", "何個体"],
-    ) && (hostile_referent || contains_any(&text, &["残り", "あと"]))
+    ) && (classified || hostile_referent || contains_any(&text, &["残り", "あと"]))
     {
         let count = event
             .combat
@@ -105,11 +125,11 @@ pub fn answer(
         return Some(speech);
     }
     let named = named_kind(&text);
-    if !has_direction(&text) || (!hostile_referent && named.is_none() && !bare_direction(&text)) {
+    if !classified && (!has_direction(&text) || (!hostile_referent && named.is_none() && !bare_direction(&text))) {
         return None;
     }
     // 裸の「どっち？」は敵の観測がない会話では選択肢への問いかもしれない。
-    if bare_direction(&text) && event.visual_threats.is_empty() {
+    if !classified && bare_direction(&text) && event.visual_threats.is_empty() {
         return None;
     }
     let candidates: Vec<_> = event

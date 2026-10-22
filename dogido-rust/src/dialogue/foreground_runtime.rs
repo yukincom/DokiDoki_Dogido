@@ -13,6 +13,10 @@ impl Dialogue {
                 Route::HaikuPreparation | Route::HaikuWorkshop
             ) && !s.haiku.foreground()
             {
+                if s.foreground.route == Route::HaikuWorkshop {
+                    // 一時的な採取ペースはworkshopの終了時から数える。作句中の経過時間で即発句しない。
+                    s.foreground.clock.reset(now);
+                }
                 s.foreground.clear(now);
             }
         }
@@ -58,8 +62,10 @@ impl Dialogue {
 mod tests {
     use super::*;
     use crate::dialogue::DialogueConfig;
+    use crate::haiku_record::{PreparedEmission, Workshop};
     use crate::playback::Status as PlaybackStatus;
     use serde_json::json;
+    use std::time::Instant;
     use tokio::sync::watch;
 
     #[tokio::test]
@@ -81,11 +87,7 @@ mod tests {
                 "input_at_ms":0, "player_input_text":"新しい話"}));
             d.sessions.get_mut("s").unwrap().cancel = Some(watch::channel(false).0);
             Dialogue::cancel_chat(&mut d, "s", "new_player_input");
-            d.sessions
-                .get_mut("s")
-                .unwrap()
-                .foreground
-                .start_combat(1, 10);
+            d.sessions.get_mut("s").unwrap().foreground.start_combat();
         }
         assert!(
             dialogue
@@ -102,12 +104,63 @@ mod tests {
         {
             let d = dialogue.data.lock().unwrap();
             let foreground = &d.sessions["s"].foreground;
-            assert_eq!(foreground.route, Route::None);
-            assert_eq!(
-                foreground.suspended.as_ref().unwrap().source_turn_ids,
-                ["heard"]
-            );
+            assert_eq!(foreground.route, Route::Knowledge);
+            assert!(foreground.suspended.is_none());
         }
+        dialogue.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn closing_workshop_starts_a_fresh_automatic_haiku_interval() {
+        let mut dialogue = Dialogue::new(DialogueConfig::default()).unwrap();
+        // 実時間を待たず起動後2分を再現し、相談に入る前の経過時間を確実に持たせる。
+        std::sync::Arc::get_mut(&mut dialogue).unwrap().clock =
+            Instant::now() - std::time::Duration::from_secs(120);
+        dialogue.register("s", "試験", true);
+        let now = dialogue.clock.elapsed().as_millis() as u64;
+        let lines: Vec<serde_json::Value> = [
+            ("upper", "上五", "くさちのひ"),
+            ("middle", "中七", "くろきつるぎの"),
+            ("lower", "下五", "かげのさむさ"),
+        ]
+        .iter()
+        .enumerate()
+        .map(|(i, (position, name, text))| json!({"line_id":format!("line_{}",i+1),
+            "line_index":i,"position":position,"canonical_name":name,"surface_text":text,"reading_text":text,
+            "source_atom_ids":[],"source_atoms":[],"provenance":"fixture"}))
+        .collect();
+        let prepared: PreparedEmission = serde_json::from_value(json!({
+            "text":"くさちのひ くろきつるぎの かげのさむさ", "lines":lines, "materials":{}
+        }))
+        .unwrap();
+        let mut workshop = Workshop::open(
+            prepared.complete(chrono::Utc::now()).unwrap(),
+            None,
+            Instant::now(),
+        );
+        workshop.close("explicit_close");
+        {
+            let mut d = dialogue.data.lock().unwrap();
+            let s = d.sessions.get_mut("s").unwrap();
+            s.foreground.clock.reset(now.saturating_sub(100_000));
+            s.foreground.activate(Route::HaikuWorkshop, now, None);
+            s.haiku.workshop = Some(workshop);
+        }
+
+        let mut d = dialogue.data.lock().unwrap();
+        let before_tick = dialogue.clock.elapsed().as_millis() as u64;
+        dialogue.tick_foreground(&mut d, "s");
+        let after_tick = dialogue.clock.elapsed().as_millis() as u64;
+        let foreground = &d.sessions["s"].foreground;
+        assert_eq!(foreground.route, Route::None);
+        // 同一ms内の終了でも成立する。時計のresetが抜けた場合は前の100秒が残って失敗する。
+        let elapsed = foreground.clock.elapsed(after_tick);
+        assert!(elapsed <= after_tick - before_tick);
+        assert_eq!(
+            foreground.clock.elapsed(after_tick + 60_000),
+            elapsed + 60_000
+        );
+        drop(d);
         dialogue.shutdown().await;
     }
 }

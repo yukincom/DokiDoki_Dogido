@@ -98,6 +98,9 @@ async fn body(
             json!({"op":"result","memory_query_requested":true,"memory_query":query,"llm_reports":[]}),
         );
     }
+    // TODO(request-classifier): 共通分類接続後は requests_sword / asks_hostile_* /
+    // asks_dragon_direction の旧語句フラグで通常会話を再拒否せず、確定した経路を参照する。
+    // 川柳保存・編集の条件は現5分類の対象外なので、このif全体を削除しない。
     if context.requests_sword
         || context.asks_save_last_haiku
         || context.revised_haiku_text.is_some()
@@ -159,25 +162,73 @@ async fn body(
     let mut result = match prepared {
         Prepared::Knowledge => bail!("knowledge routing already consumed"),
         Prepared::Fixed(fixed) => fixed_result(fixed),
-        Prepared::Reply(reply) => {
+        Prepared::Reply(mut reply) => {
             if config.llm_enabled
                 && input["workshop_fallback"] != true
-                && let Some(horse) = &input.horse_recall
+                && let Some(horse_recall) = input.horse_recall.as_ref()
             {
-                let mut result = super::horse_recall_runtime::render(
-                    reply.request(&config.model, config.max_tokens)?,
-                    llm,
-                    horse,
-                    cancel,
-                )
-                .await?;
+                let request = reply.request(&config.model, config.max_tokens)?;
+                let mut result = if input.request_classification.is_some() {
+                    super::horse_recall_runtime::render(request, llm, horse_recall, cancel).await?
+                } else {
+                    super::chat_tools_runtime::render(request, llm, input, cancel).await?
+                };
                 super::body_runtime::attach_input(&mut result, &reply.details);
                 result["observation_revision"] = reply.details["world_context"]["revision"].clone();
                 return Ok(result);
             }
+            // 通常の本文生成だけが一枚を要求する。知識・川柳・操作・workshopには画像待機を足さない。
+            let mut image = None;
+            if config.llm_enabled
+                && config.chat_image.enabled
+                && input["workshop_fallback"] != true
+                && input["workshop"].is_null()
+                && let Some(source) = &input.visual
+            {
+                image = source.capture(cancel).await;
+                if image.is_none() {
+                    tracing::info!(
+                        event = "chat_image_unavailable",
+                        reason = "unavailable_or_timeout"
+                    );
+                }
+                live(cancel)?;
+                if let Some((current, image_current)) =
+                    source.refresh(input, image.as_ref().map(|capture| &capture.context))
+                {
+                    if !image_current {
+                        image = None;
+                    }
+                    native = current;
+                    // 待機中の現在値で材料を再構成する。これは純粋な投影で、モデル呼出しを増やさない。
+                    match chat_materials::prepare(
+                        native
+                            .sensory_event
+                            .as_ref()
+                            .context("accepted body sensory view")?,
+                        &native.settings,
+                        &chat_materials::PlayerInput::from(&context),
+                        &native.context,
+                        &native.snapshot,
+                        &CatalogLabels,
+                    )? {
+                        Prepared::Reply(current) => reply = current,
+                        Prepared::Fixed(fixed) => return Ok(fixed_result(fixed)),
+                        Prepared::Knowledge => bail!("knowledge routing already consumed"),
+                    }
+                } else {
+                    image = None;
+                }
+            }
             let output = if config.llm_enabled {
                 let request = reply.request(&config.model, config.max_tokens)?;
-                let run = super::chat_leaf_runtime::render(request, llm, cancel).await?;
+                let run = super::chat_leaf_runtime::render_image(
+                    request,
+                    llm,
+                    cancel,
+                    image.as_ref().map(|capture| &capture.image),
+                )
+                .await?;
                 reports.extend(run.reports);
                 run.output
             } else {

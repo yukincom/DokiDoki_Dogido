@@ -62,28 +62,20 @@ pub(super) fn active_applicable(
             return applicable(action, session, settings, environment_settings);
         }
         // 再生開始後の対象消失・方向・個数・明るさ等は、発話の途中停止にしない。
-        // 観測自体の失効、平時の台詞中の敵・被弾は従来どおり停止する。
-        let fresh = if matches!(action.scope, Scope::Auditory(_)) {
-            session
-                .audio_received
-                .is_some_and(|at| at.elapsed() <= Duration::from_secs(10))
-        } else {
-            observation_fresh(session)
-        };
-        fresh
-            && (applicable(action, session, settings, environment_settings)
-                || !(matches!(
-                    action.delivery,
-                    Delivery::Ambient | Delivery::UrgentEnvironment
-                ) || matches!(action.scope, Scope::Safe))
-                || session
-                    .latest
+        // 観測の更新停止だけでも切らない。平時の台詞中の敵・被弾は従来どおり停止する。
+        applicable(action, session, settings, environment_settings)
+            || !(matches!(
+                action.delivery,
+                Delivery::Ambient | Delivery::UrgentEnvironment
+            ) || matches!(action.scope, Scope::Safe))
+            || session
+                .latest
+                .as_ref()
+                .is_some_and(|e| interruption_reason(e).is_none())
+                && session
+                    .audio_latest
                     .as_ref()
-                    .is_some_and(|e| interruption_reason(e).is_none())
-                    && session
-                        .audio_latest
-                        .as_ref()
-                        .is_none_or(|e| interruption_reason(e).is_none()))
+                    .is_none_or(|e| interruption_reason(e).is_none())
     })
 }
 
@@ -172,6 +164,7 @@ pub(super) fn applicable(
             .leaf
             .as_ref()
             .and_then(|leaf| leaf.details.get("__body_context"))
+            .or_else(|| action.light_comment.as_ref().map(|c| &c.body_context))
             .is_some_and(|context| {
                 *context != json!(event.body_origin().and_then(|o| o.context.as_ref()))
             })
@@ -415,6 +408,7 @@ impl Dialogue {
         }
         s.pending_input = None;
         if let Some(w) = s.warning.take() {
+            super::body_interest_runtime::finish(s, &w.turn);
             if !w.started
                 && matches!(
                     reason,
@@ -505,7 +499,8 @@ impl Dialogue {
         d.rows.push_back(json!({"utterance_id":id("utt"),"turn_id":turn,"session_id":sid,"session_instance":session_instance,"category":category,
             "source":if input.is_some(){"player_input"}else{"game_observation"},"player_input_text":input,
             "text":display_text(&pending_display),"created_at":chrono::Utc::now(),"reference_ids":[],"output_mode":"both",
-            "playback_status":"queued","warning":plan,"combat_actions":actions}));
+            "playback_status":"queued","warning":plan,"combat_actions":actions,
+            "llm_reports":actions.iter().filter_map(|a|a.light_comment.as_ref()).flat_map(|c|c.reports.iter()).collect::<Vec<_>>()}));
         d.revision += 1;
         tracing::info!(event="warning_queued",session_id=sid,turn_id=turn,actions=%json!(actions));
         (turn, rx)
@@ -622,6 +617,7 @@ impl Dialogue {
                         NoticeEnd::Retry,
                     );
                 }
+                super::body_interest_runtime::finish(s, turn);
                 s.warning = None;
             }
         }
@@ -722,7 +718,7 @@ impl Dialogue {
         }
         true
     }
-    fn protect_action(&self, sid: &str, turn: &str, protect: u64) {
+    fn protect_action(&self, sid: &str, turn: &str, protect: u64, index: usize) {
         let mut d = self.data.lock().unwrap();
         if let Some(w) = d
             .sessions
@@ -732,6 +728,10 @@ impl Dialogue {
         {
             w.started = true;
             w.protected_until = Some(Instant::now() + Duration::from_millis(protect));
+            if let Some(row) = d.rows.iter_mut().find(|r| r["turn_id"] == turn) {
+                row["speaking_action_index"] = index.into();
+            }
+            d.revision += 1;
         }
     }
     pub(super) async fn run_warning(
@@ -793,9 +793,49 @@ impl Dialogue {
             let mut thunder_scream_completed=false;
             for (index,action) in actions.iter().enumerate(){
                 anyhow::ensure!(!*cancel.borrow(),"cancelled");
+                // 前の台詞が終わり、次の生成や合成を待つ間は発話注視を解除する。
+                {
+                    let mut data=self.data.lock().unwrap();
+                    if let Some(row)=data.rows.iter_mut().find(|r|r["turn_id"]==turn) { row["speaking_action_index"]=Value::Null; }
+                    data.revision+=1;
+                }
+                // 先行cueの再生待ちで古くなった身体値を、noticeの生成直前に更新する。
+                // 元の身体世代と環境差分のガードは保持し、通常移動だけでは取消さない。
+                let mut refreshed = action.clone();
+                if action.kind == crate::environment::notice::KIND {
+                    let mut data = self.data.lock().unwrap();
+                    let valid = data.sessions.get(&sid).is_some_and(|s|
+                        s.warning.as_ref().is_some_and(|w| w.turn == turn)
+                        && applicable(action, s, &config.warnings, &config.combat)
+                        && super::environment_runtime::refresh_dialogue_context(s, std::slice::from_mut(&mut refreshed)));
+                    if !valid {
+                        Self::cancel_warning(&mut data, &sid, "stale_environment_reaction");
+                        anyhow::bail!("stale environment reaction");
+                    }
+                }
+                if crate::environment::reaction::is_model_reaction(&refreshed) {
+                    let mut data = self.data.lock().unwrap();
+                    if let Some(s) = data.sessions.get_mut(&sid) {
+                        super::body_interest_runtime::attach(s, &turn, &mut refreshed, self.clock.elapsed().as_millis() as u64);
+                    }
+                }
+                if refreshed.kind == super::body_interest_runtime::KIND
+                    && !refreshed.leaf.as_ref().is_some_and(|l| l.details["reaction_context"]["body_options"].is_object()) {
+                    let mut data = self.data.lock().unwrap();
+                    Self::cancel_warning(&mut data, &sid, "body_decision_unavailable");
+                    anyhow::bail!("body decision unavailable");
+                }
+                let action = &refreshed;
+                // 数の報告は録音断片と欠損時のTTSを同じ倍率で少し速める。
+                let callout_rate = if action.visual_plan.as_ref().is_some_and(|p| p.kind == "hostile_count") {
+                    config.warnings.hostile_callout_playback_rate
+                } else { 1.0 };
+                let mut action_config = config.clone();
+                action_config.speed *= callout_rate;
+                let config = &action_config;
                 let action_began=AtomicBool::new(false);
                 let started=||{
-                    if !action_began.swap(true,Ordering::SeqCst){self.protect_action(&sid,&turn,action.protect_ms);}
+                    if !action_began.swap(true,Ordering::SeqCst){self.protect_action(&sid,&turn,action.protect_ms,index);}
                     if !began.swap(true,Ordering::SeqCst){self.warning_update(&sid,&turn,PlaybackStatus::Started,None);}
                 };
                 let mut text=action.text.clone();
@@ -804,7 +844,9 @@ impl Dialogue {
                     let input=json!({"op":"combat_leaf","model":config.model,"max_tokens":config.max_tokens,
                         "reading_engine":config.reading_engine,"kind":leaf.kind,"details":details,
                         "temperature":leaf.temperature,"fallback_text":text});
-                    let result=bridge::render(&config,&self.llm,input,&mut cancel).await;
+                    let result=if let Some(image)=action.image.as_deref() {
+                        super::reaction_runtime::render_image(&config,&self.llm,&input,&mut cancel,Some(image)).await
+                    } else {bridge::render(&config,&self.llm,input,&mut cancel).await};
                     if crate::reaction_leaf::is_model_reaction(action) {
                         anyhow::ensure!(!*cancel.borrow(),"cancelled");
                         let mut d=self.data.lock().unwrap();
@@ -817,6 +859,9 @@ impl Dialogue {
                             Self::cancel_warning(&mut d,&sid,"stale_environment_reaction");
                             anyhow::bail!("stale environment reaction");
                         }
+                        if let Some(s) = d.sessions.get_mut(&sid) {
+                            super::body_interest_runtime::apply(s, &turn, result.as_ref().ok(), self.clock.elapsed().as_millis() as u64);
+                        }
                     }
                     match result {
                         Ok(result)=>{
@@ -826,6 +871,7 @@ impl Dialogue {
                             let mut d=self.data.lock().unwrap();
                             if let Some(row)=d.rows.iter_mut().find(|r|r["turn_id"]==turn){
                                 row["text"]=display_text(&rendered).into();
+                                row["combat_actions"]=json!(rendered);
                                 if !row["llm_reports"].is_array(){row["llm_reports"]=json!([]);}
                                 if let Some(reports)=result["llm_reports"].as_array(){row["llm_reports"].as_array_mut().unwrap().extend(reports.iter().cloned());}
                             }
@@ -842,6 +888,7 @@ impl Dialogue {
                                 Self::remember_environment_outcome(&mut d,&turn,Some(&json!({key:"generation_error"})));
                                 if let Some(row)=d.rows.iter_mut().find(|r|r["turn_id"]==turn) {
                                     row["text"]=display_text(&rendered).into();
+                                    row["combat_actions"]=json!(rendered);
                                 }
                                 d.revision+=1;
                             }
@@ -850,6 +897,12 @@ impl Dialogue {
                 }
                 silent_only=false;
                 if !config.audio_enabled { continue; }
+                if action.light_comment.is_some() {
+                    // 照明は選択時に本文が完成している。追加生成をせず、表示本文を保ったまま
+                    // 共通の読み訂正・辞書処理だけを音声用テキストへ適用する。
+                    text=super::tts_runtime::read(&config,&text,&mut cancel,
+                        tokio::time::Instant::now()+Duration::from_secs(35)).await?;
+                }
                 if let Some(plan)=&action.visual_plan{
                     if let Some(cue)=&plan.cue{
                         if let Some(path)=config.warnings.cue_dir.as_deref().and_then(|dir|cue_path(dir,cue.id)){self.audio.play_file(&config,&path,&mut cancel,0,&started).await?;}
@@ -857,7 +910,7 @@ impl Dialogue {
                     }
                     if let Some(paths)=config.warnings.cue_dir.as_deref().and_then(|dir|plan.fragment_paths(dir)){
                         tracing::info!(event="warning_fragments",fragments=paths.len());
-                        for (i,path) in paths.iter().enumerate(){self.audio.play_file(&config,path,&mut cancel,i,&started).await?;}
+                        for (i,path) in paths.iter().enumerate(){self.audio.play_file_at_rate(config,path,&mut cancel,i,callout_rate,&started).await?;}
                     }else if !text.is_empty(){
                         if !plan.cue_sequence.is_empty(){tracing::warn!(event="warning_fragments_fallback",reason="file_missing");}
                         self.audio.speak(&config,&text,&mut cancel,&started).await?;
@@ -914,6 +967,7 @@ impl Dialogue {
             }
         }
         self.resume_deferred(&sid);
+        self.resume_reply_input(&sid);
     }
 }
 
@@ -957,7 +1011,7 @@ pub(super) fn answer_fixed_query(
     }
     session
         .combat
-        .answer_query(
+        .answer_classified_query(
             session.latest.as_ref().expect("fresh query"),
             text,
             now,

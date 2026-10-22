@@ -31,6 +31,12 @@ def run_case(name, text, arguments, *, expected_lines=None, expected_code=None, 
                 incoming.update(sampling)
             calls.append(incoming)
             tools = {tool["function"]["name"] for tool in incoming.get("tools", [])}
+            policy = "\n".join(m.get("content") or "" for m in incoming["messages"])
+            for stale in ["mora_count", "meter_delta", "confidence 0.85", "confidence（0.85以上）", "読み・音数・対象", "音数・他行"]:
+                assert stale not in policy, stale
+            for tool in incoming.get("tools", []):
+                if tool["function"]["name"] == "inspect_verse":
+                    assert tool["function"]["parameters"]["properties"]["checks"]["items"]["enum"] == ["reading", "source"]
             messages = [m for m in incoming["messages"] if m["role"] == "tool"]
             if messages:
                 assert incoming["tool_choice"] == "none" and len(messages) == 1, incoming
@@ -65,6 +71,9 @@ def run_case(name, text, arguments, *, expected_lines=None, expected_code=None, 
                 message = {"role":"assistant", "content":None, "tool_calls":native}
             else:
                 assert incoming.get("tool_choice") == "none" or "stage_player_edit" not in tools, incoming
+                # 受付失敗の再応答に検査を残すと、音数確認を挟む4呼出しへ戻ってしまう。
+                if not messages:
+                    assert "inspect_verse" not in tools, incoming
                 message = {"role":"assistant", "content":json.dumps(step(text, "respond",
                     "今の句を見ながら、一緒に考えよか。"), ensure_ascii=False)}
             return {"id":"edit-tool-smoke", "model":"fixture", "object":"chat.completion", "created":0,
@@ -141,6 +150,15 @@ def main():
         short = "くろいをあおに変えて"
         cases.append(run_case("short_meter_is_saved", short, edit_args(short, "あお"),
                               expected_lines=[LINES[0], "あおおのへと", LINES[2]]))
+        # 2026-10-22の実入力。指定した上句が5音でも長くても、音数照会を挟まず保存する。
+        for replacement in ["ひのあかり", "とてもながいひのあかり"]:
+            text = f"上の句を{replacement}に変更してください。"
+            arguments = {"line_id":"line_1", "expected_text":"ひかりさす",
+                "target_fragment":"", "line_reference_evidence":"上の句",
+                "replacement_text":replacement, "evidence":text, "confidence":.2}
+            cases.append(run_case("fire_light_no_meter_" + replacement, text, arguments,
+                initial_lines=["ひかりさす", "じゃんぐるのなか", "あめがふる"],
+                expected_lines=[replacement, "じゃんぐるのなか", "あめがふる"]))
         stale = edit_args(raw)
         stale["expected_text"] = "\n".join(["さくらいろ", *LINES[1:]])
         cases.append(run_case("stale_unselected_line_blocks_edit", raw, stale, expected_code="stale_tool_edit"))
@@ -178,7 +196,7 @@ def main():
                 "replacement_text":"ゆれるともしび", "evidence":text, "confidence":1.0}
             case = run_case(name, text, arguments, initial_lines=lamp_lines,
                 expected_lines=[lamp_lines[0], "ゆれるともしび", lamp_lines[2]])
-            assert case["reply"]["text"] == "変更しました。", case["reply"]
+            assert case["reply"]["text"] == "変更したで。", case["reply"]
             cases.append(case)
         text = "ではじめるをおわるに変えて"
         arguments = {"line_id":"line_1", "expected_text":"ではじめる",

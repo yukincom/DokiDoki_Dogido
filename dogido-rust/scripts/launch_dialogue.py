@@ -27,7 +27,8 @@ def check_runtime_files(root):
         "dogido-rust/scripts/haiku_tokens.py",
         "dogido-rust/scripts/tts_tokens_worker.py",
         "dogido-rust/scripts/combat_input_helper.py",
-        "reference/language_education_and_poetry",
+        "dogido-rust/scripts/request_classifier_worker.py",
+        "reference/language_education_and_poetry/index.json",
     ):
         if not (root / relative).exists():
             raise RuntimeError(f"起動用の資料が不足しています: {relative}")
@@ -53,6 +54,26 @@ def voice_settings(settings, folder):
         path = Path(getattr(settings, key))
         setattr(settings, key, path if path.is_absolute() else folder / path)
     return settings
+
+
+def request_classifier_settings(settings, folder):
+    """相対パスは設定フォルダ基準。未指定は従来動作、有効時の不備は起動失敗にする。"""
+    root = settings.request_classifier_model_root
+    python = settings.request_classifier_python
+    if root is not None:
+        root = (folder / root).resolve()
+        python = (folder / (python or Path(".dogido_tools/request_classifier/.venv/bin/python"))).resolve()
+        if not python.is_file() or not os.access(python, os.X_OK):
+            raise RuntimeError("依頼分類器のPython環境が見つかりません。")
+        # 数値ライブラリを初期化せず、既存workerと同じ採用記録・重み検査を使う。
+        from request_classifier_worker import digest, read_spec
+        manifest = root / "adopted-model.json"
+        read_spec({"manifest_path": str(manifest), "model_root": str(root),
+                   "manifest_sha256": digest(manifest)})
+    return {"model_root": str(root) if root is not None else None,
+            "python": str(python) if python is not None else None,
+            "load_timeout_ms": settings.request_classifier_load_timeout_ms,
+            "timeout_ms": settings.request_classifier_timeout_ms}
 
 
 def main():
@@ -160,6 +181,8 @@ def main():
         "platform_ai": {k: getattr(settings, "platform_ai_" + k) for k in (
             "provider", "timeout_sec", "refresh_sec", "failure_cooldown_sec", "foundry_model_alias", "allow_model_download")},
         "memory_dir": str(settings.memory_dir.resolve()),
+        "screenshot_dir": str(settings.minecraft_screenshots_dir.expanduser().resolve())
+            if settings.minecraft_screenshots_dir is not None else None,
     }
     for url in (base, haiku_base, settings.voicevox_url):
         if urlsplit(url).hostname not in {"127.0.0.1", "localhost", "::1"}:
@@ -174,6 +197,7 @@ def main():
     print("情景発話・発句・保存・掛け軸、句の共同編集・採否・読み訂正・保存した句の検索、詩とMinecraftの知識回答に対応。", flush=True)
     print(f"マイクは同じ設定・ポート {settings.bind_port} の起動指定に --voice を付け、別のターミナルで開始してください。", flush=True)
     print("終了はこのターミナルで Ctrl+C。共有MLXとVOICEVOX本体は停止しません。", flush=True)
+    classifier = request_classifier_settings(settings, folder)
     if args.check:
         check_runtime_files(ROOT)
         from tts_shared_tokens import handle as tokens_handle
@@ -196,11 +220,13 @@ def main():
         "--server-settings", json.dumps(server_settings),
         "--combat-settings", json.dumps(combat_settings),
         "--haiku-settings", json.dumps(haiku_settings),
+        "--request-classifier-settings", json.dumps(classifier),
+        "--chat-image-settings", json.dumps({"enabled": settings.chat_image_enabled, "wait_ms": settings.chat_image_wait_ms, "stop_reactions_enabled": settings.chat_image_stop_reactions_enabled}),
         "--warning-settings", json.dumps({
             **{key: getattr(settings, key) for key in (
                 "panic_distance", "rear_warning_distance", "recent_damage_window_ms",
                 "hostile_comment_cooldown_ms", "multi_hostile_comment_cooldown_ms", "panic_scream_cooldown_ms",
-                "hostile_mass_callout_threshold", "hostile_query_distance",
+                "hostile_mass_callout_threshold", "hostile_query_distance", "hostile_callout_playback_rate",
                 "other_realm_swarm_visual_threshold", "other_realm_audio_generic_threshold")},
             "battle_speed": settings.tts_speed_for_profile("battle"),
             "cue_dir": str(settings.cue_audio_dir.resolve()) if settings.cue_audio_dir is not None else None,

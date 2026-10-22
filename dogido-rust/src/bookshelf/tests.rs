@@ -1,0 +1,1065 @@
+use super::*;
+use crate::haiku_record::MemoryStore;
+use serde_json::json;
+use std::fs;
+
+struct Fixture {
+    root: PathBuf,
+}
+impl Fixture {
+    fn new() -> Self {
+        let root =
+            std::env::temp_dir().join(format!("dogido-bookshelf-tests-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&root).unwrap();
+        Self { root }
+    }
+    fn store(&self) -> store::Store {
+        store::Store {
+            memory: self.root.join("memory"),
+            photos: self.root.join("photos"),
+            screenshots: self.root.join("screenshots"),
+        }
+    }
+    fn poem(&self, source: &str, id: &str) -> PathBuf {
+        let mut dir = self.store().memory;
+        if source != "root" {
+            dir = dir.join("sessions").join(source);
+        }
+        fs::create_dir_all(dir.join("long_term")).unwrap();
+        fs::write(dir.join("long_term/haiku_entries.jsonl"),format!("{}\n",json!({"id":id,"kind":"player_haiku","author":"player","text":"あさのやま / とりのこえする / もりのみち","created_at":"2026-10-13T00:00:00Z","world":{"biome":"forest","time_phase":"day"}}))).unwrap();
+        fs::write(dir.join("long_term/haiku_revisions.jsonl"),format!("{}\n",json!({"id":"r1","haiku_id":id,"revised_text":"ひるのやま / とりのこえする / もりのみち","created_at":"2026-10-13T01:00:00Z"}))).unwrap();
+        dir
+    }
+    fn photo(&self) -> String {
+        let dir = self.store().photos;
+        fs::create_dir_all(&dir).unwrap();
+        // 読み取りテストの最小PNGヘッダー。実ブラウザー試験には完全なPNGを使う。
+        let mut png = b"\x89PNG\r\n\x1a\n\0\0\0\x0dIHDR".to_vec();
+        png.extend(2u32.to_be_bytes());
+        png.extend(2u32.to_be_bytes());
+        fs::write(dir.join("20261013_01.png"), png).unwrap();
+        "20261013_01".into()
+    }
+}
+impl Drop for Fixture {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.root);
+    }
+}
+fn now() -> chrono::DateTime<Utc> {
+    "2026-10-13T00:00:00Z".parse().unwrap()
+}
+
+fn capture(f: &Fixture) -> (String, crate::screenshot::Receipt) {
+    use sha2::{Digest, Sha256};
+    f.poem("s", "hk_new");
+    let s = f.store();
+    fs::create_dir_all(&s.screenshots).unwrap();
+    let mut bytes = b"\x89PNG\r\n\x1a\n\0\0\0\x0dIHDR".to_vec();
+    bytes.extend(2u32.to_be_bytes());
+    bytes.extend(3u32.to_be_bytes());
+    let filename = "dogido_2026-10-20_12.00.00.png".to_owned();
+    fs::write(s.screenshots.join(&filename), &bytes).unwrap();
+    (
+        format!("shot_{}", uuid::Uuid::new_v4()),
+        crate::screenshot::Receipt {
+            session_id: "s".into(),
+            poem_id: "session:s:hk_new".into(),
+            filename,
+            directory: s.screenshots,
+            sha256: format!("{:x}", Sha256::digest(&bytes)),
+            captured_at: now(),
+            capture_view: Some(crate::screenshot::CaptureView {
+                viewpoint: "dogido_client_render_eye".into(),
+                body_entity_uuid: "22222222-2222-4222-8222-222222222222".into(),
+                body_epoch: "33333333-3333-4333-8333-333333333333".into(),
+                owner_uuid: "11111111-1111-4111-8111-111111111111".into(),
+                dimension: "minecraft:overworld".into(),
+                camera_restored: true,
+            }),
+        },
+    )
+}
+#[test]
+fn minecraft_capture_registers_once_without_copying_or_changing_notes() {
+    let f = Fixture::new();
+    let (id, r) = capture(&f);
+    let s = f.store();
+    let before = s.player().unwrap();
+    s.register_capture(&id, &r).unwrap();
+    let p = s.photo_snapshot_now().unwrap();
+    let photo = format!("minecraft-{id}");
+    assert_eq!(
+        p["placements"]["poems:session:s:hk_new"],
+        json!([photo, null, null])
+    );
+    assert_eq!(p["items"][0]["source"], "minecraft");
+    assert_eq!(p["items"][0]["filename"], "dogido_2026-10-20_12.00.00.png");
+    assert_eq!(s.read().unwrap()["minecraftPhotos"][&photo]["receipt"]["capture_view"], json!(r.capture_view));
+    assert_eq!(s.player().unwrap(), before);
+    assert!(!s.photos.exists());
+    assert_eq!(
+        s.image_bytes(&photo).unwrap(),
+        fs::read(r.directory.join(&r.filename)).unwrap()
+    );
+    s.photo_edit(&json!({"revision":p["revision"],"titles":{},"placements":{"poems:session:s:hk_new":[null,null,null]}})).unwrap();
+    s.register_capture(&id, &r).unwrap();
+    assert_eq!(
+        s.photo_snapshot_now().unwrap()["placements"]["poems:session:s:hk_new"],
+        json!([null, null, null])
+    );
+}
+#[test]
+fn historical_minecraft_photo_without_capture_view_stays_readable_and_idempotent() {
+    let f = Fixture::new();
+    let (id, mut r) = capture(&f);
+    let old_name = "2026-10-20_12.00.00.png";
+    fs::rename(r.directory.join(&r.filename), r.directory.join(old_name)).unwrap();
+    r.filename = old_name.into();
+    r.capture_view = None;
+    // 以前の保存形にはcapture_view自体がない。再読込と再登録でその形を変えない。
+    let historical = json!(r);
+    assert!(historical.get("capture_view").is_none());
+    let r: crate::screenshot::Receipt = serde_json::from_value(historical.clone()).unwrap();
+    let s = f.store();
+    s.register_capture(&id, &r).unwrap();
+    let photo = format!("minecraft-{id}");
+    let before = s.read().unwrap();
+    assert_eq!(before["minecraftPhotos"][&photo]["receipt"], historical);
+    let reopened = f.store();
+    assert_eq!(reopened.photo_snapshot_now().unwrap()["items"][0]["filename"], old_name);
+    assert_eq!(reopened.image_bytes(&photo).unwrap(), fs::read(r.directory.join(old_name)).unwrap());
+    reopened.register_capture(&id, &r).unwrap();
+    assert_eq!(reopened.read().unwrap(), before);
+}
+#[test]
+fn minecraft_trash_restore_and_expiry_never_delete_original() {
+    let f = Fixture::new();
+    let (id, r) = capture(&f);
+    let s = f.store();
+    s.register_capture(&id, &r).unwrap();
+    let photo = format!("minecraft-{id}");
+    s.photo_change(&photo, false, now()).unwrap();
+    assert!(s.image_bytes(&photo).is_err());
+    s.register_capture(&id, &r).unwrap();
+    assert!(
+        s.photo_snapshot_now().unwrap()["items"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    s.photo_change(&photo, true, now()).unwrap();
+    assert_eq!(
+        s.photo_snapshot_now().unwrap()["placements"]["poems:session:s:hk_new"][0],
+        photo
+    );
+    s.photo_change(&photo, false, now()).unwrap();
+    s.purge(now() + chrono::Duration::days(30)).unwrap();
+    assert!(r.directory.join(&r.filename).is_file());
+    s.register_capture(&id, &r).unwrap();
+    assert!(
+        s.photo_snapshot_now().unwrap()["items"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        s.photo_change(&photo, true, now() + chrono::Duration::days(30))
+            .is_err()
+    );
+}
+#[test]
+fn minecraft_capture_rejects_wrong_directory_changed_file_and_deleted_poem() {
+    let f = Fixture::new();
+    let (id, mut r) = capture(&f);
+    let s = f.store();
+    r.directory = f.root.clone();
+    assert!(s.register_capture(&id, &r).is_err());
+    r.directory = s.screenshots.clone();
+    r.filename = "../bad.png".into();
+    assert!(s.register_capture(&id, &r).is_err());
+    r.filename = "dogido_2026-10-20_12.00.00.png".into();
+    r.sha256 = "0".repeat(64);
+    assert!(s.register_capture(&id, &r).is_err());
+    crate::poem_trash::change(&s.memory, &r.poem_id, false, now()).unwrap();
+    assert!(s.register_capture(&id, &r).is_err());
+    assert_eq!(s.photo_snapshot_now().unwrap()["revision"], 0);
+}
+#[test]
+fn minecraft_changed_original_is_not_served_or_restored() {
+    let f = Fixture::new();
+    let (id, r) = capture(&f);
+    let s = f.store();
+    s.register_capture(&id, &r).unwrap();
+    let photo = format!("minecraft-{id}");
+    fs::write(r.directory.join(&r.filename), b"changed").unwrap();
+    assert!(s.image_bytes(&photo).is_err());
+    s.photo_change(&photo, false, now()).unwrap();
+    assert!(s.photo_change(&photo, true, now()).is_err());
+    s.purge(now() + chrono::Duration::days(31)).unwrap();
+    assert_eq!(fs::read(r.directory.join(&r.filename)).unwrap(), b"changed");
+}
+#[test]
+fn minecraft_full_or_trashed_slots_are_not_overwritten() {
+    let f = Fixture::new();
+    let (id, r) = capture(&f);
+    let s = f.store();
+    let mut d = s.read().unwrap();
+    d["placements"]["poems:session:s:hk_new"] = json!(["occupied", "trashed", "third"]);
+    s.save_photos(&mut d).unwrap();
+    s.register_capture(&id, &r).unwrap();
+    assert_eq!(
+        s.read().unwrap()["placements"]["poems:session:s:hk_new"],
+        json!(["occupied", "trashed", "third"])
+    );
+    assert_eq!(
+        s.photo_snapshot_now().unwrap()["items"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+}
+#[tokio::test]
+async fn library_refresh_uses_existing_read_guard_and_reports_new_capture() {
+    let f = Fixture::new();
+    let (id, r) = capture(&f);
+    f.store().register_capture(&id, &r).unwrap();
+    let app = test_app(&f);
+    let (status, body) = call(
+        app.clone(),
+        "/api/library",
+        None,
+        "127.0.0.1:45678",
+        "secret-test-token",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["photos"]["items"][0]["id"], format!("minecraft-{id}"));
+    assert_eq!(body["poems"][0]["id"], r.poem_id);
+    let (status, _) = call(
+        app,
+        "/api/library",
+        None,
+        "127.0.0.1:45678",
+        "",
+        Some("http://other.invalid"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+}
+#[cfg(unix)]
+#[test]
+fn minecraft_symlink_cannot_register() {
+    let f = Fixture::new();
+    let (id, r) = capture(&f);
+    let s = f.store();
+    let original = s.screenshots.join(&r.filename);
+    let other = f.root.join("original.png");
+    fs::rename(&original, &other).unwrap();
+    std::os::unix::fs::symlink(other, original).unwrap();
+    assert!(s.register_capture(&id, &r).is_err());
+}
+
+#[test]
+fn offline_reads_are_real_and_do_not_create_storage() {
+    let f = Fixture::new();
+    let s = f.store();
+    assert!(store::poems(&s.memory, false).unwrap().is_empty());
+    assert_eq!(s.player().unwrap()["revision"], 0);
+    assert!(
+        s.photo_snapshot_now().unwrap()["items"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    assert!(!s.memory.exists());
+    assert!(!s.photos.exists());
+    let catalog = store::catalog();
+    assert!(catalog.len() > 100);
+    assert!(catalog.iter().any(|e| e["id"] == "mob:creeper"));
+    assert!(catalog.iter().all(|e| e["raw"]["label"].is_string()));
+}
+#[test]
+fn poem_preface_shows_original_inspiration_instead_of_recitation_cue() {
+    let f = Fixture::new();
+    let dir = f.poem("root", "p1");
+    let path = dir.join("long_term/haiku_entries.jsonl");
+    let mut row: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    let spoken = "黒い石の冷たさと、ブタのぬくもりが対照的やな、なんか浮かんできたわ。";
+    row["author"] = "dogido".into();
+    row["kind"] = "agent_haiku".into();
+    row["preface"] = "ここで一句。".into();
+    row["interpretation"] = "発話とは別の解釈".into();
+    row["materials_snapshot"] = json!({"preface_spoken":spoken});
+    let original = format!("{row}\n");
+    fs::write(&path, &original).unwrap();
+    let s = f.store();
+
+    let poems = store::poems(&s.memory, false).unwrap();
+    assert_eq!(poems[0]["preface"], spoken);
+    assert_eq!(poems[0]["revised"], true);
+    assert_eq!(poems[0]["lines"][0], "ひるのやま");
+    // 直し句とごみ箱でも、最初の発句に結び付いた同じ言葉を表示する。
+    crate::poem_trash::change(&s.memory, "root:p1", false, now()).unwrap();
+    assert_eq!(store::poems(&s.memory, true).unwrap()[0]["preface"], spoken);
+    assert_eq!(fs::read_to_string(&path).unwrap(), original);
+}
+
+#[test]
+fn missing_inspiration_is_not_filled_with_cue_or_unspoken_interpretation() {
+    let f = Fixture::new();
+    let dir = f.poem("root", "p1");
+    let path = dir.join("long_term/haiku_entries.jsonl");
+    let mut row: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    row["preface"] = "ここで一句。".into();
+    row["interpretation"] = "発話されていない見どころ".into();
+    for materials in [
+        Value::Null,
+        json!({}),
+        json!({"preface_spoken":null}),
+        json!({"preface_spoken":""}),
+        json!({"preface_spoken":" \n "}),
+        json!({"preface_spoken":{"text":"不正な形式"}}),
+    ] {
+        row["materials_snapshot"] = materials;
+        let original = format!("{row}\n");
+        fs::write(&path, &original).unwrap();
+        assert!(store::poems(&f.store().memory, false).unwrap()[0]["preface"].is_null());
+        assert_eq!(fs::read_to_string(&path).unwrap(), original);
+    }
+}
+
+#[test]
+fn poem_delete_restore_and_expiry_use_exact_source_and_hide_core_recall() {
+    let f = Fixture::new();
+    let root = f.poem("root", "same");
+    let other = f.poem("another", "same");
+    let s = f.store();
+    crate::poem_trash::change(&s.memory, "root:same", false, now()).unwrap();
+    assert!(
+        MemoryStore::new(&root)
+            .local_poem_rows("haiku_entries.jsonl")
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        MemoryStore::new(&root)
+            .local_poem_rows("haiku_revisions.jsonl")
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        MemoryStore::new(&other)
+            .local_poem_rows("haiku_entries.jsonl")
+            .unwrap()
+            .len(),
+        1
+    );
+    let rows = MemoryStore::new(&s.memory)
+        .poem_rows("haiku_entries.jsonl")
+        .unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(store::poems(&s.memory, false).unwrap().len(), 1);
+    let deleted = store::poems(&s.memory, true).unwrap();
+    assert_eq!(deleted.len(), 1);
+    assert_eq!(deleted[0]["history"].as_array().unwrap().len(), 1);
+    // 二度削除しても期限を延長しない。
+    crate::poem_trash::change(
+        &s.memory,
+        "root:same",
+        false,
+        now() + chrono::Duration::days(2),
+    )
+    .unwrap();
+    assert_eq!(
+        deleted[0]["expiresAt"],
+        store::poems(&s.memory, true).unwrap()[0]["expiresAt"]
+    );
+    crate::poem_trash::change(
+        &s.memory,
+        "root:same",
+        true,
+        now() + chrono::Duration::days(29),
+    )
+    .unwrap();
+    assert_eq!(store::poems(&s.memory, false).unwrap().len(), 2);
+    crate::poem_trash::change(&s.memory, "root:same", false, now()).unwrap();
+    assert!(
+        crate::poem_trash::change(
+            &s.memory,
+            "root:same",
+            true,
+            now() + chrono::Duration::days(30)
+        )
+        .is_err()
+    );
+    s.purge(now() + chrono::Duration::days(30)).unwrap();
+    assert!(
+        crate::poem_trash::raw_rows(&root, "haiku_entries.jsonl")
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        crate::poem_trash::raw_rows(&root, "haiku_revisions.jsonl")
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        crate::poem_trash::raw_rows(&other, "haiku_entries.jsonl")
+            .unwrap()
+            .len(),
+        1
+    );
+    assert!(crate::poem_trash::is_deleted(&root, "same").unwrap());
+}
+#[test]
+fn poem_keys_are_unique_even_when_session_is_named_root() {
+    let f = Fixture::new();
+    f.poem("root", "same");
+    let s = f.store();
+    fs::create_dir_all(s.memory.join("sessions/root/long_term")).unwrap();
+    fs::copy(
+        s.memory.join("long_term/haiku_entries.jsonl"),
+        s.memory.join("sessions/root/long_term/haiku_entries.jsonl"),
+    )
+    .unwrap();
+    let rows = store::poems(&s.memory, false).unwrap();
+    assert_ne!(rows[0]["id"], rows[1]["id"]);
+    for row in rows {
+        let (dir, id) = crate::poem_trash::resolve(&s.memory, row["id"].as_str().unwrap()).unwrap();
+        assert!(dir.join("long_term/haiku_entries.jsonl").exists());
+        assert_eq!(id, "same");
+    }
+    assert!(crate::poem_trash::resolve(&s.memory, "root:../../outside").is_err());
+}
+#[test]
+fn metadata_and_photo_saves_have_independent_cas_and_restore_placements() {
+    let f = Fixture::new();
+    f.poem("root", "p1");
+    let id = f.photo();
+    let s = f.store();
+    let edited=s.edit(&json!({"revision":0,"section":"poems","key":"root:p1","value":{"favorite":true,"note":"大事な句"}})).unwrap();
+    assert_eq!(edited["revision"], 1);
+    assert!(s.edit(&json!({"revision":0,"section":"poems","key":"root:p1","value":{"favorite":false,"note":""}})).is_err());
+    let photos=s.photo_edit(&json!({"revision":0,"titles":{&id:"森の写真"},"placements":{"poems:root:p1":[id,null,null]}})).unwrap();
+    assert_eq!(photos["revision"], 1);
+    s.photo_change(&id, false, now()).unwrap();
+    assert!(
+        s.photo_snapshot_now().unwrap()["items"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        s.photo_snapshot_now().unwrap()["placements"]["poems:root:p1"][0],
+        Value::Null
+    );
+    assert!(s.image(&id).is_err());
+    assert!(s.photos.join(format!("{id}.png")).exists());
+    s.photo_change(&id, true, now() + chrono::Duration::days(29))
+        .unwrap();
+    assert_eq!(
+        s.photo_snapshot_now().unwrap()["items"][0]["title"],
+        "森の写真"
+    );
+    assert_eq!(
+        s.photo_snapshot_now().unwrap()["placements"]["poems:root:p1"][0],
+        id
+    );
+    crate::poem_trash::change(&s.memory, "root:p1", false, now()).unwrap();
+    assert_eq!(
+        s.photo_snapshot_now().unwrap()["items"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    s.photo_change(&id, false, now()).unwrap();
+    assert!(
+        s.photo_change(&id, true, now() + chrono::Duration::days(30))
+            .is_err()
+    );
+    s.purge(now() + chrono::Duration::days(30)).unwrap();
+    assert!(!s.photos.join(format!("{id}.png")).exists());
+}
+#[test]
+fn changed_photo_file_is_never_purged() {
+    let f = Fixture::new();
+    let id = f.photo();
+    let s = f.store();
+    s.photo_change(&id, false, now()).unwrap();
+    let path = s.photos.join(format!("{id}.png"));
+    fs::write(&path, b"replacement file").unwrap();
+    assert!(s.purge(now() + chrono::Duration::days(31)).is_err());
+    assert_eq!(fs::read(path).unwrap(), b"replacement file");
+}
+
+#[test]
+fn editing_another_slot_keeps_deleted_photo_for_restore() {
+    let f = Fixture::new();
+    f.poem("root", "p1");
+    let a = f.photo();
+    let s = f.store();
+    fs::copy(
+        s.photos.join(format!("{a}.png")),
+        s.photos.join("20261013_02.png"),
+    )
+    .unwrap();
+    let b = "20261013_02";
+    s.photo_edit(&json!({"revision":0,"titles":{},"placements":{"poems:root:p1":[a,null,null]}}))
+        .unwrap();
+    s.photo_change(&a, false, now()).unwrap();
+    s.photo_edit(&json!({"revision":2,"titles":{},"placements":{"poems:root:p1":[null,b,null]}}))
+        .unwrap();
+    s.photo_change(&a, true, now() + chrono::Duration::days(1))
+        .unwrap();
+    assert_eq!(
+        s.photo_snapshot_now().unwrap()["placements"]["poems:root:p1"],
+        json!([a, b, null])
+    );
+    // 削除写真の枠自体を別写真に置き換えた場合は、復元しても上書きしない。
+    s.photo_change(&a, false, now()).unwrap();
+    s.photo_edit(&json!({"revision":5,"titles":{},"placements":{"poems:root:p1":[b,null,null]}}))
+        .unwrap();
+    s.photo_change(&a, true, now() + chrono::Duration::days(1))
+        .unwrap();
+    assert_eq!(
+        s.photo_snapshot_now().unwrap()["placements"]["poems:root:p1"],
+        json!([b, null, null])
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn linked_parent_directories_cannot_purge_another_store() {
+    let f = Fixture::new();
+    let outside = Fixture::new();
+    let dir = outside.poem("another", "p");
+    crate::poem_trash::change(&outside.store().memory, "session:another:p", false, now()).unwrap();
+    let s = f.store();
+    fs::create_dir_all(&s.memory).unwrap();
+    std::os::unix::fs::symlink(
+        outside.store().memory.join("sessions"),
+        s.memory.join("sessions"),
+    )
+    .unwrap();
+    assert_eq!(crate::poem_book::directories(&s.memory).unwrap().len(), 1);
+    assert!(crate::poem_trash::change(&s.memory, "session:another:p", false, now()).is_err());
+    s.purge(now() + chrono::Duration::days(31)).unwrap();
+    assert_eq!(
+        crate::poem_trash::raw_rows(&dir, "haiku_entries.jsonl")
+            .unwrap()
+            .len(),
+        1
+    );
+    outside.photo();
+    std::os::unix::fs::symlink(outside.store().photos, &s.photos).unwrap();
+    assert!(s.photo_change("20261013_01", false, now()).is_err());
+    assert!(outside.store().photos.join("20261013_01.png").exists());
+}
+#[test]
+fn corrupt_poem_records_are_not_discarded_by_cleanup() {
+    let f = Fixture::new();
+    let root = f.poem("root", "p");
+    let s = f.store();
+    crate::poem_trash::change(&s.memory, "root:p", false, now()).unwrap();
+    let path = root.join("long_term/haiku_entries.jsonl");
+    fs::write(&path, b"{broken\n").unwrap();
+    assert!(s.purge(now() + chrono::Duration::days(31)).is_err());
+    assert_eq!(fs::read(path).unwrap(), b"{broken\n");
+}
+#[cfg(unix)]
+#[test]
+fn photo_and_session_symlinks_are_not_followed() {
+    let f = Fixture::new();
+    let s = f.store();
+    fs::create_dir_all(&s.photos).unwrap();
+    let outside = f.root.join("outside");
+    fs::write(&outside, b"preserve").unwrap();
+    std::os::unix::fs::symlink(&outside, s.photos.join("20261013_01.png")).unwrap();
+    assert!(
+        s.photo_snapshot_now().unwrap()["items"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    assert!(s.photo_change("20261013_01", false, now()).is_err());
+    fs::create_dir_all(s.memory.join("sessions")).unwrap();
+    std::os::unix::fs::symlink(&f.root, s.memory.join("sessions/link")).unwrap();
+    assert_eq!(crate::poem_book::directories(&s.memory).unwrap().len(), 1);
+}
+fn test_app(f: &Fixture) -> Arc<App> {
+    Arc::new(App {
+        store: f.store(),
+        ui: f.root.join("ui"),
+        csrf: "secret-test-token".into(),
+        origin: "http://127.0.0.1:45678".into(),
+        authority: "127.0.0.1:45678".into(),
+        memory_enabled: true,
+    })
+}
+async fn call(
+    app: Arc<App>,
+    path: &str,
+    body: Option<Value>,
+    host: &str,
+    token: &str,
+    origin: Option<&str>,
+) -> (StatusCode, Value) {
+    use tower::ServiceExt;
+    let mut req = axum::http::Request::builder()
+        .uri(path)
+        .header("Host", host)
+        .header("Content-Type", "application/json");
+    if let Some(origin) = origin {
+        req = req.header("Origin", origin);
+    }
+    if !token.is_empty() {
+        req = req.header("X-Dogido-Library", token);
+    }
+    let req = if let Some(body) = body {
+        req.method(if path == "/api/poems/export" {
+            "POST"
+        } else {
+            "PUT"
+        })
+        .body(Body::from(body.to_string()))
+        .unwrap()
+    } else {
+        req.body(Body::empty()).unwrap()
+    };
+    let response = router(app).oneshot(req).await.unwrap();
+    let status = response.status();
+    let bytes = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+        .await
+        .unwrap();
+    (
+        status,
+        serde_json::from_slice(&bytes).unwrap_or(Value::Null),
+    )
+}
+#[tokio::test]
+async fn http_bootstrap_rejects_cross_origin_scripts_even_on_same_local_host() {
+    use tower::ServiceExt;
+    let f = Fixture::new();
+    let app = test_app(&f);
+    for site in ["same-site", "cross-site", "unexpected"] {
+        let req = axum::http::Request::builder()
+            .uri("/bootstrap.js")
+            .header(header::HOST, "127.0.0.1:45678")
+            .header("sec-fetch-site", site)
+            .body(Body::empty())
+            .unwrap();
+        assert_eq!(
+            router(app.clone()).oneshot(req).await.unwrap().status(),
+            StatusCode::FORBIDDEN
+        );
+    }
+    for site in [None, Some("same-origin"), Some("none")] {
+        let mut req = axum::http::Request::builder()
+            .uri("/bootstrap.js")
+            .header(header::HOST, "127.0.0.1:45678");
+        if let Some(site) = site {
+            req = req.header("sec-fetch-site", site);
+        }
+        let response = router(app.clone())
+            .oneshot(req.body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers()["cross-origin-resource-policy"],
+            "same-origin"
+        );
+    }
+}
+#[tokio::test]
+async fn http_write_requires_same_host_and_token_and_updates_shared_reading() {
+    let f = Fixture::new();
+    let app = test_app(&f);
+    let edit = json!({"surface":"草地","reading":"くさち","entry_id":null,"wrong_reading":null,"expected_id":null});
+    for (host, token, origin) in [
+        ("evil.example", "secret-test-token", None),
+        ("127.0.0.1:45678", "", None),
+        (
+            "127.0.0.1:45678",
+            "secret-test-token",
+            Some("https://evil.example"),
+        ),
+    ] {
+        assert_eq!(
+            call(
+                app.clone(),
+                "/api/readings",
+                Some(edit.clone()),
+                host,
+                token,
+                origin
+            )
+            .await
+            .0,
+            StatusCode::FORBIDDEN
+        );
+    }
+    let (status, body) = call(
+        app.clone(),
+        "/api/readings",
+        Some(edit.clone()),
+        "127.0.0.1:45678",
+        "secret-test-token",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["correction"]["reading"], "くさち");
+    let rows = MemoryStore::new(&app.store.memory)
+        .reading_corrections()
+        .unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0]["reading"], "くさち");
+    assert_eq!(
+        call(
+            app.clone(),
+            "/api/readings",
+            Some(edit),
+            "127.0.0.1:45678",
+            "secret-test-token",
+            None
+        )
+        .await
+        .0,
+        StatusCode::CONFLICT
+    );
+    assert_eq!(
+        call(app, "/.env", None, "127.0.0.1:45678", "", None)
+            .await
+            .0,
+        StatusCode::NOT_FOUND
+    );
+}
+#[tokio::test]
+async fn http_poem_trash_works_without_game_session() {
+    let f = Fixture::new();
+    f.poem("root", "p1");
+    let app = test_app(&f);
+    let (status, _) = call(
+        app.clone(),
+        "/api/trash",
+        Some(json!({"kind":"poem","id":"root:p1","restore":false})),
+        "127.0.0.1:45678",
+        "secret-test-token",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(store::poems(&app.store.memory, false).unwrap().is_empty());
+    let (_, body) = call(app.clone(), "/api/trash", None, "127.0.0.1:45678", "", None).await;
+    assert_eq!(body["items"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        call(
+            app.clone(),
+            "/api/trash",
+            Some(json!({"kind":"poem","id":"root:p1","restore":true})),
+            "127.0.0.1:45678",
+            "secret-test-token",
+            None
+        )
+        .await
+        .0,
+        StatusCode::OK
+    );
+    assert_eq!(store::poems(&app.store.memory, false).unwrap().len(), 1);
+}
+
+fn records(path: &std::path::Path, rows: &[Value]) {
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(
+        path,
+        rows.iter().map(|v| format!("{v}\n")).collect::<String>(),
+    )
+    .unwrap();
+}
+fn talk(session: &str, wid: &str, turn: &str, player: &str) -> Value {
+    json!({"type":"dialogue_event","kind":"workshop_dialogue","time":"2026-10-13T02:00:00Z",
+        "session_id":session,"session_instance":"instance", "event_id":format!("workshop:{turn}"),"workshop_id":wid,
+        "details":{"input_turn_id":turn,"player_text":player,"dogido_text":"返答"}})
+}
+#[test]
+fn original_materials_and_delivered_dialogue_are_projected_without_mutation() {
+    let f = Fixture::new();
+    let dir = f.poem("a", "same");
+    f.poem("b", "same");
+    let path = dir.join("long_term/haiku_entries.jsonl");
+    let mut row: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    row["materials_snapshot"] =
+        json!({"interpretation":"元の解釈","source_atoms":[{"atom_id":"one","text":"材料"}]});
+    records(&path, &[row.clone()]);
+    let before = fs::read(&path).unwrap();
+    records(
+        &dir.join("long_term/haiku_workshop_turns.jsonl"),
+        &[
+            json!({"session_id":"a","state_after":{"workshop_id":"w","entry_id":"same"},"player_text":"操作のみ"}),
+            json!({"session_id":"a","state_before":{"workshop_id":"w","entry_id":"same"}}),
+        ],
+    );
+    let first = talk("a", "w", "t1", "同じ言葉");
+    let second = talk("a", "w", "t2", "同じ言葉");
+    let mut unspoken = talk("a", "w", "t3", "未発話");
+    unspoken["kind"] = "workshop_unspoken".into();
+    records(
+        &dir.join("short_term/current_session.jsonl"),
+        &[
+            first.clone(),
+            first,
+            second,
+            unspoken,
+            talk("other", "w", "t4", "別session"),
+        ],
+    );
+    let poems = store::poems(&f.store().memory, false).unwrap();
+    let p = poems.iter().find(|p| p["id"] == "session:a:same").unwrap();
+    assert_eq!(p["originalLines"][0], "あさのやま");
+    assert_eq!(p["lines"][0], "ひるのやま");
+    assert_eq!(p["original"], row);
+    assert_eq!(p["materials"]["interpretation"], "元の解釈");
+    assert_eq!(p["dialogue"].as_array().unwrap().len(), 2);
+    assert!(
+        poems.iter().find(|p| p["id"] == "session:b:same").unwrap()["dialogue"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(fs::read(path).unwrap(), before);
+    assert!(!f.store().memory.join("bookshelf").exists());
+}
+#[test]
+fn ambiguous_workshop_links_are_not_guessed_and_conflicting_dialogue_fails() {
+    let f = Fixture::new();
+    let dir = f.poem("a", "p");
+    let mapping = dir.join("long_term/haiku_workshop_turns.jsonl");
+    records(
+        &mapping,
+        &[
+            json!({"session_id":"a","workshop_id":"w","entry_id":"p","state_after":{"workshop_id":"w","entry_id":"other"}}),
+        ],
+    );
+    records(
+        &dir.join("short_term/current_session.jsonl"),
+        &[talk("a", "w", "t", "質問")],
+    );
+    assert!(research::dialogue(&dir).unwrap().is_empty());
+    records(
+        &mapping,
+        &[json!({"session_id":"a","workshop_id":"w","entry_id":"p"})],
+    );
+    records(
+        &dir.join("short_term/current_session.jsonl"),
+        &[
+            talk("a", "w", "t", "質問"),
+            talk("a", "w", "t", "異なる質問"),
+        ],
+    );
+    assert!(research::dialogue(&dir).is_err());
+}
+#[cfg(unix)]
+#[test]
+fn dialogue_reader_rejects_links_and_corruption_without_creating_missing_files() {
+    let f = Fixture::new();
+    let dir = f.poem("a", "p");
+    assert!(research::dialogue(&dir).unwrap().is_empty());
+    assert!(!dir.join("short_term").exists());
+    let outside = f.root.join("external");
+    fs::create_dir_all(&outside).unwrap();
+    std::os::unix::fs::symlink(&outside, dir.join("short_term")).unwrap();
+    assert!(research::dialogue(&dir).is_err());
+    fs::remove_file(dir.join("short_term")).unwrap();
+    fs::create_dir(dir.join("short_term")).unwrap();
+    let path = dir.join("short_term/current_session.jsonl");
+    fs::write(outside.join("data"), "{}\n").unwrap();
+    std::os::unix::fs::symlink(outside.join("data"), &path).unwrap();
+    assert!(research::dialogue(&dir).is_err());
+    fs::remove_file(&path).unwrap();
+    fs::write(&path, "{broken\n").unwrap();
+    assert!(research::dialogue(&dir).is_err());
+    assert_eq!(fs::read_to_string(path).unwrap(), "{broken\n");
+}
+fn period(start: &str, end: &str) -> research::Period {
+    research::Period {
+        start_month: start.into(),
+        end_month: end.into(),
+    }
+}
+#[test]
+fn month_bounds_are_jst_half_open_and_validate_calendar_months() {
+    let (start, end) = period("2026-10", "2026-10").bounds().unwrap();
+    assert_eq!(
+        start.with_timezone(&Utc).to_rfc3339(),
+        "2026-09-30T15:00:00+00:00"
+    );
+    assert_eq!(
+        end.with_timezone(&Utc).to_rfc3339(),
+        "2026-10-31T15:00:00+00:00"
+    );
+    assert_eq!(
+        period("2024-02", "2024-02")
+            .bounds()
+            .unwrap()
+            .1
+            .to_rfc3339(),
+        "2024-03-01T00:00:00+09:00"
+    );
+    assert_eq!(
+        period("2026-12", "2026-12")
+            .bounds()
+            .unwrap()
+            .1
+            .to_rfc3339(),
+        "2027-01-01T00:00:00+09:00"
+    );
+    for (a, b) in [
+        ("2026-11", "2026-10"),
+        ("2026-13", "2026-13"),
+        ("2026-1", "2026-10"),
+        ("wrongxx", "2026-10"),
+        ("2026-00", "2026-01"),
+    ] {
+        assert!(period(a, b).bounds().is_err());
+    }
+}
+#[test]
+fn export_selects_original_month_with_all_history_notes_and_photo_references() {
+    let f = Fixture::new();
+    let dir = f.poem("root", "p");
+    let s = f.store();
+    let photo = f.photo();
+    let path = dir.join("long_term/haiku_entries.jsonl");
+    let mut row: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    let revision = json!({"id":"r2","haiku_id":"p","created_at":"2026-11-20T00:00:00Z","revised_text":"あとから / 修正した句 / 残します"});
+    records(
+        &dir.join("long_term/haiku_revisions.jsonl"),
+        std::slice::from_ref(&revision),
+    );
+    s.edit(&json!({"revision":0,"section":"poems","key":"root:p","value":{"favorite":true,"note":"研究メモ"}})).unwrap();
+    s.photo_edit(&json!({"revision":0,"titles":{&photo:"写真"},"placements":{"poems:root:p":[photo,null,null]}})).unwrap();
+    let state = fs::read(s.memory.join("bookshelf/state.json")).unwrap();
+    for (created, count) in [
+        ("2026-09-30T14:59:59Z", 0),
+        ("2026-09-30T15:00:00Z", 1),
+        ("2026-10-01T00:00:00+09:00", 1),
+        ("2026-10-31T14:59:59Z", 1),
+        ("2026-10-31T15:00:00Z", 0),
+    ] {
+        row["created_at"] = created.into();
+        records(&path, &[row.clone()]);
+        let export = research::export(&s, &period("2026-10", "2026-10"), now()).unwrap();
+        assert_eq!(export["poems"].as_array().unwrap().len(), count);
+        if count == 1 {
+            let p = &export["poems"][0];
+            assert_eq!(p["current"], revision);
+            assert_eq!(p["revisions"].as_array().unwrap().len(), 1);
+            assert_eq!(p["player"]["note"], "研究メモ");
+            assert_eq!(p["photos"]["references"][0]["id"], photo);
+            assert!(p["photos"]["references"][0].get("url").is_none());
+        }
+    }
+    row["created_at"] = "2026-10-10T00:00:00Z".into();
+    records(&path, &[row.clone()]);
+    crate::poem_trash::change(&s.memory, "root:p", false, now()).unwrap();
+    assert!(
+        research::export(&s, &period("2026-10", "2026-10"), now()).unwrap()["poems"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    crate::poem_trash::change(&s.memory, "root:p", true, now()).unwrap();
+    assert_eq!(
+        research::export(&s, &period("2026-10", "2026-10"), now()).unwrap()["poems"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    row["created_at"] = "invalid".into();
+    records(&path, &[row]);
+    assert!(research::export(&s, &period("2026-10", "2026-10"), now()).is_err());
+    assert_eq!(
+        fs::read(s.memory.join("bookshelf/state.json")).unwrap(),
+        state
+    );
+}
+#[test]
+fn metadata_contract_rejects_removed_ratings_and_preserves_note_on_failure() {
+    let f = Fixture::new();
+    f.poem("root", "p");
+    let s = f.store();
+    s.edit(&json!({"revision":0,"section":"poems","key":"root:p","value":{"favorite":true,"note":"保持"}})).unwrap();
+    let before = s.player().unwrap();
+    assert!(s.edit(&json!({"revision":1,"section":"poems","key":"root:p","value":{"rating":5,"favorite":false,"note":""}})).is_err());
+    assert_eq!(s.player().unwrap(), before);
+    assert!(
+        !serde_json::to_string(
+            &research::export(&s, &period("2026-10", "2026-10"), now()).unwrap()
+        )
+        .unwrap()
+        .contains("rating")
+    );
+}
+#[tokio::test]
+async fn export_requires_same_origin_token_and_valid_period() {
+    let f = Fixture::new();
+    f.poem("root", "p");
+    let app = test_app(&f);
+    let body = json!({"startMonth":"2026-10","endMonth":"2026-10"});
+    assert_eq!(
+        call(
+            app.clone(),
+            "/api/poems/export",
+            Some(body.clone()),
+            "127.0.0.1:45678",
+            "",
+            None
+        )
+        .await
+        .0,
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        call(
+            app.clone(),
+            "/api/poems/export",
+            Some(body.clone()),
+            "127.0.0.1:45678",
+            "secret-test-token",
+            Some("http://elsewhere.invalid")
+        )
+        .await
+        .0,
+        StatusCode::FORBIDDEN
+    );
+    let (status, value) = call(
+        app.clone(),
+        "/api/poems/export",
+        Some(body),
+        "127.0.0.1:45678",
+        "secret-test-token",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(value["poems"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        call(
+            app,
+            "/api/poems/export",
+            Some(json!({"startMonth":"2026-13","endMonth":"2026-10"})),
+            "127.0.0.1:45678",
+            "secret-test-token",
+            None
+        )
+        .await
+        .0,
+        StatusCode::BAD_REQUEST
+    );
+}

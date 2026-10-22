@@ -1,3 +1,5 @@
+//! 既存Chat Completionsへ一要求を一回送信し、本文と終了情報だけを返す。
+//! 任意画像は通常会話の最後のuser入力にだけ添付し、履歴・保存・取消の判断は呼出側が所有する。
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail, ensure};
@@ -7,6 +9,7 @@ use rig_core::{
     providers::openai,
 };
 use serde_json::{Value, json};
+use tracing::instrument::WithSubscriber;
 
 use crate::types::{GeneratedText, GenerationReport, GenerationRequest, Role};
 
@@ -58,7 +61,17 @@ impl RigLlm {
     }
 
     pub async fn generate(&self, input: &GenerationRequest) -> Result<GenerationReport> {
-        Ok(self.complete(input, &[], &[], false).await?.0)
+        Ok(self.complete(input, &[], &[], false, None).await?.0)
+    }
+
+    /// 検証した画像一枚を同じ通常会話の要求へ添え、一回だけ送信する。
+    /// 不正画像・通信失敗でも画像なしの再送はせず、画像本文を結果やログへ戻さない。
+    pub async fn generate_with_image(
+        &self,
+        input: &GenerationRequest,
+        image: &crate::chat_image::Attachment,
+    ) -> Result<GenerationReport> {
+        Ok(self.complete(input, &[], &[], false, Some(image)).await?.0)
     }
 
     /// 許可された道具定義と、直前の呼出し・実行結果を既存Chat Completionsへ載せる。
@@ -70,7 +83,8 @@ impl RigLlm {
         tool_messages: &[Value],
         allow_call: bool,
     ) -> Result<(GenerationReport, Option<Value>)> {
-        self.complete(input, tools, tool_messages, allow_call).await
+        self.complete(input, tools, tool_messages, allow_call, None)
+            .await
     }
 
     async fn complete(
@@ -79,10 +93,11 @@ impl RigLlm {
         tools: &[Value],
         tool_messages: &[Value],
         allow_call: bool,
+        image: Option<&crate::chat_image::Attachment>,
     ) -> Result<(GenerationReport, Option<Value>)> {
         ensure!(self.enabled, "LLM disabled by configuration");
         input.validate()?;
-        let mut request = to_rig_request(input);
+        let mut request = request_with_image(input, image)?;
         if !tools.is_empty() {
             let params = request.additional_params.as_mut().unwrap();
             params["tools"] = json!(tools);
@@ -94,10 +109,20 @@ impl RigLlm {
         }
         let model = self.client.completion_model(&input.model);
         let start = Instant::now();
-        let response = tokio::time::timeout(self.timeout, model.raw_completion(request))
+        let completion = model.raw_completion(request);
+        // Rigはtelemetry本文を無効にしてもTRACEで送信JSONを出す。
+        // 画像を含む要求だけprovider内部の購読を外し、base64を診断ログへ残さない。
+        let response = if image.is_some() {
+            tokio::time::timeout(
+                self.timeout,
+                completion.with_subscriber(tracing::subscriber::NoSubscriber::default()),
+            )
             .await
-            .context("LLM request timed out; no retry was sent")?
-            .context("Rig Chat Completions request failed")?;
+        } else {
+            tokio::time::timeout(self.timeout, completion).await
+        }
+        .context("LLM request timed out; no retry was sent")?
+        .context("Rig Chat Completions request failed")?;
         let mut body = serde_json::to_value(&response)?;
         let message = &body["choices"][0]["message"];
         let tool_message = (!tools.is_empty()
@@ -125,6 +150,37 @@ impl RigLlm {
             tool_message,
         ))
     }
+}
+
+/// 既存の文字列メッセージは変更せず、送信用JSONの最後のuserだけを画像付きcontentへ変える。
+/// 先行する会話・system・assistantはそのままにし、画像の意味判断はこの層で行わない。
+fn request_with_image(
+    input: &GenerationRequest,
+    image: Option<&crate::chat_image::Attachment>,
+) -> Result<CompletionRequest> {
+    let mut request = to_rig_request(input);
+    if let Some(image) = image {
+        ensure!(
+            matches!(input.kind.as_str(), "player_chat" | "environment_reaction"),
+            "chat_image_wrong_generation_kind"
+        );
+        image.validate()?;
+        let index = input
+            .messages
+            .iter()
+            .rposition(|message| message.role == Role::User)
+            .context("chat_image_user_message_missing")?;
+        let text = format!(
+            "{}\n\n{}",
+            input.messages[index].content,
+            image.metadata_text()
+        );
+        request.additional_params.as_mut().unwrap()["messages"][index]["content"] = json!([
+            {"type":"text","text":text},
+            {"type":"image_url","image_url":{"url":image.data_url()}},
+        ]);
+    }
+    Ok(request)
 }
 
 fn to_rig_request(input: &GenerationRequest) -> CompletionRequest {
@@ -205,6 +261,111 @@ pub fn decode_response(body: &Value) -> Result<GeneratedText> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn chat_request() -> GenerationRequest {
+        GenerationRequest {
+            schema_version: 1,
+            kind: "player_chat".into(),
+            model: "fixture".into(),
+            messages: vec![
+                crate::types::ChatMessage {
+                    role: Role::System,
+                    content: "system".into(),
+                },
+                crate::types::ChatMessage {
+                    role: Role::User,
+                    content: "先の質問".into(),
+                },
+                crate::types::ChatMessage {
+                    role: Role::Assistant,
+                    content: "先の返事".into(),
+                },
+                crate::types::ChatMessage {
+                    role: Role::User,
+                    content: "今回の質問".into(),
+                },
+                crate::types::ChatMessage {
+                    role: Role::Assistant,
+                    content: "後続は変更しない".into(),
+                },
+            ],
+            temperature: 0.65,
+            max_tokens: 72,
+            enable_thinking: false,
+        }
+    }
+
+    #[test]
+    fn absent_image_preserves_text_payload_exactly() {
+        let input = chat_request();
+        let request = request_with_image(&input, None).unwrap();
+        let parameters = request.additional_params.unwrap();
+        assert_eq!(parameters["messages"], json!(input.messages));
+        assert_eq!(
+            parameters,
+            to_rig_request(&input).additional_params.unwrap()
+        );
+        assert!(!request.record_telemetry_content);
+    }
+
+    #[test]
+    fn image_changes_only_last_user_and_keeps_source_messages_unchanged() {
+        let input = chat_request();
+        let original = json!(input.messages);
+        let image = crate::chat_image::tests::image();
+        let request = request_with_image(&input, Some(&image)).unwrap();
+        let parameters = request.additional_params.unwrap();
+        let messages = parameters["messages"].as_array().unwrap();
+        assert_eq!(messages.len(), 5);
+        for index in [0, 1, 2, 4] {
+            assert_eq!(messages[index], original[index]);
+        }
+        assert_eq!(messages[3]["role"], "user");
+        let content = messages[3]["content"].as_array().unwrap();
+        assert_eq!(content.len(), 2);
+        assert_eq!(content[0]["type"], "text");
+        assert_eq!(
+            content[0]["text"],
+            format!("今回の質問\n\n{}", image.metadata_text())
+        );
+        assert_eq!(
+            content[1],
+            json!({"type":"image_url", "image_url":{"url":image.data_url()}})
+        );
+        assert_eq!(json!(input.messages), original);
+        assert_eq!(parameters["stream"], false);
+        assert_eq!(parameters["chat_template_kwargs"]["enable_thinking"], false);
+        assert!(!request.record_telemetry_content);
+    }
+
+    #[test]
+    fn image_rejects_other_kind_missing_user_and_invalid_attachment() {
+        let image = crate::chat_image::tests::image();
+        let mut input = chat_request();
+        input.kind = "haiku_irony".into();
+        assert_eq!(
+            request_with_image(&input, Some(&image))
+                .unwrap_err()
+                .to_string(),
+            "chat_image_wrong_generation_kind"
+        );
+        input.kind = "player_chat".into();
+        input.messages.retain(|message| message.role != Role::User);
+        assert_eq!(
+            request_with_image(&input, Some(&image))
+                .unwrap_err()
+                .to_string(),
+            "chat_image_user_message_missing"
+        );
+        let mut image = image;
+        image.sha256 = "0".repeat(64);
+        assert_eq!(
+            request_with_image(&chat_request(), Some(&image))
+                .unwrap_err()
+                .to_string(),
+            "chat_image_sha256_mismatch"
+        );
+    }
 
     #[tokio::test]
     async fn disabled_provider_returns_before_network_access() {

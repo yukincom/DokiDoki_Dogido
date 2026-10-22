@@ -209,6 +209,19 @@ pub(super) fn refresh_dialogue_context(s: &Session, actions: &mut [Speech]) -> b
             };
             leaf.details[key]["world_context"] = json!(context.for_reaction(kind, &leaf.details));
         }
+        if action.kind == crate::environment::notice::KIND {
+            // 周期の環境差分とrevisionは固定し、身体の現在値だけを生成時点へ揃える。
+            // 最新の会話Context全体へ置換すると、未提示の差分まで消費してしまう。
+            let current = super::body_runtime::context(s).unwrap_or_default();
+            let observations = &mut leaf.details[key]["world_context"]["observations"];
+            observations["body_observation"] = current.observations.get("body_observation")
+                .cloned().unwrap_or_else(|| json!({"status":"unavailable","reason":"not_sampled"}));
+            observations["reassurance"] = current.observations.get("reassurance").cloned().unwrap_or_default();
+            observations["attention"] = current.observations.get("attention").cloned().unwrap_or_default();
+            observations["observer"] = json!("dogido");
+            observations["sensory_status"] = current.observations.get("sensory_status")
+                .cloned().unwrap_or_else(|| json!("unavailable"));
+        }
         if action.rain_after_window.is_some() {
             // この一件の匂いだけ雨上がりへ集中する。通常の会話snapshotは触らないので、
             // 出力が終われば次の観測を待たず花・食品等の現在の匂いを使える。
@@ -366,6 +379,7 @@ impl Dialogue {
         now: u64,
         combat_priority: CombatPriority,
     ) {
+        let speaking = super::reply_queue::playback_started(d, sid);
         let s = d.sessions.get_mut(sid).unwrap();
         if super::workshop_focus::active(s) {
             // update済みの現在観測は保持し、発話候補やCDは消費しない。
@@ -395,7 +409,15 @@ impl Dialogue {
             return;
         }
         let mut danger = s.danger.clone();
-        let urgent = danger.urgent(&event, now, s.mode, false, &self.config.combat);
+        // 川柳の生成と開始済みの発話を夕方警告で取り消さない。既存focus判定は
+        // 雷・危険な熱源の後で働き、未発話の夕方警告は現在観測で後から再評価する。
+        let urgent = danger.urgent(
+            &event,
+            now,
+            s.mode,
+            s.haiku.foreground() || speaking,
+            &self.config.combat,
+        );
         // Do not cut off an already selected thunder/evening warning on the
         // next snapshot, or consume the heat cooldown before it can be queued.
         if urgent.iter().any(|a| a.kind == "damaging_light")
@@ -416,7 +438,7 @@ impl Dialogue {
         }
         let s = d.sessions.get_mut(sid).unwrap();
         let busy = s.haiku.foreground()
-            || !s.knowledge_queue.is_empty()
+            || !s.reply_queue.is_empty()
             || s.cancel.is_some()
             || s.warning.is_some()
             || s.pending_warning.is_some()
@@ -448,7 +470,7 @@ impl Dialogue {
         } else {
             priority(&ambient_actions)
         };
-        let (actions, request) = if danger_rank <= ambient_rank {
+        let (mut actions, request) = if danger_rank <= ambient_rank {
             s.danger = danger;
             if ambient_actions.is_empty() && plan.is_none() {
                 s.ambient = ambient;
@@ -461,6 +483,15 @@ impl Dialogue {
             }
             (ambient_actions, plan)
         };
+        if actions.is_empty() && request.is_none() && !busy && self.config.llm_enabled
+            && self.config.chat_image.stop_reactions_enabled
+            && let Some(action) = super::visual_runtime::opportunity(s) {
+            actions.push(action);
+        }
+        if actions.is_empty() && request.is_none() && !busy && self.config.llm_enabled
+            && let Some(action) = super::body_interest_runtime::opportunity(s, now) {
+            actions.push(action);
+        }
         self.queue_environment(d, jobs, sid, actions, false);
         if let Some(request) = request {
             self.start_light_plan(d, jobs, sid, request);
@@ -471,8 +502,9 @@ impl Dialogue {
         d: &mut Data,
         jobs: &mut Vec<JoinHandle<()>>,
         sid: &str,
-        request: LightPlanRequest,
+        mut request: LightPlanRequest,
     ) {
+        request.details["context"]["recent"] = json!(d.sessions[sid].history.rows());
         Self::cancel_light(d, sid);
         if jobs.len() >= 16 {
             return;
@@ -521,17 +553,19 @@ impl Dialogue {
         {
             return;
         }
-        let payload = result
-            .map(|r| r["payload"].clone())
-            .unwrap_or(request.fallback_payload);
-        if let Some(action) = s.ambient.resolve_light_plan(
+        let result = result.unwrap_or_else(|_| json!({"payload":request.fallback_payload}));
+        let payload = &result["payload"];
+        if let Some(mut action) = s.ambient.resolve_light_plan(
             request.request_id,
-            &payload,
+            payload,
             &event,
             now,
             &focus,
             &self.config.combat,
         ) {
+            if let Some(comment) = action.light_comment.as_mut() {
+                comment.reports = result["llm_reports"].as_array().cloned().unwrap_or_default();
+            }
             self.queue_environment(&mut d, &mut jobs, &sid, vec![action], false);
         }
     }

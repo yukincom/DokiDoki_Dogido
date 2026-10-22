@@ -8,15 +8,15 @@
 
 ## 現行の入口（2026-10-04）
 
-弱い形容から無理に対象を決めず、通常の雑談を保つ。現在は[planner](../dogido-rust/src/planner/)が閉じたread actionを選び、[chat_catalog.rs](../dogido-rust/src/chat_catalog.rs)が候補を検索する。[chat_topics.rs](../dogido-rust/src/chat_topics.rs)と[照合規則](../dogido-rust/src/chat_topics/rules.json)が弱い語による候補を絞り、コードが現在観測へ突き合わせる。カタログ候補やプレイヤーの報告を世界観測へ昇格させない。
+弱い形容表現から無理に対象を特定・断定せず、自然な雑談を維持します。現行のRust実装では、[planner](../dogido-rust/src/planner/) が閉じた read action を選択し、[chat_catalog.rs](../dogido-rust/src/chat_catalog.rs) が候補を検索します。[chat_topics.rs](../dogido-rust/src/chat_topics.rs) と [照合規則](../dogido-rust/src/chat_topics/rules.json) によって曖昧な語句による候補を絞り込み、コードが現在の観測情報と突き合わせます。カタログの候補やプレイヤーの発言報告を、客観的な世界観測へ勝手に昇格させることはありません。
 
-現行仕様は[通常会話の共通対話](player-chat-casual-plan.md#2026-10-01-rust本体の共通対話)と[会話の観測境界](rust-chat-grounding-boundary.md)。検証の入口は次のとおり。
+現行仕様は [通常会話の共通対話](player-chat-casual-plan.md#2026-10-01-rust本体の共通対話) および [会話の観測境界](rust-chat-grounding-boundary.md) を参照してください。検証の開始コマンドは次のとおりです。
 
 ```sh
 ./dogido-rust/cargo.sh test --locked --test chat_topics --test chat_grounding --test planner
 ```
 
-以下のログ・Pythonの関数名・T-A以降の順序は2026-07の設計記録。将来VLMで建造物の感想を扱う方針は残すが、常時経路や現在の実装済み機能ではない。
+※以降に記載されているログ、Pythonの関数名、およびT-A以降のフェーズ順序は2026-07当時の設計記録です。将来的にVLMを用いて建造物への感想を扱う構想は残されていますが、常時稼働する経路ではなく、現在の実装済み機能でもありません。
 
 ---
 

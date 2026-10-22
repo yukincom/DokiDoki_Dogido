@@ -1,4 +1,5 @@
-//! 会話の所有権と戦闘中の一時的な話題。本文生成・世界観測・永続保存はしない。
+//! 会話の所有権と発句準備等による一時的な話題。本文生成・世界観測・永続保存はしない。
+//! 戦闘中も会話routeを保持する。警告で未回答になった入力はdialogueのreply_queueが管理する。
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 
@@ -127,7 +128,7 @@ impl State {
         now: u64,
         player_at: u64,
     ) -> Route {
-        if self.selected_turn == turn || self.combat_active {
+        if self.selected_turn == turn {
             return self.route;
         }
         self.selected_turn = turn.to_owned();
@@ -199,10 +200,8 @@ impl State {
         self.route = Route::None;
         self.started_at = None;
     }
-    pub fn start_combat(&mut self, now: u64, hold: u64) {
-        if !self.combat_active {
-            self.suspend(now, "combat", hold);
-        }
+    /// 戦闘の事実だけを更新する。通常会話を続けるため、routeと学習文脈は保持する。
+    pub fn start_combat(&mut self) {
         self.combat_active = true;
     }
     pub fn finish_combat(&mut self) {
@@ -297,7 +296,7 @@ mod tests {
         assert_eq!(s.clock.elapsed(901_000), 303_000);
     }
     #[test]
-    fn only_completed_topic_survives_combat_and_ticks_do_not_consume_turns() {
+    fn combat_keeps_conversation_owner_and_accepts_new_turns() {
         let mut s = State::default();
         s.activate(Route::Knowledge, 0, Some(0));
         s.completed(
@@ -306,27 +305,34 @@ mod tests {
             "定型的な言葉やで。",
             Route::Knowledge,
         );
-        s.completed("not_heard", "後の話", "", Route::Knowledge);
-        s.start_combat(1000, 10);
+        s.start_combat();
         for now in 1001..1200 {
-            s.start_combat(now, 10);
+            s.start_combat();
             s.tick(now, 300_000);
         }
-        assert_eq!(s.suspended.as_ref().unwrap().source_turn_ids, ["heard"]);
-        assert_eq!(s.suspended.as_ref().unwrap().remaining_player_turns, 10);
+        assert_eq!(s.route, Route::Knowledge);
+        assert!(s.suspended.is_none());
+        assert_eq!(
+            s.select("battle", "ここは何バイオーム？", Route::Casual, 2000, 2000),
+            Route::Casual
+        );
+        assert!(s.combat_active);
         s.finish_combat();
-        for n in 0..9 {
-            s.select(
-                &format!("turn{n}"),
-                "別の話",
-                Route::Casual,
-                2000 + n,
-                2000 + n,
-            );
-        }
-        assert_eq!(s.suspended.as_ref().unwrap().remaining_player_turns, 1);
-        s.select("turn8", "重複通知", Route::Casual, 2010, 2010);
-        assert_eq!(s.suspended.as_ref().unwrap().remaining_player_turns, 1);
+        assert_eq!(s.route, Route::Casual);
+        assert!(s.suspended.is_none());
+    }
+    #[test]
+    fn haiku_preparation_keeps_its_explicit_topic_resume() {
+        let mut s = State::default();
+        s.activate(Route::Knowledge, 0, Some(0));
+        s.completed(
+            "heard",
+            "枕詞って何？",
+            "定型的な言葉やで。",
+            Route::Knowledge,
+        );
+        s.suspend(1, "haiku_preparation", 10);
+        assert_eq!(s.suspended.as_ref().unwrap().source_turn_ids, ["heard"]);
         assert!(s.resume_prompt("さっきの話の続き").contains("枕詞"));
         assert_eq!(
             s.select("resume", "さっきの話の続き", Route::Casual, 3000, 3000),
@@ -338,7 +344,7 @@ mod tests {
     fn suspended_topic_expires_after_ten_other_routed_turns() {
         let mut s = State::default();
         s.activate(Route::Casual, 0, Some(0));
-        s.suspend(1, "combat", 10);
+        s.suspend(1, "haiku_preparation", 10);
         for n in 0..10 {
             s.select(&format!("turn{n}"), "別の話", Route::Casual, n + 2, n + 2);
         }

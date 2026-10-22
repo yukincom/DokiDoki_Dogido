@@ -294,6 +294,8 @@ pub fn extract(raw: &str) -> Option<Query> {
 
 /// 前段で整理済みの表記。明示した剣の持ち替えを知識へ奪わない。
 pub fn from_normalized(text: &str) -> Option<Query> {
+    // TODO(request-classifier): equip_sword 接続後は、この剣依頼の語句による除外を
+    // 共通分類の経路選択へ移す。知識質問の対象・観点を抽出する extract は別途必要。
     if crate::assist::intent::is_explicit_select_sword_request(text) {
         None
     } else {

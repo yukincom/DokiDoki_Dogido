@@ -1,4 +1,5 @@
-//! Free-text reading for native reaction/recall paths only. No catalog overlay.
+//! 通常会話・環境反応・想起の音声用読みを作る。表示原文は変更しない。
+//! 共通の明示訂正を毎回読み、UniDicの前に反映する。保存・再生は呼出側の担当。
 use super::{DialogueConfig, bridge};
 use crate::{
     python_worker::Helper,
@@ -25,7 +26,10 @@ pub(super) async fn read(
     deadline: Instant,
 ) -> Result<String> {
     live(cancel, deadline)?;
-    let source = match tts_reading::prepare(text, Some(&config.reading_engine), None) {
+    let corrections = super::reading_runtime::load_overlay(config).await?;
+    live(cancel, deadline)?;
+    let corrected = tts_reading::apply_corrections(text, &corrections);
+    let source = match tts_reading::prepare(&corrected, Some(&config.reading_engine), None) {
         Step::Ready(spoken) => {
             live(cancel, deadline)?;
             return Ok(spoken);
@@ -64,6 +68,120 @@ mod tests {
     use super::*;
     use serde_json::Value;
     use std::time::Duration;
+
+    #[tokio::test]
+    async fn saved_reading_is_reloaded_without_restarting_and_display_stays_original() {
+        let dir =
+            std::env::temp_dir().join(format!("dogido-reading-reload-{}", uuid::Uuid::new_v4()));
+        let mut config = DialogueConfig {
+            reading_engine: "off".into(),
+            ..Default::default()
+        };
+        config.haiku.memory_dir = dir.clone();
+        config.haiku.memory_enabled = true;
+        let store = crate::haiku_record::MemoryStore::new(&dir);
+        let display = "草地で待とう。";
+        let (tx, mut cancel) = watch::channel(false);
+        let first = store
+            .edit_catalog_reading(
+                &crate::catalog_editor::Edit {
+                    surface: "草地".into(),
+                    reading: "そうち".into(),
+                    entry_id: None,
+                    wrong_reading: None,
+                    expected_id: None,
+                },
+                chrono::Utc::now(),
+            )
+            .unwrap();
+        let before = read(
+            &config,
+            display,
+            &mut cancel,
+            Instant::now() + Duration::from_secs(5),
+        )
+        .await
+        .unwrap();
+        assert!(before.starts_with("そうち"));
+        store
+            .edit_catalog_reading(
+                &crate::catalog_editor::Edit {
+                    surface: "草地".into(),
+                    reading: "くさち".into(),
+                    entry_id: None,
+                    wrong_reading: None,
+                    expected_id: first["id"].as_str().map(str::to_owned),
+                },
+                chrono::Utc::now(),
+            )
+            .unwrap();
+        let after = read(
+            &config,
+            display,
+            &mut cancel,
+            Instant::now() + Duration::from_secs(5),
+        )
+        .await
+        .unwrap();
+        assert!(after.starts_with("くさち"));
+        assert_eq!(display, "草地で待とう。");
+        drop(tx);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    // 明示実行専用。通常テストで音声エンジンやスピーカーを起動・使用しない。
+    #[tokio::test]
+    #[ignore = "実VOICEVOXとスピーカーを使う明示的な確認"]
+    async fn live_voicevox_bookshelf_reading() {
+        let dir =
+            std::env::temp_dir().join(format!("dogido-live-reading-{}", uuid::Uuid::new_v4()));
+        let mut config = DialogueConfig {
+            python: std::env::current_dir()
+                .unwrap()
+                .parent()
+                .unwrap()
+                .join("dogido-llm/bin/python"),
+            audio_dir: dir.join("audio"),
+            ..Default::default()
+        };
+        config.haiku.memory_dir = dir.clone();
+        config.haiku.memory_enabled = true;
+        let store = crate::haiku_record::MemoryStore::new(&dir);
+        store
+            .edit_catalog_reading(
+                &crate::catalog_editor::Edit {
+                    surface: "草地".into(),
+                    reading: "くさっぱら".into(),
+                    entry_id: None,
+                    wrong_reading: None,
+                    expected_id: None,
+                },
+                chrono::Utc::now(),
+            )
+            .unwrap();
+        let display = "草地で、ひと休みしよう。";
+        let (_tx, mut cancel) = watch::channel(false);
+        let spoken = read(
+            &config,
+            display,
+            &mut cancel,
+            Instant::now() + Duration::from_secs(20),
+        )
+        .await
+        .unwrap();
+        assert!(
+            spoken.contains("くさっぱら") || spoken.contains("クサッパラ"),
+            "{spoken}"
+        );
+        println!("display={display}\nspoken={spoken}");
+        super::super::audio::Audio::new()
+            .unwrap()
+            .speak(&config, &spoken, &mut cancel, || {})
+            .await
+            .unwrap();
+        println!("VOICEVOX synthesis and audio playback completed");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
     #[tokio::test]
     async fn ready_needs_no_helper_and_cancelled_ready_is_not_spoken() {
         let mut config = DialogueConfig {

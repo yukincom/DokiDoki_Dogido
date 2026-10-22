@@ -15,6 +15,12 @@ pub enum AdapterCommandResultCommandType {
     SelectHotbar,
     #[serde(rename = "recall_horse")]
     RecallHorse,
+    #[serde(rename = "inspect_body_target")]
+    InspectBodyTarget,
+    #[serde(rename = "capture_screenshot")]
+    CaptureScreenshot,
+    #[serde(rename = "capture_body_view")]
+    CaptureBodyView,
 }
 /// Fabricでの操作結果。成功、実行前の拒否、実行失敗、期限切れを区別し、
 /// Rustのassistが同じcommand_idの結果として受領する。
@@ -399,6 +405,9 @@ pub enum WorldStateNearbyPortalEncounter {
 /// DogidoEventClientが未ACKの結果をイベントへ添付し、Rustのassistがcommand_idで受領する。
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AdapterCommandResult {
+    /// 一回生成だけの画像。JSON履歴や評価記録へは書き出さない。
+    #[serde(default, skip_serializing)]
+    pub body_view: Option<BodyViewPayload>,
     /// Rustが発行した命令ID。同じ命令の再配送と結果ACKを対応させる。
     pub command_id: String,
     pub command_type: AdapterCommandResultCommandType,
@@ -416,6 +425,12 @@ pub struct AdapterCommandResult {
     pub detail_code: String,
     #[serde(flatten)]
     pub extra: BTreeMap<String, Value>,
+}
+/// 不正な画像で世界観測全体を拒否しないため、要求受信時に内容を検証する。
+#[derive(Clone, Deserialize)]
+pub struct BodyViewPayload(pub Value);
+impl std::fmt::Debug for BodyViewPayload {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { f.write_str("BodyViewPayload(<redacted>)") }
 }
 /// buildAmbientSoundsが送る非敵対Mob・環境・ブロックなどの聴覚観測一件。
 /// 音の種類、根拠ID、経過時間を会話へ渡し、現在見えている対象とは分けて扱う。
@@ -1356,6 +1371,9 @@ pub struct EventData {
     /// 身体の自他位置。Noneは旧adapter等の未送信で、player視覚とは別の観測。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub body_observation: Option<crate::body::contracts::Observation>,
+    /// 同じ身体snapshotから得た自律移動の状態と実視認候補。欠損時は操作許可を推定しない。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub body_autonomy: Option<crate::body::autonomy::Observation>,
     #[serde(default)]
     pub ambient_sounds: Vec<AmbientSound>,
     #[serde(default)]
@@ -1735,6 +1753,9 @@ impl Validate for EventData {
         self.smell_observation.validate()?;
         if let Some(body) = &self.body_observation {
             body.validate()?;
+        }
+        if let Some(body) = &self.body_autonomy {
+            body.validate().map_err(|error| error.to_string())?;
         }
         self.ambient_sounds.validate()?;
         self.passive_mobs.validate()?;

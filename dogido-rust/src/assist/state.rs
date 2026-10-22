@@ -161,6 +161,9 @@ impl AssistState {
         };
         let mut command_text = normalized.clone();
         let mut source = None;
+        // TODO(request-classifier): equip_sword 接続後は、この語句による即決と
+        // confidence=1.0 の組み立てを分類結果へ置き換える。依頼性の二重判定を残さず、
+        // issue 内のhotbar・capability・期限・実行検証は維持する。
         if intent::is_explicit_select_sword_request(&normalized) {
             source = Some("code");
         } else if let Some(text) = repaired
@@ -192,6 +195,9 @@ impl AssistState {
         } else {
             normalized
         };
+        // TODO(request-classifier): 共通の分類入口へ移したら、剣の語を含む入力だけを
+        // NeedsIntent へ送るこの絞り込みと、旧LLM用 PreparedIntent の組み立てを撤去する。
+        // 空入力処理・原文と音声解釈の区別・入力世代の保持は移行先へ引き継ぐ。
         if player_text.is_empty()
             || !intent::mentions_sword_target(&player_text)
             || intent::is_bare_sword_target(&player_text)
@@ -232,6 +238,9 @@ impl AssistState {
         {
             return Submission::NotHandled;
         }
+        // TODO(request-classifier): 旧JSONの契約／依頼性検証は分類結果の受理へ置換する。
+        // complete_intent 全体は削除せず、上の入力同一性・owner・epochの検証と
+        // 下の issue への接続を、分類結果を受け取る経路にも引き継ぐ。
         if !intent::contract_errors(payload).is_empty() {
             return Submission::NotHandled;
         }
@@ -239,6 +248,20 @@ impl AssistState {
             return Submission::NotHandled;
         };
         Submission::Handled(self.issue(intent, event, now, has_existing_speech))
+    }
+    /// 共通受付で受理した剣依頼を実測検証へ渡す。確率は診断用で、追加の閾値判定はしない。
+    pub fn submit_classified(
+        &mut self, classification: &crate::request_classifier::Classification,
+        event: &GameEvent, now: DateTime<Utc>, has_speech: bool,
+    ) -> Submission {
+        if classification.prediction.label != crate::request_classifier::Label::EquipSword {
+            return Submission::NotHandled;
+        }
+        self.invalidate_intent();
+        Submission::Handled(self.issue(IntentEvidence {
+            source: "modernbert".into(), evidence: classification.text.clone(),
+            confidence: classification.prediction.probabilities[2],
+        }, event, now, has_speech))
     }
     fn issue(
         &mut self,
@@ -435,6 +458,7 @@ impl AssistState {
             out.push(ObservedResult {
                 known_command: true,
                 result: AdapterCommandResult {
+                    body_view: None,
                     command_id: id,
                     command_type: AdapterCommandResultCommandType::SelectHotbar,
                     status: AdapterCommandResultStatus::Expired,

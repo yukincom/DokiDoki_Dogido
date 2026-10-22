@@ -21,6 +21,7 @@ pub struct Settings {
     pub other_realm_swarm_visual_threshold: usize,
     pub other_realm_audio_generic_threshold: usize,
     pub battle_speed: f64,
+    pub hostile_callout_playback_rate: f64,
     pub cue_dir: Option<PathBuf>,
 }
 impl Default for Settings {
@@ -61,6 +62,7 @@ impl Default for Settings {
                 .expect("checked warning default")
                 as usize,
             battle_speed: 1.0,
+            hostile_callout_playback_rate: defaults["hostile_callout_playback_rate"].as_f64().expect("checked warning default"),
             cue_dir: Some("cue_voice".into()),
         }
     }
@@ -75,7 +77,10 @@ impl Settings {
                 && self.hostile_query_distance.is_finite()
                 && self.hostile_query_distance >= 0.0
                 && self.battle_speed.is_finite()
-                && self.battle_speed > 0.0,
+                && self.battle_speed > 0.0
+                && self.hostile_callout_playback_rate.is_finite()
+                && self.hostile_callout_playback_rate > 0.0
+                && self.hostile_callout_playback_rate <= 2.0,
             "invalid warning settings"
         );
         Ok(())

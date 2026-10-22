@@ -53,6 +53,10 @@ public final class BodyVitals {
         return new Vitals(downed ? Life.DOWNED : Life.ACTIVE,health,maximum,damageEnabled,gameMode,
             wallTicks,restTicks,respawnRemaining,respawnCount,lastDamage);
     }
+    /** 被弾直後を落ち着いた状態と扱わないための実測時刻。HP量から安心度は計算しない。 */
+    public boolean recentlyDamaged(long tick, int withinTicks) {
+        return lastDamage != null && tick >= lastDamage.serverTick() && tick-lastDamage.serverTick() <= withinTicks;
+    }
     public boolean downed() { return downed; }
     public int wallTicks() { return wallTicks; }
     public int remaining() { return respawnRemaining; }

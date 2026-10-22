@@ -33,7 +33,7 @@ def speak(session_id, text, base=DEFAULT_BASE, timeout=120):
     while time.monotonic() < deadline:
         snapshot = call('snapshot', {'session_id': session_id}, base)
         row = next((r for r in snapshot['dialogue']['utterances'] if r['turn_id'] == accepted['turn_id']), None)
-        if row and row['playback_status'] not in {'routing', 'generating', 'queued', 'started', 'waiting_for_safety'}:
+        if row and row['playback_status'] not in {'routing', 'generating', 'queued', 'started', 'waiting_for_warning'}:
             if row['playback_status'] == 'audio_disabled' and row.get('text'):
                 displayed = call('displayed', {'session_id': session_id, 'turn_id': row['turn_id']}, base)
                 row['text_delivery_acknowledged'] = displayed['accepted']
@@ -86,7 +86,7 @@ def main():
             candidates = [p for p in poems if p['key'] == state.get('key')] if state else [p for p in poems if p['text'].splitlines() == workshop['canonical_lines']]
             if len(candidates) != 1 or (not state and workshop['pending_lines']):
                 raise RuntimeError('編集済み・未採用案・重複句があるため、会話を自動移行できません。')
-            if any(r['playback_status'] in {'routing', 'waiting_for_safety', 'generating', 'queued', 'started'} for r in snapshot['dialogue']['utterances']):
+            if any(r['playback_status'] in {'routing', 'waiting_for_warning', 'generating', 'queued', 'started'} for r in snapshot['dialogue']['utterances']):
                 raise RuntimeError('返答を待ってから移行してください。')
             records.append({'key': candidates[0]['key'], 'session_id': sid, 'snapshot': snapshot})
         args.file.parent.mkdir(parents=True, exist_ok=True)

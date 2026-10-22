@@ -1,5 +1,6 @@
-use anyhow::{Result, ensure};
+//! 編集入力の表記上の区切りと行呼称を扱う。原文の語句を切り出し、意味判断・保存は行わない。
 use crate::haiku::lexical;
+use anyhow::{Result, ensure};
 use regex::Regex;
 use serde_json::Value;
 use std::{

@@ -319,11 +319,8 @@ pub fn still_applicable(speech: &Speech, e: &GameEvent) -> bool {
     if !e.visual_threats.is_empty() || !e.auditory_threats.is_empty() {
         return false;
     }
-    let guard = speech.leaf.as_ref().map(|r| &r.details["__ambient_guard"]);
-    if let Some(g) = guard
-        && let Some(count) = g["light_source_count"].as_i64()
-    {
-        return light::count(e) == count;
+    if let Some(comment) = &speech.light_comment {
+        return light::count(e) == comment.source_count;
     }
     match speech.kind {
         "smell" if super::reaction::is_model_reaction(speech) => true,

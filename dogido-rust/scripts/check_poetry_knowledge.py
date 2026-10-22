@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """本体の詩の基礎知識と、専用国語対話へ分岐しない境界を模擬HTTPで確認する。"""
 import json
-import os
 from pathlib import Path
 import tempfile
 
@@ -12,7 +11,7 @@ def main():
     passed = []
     with tempfile.TemporaryDirectory(prefix="dogido-poetry-scope-") as temp, dependencies() as (dep, control, seen):
         # 詩の基礎は出典付きの即答、一般的な質問は通常の一回生成。
-        with running(Path(os.environ.get("DOGIDO_RUST_BINARY", ROOT / "target/debug/dogido-rust")), Path(temp), dep) as (base, _, log):
+        with running(ROOT / "target/debug/dogido-rust", Path(temp), dep) as (base, _, log):
             sid = register(base)
             def calls():
                 return [r["body"] for r in seen if r["path"] == "/v1/chat/completions"]

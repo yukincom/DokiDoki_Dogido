@@ -43,6 +43,11 @@ pub struct GameEvent(
 );
 
 impl GameEvent {
+    /// 撮影待機へ画像を渡した後、観測の複製・保持から一時画像だけを解放する。
+    pub(crate) fn discard_command_images(&mut self) {
+        for result in &mut self.0.command_results { result.body_view = None; }
+    }
+
     /// 受理済み身体状態が作る感覚用コピー。player/combat/look_targetは元の意味を保つ。
     /// 身体の欠損は空の感覚と未取得metadataになり、playerの世界観測を補完に使わない。
     pub(crate) fn with_body_senses(

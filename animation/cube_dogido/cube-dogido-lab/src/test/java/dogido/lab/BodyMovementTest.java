@@ -21,12 +21,11 @@ class BodyMovementTest {
         assertFalse(BodyMotion.touchesFluid(BodyMotion.box(new Vec3d(.5,0,.5)),0,0,0,0));
     }
 
-    @Test void normalTargetIsRightFrontAtShoulderAndExplorationUsesSeparateBand() {
+    @Test void nearbyFollowHoldsPositionAndExplorationUsesSeparateBand() {
         BodyController controller = new BodyController(42);
-        var follow = controller.plan(new Vec3d(3,1,0),owner,0,true,Mode.FOLLOW,false,tuning,open);
-        assertTrue(follow.target().x < 0); assertTrue(follow.target().z > 0);
-        assertEquals(3,follow.target().horizontalLength(),1e-8);
-        assertEquals(1.1,follow.target().y,1e-8);
+        Vec3d body = new Vec3d(3,1,0);
+        var follow = controller.plan(body,owner,0,true,Mode.FOLLOW,false,tuning,open);
+        assertEquals(body,follow.target()); assertEquals(Activity.HOLDING,follow.activity());
         for (int tick = 1; tick < 3000; tick += 201) {
             var explore = controller.plan(follow.target(),owner,tick,true,Mode.EXPLORE,false,tuning,open);
             double radius = explore.target().horizontalLength();
@@ -39,10 +38,11 @@ class BodyMovementTest {
         assertTrue(retreat.target().z < 0); assertEquals(Activity.RETREATING,retreat.activity());
         controller.call(UUID.randomUUID(),owner,1);
         var call = controller.plan(retreat.target(),owner,1,true,Mode.EXPLORE,false,tuning,open);
-        assertTrue(call.target().z > 2); assertEquals(Activity.CALLING,call.activity());
+        assertEquals(1.75,call.target().z); assertEquals(Activity.CALLING,call.activity());
         controller.plan(call.target(),owner,2,true,Mode.EXPLORE,false,tuning,open);
-        assertTrue(controller.takeArrived());
-        var restored = controller.plan(call.target(),owner,105,true,Mode.EXPLORE,false,tuning,open);
+        assertTrue(controller.takeArrived()); assertFalse(controller.calling());
+        assertNull(controller.takeCallEnd());
+        var restored = controller.plan(call.target(),owner,3,true,Mode.EXPLORE,false,tuning,open);
         assertEquals(Activity.EXPLORING,restored.activity());
         controller.reset();
         controller.call(UUID.randomUUID(),owner,106);
@@ -73,7 +73,7 @@ class BodyMovementTest {
     @Test void ordinaryTargetsRejectWallsButRetreatCanUseWallRefuge() {
         BodyController controller = new BodyController(2);
         BodyController.TargetSpace wallOnly = (p,wall) -> wall;
-        assertEquals("no_safe_target",controller.plan(Vec3d.ZERO,owner,0,true,Mode.FOLLOW,false,tuning,wallOnly).reason());
+        assertEquals("no_safe_target",controller.plan(new Vec3d(18,1,0),owner,0,true,Mode.FOLLOW,false,tuning,wallOnly).reason());
         var retreat = controller.plan(Vec3d.ZERO,owner,1,true,Mode.FOLLOW,true,tuning,wallOnly);
         assertEquals("wall_refuge",retreat.reason()); assertTrue(retreat.allowWall());
     }
@@ -95,6 +95,12 @@ class BodyMovementTest {
         Box body = BodyMotion.box(new Vec3d(.9,1,0));
         assertTrue(BodyMotion.clip(body,new Vec3d(.2,0,0),List.of(obstacle)).x > 0);
         assertEquals(Vec3d.ZERO,BodyMotion.clip(body,new Vec3d(-.2,0,0),List.of(obstacle)));
+    }
+    @Test void severalPhysicalOverlapsDoNotRequireAllDepthsToDecreaseOnTheSameTick() {
+        Box body = BodyMotion.box(new Vec3d(.9,1,.9));
+        List<Box> crossed = List.of(new Box(-1,0,-5,1,2,5),new Box(-5,0,-1,5,2,1));
+        assertTrue(BodyMotion.clip(body,new Vec3d(.2,0,0),crossed).x > 0);
+        assertEquals(Vec3d.ZERO,BodyMotion.clip(body,new Vec3d(-.2,0,0),crossed));
     }
     @Test void canRetreatSidewaysAroundMobBlockingDirectRoute() {
         Vec3d position = new Vec3d(2,1.1,3), target = new Vec3d(0,1.1,-3.5), velocity = Vec3d.ZERO;
@@ -136,7 +142,8 @@ class BodyMovementTest {
             double speed = tuning.speedFor(plan.activity(),position.distanceTo(plan.target()),position.distanceTo(walking.feet()));
             Vec3d step = BodyMotion.steer(position,plan.target(),speed,velocity,List.of(),d -> true);
             velocity = step; position = position.add(step);
-            assertTrue(position.distanceTo(walking.feet()) < 5,"falling behind at tick "+tick+": "+position);
+            assertTrue(position.distanceTo(walking.feet()) < 17.3,"falling behind at tick "+tick+": "+position);
         }
+        assertTrue(position.z > 65,"walking owner must cause sustained follow movement");
     }
 }

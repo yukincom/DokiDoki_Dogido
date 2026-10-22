@@ -5,14 +5,26 @@ import java.util.List;
 
 /** 身体の実測と操作を不変データで渡す。HP/食料は身体の情報で、player観測や嗅覚へ混入させない。 */
 public final class BodyProtocol {
-    public static final int VERSION = 5;
-    public static final String ENTRYPOINT = "dogido:body_bridge_v5";
+    public static final int VERSION = 9;
+    public static final String ENTRYPOINT = "dogido:body_bridge_v9";
+    /** FOLLOWが高さを合わせ直す幅（block）。身体とadapterの停止位置計算で共有する。 */
+    public static final double FOLLOW_HEIGHT_DISTANCE = 4;
+    /** ownerの目の高さと身体の実寸から、通常追従する身体底面の高さを足元基準で返す。 */
+    public static double followBodyHeight(double ownerEyeHeight, double bodySize) {
+        return Math.max(.1,ownerEyeHeight-.2-bodySize/2);
+    }
+    /** 観察到着の許容.4blockと到着後の浮遊全幅.36blockに余白を足し、途中で高さ追従へ切り替わらない停止先に限定する。 */
+    public static boolean inspectionHeightAllowed(double offsetFromFollowHeight) {
+        return Double.isFinite(offsetFromFollowHeight) && Math.abs(offsetFromFollowHeight) <= FOLLOW_HEIGHT_DISTANCE-.8+1e-9;
+    }
     private BodyProtocol() {}
 
     public enum Mode { DIRECT, FOLLOW, EXPLORE, HOLD }
     public enum Activity { UNBOUND, OWNER_ABSENT, HOLDING, FOLLOWING, EXPLORING, CALLING, RETREATING, MOVING, RESTING, DOWNED }
     public enum Presence { PRESENT, NOT_BOUND, UNLOADED, OWNER_UNAVAILABLE }
     public enum Action { CALL, MOVE_TO, REST, WAIT, EAT }
+    /** MOVE_TOの目的。ownerへの接近先は身体が現在のowner姿勢から計算し、外部座標を受けない。 */
+    public enum MovePurpose { INSPECT, OWNER_NEAR, OWNER_FACE }
     public enum Outcome { ACCEPTED, SUCCEEDED, REJECTED, INTERRUPTED, EXPIRED }
     public enum Submission { QUEUED, UNAVAILABLE, WRONG_THREAD, STALE_CONTEXT }
     public enum Sensors { BODY_VISION_AND_HEARING }
@@ -24,12 +36,20 @@ public final class BodyProtocol {
     /** Epoch changes on owner reconnect/respawn, body load, or dimension transfer. */
     public record Context(UUID ownerId, UUID bodyId, UUID epoch, String dimension) {}
     public record Position(double x, double y, double z) {}
+    /** workingはadapterの既存採掘中観測。観測tickから20tickまで配置判断に使う。 */
+    public record OwnerWorkObservation(Context context, long observedServerTick, Boolean working) {}
+    /** 発話中に観測した注視点。block座標、nullは終了。sequenceは接続内単調増加、期限は観測tickから20tick。 */
+    public record SpeechGazeObservation(Context context, long sequence, long observedServerTick, Position target) {}
 
     /** observedServerTick bounds transport age; basedOnSnapshot is traceability, not equality. */
     public record StateRequest(Context context, long revision, long basedOnSnapshot,
             long observedServerTick, int leaseTicks, boolean enabled, Mode mode, boolean retreat) {}
     public record ActionRequest(Context context, long sequence, UUID actionId,
-            long observedServerTick, int validForTicks, Action action, Position destination, String foodId) {
+            long observedServerTick, int validForTicks, Action action, Position destination, String foodId, MovePurpose movePurpose) {
+        public ActionRequest(Context context, long sequence, UUID actionId, long observedServerTick,
+                int validForTicks, Action action, Position destination, String foodId) {
+            this(context,sequence,actionId,observedServerTick,validForTicks,action,destination,foodId,MovePurpose.INSPECT);
+        }
         public ActionRequest(Context context, long sequence, UUID actionId, long observedServerTick,
                 int validForTicks, Action action) {
             this(context,sequence,actionId,observedServerTick,validForTicks,action,null,null);
@@ -62,9 +82,28 @@ public final class BodyProtocol {
         public HearingObservation { sounds = List.copyOf(sounds); }
     }
 
+    /** 保存しない安心度0..100と同tickのowner実測。距離はblock、可視性は身体の眼を基準とする。HPとは独立。 */
+    public record Reassurance(double value, double ownerDistance, boolean ownerVisible, boolean faceVisible, boolean ownerWorking) {}
+    /** 現在の身体側制御状態。観測した値であり、adapterから自律移動を有効化しない。 */
+    public record ControlObservation(boolean enabled, Mode mode, double followDistance, double warpDistance, Reassurance reassurance) {
+        /** 旧fixtureの未取得値。近くに見える、顔が見えるという回復根拠を補わない。 */
+        public ControlObservation(boolean enabled, Mode mode, double followDistance, double warpDistance) {
+            this(enabled,mode,followDistance,warpDistance,new Reassurance(50,0,false,false,false));
+        }
+    }
+
     /** position is null when the body is not loaded, never a synthetic origin position. */
     public record Snapshot(int version, Presence presence, Context context, String ownerDimension, long serverTick,
             long snapshotRevision, Position position, float yaw, Activity activity, String reason,
             long appliedStateRevision, StateResult stateResult, ActionResult actionResult, Sensors sensors,
-            Vitals vitals, FoodObservation food, PoseObservation pose, VisionObservation vision, HearingObservation hearing) {}
+            Vitals vitals, FoodObservation food, PoseObservation pose, VisionObservation vision, HearingObservation hearing, ControlObservation control) {
+        /** 制御情報がない取得不能snapshotと既存fixture用。nullを移動許可へ読み替えない。 */
+        public Snapshot(int version, Presence presence, Context context, String ownerDimension, long serverTick,
+                long snapshotRevision, Position position, float yaw, Activity activity, String reason,
+                long appliedStateRevision, StateResult stateResult, ActionResult actionResult, Sensors sensors,
+                Vitals vitals, FoodObservation food, PoseObservation pose, VisionObservation vision, HearingObservation hearing) {
+            this(version,presence,context,ownerDimension,serverTick,snapshotRevision,position,yaw,activity,reason,
+                appliedStateRevision,stateResult,actionResult,sensors,vitals,food,pose,vision,hearing,null);
+        }
+    }
 }

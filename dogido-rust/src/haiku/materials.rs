@@ -536,7 +536,7 @@ pub fn capture(
 }
 #[allow(clippy::too_many_arguments)]
 /// 見どころ候補を、ポータル→周辺→落下物→Mob→プレイヤーの所持品→乗車・採掘→場所→空の順に作る。
-/// 最後に先頭14件へ絞るため、この追加順が候補枠の優先順になる。個別の季語スコアは付けない。
+/// 身体観測は周辺・Mob・場所を所持品より先に並べ直してから14件へ絞る。個別の季語スコアは付けない。
 fn features(
     event: &GameEvent,
     poem: &PoemItem,
@@ -714,18 +714,23 @@ fn features(
         );
     }
     if event.body_origin().is_some() {
-        // 身体の視認材料を先にし、同じ順位内は既存順序を保つ。
+        // 種類の多い所持品や落下物で、生きもの・土地の候補枠を埋めない。
+        // 各群内は既存順序を保つ。持ち物自体はContextにも残り、句での使用は必須・禁止にしない。
         out.sort_by_key(|row| {
             if row.key == "portal" {
                 0
             } else if row.key.starts_with("nearby_") {
                 1
-            } else if row.key.starts_with("dropped_") {
-                2
             } else if row.key.starts_with("mob_") {
+                2
+            } else if matches!(row.key.as_str(), "biome" | "biome_group" | "trait_1" | "structure" | "climate") {
                 3
-            } else {
+            } else if row.key.starts_with("dropped_") {
                 4
+            } else if row.key == "held_item" || row.key == "pocket_item" || row.key.starts_with("inventory_") {
+                6
+            } else {
+                5
             }
         });
     }

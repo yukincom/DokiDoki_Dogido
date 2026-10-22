@@ -1,5 +1,7 @@
 # TTS 読み補正 — UniDic / 形態素解析方針
 
+**明示訂正の接続（2026-10-13）:** 本棚の「あんちょこ」で保存した読みを、通常会話とワークショップの音声用本文へUniDicより先に反映する。各発話で共通の `catalog_corrections.jsonl` を読み直し、表示文は変更しない。以下のカタログラベル限定という旧説明は、標準の読み表についての範囲。利用者の明示訂正は自由文にも適用する。[本棚の仕様と検証](2026-10-13-bookshelf-integration.md)を参照。
+
 **実装先更新（2026-10-03）:** 読み補正の仕様は継続し、実装はRustへ移した。旧 `dogido_server/tts_reading.py` を保持する計画は終了。現行の読み判定・整形は `dogido-rust/src/tts_reading.rs`、辞書tokenは `dogido-rust/scripts/tts_shared_tokens.py` の共有 `Unidic()` が担当する。詳細は [共有取得口](rust-tts-shared.md) と [最小UniDic補助](rust-tts-adapter.md)。過去のフェーズ・実測待ちの記録を、今回の実機検証済みへ読み替えない。
 
 **日付:** 2026-07-29  
@@ -80,6 +82,8 @@ LLM 出力（ログ・UI 用。漢字交じり）
         │
         ▼
 prepare_text_for_tts()
+        │
+        ├─ (0) 本棚で保存した明示の読み訂正（engine=offでも有効）
         │
         ├─ (1) UniDic 経路（optional・engine≠off）
         │      トークン単位でひらがな化

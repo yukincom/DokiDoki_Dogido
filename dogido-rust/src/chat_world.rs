@@ -1,4 +1,5 @@
-//! Current-frame conversation material. Session state and name authorization stay elsewhere.
+//! 現在の観測とカタログから会話用の場所・天候・所持品表示を作る。
+//! 観測値は書き換えず、セッション状態と呼び名の許可は呼出側が管理する。
 use crate::chat_catalog::{Catalog, strip};
 use crate::environment::{
     precipitation,
@@ -287,12 +288,18 @@ pub fn weather_label(event: &GameEvent, climate: &precipitation::Climate) -> Res
     ))
 }
 
+/// 現在の世界天候と解決済み降水から表示名を返す。降水なしの場所を世界全体の雨で上書きしない。
 pub(crate) fn weather_label_from_context(
     event: &GameEvent,
     context: &precipitation::PrecipitationContext,
 ) -> String {
     if context.precipitation_kind == precipitation::PrecipitationKind::Snow {
         return "雪".into();
+    }
+    if context.precipitation_kind == precipitation::PrecipitationKind::None
+        && matches!(event.world.weather, Some(Weather::Rain | Weather::Thunder))
+    {
+        return "曇り（この場所では降水なし）".into();
     }
     match event.world.weather {
         Some(Weather::Clear) => "晴れ",

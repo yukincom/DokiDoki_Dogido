@@ -66,15 +66,15 @@ def row(base, turn, statuses):
 def submit(base, sid, text="こんにちは"):
     got = request(base, "/api/v1/player-input", {"text": text, "source": "voice", "session_id": sid})
     assert got["accepted"], got
-    # 7e: 危険/警告中は既存parserの非同期振分けを先に受領する。
-    # 知識なら元IDのまま保留し、それ以外は明示された配送先を追う。
-    while got.get("reason") == "knowledge_input_routing":
+    # 警告中の通常質問/知識は元IDのまま保留・自動再開する。
+    # 専用入力へ振り分けられた場合は、明示された配送先を追う。
+    while got.get("reason") == "reply_input_routing":
         routing = got
         def classified():
             item = next((r for r in snapshot(base)["utterances"] if r["turn_id"] == routing["turn_id"]), None)
             if not item: return None
             if "forwarded_input" in item: return item["forwarded_input"]
-            if item["playback_status"] in {"waiting_for_safety", "failed", "cancelled"}:
+            if item["playback_status"] in {"waiting_for_warning", "generating", "queued", "started", "completed", "failed", "cancelled"}:
                 return {**routing, "reason":item["playback_status"]}
             return None
         got = wait_for(classified)
@@ -429,10 +429,10 @@ def main():
             request(base, "/api/v1/game-events", event(2), sid=sid)
             assert request(base, "/api/v1/game-events", event(2), sid=sid)["deduplicated"]
             turn = submit(base, sid, "こんにちは")
-            # 全戦闘Engine移行後はpanic優先を確認する。暗いだけのAlertは会話を一律禁止しない。
+            # 被弾でpanicになっても、緊急警告actionのないフレームでは通常回答を切らない。
             request(base, "/api/v1/game-events", event(3, danger=True), sid=sid)
-            wait_for(lambda: row(base, turn, {"cancelled"}))
-            passed.append("fresh_observation_required_and_danger_cancels")
+            wait_for(lambda: row(base, turn, {"completed"}))
+            passed.append("fresh_observation_required_and_combat_mode_keeps_reply")
             request(base, "/api/v1/adapter-sessions/" + sid, method="DELETE")
             sid = register(base, preview=False)
             control["delay"] = 0

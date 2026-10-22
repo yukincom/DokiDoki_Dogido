@@ -39,6 +39,14 @@ def value(args, flag):
     return args[args.index(flag) + 1]
 
 
+@pytest.mark.parametrize("custom", [None, "custom-game/screenshots"])
+def test_screenshot_root_is_optional_and_shared_with_bookshelf(monkeypatch, tmp_path, custom):
+    settings = Settings(_env_file=None, minecraft_screenshots_dir=custom)
+    args, _ = command(monkeypatch, tmp_path, settings)
+    haiku = json.loads(value(args, "--haiku-settings"))
+    assert haiku["screenshot_dir"] == (str((tmp_path / custom).resolve()) if custom else None)
+
+
 def test_optional_cue_disabled_features_and_voice_profiles_reach_rust(monkeypatch, tmp_path):
     settings = Settings(_env_file=None, cue_audio_dir=None, audio_enabled=False,
                         llm_enabled=False,
@@ -333,3 +341,45 @@ def test_source_checkout_requires_cargo_dependency_record(tmp_path):
     binary.touch()
     with pytest.raises(RuntimeError, match="ビルド依存情報がありません"):
         launch.check_binary_freshness(tmp_path, binary)
+
+
+def test_request_classifier_config_reaches_shared_launcher(monkeypatch, tmp_path):
+    import request_classifier_worker as worker
+    model = tmp_path / "classifier-model"
+    model.mkdir()
+    (model / "adopted-model.json").write_text('{}')
+    python = tmp_path / ".dogido_tools/request_classifier/.venv/bin/python"
+    python.parent.mkdir(parents=True)
+    python.touch()
+    python.chmod(0o700)
+    checked = []
+    monkeypatch.setattr(worker, "read_spec", lambda args: checked.append(args))
+    settings = Settings(_env_file=None, request_classifier_model_root="classifier-model",
+                        request_classifier_load_timeout_ms=32100, request_classifier_timeout_ms=1234)
+    args, _ = command(monkeypatch, tmp_path, settings)
+    result = json.loads(value(args, "--request-classifier-settings"))
+    assert result == {"model_root": str(model), "python": str(python),
+                      "load_timeout_ms":32100, "timeout_ms":1234}
+    assert checked[0]["manifest_path"] == str(model / "adopted-model.json")
+    assert len(checked[0]["manifest_sha256"]) == 64
+
+
+def test_request_classifier_disabled_and_invalid_selection(monkeypatch, tmp_path):
+    args, _ = command(monkeypatch, tmp_path, Settings(_env_file=None))
+    assert json.loads(value(args, "--request-classifier-settings"))["model_root"] is None
+    with pytest.raises(RuntimeError, match="Python"):
+        launch.request_classifier_settings(Settings(_env_file=None, request_classifier_model_root="missing"), tmp_path)
+
+
+def test_chat_image_launch_settings_and_bounds(monkeypatch, tmp_path):
+    from pydantic import ValidationError
+    from dogido_server.runtime_settings import DEFAULTS
+    settings = Settings(_env_file=None, chat_image_enabled=True, chat_image_wait_ms=1900, chat_image_stop_reactions_enabled=False)
+    argv, _ = command(monkeypatch, tmp_path, settings)
+    assert json.loads(argv[argv.index("--chat-image-settings") + 1]) == {"enabled": True, "wait_ms": 1900, "stop_reactions_enabled": False}
+    defaults = Settings(_env_file=None)
+    assert defaults.chat_image_enabled == DEFAULTS["chat_image"]["enabled"]
+    assert defaults.chat_image_wait_ms == DEFAULTS["chat_image"]["wait_ms"]
+    for invalid in (0, 99, 5001):
+        with pytest.raises(ValidationError):
+            Settings(_env_file=None, chat_image_wait_ms=invalid)

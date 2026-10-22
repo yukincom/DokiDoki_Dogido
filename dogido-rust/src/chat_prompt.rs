@@ -716,16 +716,16 @@ mod tests {
                 assert!(
                     out[0]
                         .content
-                        .contains(&format!("player は{expected}やで。"))
+                        .contains(&format!("player は{expected}のことやで。"))
                 );
                 assert_eq!(
-                    out[0].content.matches("body_observation の self").count(),
+                    out[0].content.matches("body_observation はオレの身体").count(),
                     1
                 );
                 assert!(
                     out[0]
                         .content
-                        .contains("今の位置は分からへんものとして扱ってな。")
+                        .contains("今の位置は分からへんで。")
                 );
                 assert_eq!(out[1].content.matches("\"body_observation\"").count(), 1);
             }

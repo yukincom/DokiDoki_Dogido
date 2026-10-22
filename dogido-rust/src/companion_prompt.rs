@@ -18,6 +18,10 @@ pub fn base() -> &'static str {
 pub fn mode(mode: &str) -> &'static str {
     TEXT["modes"][mode].as_str().unwrap_or("")
 }
+pub fn image_move_notice() -> &'static str { TEXT["image_move_notice"].as_str().unwrap() }
+pub fn image_body_contract() -> &'static str { TEXT["image_body_contract"].as_str().unwrap() }
+pub fn chat_image() -> &'static str { TEXT["chat_image"].as_str().unwrap() }
+pub fn chat_tools() -> &'static str { TEXT["chat_tools"].as_str().unwrap() }
 pub fn grounding() -> &'static str {
     TEXT["grounding"].as_str().unwrap()
 }
@@ -85,6 +89,15 @@ pub fn dialogue(mode_name: &str, purpose: DialoguePurpose, smell_observed: bool)
     .filter(|s| !s.is_empty())
     .collect::<Vec<_>>()
     .join("\n")
+}
+
+/// 身体候補がある環境判断だけ、共有の発話契約を発話＋行動の閉じた契約へ差し替える。
+pub fn environment(smell_observed: bool, body_actions: bool) -> String {
+    let prompt = dialogue("normal", DialoguePurpose::Ambient, smell_observed);
+    if body_actions {
+        prompt.strip_suffix(choice_contract()).unwrap().to_owned()
+            + TEXT["environment_body_contract"].as_str().unwrap()
+    } else { prompt }
 }
 
 /// Expand references in generated task assets from the same source as live dialogue.

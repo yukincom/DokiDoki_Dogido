@@ -239,10 +239,24 @@ async fn dictionary_protocol_errors_deadline_and_cancel_do_not_become_success() 
         );
         let mut engine = Engine::default();
         let frame = json!({"op":"whole_verse","text":"桜\n桜\n桜","source":"formal"});
+        // Python起動時間と辞書応答の期限を分ける。起動前のkillを辞書timeoutと数えない。
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            while !dir.join("pid").is_file() {
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("helper ready");
         let result = if mode == "cancel" {
             let (send, mut cancel) = tokio::sync::watch::channel(false);
             let trigger = async {
-                tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+                tokio::time::timeout(std::time::Duration::from_secs(5), async {
+                    while !dir.join("requests").is_file() {
+                        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                    }
+                })
+                .await
+                .expect("request received");
                 send.send(true).unwrap();
             };
             let run = async {

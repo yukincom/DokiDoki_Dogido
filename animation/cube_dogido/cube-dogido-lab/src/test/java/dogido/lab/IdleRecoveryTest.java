@@ -87,6 +87,7 @@ class IdleRecoveryTest {
         IdleRecovery recovery = new IdleRecovery();
         Predicate<Box> clear = box -> !box.intersects(GROUND) && living.stream().noneMatch(box::intersects);
         Vec3d motion = Vec3d.ZERO;
+        IdleMotion.FloatCycle wave = new IdleMotion.FloatCycle();
         boolean started = false, completed = false;
         int hoverTicks = 0;
         for (int tick = 0; tick < 600 && hoverTicks < 240; tick++) {
@@ -97,9 +98,17 @@ class IdleRecoveryTest {
             if (destination != null) started = true;
             if (started && destination == null) completed = true;
             double beforeOverlap = BodyMotion.overlapDepth(BodyMotion.box(position),living);
-            Vec3d target = destination == null ? position.add(0,IdleMotion.hoverStep(tick),0) : destination;
+            Vec3d target = destination == null ? position : destination;
             motion = BodyMotion.steer(position,target,.14,motion,living,delta -> true);
-            position = position.add(motion);
+            Vec3d step = motion;
+            if (destination == null) {
+                Vec3d start = position;
+                var floated = BodyMotion.withHover(position,motion,wave.nextStep(),living,
+                    delta -> clear.test(BodyMotion.box(start.add(delta))));
+                step = floated.movement();
+                if (floated.applied()) wave.advance();
+            }
+            position = position.add(step);
             double afterOverlap = BodyMotion.overlapDepth(BodyMotion.box(position),living);
             assertTrue(afterOverlap <= beforeOverlap + 1e-7,"recovery must preserve living collision constraints");
             if (completed) {
@@ -116,8 +125,9 @@ class IdleRecoveryTest {
     @Test void holdsDestinationAfterLeavingSolidUntilHoverClearanceIsReached() {
         IdleRecovery recovery = new IdleRecovery();
         Predicate<Box> clear = box -> !box.intersects(GROUND);
-        recovery.update(BURIED,true,true,0,clear);
-        Vec3d destination = recovery.target(BURIED);
+        Vec3d buried = new Vec3d(0,2*IdleMotion.HOVER_AMPLITUDE+.03-.5,0);
+        recovery.update(buried,true,true,0,clear);
+        Vec3d destination = recovery.target(buried);
         assertNotNull(destination);
         Vec3d barelyClear = new Vec3d(0,.01,0);
         recovery.update(barelyClear,true,false,1,clear);

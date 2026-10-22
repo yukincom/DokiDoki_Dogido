@@ -1,0 +1,39 @@
+/* Shared metadata and player feedback; no game or persistence wiring. */
+#filters { grid-template-columns:repeat(2,minmax(0,1fr)); }
+#filters label:last-child { grid-column:auto; }
+#filters select { width:100%; min-width:0; }
+.poem-tags { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:0 0 18px; }
+.biome-tag,.time-tag { padding:5px 10px; border:1px solid #c5b48e; background:#eee5cf; font-size:16px; }
+.biome-tag { display:inline-flex; align-items:baseline; white-space:nowrap; }
+.time-tag { background:#f6e7c3; min-width:38px; text-align:center; }
+.poem-tags.compact { gap:4px; margin:5px 0 0; }
+.compact .biome-tag,.compact .time-tag { padding:1px 4px; font-size:13px; min-width:0; }
+.poem-list-content { min-width:0; width:100%; }
+.poem-list-body{display:flex;align-items:center;gap:8px;min-width:0}
+.poem-list-body .poem-lines{min-width:0;overflow-wrap:anywhere}
+.poem-list-thumbnail{display:block;flex:0 0 40px;width:40px;height:40px;overflow:hidden;border:1px solid #c8bca2;background:#e9dfc9}
+.poem-list-thumbnail img{display:block;width:100%;height:100%;object-fit:cover;object-position:center}
+.poem-lines span { display:block; }
+/* 一覧だけはバイオーム・時間帯・年月日の順で横にまとめる。本文側のタグは変えない。 */
+#categories .entry .poem-list-meta{display:flex;align-items:center;gap:6px;margin-top:7px;min-width:0;font-size:12px;line-height:1.5}
+#categories .entry .poem-list-meta time{flex-shrink:0;white-space:nowrap;color:var(--muted);font-size:inherit;font-variant-numeric:tabular-nums}
+#categories .entry .poem-list-meta .poem-tags{flex:0 1 auto;min-width:0;flex-wrap:nowrap;gap:4px;margin:0}
+#categories .entry .poem-list-meta .biome-tag,#categories .entry .poem-list-meta .time-tag{font-size:12px;line-height:1.5;padding:1px 3px}
+#categories .entry .poem-list-meta .biome-tag{min-width:0;white-space:normal;overflow-wrap:anywhere}
+#categories .entry .poem-list-meta .time-tag{flex-shrink:0;white-space:nowrap}
+.entry-heading .poem-byline { font-size:16px; margin:0; }
+@media(max-width:600px) { .poems .entry { flex-basis:220px; } }
+.preface-label { font-size:12px; margin:0 0 8px; color:var(--muted); }
+blockquote.poem-note { margin:0; }
+.player-note { display:block; width:100%; min-height:130px; resize:vertical; padding:12px; font-family:inherit; font-size:14px; line-height:1.8; color:var(--ink); border:1px solid #bdaa83; background:#fff9e9; border-radius:0; }
+.player-note:focus-visible { outline:3px solid #a66725; outline-offset:3px; }
+@media(max-width:600px) { .folio-head { gap:8px; flex-wrap:wrap; } }
+
+/* 見どころの原文を句の上へ置き、しおりは面のアイコンの色で示す。 */
+.entry-heading .poem-preface{flex:1;margin:0;font-size:18px;line-height:1.85;overflow-wrap:anywhere;user-select:text;-webkit-user-select:text}
+.poem-page-meta{justify-content:flex-start;align-items:center;gap:10px;flex-wrap:wrap}
+.poem-page-meta .poem-tags{margin:0}
+.poem-page-meta time{font-size:16px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.poem-page-meta .bookmark-button{margin-left:auto;flex-shrink:0;display:grid;place-items:center;min-width:44px;min-height:48px;padding:6px;background:transparent;border:0;color:#b4aa94;box-shadow:none}
+.bookmark-button svg{display:block;fill:currentColor}
+.poem-page-meta .bookmark-button[aria-pressed=true]{color:#ac4b38;background:transparent}

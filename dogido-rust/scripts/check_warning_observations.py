@@ -68,10 +68,7 @@ time.sleep(.04 if '/panic/' in sys.argv[1] else delay)
 
             def reject_chat(sid):
                 got = request(base, "/api/v1/player-input", {"session_id": sid, "source": "voice", "text": "こんにちは"})
-                if got.get("reason") == "knowledge_input_routing":
-                    # Danger input is first classified for deferred knowledge.
-                    # Acceptance of that classifier is not chat acceptance; the
-                    # ordinary greeting must still fail the same safety gate.
+                if got.get("reason") == "reply_input_routing":
                     routing_turn = got["turn_id"]
                     def forwarded():
                         item = next((r for r in snapshot(base)["utterances"]
@@ -133,19 +130,22 @@ time.sleep(.04 if '/panic/' in sys.argv[1] else delay)
             send(sid, name="ambient_mob_detected")
             reject_chat(sid)
             send(sid, empty=True)
+            (folder / "delay").write_text(".6")
             turn = submit(base, sid)
             wait_for(lambda: row(base, turn, {"started"}))
-            (folder / "delay").write_text(".05")
+            (folder / "delay").write_text(".5")
             send(sid, name="hostile_audio_detected")
-            assert wait_for(lambda: row(base, turn, {"cancelled"}))["cancel_reason"] == "auditory_hostile"
+            assert row(base, turn, {"started", "completed"})
             send(sid, name="ambient_mob_detected")
-            reject_chat(sid)
             wait_for(lambda: any(r["session_id"] == sid and r["category"] == "callout"
                                 and r["playback_status"] == "completed" for r in snapshot(base)["utterances"]))
+            wait_for(lambda: row(base, turn, {"completed"}))
+            assert row(base, turn, {"completed"}).get("resolution") != "reply_resumed"
+            (folder / "delay").write_text(".05")
             send(sid, empty=True)
             turn = submit(base, sid, "もう大丈夫かな")
             wait_for(lambda: row(base, turn, {"completed"}))
-            passed.append("partial_danger_blocks_chat_until_complete_safe_observation")
+            passed.append("fresh_observation_required_and_nonurgent_audio_keeps_player_reply")
             close(sid)
         assert "dialogue_stopped" in log.read_text()
     report = ROOT / "reports/warning-observation-check.json"

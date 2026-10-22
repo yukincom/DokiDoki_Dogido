@@ -2,6 +2,7 @@ package dogido.lab.control;
 
 import dogido.lab.api.BodyProtocol.Activity;
 import dogido.lab.api.BodyProtocol.Mode;
+import dogido.lab.IdleMotion;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Predicate;
@@ -15,8 +16,8 @@ import net.minecraft.util.math.Vec3d;
  */
 public final class IdleRecovery {
     public static final double SEARCH_RADIUS = 3;
-    // hover開始位相による最大上下差0.12と、到着直後の小さな慣性に余白を残す。
-    private static final double HOVER_CLEARANCE = .15, ARRIVAL_DISTANCE = .04;
+    // 任意の位相で待機へ入るため、上下波形の全振幅と到着直後の小さな慣性に余白を残す。
+    private static final double HOVER_CLEARANCE = 2*IdleMotion.HOVER_AMPLITUDE+.03, ARRIVAL_DISTANCE = .04;
     private static final int RETRY_TICKS = 20;
     private static final List<Vec3d> OFFSETS = offsets();
     private Vec3d destination, origin;

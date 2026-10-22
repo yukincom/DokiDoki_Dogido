@@ -32,6 +32,7 @@ pub(crate) fn attach(action: &mut Speech, event: &GameEvent, recent: &Value, set
     }
     let topic = match action.kind {
         "surroundings_notice" => "surroundings",
+        "reassurance_notice" => "reassurance",
         "thunder_reaction" => "thunder",
         "smell" => "smell",
         "occluded_entry_with_light" | "occluded_entry_no_light" => "place",
@@ -56,7 +57,7 @@ pub(crate) fn attach(action: &mut Speech, event: &GameEvent, recent: &Value, set
             observations = json!({"thunder_heard":heard,"nearby_lightning_observed":details["nearby_lightning"] == true});
             properties["note"] = "雷鳴だけでは落雷地点や距離は未確認。".into();
         }
-        "surroundings" => {}
+        "surroundings" | "reassurance" => {}
         "smell" => {
             let smell = match action.rain_after_window {
                 Some(window) => super::ambient::rain_after_context(event, window),
@@ -96,8 +97,13 @@ pub(crate) fn attach(action: &mut Speech, event: &GameEvent, recent: &Value, set
         _ => unreachable!(),
     }
     details["__reaction_guard"] = guard;
+    let visual_world = action.image.as_ref().map(|_| details["reaction_context"]["world_context"].clone());
     details["reaction_context"] =
         json!({"topic":topic,"observations":observations,"properties":properties,"recent":recent});
+    if let Some(world) = visual_world {
+        details["reaction_context"]["world_context"] = world;
+        details["reaction_context"]["visual_capture"] = details["visual_capture"].clone();
+    }
     action.leaf = Some(LeafRequest {
         kind: KIND.into(),
         details,
@@ -190,6 +196,7 @@ pub(crate) fn still_applicable(action: &Speech, event: &GameEvent) -> bool {
 pub(crate) struct Prepared {
     pub request: GenerationRequest,
     fallback: String,
+    body_actions: bool,
 }
 impl Prepared {
     pub(crate) fn new(input: &Value, model: &str) -> Result<Self> {
@@ -218,11 +225,11 @@ impl Prepared {
         ensure!(
             matches!(
                 context.get("topic").and_then(Value::as_str),
-                Some("surroundings" | "thunder" | "smell" | "place")
+                Some("surroundings" | "thunder" | "smell" | "place" | "reassurance")
             ),
             "unknown reaction topic"
         );
-        if context.get("topic").and_then(Value::as_str) == Some("surroundings") {
+        if context.get("topic").and_then(Value::as_str) == Some("surroundings") && context.get("visual_capture").is_none() {
             let shared = crate::reaction_leaf::context("surroundings_notice", &input["details"])?;
             context.insert("situation".into(), shared["situation"].clone());
         }
@@ -233,6 +240,7 @@ impl Prepared {
                 && context
                     .get("observations")
                     .is_some_and(|observations| observations["smell"].is_object()));
+        let body_actions = context.get("body_options").is_some();
         let request = GenerationRequest {
             schema_version: 1,
             kind: KIND.into(),
@@ -240,11 +248,7 @@ impl Prepared {
             messages: vec![
                 ChatMessage {
                     role: Role::System,
-                    content: crate::companion_prompt::dialogue(
-                        "normal",
-                        crate::companion_prompt::DialoguePurpose::Ambient,
-                        smell_observed,
-                    ),
+                    content: crate::companion_prompt::environment(smell_observed, body_actions),
                 },
                 ChatMessage {
                     role: Role::User,
@@ -260,6 +264,7 @@ impl Prepared {
         request.validate()?;
         Ok(Self {
             request,
+            body_actions,
             fallback: input["fallback_text"]
                 .as_str()
                 .context("reaction fallback")?
@@ -273,12 +278,26 @@ impl Prepared {
         if generated.finish_reason.as_deref() == Some("length") {
             return (self.fallback.clone(), "truncated_output");
         }
-        match crate::speech_choice::parse(&generated.text) {
+        match parse_reply(&generated.text, self.body_actions).map(|(speech, _)| speech) {
             Ok(crate::speech_choice::Choice::Silent) => (String::new(), "silent"),
             Ok(crate::speech_choice::Choice::Speak(text)) => (text, "speak"),
             Err(reason) => (self.fallback.clone(), reason),
         }
     }
+    /// 発話が成立した同じ応答からだけ行動欄を取り出す。行動自体の検証は身体の状態機械が所有する。
+    pub(crate) fn body_action(&self, generated: Option<&GeneratedText>) -> Option<Value> {
+        let generated = generated.filter(|g| g.finish_reason.as_deref() != Some("length"))?;
+        parse_reply(&generated.text, self.body_actions).ok()?.1
+    }
+}
+
+fn parse_reply(raw: &str, body_actions: bool) -> Result<(crate::speech_choice::Choice, Option<Value>), &'static str> {
+    if !body_actions { return crate::speech_choice::parse(raw).map(|speech| (speech, None)); }
+    let mut value: Value = serde_json::from_str(&crate::text_format::strip_code_fence(raw))
+        .map_err(|_| "invalid_contract")?;
+    let object = value.as_object_mut().ok_or("invalid_contract")?;
+    let action = object.remove("body_action");
+    crate::speech_choice::parse(&value.to_string()).map(|speech| (speech, action))
 }
 
 #[cfg(test)]

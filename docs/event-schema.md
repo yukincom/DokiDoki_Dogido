@@ -58,7 +58,7 @@
 
 任意の`body_observation`は[HTTP観測v3](adapter-api.md#body-observation-v3)に従う。server実測の自他姿勢・owner可視性に加え、`sample.senses`へ身体の地点・目・向きによる周辺視認、環境、匂い、音を載せる。感覚の`basis=body_pose_client_world`はserver姿勢そのものと区別する。top-levelのplayer・戦闘観測へ代入せず、会話・環境反応・川柳用の身体観測として消費する。未取得・失効時にplayer由来の感覚で補完しない。具体例は[Java/Rust共通fixture](../dogido-rust/fixtures/body-observation-v3.json)。
 
-任意の`body_autonomy`は[HTTP観察移動v1](adapter-api.md#body-autonomy-v1)に従う。同じ身体観測のcontext・tick・revisionに属する制御状態と最大24件の対象候補を運び、観測capabilityと実行capabilityを区別する。`inspect_body_target`の結果は既存`command_results`で返す。
+任意の`body_autonomy`は[HTTP身体行動v2](adapter-api.md#body-autonomy-v2)に従う。同じ身体観測のcontext・tick・revisionに属する制御状態・実測安心度・注意範囲と最大24件の対象候補を運び、観測capabilityと実行capabilityを区別する。`inspect_body_target`の結果は既存`command_results`で返す。
 
 ## 5. トップレベル項目
 
@@ -485,6 +485,8 @@ Fabric adapterが近接源・hotbar・バイオーム・温度・天候から到
 ```
 
 - `type=block:* / weather:* / environment:*` は実再生された `sound_event` から機械的に決める
+- `sound_event`の`step / hit / break / place / fall`を会話材料まで保持し、足音・打撃・破壊・設置・着地を分ける。同一`source_id`でも異なるsound eventは別の音として保持する
+- `block.stone.*`等は共有sound groupであり、正確なブロック種や発音者を確定しない。破壊・設置系の音もプレイヤー専用ではない。個体照合のないブロック音は発音者未確定とする
 - 近くにブロックがあるだけで「その音がした」と推測しない
 - Mob 音は従来どおり、敵対中なら `auditory_threats`、非敵対なら `ambient_sounds`
 - 音源位置は粗い方向・距離帯だけを発話材料にし、exact position は渡さない
@@ -574,6 +576,18 @@ Fabricの `passive_mobs` は実際の距離・見通し条件を通った先頭4
 ## 14b. `command_results`
 
 serverから受けた型付き支援commandの実行結果。adapterはackされるまで後続イベントへ再添付する。
+
+通常会話の `command_type:"capture_body_view"` は成功時だけ一時的な `body_view` に192px PNGとhash・撮影時刻・身体contextを添える。Rustは会話一回で使い終えてからACKし、画像を観測保持・履歴・episodeへ残さない。[全fieldと上限](2026-10-21-chat-image.md#既存通信への接続)。
+
+自動撮影の `command_type:"capture_screenshot"` は共通の `command_id,status,executed_at,detail_code` と、
+元の `session_id,poem_id` を持つ。成功時だけ `captured_at,directory,filename,sha256,capture_view` を追加する。
+`filename` は `dogido_YYYY-MM-DD_HH.mm.ss.png`（同秒の重複は `_2` 以降）。`capture_view` は `viewpoint:"dogido_client_render_eye",body_entity_uuid,body_epoch,owner_uuid,dimension,camera_restored:true` を持ち、要求した身体と同じ撮影frameであることを本体が照合する。
+2026-10-21以降の命令の `poem_id` は生成開始時の予約キーであり、adapterは変更せず返す。
+Rustが同じ生成の保存成功後だけ実際の正本IDへ対応付け、本棚登録まで未ACKで待つ。取消・保存失敗の画像を別の句へ登録しない。
+`captured_at` は画面取得開始、`executed_at` はPNG保存完了確認時刻で、時差付きISO形式。
+`directory` は保存完了通知の実ファイルの親であり、サーバーは設定済みの固定screenshotsと一致する場合だけ読む。
+句集用のcapture_screenshotは画像本体・任意URLを送らない。型・発行済みID・句・session・時刻を本体で照合し、本棚への永続登録後にACKする。
+命令結果は全種類を合わせて一イベント32件以下に分割し、未送信分はACKまで各台帳に残す。
 
 ```json
 [

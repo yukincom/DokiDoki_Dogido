@@ -29,7 +29,8 @@ def main():
                     "dark_push_after_breath_protect_ms": 0}
         # 存在する設定だけを使い、所要時間の長いCDはこの模擬試験内に限り短縮。
         settings = {k: v for k, v in settings.items() if k in COMBAT_DEFAULTS}
-        with running(ROOT / "target/debug/dogido-rust", folder, dep, player=player, combat_settings=settings) as (base, process, log):
+        with running(ROOT / "target/debug/dogido-rust", folder, dep, player=player, combat_settings=settings,
+                     haiku_settings={"memory_dir":str(folder / "memory")}) as (base, process, log):
             seq = 0
             def register(capable=True):
                 return request(base, "/api/v1/adapter-sessions", {"adapter_name": "fabric-test", "adapter_version": "fixture",
@@ -257,22 +258,61 @@ def main():
             passed.append("chat_priority_drops_busy_period_and_only_new_changes_speak_later")
 
             sid = register(); send(sid)
-            control["structured"] = {160: {"action": "acknowledge_supply_gain", "basis_ids": ["first_light_supply"], "confidence": .95}}
-            control["leaf"] = "松明を十本クラフトしたんやな。"
+            control["structured"] = {160: {"action": "acknowledge_supply_gain", "speech": "備えが増えたな。"}}
+            saved = request(base, "/api/v1/catalog/readings", {"surface":"備え", "reading":"そなえ"}, method="PUT")["correction"]
+            before = calls(); audio_before = len(seen)
             send(sid, inventory={"torch": 1})
             reply = wait_for(lambda: match(sid, "light_source_gain", "completed"))
-            assert "クラフト" not in reply["text"] and "十本" not in reply["text"], reply
-            close(sid); passed.append("light_plan_and_leaf_preserve_observed_supply_only")
+            assert reply["text"] == "備えが増えたな。" and calls() == before + 1, reply
+            assert len(reply["llm_reports"]) == 1, reply
+            assert any(r["path"].startswith("/synthesis?") and r["body"]["test_text"].startswith("そなえ") for r in seen[audio_before:]), seen[audio_before:]
+            request(base, "/api/v1/catalog/readings", {"surface":"備え", "expected_id":saved["id"]}, method="DELETE")
+            close(sid); passed.append("light_action_and_speech_finish_in_one_call_with_reading_overlay")
+
+            for payload in [{"action":"stay_silent", "speech":""},
+                            {"action":"acknowledge_supply_gain", "speech":""}]:
+                sid = register(); send(sid)
+                control["structured"] = {160:payload}; before = calls()
+                send(sid, inventory={"torch":1})
+                wait_for(lambda: calls() == before + 1); time.sleep(.15)
+                assert calls() == before + 1 and not match(sid,"light_source_gain","completed")
+                close(sid)
+            passed.append("silent_or_invalid_light_response_never_retries")
+            control["structured"] = {160:{"action":"acknowledge_supply_gain", "speech":"備えが増えたな。"}}
+
+            sid = register(); send(sid); (folder / "delay").write_text("1.5")
+            send(sid, inventory={"torch":1})
+            comment = wait_for(lambda: match(sid, "light_source_gain", "started"))
+            queued = say(sid, "うん")
+            assert queued["queued"], queued
+            send(sid, inventory={"torch":1}, world={"biome":"desert", "local_light":13})
+            assert row(base, comment["turn_id"], {"started"})
+            (folder / "delay").write_text(".04")
+            wait_for(lambda: row(base, comment["turn_id"], {"completed"}))
+            wait_for(lambda: row(base, queued["turn_id"], {"completed"}))
+            close(sid); passed.append("started_light_comment_finishes_before_acknowledgement_reply")
+
+            sid = register(); send(sid); (folder / "delay").write_text("1.5")
+            turn = say(sid, "こんにちは")["turn_id"]
+            wait_for(lambda: row(base, turn, {"started"}))
+            send(sid, world={"time_phase":"evening", "local_light":12})
+            assert not any(any(a["kind"]=="night_warning_surface" for a in r.get("combat_actions", [])) for r in rows(sid))
+            assert row(base, turn, {"started"})
+            (folder / "delay").write_text(".04")
+            wait_for(lambda: row(base, turn, {"completed"}))
+            send(sid, world={"time_phase":"evening", "local_light":12})
+            wait_for(lambda: match(sid, "night_warning_surface", "completed"))
+            close(sid); passed.append("evening_waits_for_started_normal_reply_then_rechecks_current_world")
 
             sid = register(); send(sid)
-            control["delay"] = .25; before = calls()
+            control["delay"] = .3; before = calls()
             send(sid, inventory={"torch": 1})
-            wait_for(lambda: calls() >= before + 2)
+            wait_for(lambda: calls() >= before + 1)
             send(sid, world=dark, inventory={"torch": 1})
-            wait_for(lambda: match(sid, "light_source_gain", "cancelled"))
+            time.sleep(.45)
             assert not match(sid, "light_source_gain", "completed")
             close(sid); control["delay"] = 0
-            passed.append("light_leaf_invalidated_if_darkness_returns_after_plan")
+            passed.append("light_response_invalidated_if_darkness_returns_during_generation")
 
             sid = register(); send(sid)
             control["leaf"] = "こんにちは。話しかけてくれてうれしいわ。"

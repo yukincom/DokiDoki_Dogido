@@ -128,7 +128,10 @@ fn native_operations_are_not_advertised_as_content_actions() {
     assert!(!prompt.contains("\"action\":\"inspect\""));
     assert!(prompt.contains("function call"));
     let defaults = editable_assets(&editable_defaults()).unwrap();
-    assert_eq!(prepare_with_assets(&prepared, None, &defaults).unwrap(), result);
+    assert_eq!(
+        prepare_with_assets(&prepared, None, &defaults).unwrap(),
+        result
+    );
 }
 
 #[test]
@@ -312,5 +315,21 @@ async fn native_projection_limits_reject_before_fragment_ipc() {
         stopped(pid(&dir));
         assert!(!dir.join("request").exists());
         std::fs::remove_dir_all(dir).unwrap();
+    }
+}
+
+#[test]
+fn all_consultation_templates_drop_retired_gate_instructions() {
+    let instructions = ASSETS.to_string();
+    for stale in [
+        "confidence 0.85",
+        "confidence（0.85以上）",
+        "meter_delta",
+        "mora_count",
+        "音数・他行",
+        "読み・音数・対象",
+        "否定・引用・伝聞・条件付き・疑問を",
+    ] {
+        assert!(!instructions.contains(stale), "{stale}");
     }
 }

@@ -20,6 +20,10 @@ impl Dialogue {
     pub fn set_execution_capabilities(&self, sid: &str, capabilities: &[String]) {
         if let Some(s) = self.data.lock().unwrap().sessions.get_mut(sid) {
             s.assist = assist::AssistState::new(capabilities.iter().cloned());
+            s.screenshots.enabled = capabilities.iter().any(|c| c == crate::screenshot::CAPABILITY);
+            s.visual.enabled = capabilities.iter().any(|c| c == super::visual_runtime::CAPABILITY);
+            s.body_interest_enabled = capabilities.iter().any(|c| c == "body.inspect_target.v2");
+            if !s.body_interest_enabled { super::body_interest_runtime::cancel(s); }
         }
     }
     pub(super) fn cancel_assist(d: &mut Data, sid: &str) {
@@ -73,10 +77,13 @@ impl Dialogue {
             ..Input::default()
         };
         let has_speech = s.warning.is_some() || s.pending_warning.is_some();
-        match s
-            .assist
-            .submit(input.clone(), event, chrono::Utc::now(), has_speech)
-        {
+        let submission = if let Some(classification) =
+            super::request_runtime::classification(s, text, source).cloned() {
+            s.assist.submit_classified(&classification, event, chrono::Utc::now(), has_speech)
+        } else {
+            s.assist.submit(input.clone(), event, chrono::Utc::now(), has_speech)
+        };
+        match submission {
             Submission::NotHandled => None,
             Submission::Handled(dispatch) => {
                 Self::cancel_chat(d, sid, "assist_input");
@@ -91,7 +98,7 @@ impl Dialogue {
             Submission::NeedsIntent(prepared) => {
                 // 「剣の耐久値は？」等は知識質問。危険中は抽出jobの最新一件枠に
                 // 入れる前にFIFOへ渡し、次の発話で質問を消さない。
-                if let Some(queued) = self.queue_knowledge_input(d, jobs, sid, text, source) {
+                if let Some(queued) = self.queue_reply_input(d, jobs, sid, text, source, false) {
                     return Some(queued);
                 }
                 Self::cancel_chat(d, sid, "assist_intent");
@@ -126,6 +133,7 @@ impl Dialogue {
             }
         }
     }
+    // 分類器未設定時の既存経路。有効時はsubmit_classifiedから実測検証へ直接進む。
     async fn run_assist(
         self: Arc<Self>,
         sid: String,

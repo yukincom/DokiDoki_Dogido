@@ -139,6 +139,7 @@ impl Dialogue {
                     "dialogue_reason",
                     "observation_revision",
                     "body_observation_input",
+                    "body_position_changes_input",
                     "horse_recall_status",
                     "horse_recall_reason",
                     "horse_command",

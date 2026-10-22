@@ -14,8 +14,7 @@ def finish(base, send, sid, text):
 
 def reply(text, prompt, count):
     if "段階: after_validation" in prompt:
-        assert "meter_not_exact" in prompt
-        return step(text, "respond", "そのままやと音数が合わんから、表現を相談しよか。")
+        raise AssertionError("failed candidate must not trigger another model call")
     if text == "それにして":
         payload = step(text, "stage_conversation_candidate")
         payload["purpose"] = "improve_wording"

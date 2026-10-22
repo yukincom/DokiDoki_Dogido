@@ -1,0 +1,668 @@
+{
+  "source": "2026-10-14 three-condition position experiment, 17 available cases",
+  "cases": [
+    {
+      "id": "yaw0_front",
+      "egocentric_input": {
+        "self": {
+          "position": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "yaw": 0.0
+        },
+        "player": {
+          "position": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 4.0
+          },
+          "yaw": 90
+        }
+      },
+      "expected": {
+        "position_status": "available",
+        "relative_positions": [
+          {
+            "observer": "dogido",
+            "target": "player",
+            "horizontal": "front",
+            "vertical": "same"
+          },
+          {
+            "observer": "player",
+            "target": "dogido",
+            "horizontal": "right",
+            "vertical": "same"
+          }
+        ],
+        "distance_blocks": 4.0
+      }
+    },
+    {
+      "id": "yaw0_front_right",
+      "egocentric_input": {
+        "self": {
+          "position": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "yaw": 0.0
+        },
+        "player": {
+          "position": {
+            "x": 2.828427,
+            "y": 0.0,
+            "z": 2.828427
+          },
+          "yaw": 90
+        }
+      },
+      "expected": {
+        "position_status": "available",
+        "relative_positions": [
+          {
+            "observer": "dogido",
+            "target": "player",
+            "horizontal": "front_right",
+            "vertical": "same"
+          },
+          {
+            "observer": "player",
+            "target": "dogido",
+            "horizontal": "back_right",
+            "vertical": "same"
+          }
+        ],
+        "distance_blocks": 4.0
+      }
+    },
+    {
+      "id": "yaw0_right",
+      "egocentric_input": {
+        "self": {
+          "position": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "yaw": 0.0
+        },
+        "player": {
+          "position": {
+            "x": 4.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "yaw": 90
+        }
+      },
+      "expected": {
+        "position_status": "available",
+        "relative_positions": [
+          {
+            "observer": "dogido",
+            "target": "player",
+            "horizontal": "right",
+            "vertical": "same"
+          },
+          {
+            "observer": "player",
+            "target": "dogido",
+            "horizontal": "back",
+            "vertical": "same"
+          }
+        ],
+        "distance_blocks": 4.0
+      }
+    },
+    {
+      "id": "yaw0_back_right",
+      "egocentric_input": {
+        "self": {
+          "position": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "yaw": 0.0
+        },
+        "player": {
+          "position": {
+            "x": 2.828427,
+            "y": 0.0,
+            "z": -2.828427
+          },
+          "yaw": 90
+        }
+      },
+      "expected": {
+        "position_status": "available",
+        "relative_positions": [
+          {
+            "observer": "dogido",
+            "target": "player",
+            "horizontal": "back_right",
+            "vertical": "same"
+          },
+          {
+            "observer": "player",
+            "target": "dogido",
+            "horizontal": "back_left",
+            "vertical": "same"
+          }
+        ],
+        "distance_blocks": 4.0
+      }
+    },
+    {
+      "id": "yaw0_back",
+      "egocentric_input": {
+        "self": {
+          "position": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "yaw": 0.0
+        },
+        "player": {
+          "position": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": -4.0
+          },
+          "yaw": 90
+        }
+      },
+      "expected": {
+        "position_status": "available",
+        "relative_positions": [
+          {
+            "observer": "dogido",
+            "target": "player",
+            "horizontal": "back",
+            "vertical": "same"
+          },
+          {
+            "observer": "player",
+            "target": "dogido",
+            "horizontal": "left",
+            "vertical": "same"
+          }
+        ],
+        "distance_blocks": 4.0
+      }
+    },
+    {
+      "id": "yaw0_back_left",
+      "egocentric_input": {
+        "self": {
+          "position": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "yaw": 0.0
+        },
+        "player": {
+          "position": {
+            "x": -2.828427,
+            "y": 0.0,
+            "z": -2.828427
+          },
+          "yaw": 90
+        }
+      },
+      "expected": {
+        "position_status": "available",
+        "relative_positions": [
+          {
+            "observer": "dogido",
+            "target": "player",
+            "horizontal": "back_left",
+            "vertical": "same"
+          },
+          {
+            "observer": "player",
+            "target": "dogido",
+            "horizontal": "front_left",
+            "vertical": "same"
+          }
+        ],
+        "distance_blocks": 4.0
+      }
+    },
+    {
+      "id": "yaw0_left",
+      "egocentric_input": {
+        "self": {
+          "position": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "yaw": 0.0
+        },
+        "player": {
+          "position": {
+            "x": -4.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "yaw": 90
+        }
+      },
+      "expected": {
+        "position_status": "available",
+        "relative_positions": [
+          {
+            "observer": "dogido",
+            "target": "player",
+            "horizontal": "left",
+            "vertical": "same"
+          },
+          {
+            "observer": "player",
+            "target": "dogido",
+            "horizontal": "front",
+            "vertical": "same"
+          }
+        ],
+        "distance_blocks": 4.0
+      }
+    },
+    {
+      "id": "yaw0_front_left",
+      "egocentric_input": {
+        "self": {
+          "position": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "yaw": 0.0
+        },
+        "player": {
+          "position": {
+            "x": -2.828427,
+            "y": 0.0,
+            "z": 2.828427
+          },
+          "yaw": 90
+        }
+      },
+      "expected": {
+        "position_status": "available",
+        "relative_positions": [
+          {
+            "observer": "dogido",
+            "target": "player",
+            "horizontal": "front_left",
+            "vertical": "same"
+          },
+          {
+            "observer": "player",
+            "target": "dogido",
+            "horizontal": "front_right",
+            "vertical": "same"
+          }
+        ],
+        "distance_blocks": 4.0
+      }
+    },
+    {
+      "id": "rotated_90",
+      "egocentric_input": {
+        "self": {
+          "position": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "yaw": 0.0
+        },
+        "player": {
+          "position": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 6.0
+          },
+          "yaw": -180
+        }
+      },
+      "expected": {
+        "position_status": "available",
+        "relative_positions": [
+          {
+            "observer": "dogido",
+            "target": "player",
+            "horizontal": "front",
+            "vertical": "same"
+          },
+          {
+            "observer": "player",
+            "target": "dogido",
+            "horizontal": "front",
+            "vertical": "same"
+          }
+        ],
+        "distance_blocks": 6.0
+      }
+    },
+    {
+      "id": "rotated_180",
+      "egocentric_input": {
+        "self": {
+          "position": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "yaw": 0.0
+        },
+        "player": {
+          "position": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 6.0
+          },
+          "yaw": -180
+        }
+      },
+      "expected": {
+        "position_status": "available",
+        "relative_positions": [
+          {
+            "observer": "dogido",
+            "target": "player",
+            "horizontal": "front",
+            "vertical": "same"
+          },
+          {
+            "observer": "player",
+            "target": "dogido",
+            "horizontal": "front",
+            "vertical": "same"
+          }
+        ],
+        "distance_blocks": 6.0
+      }
+    },
+    {
+      "id": "rotated_-90",
+      "egocentric_input": {
+        "self": {
+          "position": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "yaw": 0.0
+        },
+        "player": {
+          "position": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 6.0
+          },
+          "yaw": -90
+        }
+      },
+      "expected": {
+        "position_status": "available",
+        "relative_positions": [
+          {
+            "observer": "dogido",
+            "target": "player",
+            "horizontal": "front",
+            "vertical": "same"
+          },
+          {
+            "observer": "player",
+            "target": "dogido",
+            "horizontal": "left",
+            "vertical": "same"
+          }
+        ],
+        "distance_blocks": 6.0
+      }
+    },
+    {
+      "id": "rotated_45",
+      "egocentric_input": {
+        "self": {
+          "position": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "yaw": 0.0
+        },
+        "player": {
+          "position": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 6.0
+          },
+          "yaw": -180
+        }
+      },
+      "expected": {
+        "position_status": "available",
+        "relative_positions": [
+          {
+            "observer": "dogido",
+            "target": "player",
+            "horizontal": "front",
+            "vertical": "same"
+          },
+          {
+            "observer": "player",
+            "target": "dogido",
+            "horizontal": "front",
+            "vertical": "same"
+          }
+        ],
+        "distance_blocks": 6.0
+      }
+    },
+    {
+      "id": "above_side",
+      "egocentric_input": {
+        "self": {
+          "position": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "yaw": 0.0
+        },
+        "player": {
+          "position": {
+            "x": 0.0,
+            "y": 3,
+            "z": -4.0
+          },
+          "yaw": -90
+        }
+      },
+      "expected": {
+        "position_status": "available",
+        "relative_positions": [
+          {
+            "observer": "dogido",
+            "target": "player",
+            "horizontal": "back",
+            "vertical": "above"
+          },
+          {
+            "observer": "player",
+            "target": "dogido",
+            "horizontal": "right",
+            "vertical": "below"
+          }
+        ],
+        "distance_blocks": 5.0
+      }
+    },
+    {
+      "id": "below_diagonal",
+      "egocentric_input": {
+        "self": {
+          "position": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "yaw": 0.0
+        },
+        "player": {
+          "position": {
+            "x": 3.0,
+            "y": -2,
+            "z": -3.0
+          },
+          "yaw": 135
+        }
+      },
+      "expected": {
+        "position_status": "available",
+        "relative_positions": [
+          {
+            "observer": "dogido",
+            "target": "player",
+            "horizontal": "back_right",
+            "vertical": "below"
+          },
+          {
+            "observer": "player",
+            "target": "dogido",
+            "horizontal": "back",
+            "vertical": "above"
+          }
+        ],
+        "distance_blocks": 4.7
+      }
+    },
+    {
+      "id": "directly_above",
+      "egocentric_input": {
+        "self": {
+          "position": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "yaw": 0.0
+        },
+        "player": {
+          "position": {
+            "x": 0.0,
+            "y": 4,
+            "z": 0.0
+          },
+          "yaw": -90
+        }
+      },
+      "expected": {
+        "position_status": "available",
+        "relative_positions": [
+          {
+            "observer": "dogido",
+            "target": "player",
+            "horizontal": "same_horizontal_position",
+            "vertical": "above"
+          },
+          {
+            "observer": "player",
+            "target": "dogido",
+            "horizontal": "same_horizontal_position",
+            "vertical": "below"
+          }
+        ],
+        "distance_blocks": 4.0
+      }
+    },
+    {
+      "id": "same_position",
+      "egocentric_input": {
+        "self": {
+          "position": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "yaw": 0.0
+        },
+        "player": {
+          "position": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "yaw": -180
+        }
+      },
+      "expected": {
+        "position_status": "available",
+        "relative_positions": [
+          {
+            "observer": "dogido",
+            "target": "player",
+            "horizontal": "same_horizontal_position",
+            "vertical": "same"
+          },
+          {
+            "observer": "player",
+            "target": "dogido",
+            "horizontal": "same_horizontal_position",
+            "vertical": "same"
+          }
+        ],
+        "distance_blocks": 0.0
+      }
+    },
+    {
+      "id": "range_edge",
+      "egocentric_input": {
+        "self": {
+          "position": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "yaw": 0.0
+        },
+        "player": {
+          "position": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 16.0
+          },
+          "yaw": 90
+        }
+      },
+      "expected": {
+        "position_status": "available",
+        "relative_positions": [
+          {
+            "observer": "dogido",
+            "target": "player",
+            "horizontal": "front",
+            "vertical": "same"
+          },
+          {
+            "observer": "player",
+            "target": "dogido",
+            "horizontal": "right",
+            "vertical": "same"
+          }
+        ],
+        "distance_blocks": 16.0
+      }
+    }
+  ]
+}

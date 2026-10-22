@@ -53,112 +53,116 @@ fn capture(d: &Dialogue, e: &GameEvent) -> chat_context::Native {
 fn body(c: &chat_context::Native) -> &Value {
     &c.context.world_context.as_ref().unwrap().observations["body_observation"]
 }
+#[test]
+fn haiku_candidate_limit_keeps_visible_mobs_and_place_ahead_of_inventory() {
+    let d = server();
+    for (index, sky_visible) in [true, false].into_iter().enumerate() {
+        let raw = edit(event(index as i64 + 1, 100 + index as u64, 23.0), |v| {
+            v["player"]["held_item"] = json!("birch_door");
+            v["inventory"] = json!({"birch_door": 1, "cobblestone": 64, "stick": 64, "bone": 32});
+            let senses = &mut v["body_observation"]["sample"]["senses"];
+            senses["world"] = json!({"biome":"plains", "sky_visible":sky_visible, "weather":"clear", "time_phase":"day"});
+            senses["nearby_resources"] = json!(["oak_log", "stone", "sand", "grass_block", "dirt", "cherry_leaves"]
+                .iter().enumerate().map(|(i, name)| json!({"type":"block", "name":name, "distance":i + 1})).collect::<Vec<_>>());
+            senses["dropped_items"] = json!(["apple", "bread", "feather", "string"]
+                .iter().enumerate().map(|(i, name)| json!({"name":name, "count":1, "distance":i + 1})).collect::<Vec<_>>());
+            senses["passive_mobs"] = json!(["cow", "sheep", "pig"]
+                .iter().map(|kind| json!({"type":kind, "distance":2})).collect::<Vec<_>>());
+        });
+        let sensory = {
+            let mut data = d.data.lock().unwrap();
+            let s = data.sessions.get_mut("s").unwrap();
+            super::observe(s, &raw);
+            super::event(s, &raw)
+        };
+        let world = crate::world_catalog::catalog();
+        let context = crate::haiku::materials::capture(
+            &sensory,
+            crate::haiku::materials::RuntimeRead {
+                current_structure: None, player_name: "試験", inventory_order: sensory.inventory_order(),
+            },
+            world, crate::chat_catalog::catalog(), world, &Default::default(),
+        ).unwrap();
+        let keys: Vec<_> = context.feature_candidates.iter().map(|row| row.key.as_str()).collect();
+        assert_eq!(keys.len(), 14);
+        for key in ["nearby_1", "nearby_6", "mob_1", "mob_2", "mob_3"] {
+            assert!(keys.contains(&key), "{key}: {keys:?}");
+        }
+        assert_eq!(keys.contains(&"biome"), sky_visible);
+        assert_eq!(keys.contains(&"biome_group"), sky_visible);
+        // 候補欄で押し出されても、持ち物そのものと出典は消さない。
+        assert!(!context.held_item.is_empty() && !context.inventory_items.is_empty());
+        assert!(context.source_atoms.iter().any(|atom| atom.observation_role == "selected_item"));
+    }
+}
 #[tokio::test]
-async fn body_original_event_updates_once_and_capture_is_immutable() {
+async fn body_comparison_stays_internal_while_model_context_contains_no_raw_pose() {
     let d = server();
     let permit = d.serial.acquire().await.unwrap();
     let a = event(1, 100, 23.0);
     d.observe("s", a.clone(), Some("a"));
     let first = capture(&d, &a);
-    let first_diagnostic = d.snapshot(Some("s"))["sessions"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|s| s["session_id"] == "s")
-        .unwrap()["body_observation"]
-        .clone();
-    assert_eq!(first_diagnostic["current"]["player"]["position"]["z"], 23.0);
-    d.observe("other", a.clone(), Some("a"));
     let b = edit(event(2, 110, 28.0), |v| {
         let sample = &mut v["body_observation"]["sample"];
         sample["self_pose"]["yaw"] = json!(90.0);
-        sample["self_pose"]["view_yaw"] = json!(90.0);
         sample["player_pose"]["yaw"] = json!(-45.0);
-        sample["player_pose"]["pitch"] = json!(-20.0);
         sample["vision"]["player_visibility"] = json!("not_visible");
         sample["vision"]["reason"] = json!("occluded");
     });
     d.observe("s", b.clone(), Some("b"));
     let second = capture(&d, &b);
-    let changes = &second.context.world_context.as_ref().unwrap().changes;
+    let context = second.context.world_context.as_ref().unwrap();
+    assert_eq!(context.changes.len(), 5);
+    assert_eq!(context.changes[4].kind, "body_position_relation");
+    assert_eq!(context.changes[4].before["distance_blocks"], 3.0);
+    assert_eq!(context.changes[4].now["distance_blocks"], 8.0);
+    assert_eq!(body(&second)["current"]["position_relation"], context.changes[4].now);
+    for change in &context.changes[..3] {
+        assert!(change.before.is_null());
+        assert_eq!(change.now, json!({"changed":true}));
+    }
+    assert_eq!(context.changes[3].now["player_visibility"], "not_visible");
+    {
+        let data = d.data.lock().unwrap();
+        let internal = data.sessions["s"]
+            .conversation_observation
+            .context()
+            .unwrap();
+        assert_eq!(internal.changes[0].before["z"], 23.0);
+        assert_eq!(internal.changes[0].now["z"], 28.0);
+        let raw = data.sessions["s"]
+            .body_observation
+            .project(Instant::now())
+            .unwrap();
+        assert_eq!(raw["current"]["player"]["position"]["z"], 28.0);
+        assert_eq!(raw["previous"]["player"]["position"]["z"], 23.0);
+    }
     assert_eq!(
-        changes.iter().map(|c| c.kind.as_str()).collect::<Vec<_>>(),
-        [
-            "body_player_position",
-            "body_self_orientation",
-            "body_player_orientation",
-            "body_player_visibility"
-        ]
-    );
-    assert_eq!(changes[0].before["z"], 23.0);
-    assert_eq!(changes[0].now["z"], 28.0);
-    assert_eq!(changes[3].before["player_visibility"], "visible");
-    assert_eq!(changes[3].now["player_visibility"], "not_visible");
-    let second_diagnostic = d.snapshot(Some("s"))["sessions"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|s| s["session_id"] == "s")
-        .unwrap()["body_observation"]
-        .clone();
-    assert_eq!(
-        second_diagnostic["current"]["player"]["position"]["z"],
-        28.0
-    );
-    assert_eq!(first_diagnostic["current"]["player"]["position"]["z"], 23.0);
-    assert_eq!(
-        first_diagnostic["current"]["vision"]["player_visibility"],
+        body(&first)["current"]["vision"]["player_visibility"],
         "visible"
     );
-    assert_eq!(second_diagnostic["current"], body(&second)["current"]);
-    assert_eq!(second_diagnostic["previous"], body(&second)["previous"]);
     assert_eq!(
         body(&second)["current"]["vision"]["player_visibility"],
         "not_visible"
     );
-    assert_eq!(
-        body(&second)["previous"]["vision"]["player_visibility"],
-        "visible"
-    );
-    assert_eq!(body(&second)["current"]["player"]["position"]["z"], 28.0);
-    assert_eq!(body(&second)["previous"]["player"]["position"]["z"], 23.0);
-    assert_eq!(body(&first)["current"]["player"]["position"]["z"], 23.0);
-    assert_eq!(body(&second)["current"]["self"]["yaw"], 90.0); // player yawは混ぜない。
-    assert_eq!(body(&second)["current"]["self"]["view_yaw"], 90.0);
-    assert_eq!(body(&second)["current"]["self"]["view_pitch"], 0.0);
-    assert_eq!(body(&second)["current"]["player"]["yaw"], -45.0);
-    assert_eq!(body(&second)["current"]["player"]["pitch"], -20.0);
-    let dup = event(2, 120, 99.0);
-    d.observe("s", dup.clone(), Some("dup"));
-    assert_eq!(
-        body(&capture(&d, &dup))["current"]["player"]["position"]["z"],
-        28.0
-    );
-    let partial = edit(event(3, 110, 88.0), |v| {
-        v.as_object_mut().unwrap().remove("body_observation");
-    });
-    d.observe("s", partial.clone(), Some("partial"));
-    assert_eq!(
-        body(&capture(&d, &partial))["current"]["player"]["position"]["z"],
-        28.0
-    );
-    assert_eq!(
-        context(&d.data.lock().unwrap().sessions["other"])
-            .unwrap()
-            .observations["body_observation"]["reason"],
-        "owner_mismatch"
-    );
-    assert_eq!(
-        second.context.world_context.as_ref().unwrap().observations["observer"],
-        "dogido"
-    );
+    for field in ["self", "player"] {
+        assert!(body(&second)["current"].get(field).is_none());
+    }
+    for field in [
+        "previous",
+        "coordinate_system",
+        "sample_interval_ticks",
+        "pose_basis",
+    ] {
+        assert!(body(&second).get(field).is_none());
+    }
     let input = crate::chat_materials::PlayerInput {
-        raw_text: "オレはさっきより離れた？".into(),
-        semantic_text: "オレはさっきより離れた？".into(),
+        raw_text: "今どこ？".into(),
+        semantic_text: "今どこ？".into(),
         ..Default::default()
     };
     let crate::chat_materials::Prepared::Reply(reply) = crate::chat_materials::prepare(
-        &b,
+        second.sensory_event.as_ref().unwrap(),
         &second.settings,
         &input,
         &second.context,
@@ -166,84 +170,50 @@ async fn body_original_event_updates_once_and_capture_is_immutable() {
         &chat_context::CatalogLabels,
     )
     .unwrap() else {
-        panic!("normal reply route");
+        panic!("normal reply route")
     };
     let request = reply.request("fixture-model", 256).unwrap();
-    let wire = serde_json::to_value(&request).unwrap().to_string();
-    assert_eq!(
-        request.messages[1]
-            .content
-            .matches("\"body_observation\"")
-            .count(),
-        1
-    );
-    assert!(
-        request.messages[0]
-            .content
-            .contains("body_observation の self はオレ")
-    );
-    for kind in [
-        "body_player_position",
-        "body_self_orientation",
-        "body_player_orientation",
-        "body_player_visibility",
+    let wire = request.messages[1].content.clone();
+    assert!(wire.contains("body_player_position") && wire.contains("occluded"));
+    for field in [
+        "coordinate_system",
+        "view_yaw",
+        "view_pitch",
+        "eye_position",
+        OWNER,
     ] {
-        assert!(request.messages[1].content.contains(kind));
+        assert!(!wire.contains(field), "{field}");
     }
-    assert!(wire.contains("server_pose"));
-    assert!(wire.contains("pose_basis"));
-    assert!(wire.contains("body_eye_raycast_fov"));
-    assert!(wire.contains("occluded"));
-    assert!(wire.contains("view_pitch"));
-    assert!(wire.contains("previous"));
-    assert!(!wire.contains(OWNER));
     let mut result = json!({"text":"fixture"});
     attach_input(&mut result, &reply.details);
-    assert_eq!(result["body_observation_input"], body(&second).clone());
-    let later = event(4, 130, 42.0);
+    let later = event(3, 120, 42.0);
     d.observe("s", later.clone(), Some("later"));
-    assert_eq!(
-        body(&capture(&d, &later))["current"]["player"]["position"]["z"],
-        42.0
-    );
-    assert_eq!(
-        result["body_observation_input"]["current"]["player"]["position"]["z"],
-        28.0
-    );
-    assert_eq!(
-        result["body_observation_input"]["previous"]["player"]["position"]["z"],
-        23.0
-    );
-    assert_eq!(
-        result["body_observation_input"]["current"]["vision"]["reason"],
-        "occluded"
-    );
+    assert_eq!(result["body_observation_input"], body(&second).clone());
     assert_eq!(
         body(&capture(&d, &later))["current"]["vision"]["reason"],
         "in_view"
     );
-    assert!(!result.to_string().contains(OWNER));
     drop(permit);
     d.shutdown().await;
 }
+
 #[tokio::test]
-async fn body_unavailable_vision_is_kept_in_normal_chat_and_diagnostic_without_losing_pose() {
+async fn body_unavailable_vision_keeps_raw_pose_only_in_diagnostic() {
     let d = server();
     let permit = d.serial.acquire().await.unwrap();
     let e = edit(event(1, 100, 23.0), |v| {
         v["body_observation"]["sample"]["vision"]["player_visibility"] = json!("unavailable");
         v["body_observation"]["sample"]["vision"]["reason"] = json!("area_unloaded");
     });
-    d.observe("s", e.clone(), Some("unavailable-vision"));
+    d.observe("s", e.clone(), None);
     let captured = capture(&d, &e);
     let projected = body(&captured);
     assert_eq!(projected["status"], "observed");
-    assert_eq!(projected["current"]["self"]["position"]["z"], 20.0);
-    assert_eq!(projected["current"]["player"]["position"]["z"], 23.0);
     assert_eq!(
         projected["current"]["vision"]["player_visibility"],
         "unavailable"
     );
+    assert!(projected["current"].get("self").is_none());
     let snapshot = d.snapshot(Some("s"));
     let diagnostic = snapshot["sessions"]
         .as_array()
@@ -252,32 +222,20 @@ async fn body_unavailable_vision_is_kept_in_normal_chat_and_diagnostic_without_l
         .find(|s| s["session_id"] == "s")
         .unwrap();
     assert_eq!(
-        diagnostic["body_observation"]["current"],
-        projected["current"]
+        diagnostic["body_observation"]["current"]["player"]["position"]["z"],
+        23.0
     );
-    let input = crate::chat_materials::PlayerInput {
-        raw_text: "今オレが見える？".into(),
-        semantic_text: "今オレが見える？".into(),
-        ..Default::default()
-    };
-    let crate::chat_materials::Prepared::Reply(reply) = crate::chat_materials::prepare(
-        &e,
-        &captured.settings,
-        &input,
-        &captured.context,
-        &captured.snapshot,
-        &chat_context::CatalogLabels,
-    )
-    .unwrap() else {
-        panic!("normal reply route");
-    };
-    let request = reply.request("fixture-model", 256).unwrap();
-    assert!(request.messages[1].content.contains("area_unloaded"));
-    assert!(request.messages[1].content.contains("pose_basis"));
-    let mut result = json!({"text":"fixture"});
-    attach_input(&mut result, &reply.details);
-    assert_eq!(result["body_observation_input"], projected.clone());
-    assert!(result["body_observation_input"]["current"]["self"]["position"].is_object());
+    assert_eq!(
+        diagnostic["body_observation"]["current"]["vision"],
+        projected["current"]["vision"]
+    );
+    let probe = &diagnostic["body_probe"];
+    assert_eq!(probe["context"]["owner_id"], OWNER);
+    assert_eq!(probe["server_tick"], 100);
+    assert_eq!(probe["snapshot_revision"], 200);
+    assert_eq!(probe["player_pose"]["position"]["z"], 23.0);
+    assert_eq!(probe["vision"]["player_visibility"], "unavailable");
+    assert!(captured.context.world_context.as_ref().unwrap().observations.get("body_probe").is_none());
     drop(permit);
     d.shutdown().await;
 }
@@ -527,7 +485,7 @@ async fn old_reply_ack_cannot_consume_new_body_generation_changes() {
     let b = event(2, 110, 24.0);
     d.observe("s", b.clone(), None);
     let offered = capture(&d, &b).context.world_context.unwrap();
-    assert_eq!(offered.changes.len(), 1);
+    assert_eq!(offered.changes.len(), 2);
     let generation = |e: GameEvent| {
         edit(e, |v| {
             v["body_observation"]["sample"]["context"]["epoch"] =
@@ -556,9 +514,150 @@ async fn old_reply_ack_cannot_consume_new_body_generation_changes() {
         .considered(offered.revision);
     let current = capture(&d, &e).context.world_context.unwrap();
     assert!(current.revision > offered.revision);
-    assert_eq!(current.changes.len(), 1);
-    assert_eq!(current.changes[0].before["z"], 99.0);
-    assert_eq!(current.changes[0].now["z"], 98.0);
+    assert_eq!(current.changes.len(), 2);
+    assert_eq!(current.changes[1].kind, "body_position_relation");
+    assert_eq!(current.changes[1].before["distance_blocks"], 79.0);
+    assert_eq!(current.changes[1].now["distance_blocks"], 78.0);
+    assert!(current.changes[0].before.is_null());
+    assert_eq!(current.changes[0].now, json!({"changed":true}));
+    {
+        let data = d.data.lock().unwrap();
+        let internal = data.sessions["s"]
+            .conversation_observation
+            .context()
+            .unwrap();
+        assert_eq!(internal.changes[0].before["z"], 99.0);
+        assert_eq!(internal.changes[0].now["z"], 98.0);
+    }
+    drop(permit);
+    d.shutdown().await;
+}
+
+/// 現在値は差分の消費後も残り、未提示の新しい差分を古い判断で消さない。
+#[tokio::test]
+async fn position_current_survives_ack_and_changes_are_latest_only() {
+    let d = server();
+    let permit = d.serial.acquire().await.unwrap();
+    let a = event(1, 100, 23.0);
+    d.observe("s", a.clone(), None);
+    let first = capture(&d, &a).context.world_context.unwrap();
+    assert!(first.changes.is_empty());
+    let current = &first.observations["body_observation"]["current"]["position_relation"];
+    assert_eq!(current["distance_blocks"], 3.0);
+    assert_eq!(current["relative_positions"][0]["horizontal"], "front");
+    assert_eq!(current["relative_positions"][1]["horizontal"], "right");
+    let b = event(2, 110, 26.0);
+    d.observe("s", b.clone(), None);
+    let offered = capture(&d, &b).context.world_context.unwrap();
+    let c = event(3, 120, 29.0);
+    d.observe("s", c.clone(), None);
+    {
+        let mut data = d.data.lock().unwrap();
+        data.sessions.get_mut("s").unwrap().conversation_observation.considered(offered.revision);
+    }
+    let latest = capture(&d, &c).context.world_context.unwrap();
+    let relation_changes: Vec<_> = latest.changes.iter().filter(|c| c.kind == "body_position_relation").collect();
+    assert_eq!(relation_changes.len(), 1);
+    assert_eq!(relation_changes[0].before["distance_blocks"], 6.0);
+    assert_eq!(relation_changes[0].now["distance_blocks"], 9.0);
+    {
+        let mut data = d.data.lock().unwrap();
+        data.sessions.get_mut("s").unwrap().conversation_observation.considered(latest.revision);
+    }
+    let repeated = capture(&d, &c).context.world_context.unwrap();
+    assert!(repeated.changes.is_empty());
+    assert_eq!(repeated.observations, latest.observations);
+    let stationary = event(4, 130, 29.0);
+    d.observe("s", stationary.clone(), None);
+    assert!(capture(&d, &stationary).context.world_context.unwrap().changes.is_empty());
+    // 表示する方向と0.1ブロック単位の距離が同じなら、位置関係の差分は作らない。
+    let small_move = event(5, 140, 29.01);
+    d.observe("s", small_move.clone(), None);
+    assert!(!capture(&d, &small_move).context.world_context.unwrap().changes.iter().any(|c| c.kind == "body_position_relation"));
+    let rotated = edit(event(6, 150, 29.01), |v| {
+        v["body_observation"]["sample"]["player_pose"]["yaw"] = json!(0.0);
+    });
+    d.observe("s", rotated.clone(), None);
+    let rotated = capture(&d, &rotated).context.world_context.unwrap();
+    let change = rotated.changes.iter().find(|c| c.kind == "body_position_relation").unwrap();
+    assert_eq!(change.now["relative_positions"][0]["horizontal"], "front");
+    assert_eq!(change.before["relative_positions"][1]["horizontal"], "right");
+    assert_eq!(change.now["relative_positions"][1]["horizontal"], "back");
+    drop(permit);
+    d.shutdown().await;
+}
+
+#[tokio::test]
+async fn paused_and_invalidated_body_do_not_expose_last_position_or_changes() {
+    let d = server();
+    let permit = d.serial.acquire().await.unwrap();
+    let a = event(1, 100, 23.0);
+    d.observe("s", a.clone(), None);
+    let b = event(2, 110, 26.0);
+    d.observe("s", b.clone(), None);
+    {
+        let mut data = d.data.lock().unwrap();
+        data.sessions.get_mut("s").unwrap().foreground.game_paused = true;
+    }
+    let paused = capture(&d, &b).context.world_context.unwrap();
+    assert_eq!(paused.observations["body_observation"]["reason"], "game_paused");
+    assert!(paused.changes.is_empty());
+    assert!(paused.observations["body_observation"].get("current").is_none());
+    {
+        let mut data = d.data.lock().unwrap();
+        let s = data.sessions.get_mut("s").unwrap();
+        s.foreground.game_paused = false;
+        s.body_observation.observe(a.body_observation.as_ref(), Some(OWNER),
+            Some("minecraft:the_nether"), Instant::now(), Some(0));
+    }
+    let expired = capture(&d, &b).context.world_context.unwrap();
+    assert_eq!(expired.observations["body_observation"]["status"], "unavailable");
+    assert!(expired.changes.is_empty());
+    assert!(expired.observations["body_observation"].get("current").is_none());
+    drop(permit);
+    d.shutdown().await;
+}
+
+#[tokio::test]
+async fn notice_refreshes_body_but_preserves_periodic_table_and_ack_revision() {
+    let d = server();
+    let permit = d.serial.acquire().await.unwrap();
+    let a = event(1, 100, 23.0);
+    d.observe("s", a.clone(), None);
+    let b = event(2, 110, 24.0);
+    d.observe("s", b.clone(), None);
+    let offered = capture(&d, &b).context.world_context.unwrap();
+    let periodic = crate::conversation_observation::Context {
+        observations: json!({"nearby_mob_types":["cow"],"body_observation":offered.observations["body_observation"]}),
+        changes: vec![crate::conversation_observation::Change {
+            kind: "nearby_mob_types".into(), before: json!([]), now: json!(["cow"]),
+            observed_at: "fixed_periodic_time".into(), revision: offered.revision,
+        }],
+        revision: offered.revision,
+        ..Default::default()
+    };
+    let mut action = crate::environment::notice::action();
+    action.leaf.as_mut().unwrap().details["reaction_context"] = json!({"world_context":periodic});
+    let c = event(3, 120, 29.0);
+    d.observe("s", c.clone(), None);
+    {
+        let mut data = d.data.lock().unwrap();
+        let s = data.sessions.get_mut("s").unwrap();
+        assert!(super::super::environment_runtime::refresh_dialogue_context(s, std::slice::from_mut(&mut action)));
+        let refreshed = &action.leaf.as_ref().unwrap().details["reaction_context"]["world_context"];
+        assert_eq!(refreshed["observations"]["body_observation"]["current"]["position_relation"]["distance_blocks"], 9.0);
+        assert_eq!(refreshed["observations"]["nearby_mob_types"], json!(["cow"]));
+        assert_eq!(refreshed["changes"], json!(periodic.changes));
+        assert_eq!(refreshed["revision"], periodic.revision);
+        s.conversation_observation.considered(periodic.revision);
+        let remaining = s.conversation_observation.context().unwrap();
+        assert!(remaining.changes.iter().any(|c| c.kind == "body_position_relation" && c.now["distance_blocks"] == 9.0));
+        s.foreground.game_paused = true;
+        assert!(super::super::environment_runtime::refresh_dialogue_context(s, std::slice::from_mut(&mut action)));
+        let paused = &action.leaf.as_ref().unwrap().details["reaction_context"]["world_context"];
+        assert_eq!(paused["observations"]["body_observation"]["status"], "unavailable");
+        assert_eq!(paused["revision"], periodic.revision);
+    }
     drop(permit);
     d.shutdown().await;
 }

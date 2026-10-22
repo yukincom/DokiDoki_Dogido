@@ -5,8 +5,13 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
-fn fixtures() -> Value {
-    serde_json::from_str(include_str!("fixtures.json")).unwrap()
+fn details() -> Value {
+    json!({"allowed_actions":["stay_silent","acknowledge_supply_gain"],
+        "facts":[{"basis_id":"first_light_supply","value":"true"}],
+        "context":{"player_name":"ユキ","recent":[]}})
+}
+fn fallback() -> Value {
+    json!({"action":"stay_silent","speech":""})
 }
 fn generated(reply: &Value) -> Result<GenerationReport> {
     if let Some(error) = reply["error"].as_str() {
@@ -30,120 +35,96 @@ fn generated(reply: &Value) -> Result<GenerationReport> {
 }
 
 #[test]
-fn canonical_prompts_contracts_and_retry_messages() {
-    let fixtures = fixtures();
-    for row in fixtures["prompts"].as_array().unwrap() {
-        assert_eq!(json!(messages(&row["details"], None)), row["messages"]);
+fn one_call_prompt_and_action_speech_contract() {
+    let d = details();
+    let m = messages(&d);
+    assert_eq!(m.len(), 2);
+    assert!(m[0].content.contains("照明器具が増えたけど"));
+    assert_eq!(m[1].content, spaced_json(&d));
+    for payload in [
+        fallback(),
+        json!({"action":"acknowledge_supply_gain","speech":"備えが増えたな。"}),
+    ] {
+        assert!(contract_errors(&payload, &d).is_empty());
     }
-    for (index, row) in fixtures["contracts"].as_array().unwrap().iter().enumerate() {
-        let errors = contract_errors(&row["payload"], &row["details"]);
-        assert_eq!(
-            json!(errors),
-            row["errors"],
-            "contract {index}: {}",
-            row["payload"]
-        );
-        assert_eq!(
-            json!(messages(&row["details"], Some((&errors, &row["payload"])))),
-            row["retry_messages"],
-            "retry {index}"
-        );
+    for payload in [
+        Value::Null,
+        json!({"action":"relief_after_darkness","speech":"ほっとしたわ。"}),
+        json!({"action":"acknowledge_supply_gain","speech":" "}),
+        json!({"action":"stay_silent","speech":"話すで。"}),
+        json!({"action":"acknowledge_supply_gain","speech":7}),
+        json!({"action":"acknowledge_supply_gain","speech":"備えや。","confidence":1}),
+    ] {
+        assert!(!contract_errors(&payload, &d).is_empty(), "{payload}");
     }
 }
 
 #[tokio::test]
-async fn canonical_runtime_retry_and_abstention() {
-    let fixtures = fixtures();
-    for case in fixtures["runtime"].as_array().unwrap() {
+async fn every_result_finishes_after_exactly_one_generation() {
+    for (reply, status, speech) in [
+        (
+            json!({"text":r#"{"action":"acknowledge_supply_gain","speech":"備えが増えたな。"}"#}),
+            "accepted",
+            "備えが増えたな。",
+        ),
+        (
+            json!({"text":r#"{"action":"stay_silent","speech":""}"#}),
+            "accepted",
+            "",
+        ),
+        (json!({"text":"broken"}), "invalid_json", ""),
+        (
+            json!({"text":r#"{"action":"relief_after_darkness","speech":"ほっ。"}"#}),
+            "schema_contract_error",
+            "",
+        ),
+        (
+            json!({"text":r#"{"action":"stay_silent","speech":""}"#, "finish_reason":"length"}),
+            "output_truncated",
+            "",
+        ),
+        (json!({"error":"offline"}), "generation_error", ""),
+    ] {
         let (_sender, mut receiver) = watch::channel(false);
-        let mut replies = case["replies"].as_array().unwrap().iter();
-        let mut requests = Vec::new();
+        let count = AtomicUsize::new(0);
         let result = run_bounded(
             "configured-model",
-            &case["details"],
-            &case["fallback"],
+            &details(),
+            &fallback(),
             &mut receiver,
             DEADLINE,
             |request| {
+                count.fetch_add(1, Ordering::SeqCst);
                 assert_eq!(request.model, "configured-model");
                 assert_eq!(request.kind, KIND);
                 assert!(!request.enable_thinking);
-                requests.push(
-                    json!({"messages":request.messages,"temperature":request.temperature,
-                "max_tokens":request.max_tokens,"route":"chat"}),
-                );
-                std::future::ready(generated(replies.next().expect("at most canonical calls")))
+                // replyを消費するFnOnceで、同じ入力への再生成がないことも型で保証する。
+                async move { generated(&reply) }
             },
         )
         .await
         .unwrap();
-        assert_eq!(
-            result["payload"], case["expected_payload"],
-            "{}",
-            case["name"]
-        );
-        assert_eq!(json!(requests), case["requests"], "{}", case["name"]);
-        assert_eq!(
-            result["llm_reports"].as_array().unwrap().len(),
-            requests.len()
-        );
-        assert!(requests.len() <= 2);
-        // Compare the Rust event consumer with the saved domain-decision fixture.
-        use crate::environment::ambient::{Ambient, AmbientFocus};
-        use crate::{combat::model::Mode, events::GameEvent};
-        let event = |inventory| {
-            GameEvent::parse(json!({
-            "schema_version":"2026-05-24", "adapter":"fixture", "sequence":1,
-            "observed_at":"2026-09-25T00:00:00Z",
-            "event":{"name":"status_snapshot","source_kind":"system","priority_hint":"background","certainty":"high"},
-            "world":{"biome":"plains","time_phase":"day"}, "inventory":inventory
-        })).unwrap()
-        };
-        let settings = crate::combat::model::Settings::default();
-        let focus = AmbientFocus::default();
-        let mut ambient = Ambient::default();
-        ambient.update(&event(json!({})), 0, true, &settings);
-        let current = event(json!({"torch":1}));
-        ambient.update(&current, 1, true, &settings);
-        ambient.actions(&current, 1, Mode::Normal, false, &focus, &settings);
-        let request = ambient.take_light_plan().unwrap();
-        assert_eq!(request.details, case["details"]);
-        let spoken = ambient.resolve_light_plan(
-            request.request_id,
-            &result["payload"],
-            &current,
-            2,
-            &focus,
-            &settings,
-        );
-        assert_eq!(
-            json!(spoken.is_some()),
-            case["should_speak"],
-            "consumer {}",
-            case["name"]
-        );
+        assert_eq!(count.load(Ordering::SeqCst), 1);
+        assert_eq!(result["llm_reports"].as_array().unwrap().len(), 1);
+        assert_eq!(result["payload"]["__dogido_status"], status);
+        assert_eq!(result["payload"]["speech"], speech);
     }
 }
 
 #[tokio::test]
-async fn cancellation_before_and_between_requests_stops_retry() {
-    let f = fixtures();
-    let case = &f["runtime"][8];
+async fn cancellation_before_and_during_generation_stops_delivery() {
+    let d = details();
+    let f = fallback();
     for already_cancelled in [false, true] {
         let (sender, mut receiver) = watch::channel(already_cancelled);
         let count = AtomicUsize::new(0);
-        let result = run_bounded(
-            "model",
-            &case["details"],
-            &case["fallback"],
-            &mut receiver,
-            DEADLINE,
-            |_| {
-                count.fetch_add(1, Ordering::SeqCst);
-                sender.send(true).unwrap();
-                std::future::ready(generated(&case["replies"][0]))
-            },
-        )
+        let result = run_bounded("model", &d, &f, &mut receiver, DEADLINE, |_| {
+            count.fetch_add(1, Ordering::SeqCst);
+            sender.send(true).unwrap();
+            std::future::ready(generated(
+                &json!({"text":r#"{"action":"stay_silent","speech":""}"#}),
+            ))
+        })
         .await;
         assert_eq!(result.unwrap_err().to_string(), "cancelled");
         assert_eq!(
@@ -153,14 +134,9 @@ async fn cancellation_before_and_between_requests_stops_retry() {
     }
     let (sender, mut receiver) = watch::channel(false);
     drop(sender);
-    let result = run_bounded(
-        "model",
-        &case["details"],
-        &case["fallback"],
-        &mut receiver,
-        DEADLINE,
-        |_| async { panic!("orphaned request must not start") },
-    )
+    let result = run_bounded("model", &d, &f, &mut receiver, DEADLINE, |_| async {
+        panic!("orphaned request must not start")
+    })
     .await;
     assert_eq!(result.unwrap_err().to_string(), "cancelled");
 }
@@ -173,8 +149,8 @@ impl Drop for Dropped {
 }
 #[tokio::test]
 async fn pending_generation_is_dropped_on_timeout_and_cancellation() {
-    let f = fixtures();
-    let case = &f["runtime"][0];
+    let d = details();
+    let f = fallback();
     for timeout in [false, true] {
         let (sender, mut receiver) = watch::channel(false);
         let (started_tx, started_rx) = tokio::sync::oneshot::channel();
@@ -183,8 +159,8 @@ async fn pending_generation_is_dropped_on_timeout_and_cancellation() {
         let calls = AtomicUsize::new(0);
         let runner = run_bounded(
             "model",
-            &case["details"],
-            &case["fallback"],
+            &d,
+            &f,
             &mut receiver,
             if timeout {
                 Duration::from_millis(30)

@@ -5,6 +5,8 @@ use crate::events::{
     Direction, DistanceBand, EventName, EventTime, GameEvent, HorizontalDirection,
 };
 use serde::{Deserialize, Serialize};
+mod sound;
+pub(crate) use sound::description as sound_description;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default)]
@@ -68,6 +70,9 @@ pub struct HearingMemo {
     pub identity: Option<crate::events::MobIdentity>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sound_event: Option<String>,
+    /// 実発音のsource_idと受理済み身体ownerの一致による由来。音の種類や近接位置からは補わない。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub emitter: Option<String>,
 }
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CurrentObservation {
@@ -319,6 +324,7 @@ impl ChatObservationMemory {
                 dedupe_key: sound.key,
                 identity: sound.identity,
                 sound_event: sound.sound_event,
+                emitter: sound.emitter,
             };
             put_hearing(&mut self.hearing, memo);
         }
@@ -349,6 +355,7 @@ impl ChatObservationMemory {
                         dedupe_key: format!("environment:{raw}:周囲:"),
                         identity: None,
                         sound_event: None,
+                        emitter: None,
                     },
                 );
             }
@@ -641,6 +648,7 @@ impl ChatObservationMemory {
                         dedupe_key: sound.key.clone(),
                         identity: sound.identity.clone(),
                         sound_event: sound.sound_event.clone(),
+                        emitter: sound.emitter.clone(),
                     },
                 })
                 .collect::<Vec<_>>();
@@ -668,6 +676,7 @@ impl ChatObservationMemory {
                 sound.direction,
                 sound.band
             );
+            let key = sound::event_key(format!("{key}:{}",sound.emitter.as_deref().unwrap_or("")), sound.sound_event.as_deref());
             if seen.contains(&key) {
                 continue;
             }
@@ -675,9 +684,11 @@ impl ChatObservationMemory {
             summary.push(line(
                 label,
                 &sound.kind,
+                sound.sound_event.as_deref(),
                 &sound.direction,
                 &sound.band,
                 false,
+                sound.emitter.as_deref(),
             ));
             seen.push(key);
         }
@@ -695,15 +706,18 @@ impl ChatObservationMemory {
                 memo.direction,
                 memo.distance_band
             );
+            let key = sound::event_key(format!("{key}:{}",memo.emitter.as_deref().unwrap_or("")), memo.sound_event.as_deref());
             if seen.contains(&key) {
                 continue;
             }
             summary.push(line(
                 memo.label_ja.as_deref(),
                 &memo.kind,
+                memo.sound_event.as_deref(),
                 &memo.direction,
                 &memo.distance_band,
                 true,
+                memo.emitter.as_deref(),
             ));
             seen.push(key);
         }
@@ -826,7 +840,7 @@ pub(crate) fn mob_label(id: Option<&str>, labels: &impl Labels) -> Option<String
         .or_else(|| labels.mob_fallback_label(id).filter(|s| !s.is_empty()))
         .map(str::to_owned)
 }
-fn environment_label(raw: &str, labels: &impl Labels) -> Option<String> {
+pub(crate) fn environment_label(raw: &str, labels: &impl Labels) -> Option<String> {
     let raw = strip(raw).to_lowercase();
     let known = match raw.as_str() {
         "weather:rain" => Some("雨"),
@@ -877,6 +891,7 @@ struct Sound {
     heard_ago_ms: i64,
     identity: Option<crate::events::MobIdentity>,
     sound_event: Option<String>,
+    emitter: Option<String>,
 }
 fn sounds(event: &GameEvent, labels: &impl Labels) -> Vec<Sound> {
     let mut result = vec![];
@@ -902,10 +917,12 @@ fn sounds(event: &GameEvent, labels: &impl Labels) -> Vec<Sound> {
             environment_label: None,
             direction,
             band,
+            // 敵対音は従来の音源単位で保持し、警戒側と同じ最新音を使う。
             key,
             heard_ago_ms: audio.heard_ago_ms.unwrap_or(0),
             identity: None,
-            sound_event: None,
+            sound_event: audio.sound_event.clone(),
+            emitter: None,
         });
     }
     for (index, sound) in event.ambient_sounds.iter().enumerate() {
@@ -937,13 +954,16 @@ fn sounds(event: &GameEvent, labels: &impl Labels) -> Vec<Sound> {
             environment_label,
             direction,
             band,
-            key,
+            key: sound::event_key(key, sound.sound_event.as_deref()),
             heard_ago_ms: sound.heard_ago_ms.unwrap_or(0),
             identity: sound
                 .identity
                 .clone()
                 .filter(|identity| sound.source_id.as_deref() == Some(identity.entity_id.as_str())),
-            sound_event: sound.identity.as_ref().and(sound.sound_event.clone()),
+            sound_event: sound.sound_event.clone(),
+            emitter: event.body_origin().and_then(|origin| origin.context.as_ref())
+                .filter(|context| sound.source_id.as_deref() == Some(context.owner_id.as_str()))
+                .map(|_| "プレイヤー".to_owned()),
         });
     }
     result
@@ -951,15 +971,13 @@ fn sounds(event: &GameEvent, labels: &impl Labels) -> Vec<Sound> {
 pub(crate) fn line(
     label: Option<&str>,
     kind: &str,
+    sound_event: Option<&str>,
     direction: &str,
     band: &str,
     recent: bool,
+    emitter: Option<&str>,
 ) -> String {
-    let prefix = match label {
-        Some(label) if kind == "ambient" => format!("{label}っぽい声"),
-        Some(label) => format!("{label}の音"),
-        None => "音（種別未確定）".into(),
-    };
+    let prefix = sound::with_emitter(sound_description(label, kind, sound_event, false),emitter);
     strip(&format!(
         "{prefix} {direction} {band}{}",
         if recent { "（ついさっき）" } else { "" }

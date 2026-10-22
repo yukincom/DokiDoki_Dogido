@@ -134,11 +134,19 @@ impl Dialogue {
             if let Some(state) = saved.get("editing_state") {
                 let editing: Option<crate::haiku_record::WorkshopEditing> =
                     serde_json::from_value(state.clone())?;
-                ensure!(editing.as_ref().is_none_or(|e| e.selected_line.is_none_or(|i| i < 3)),
-                    "invalid editing line");
+                ensure!(
+                    editing
+                        .as_ref()
+                        .is_none_or(|e| e.selected_line.is_none_or(|i| i < 3)),
+                    "invalid editing line"
+                );
                 w.editing = editing;
             } else if let Some(pending) = &w.pending {
-                let selected = if pending.generated_basis.as_ref().is_some_and(|b| b.target_indices.len() != 1) {
+                let selected = if pending
+                    .generated_basis
+                    .as_ref()
+                    .is_some_and(|b| b.target_indices.len() != 1)
+                {
                     None
                 } else {
                     Some(pending.selected_line)

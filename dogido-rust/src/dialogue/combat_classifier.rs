@@ -71,6 +71,9 @@ pub(super) struct Classifier {
     helper: tokio::sync::Mutex<Option<Helper>>,
 }
 impl Classifier {
+    // TODO(BERT): 川柳中断中の再開・継続・終了の意図は、分類拡張後に共通BERT受付へ移す。
+    // ここはBERTの場所。ユキから応答への不満が出てもLLM分類を重ねず、分類定義とデータを見直す。
+    // 安全判定・原文根拠・現在句の照合と実際の再開／終了は引き続きRustが所有する。
     /// 中断中の発話を五分類へ絞り、信頼度・原文の根拠・行為表現を検証する。
     /// 戻すのは候補だけで、実際の再開・終了はworkshop_combat_inputが現在の句と戦況へ再照合する。
     /// OS側が利用できなければchatへ進み、有効な分類が得られない場合に限り閉じた規則を使う。

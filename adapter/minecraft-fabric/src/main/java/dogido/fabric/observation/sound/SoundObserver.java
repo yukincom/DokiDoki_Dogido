@@ -42,6 +42,19 @@ import static dogido.fabric.observation.mobs.MobClassifier.isAmbientMobCandidate
 import static dogido.fabric.observation.sound.WorldSoundFacts.OMINOUS_SOUND_TTL_TICKS;
 
 public final class SoundObserver {
+    /** 既存の実音記録の発音点。entityの現在位置へ置換せず、観測時刻も更新しない。 */
+    public record SpatialSound(String sourceId, Vec3d position) {}
+    public List<SpatialSound> spatialSounds() {
+        long now=System.nanoTime();
+        var result=new LinkedHashMap<String,SpatialSound>();
+        for (var collection : List.of(recentSoundObservations,recentAmbientSoundObservations)) {
+            for (var sound : collection) {
+                if (SoundObservationPolicy.ageMillis(now,sound.heardAtNanos()) >= SOUND_OBSERVATION_TTL_TICKS*50L) continue;
+                result.put(sound.sourceId(),new SpatialSound(sound.sourceId(),new Vec3d(sound.sourceX(),sound.sourceY(),sound.sourceZ())));
+            }
+        }
+        return List.copyOf(result.values());
+    }
     // 音 packet をクライアント側で保持する長さ。
     // 人間が「…？」「今の音なに？」と言うまでの猶予を確保する（旧5秒だと短い）。
     // 20 tick/s 想定で約15秒。サーバ hearing バッファ（約20s）以下に保つ。
@@ -256,7 +269,7 @@ public final class SoundObserver {
     }
     public List<AudioThreatObservation> scanAmbientSounds(ObservationOrigin origin,
             Map<UUID,SoundObservationPolicy.Point> currentSoundSources) {
-        Map<String, AudioThreatObservation> deduped = new LinkedHashMap<>();
+        Map<SoundObservationPolicy.SoundKey, AudioThreatObservation> deduped = new LinkedHashMap<>();
         var observations = this.recentAmbientSoundObservations.iterator();
         while (observations.hasNext()) {
             SoundObservation observation = observations.next();
@@ -274,7 +287,7 @@ public final class SoundObserver {
             String distanceBand = bucketDistance(distance);
             String certainty = distance <= 6.0 ? "medium" : "low";
             deduped.put(
-                observation.sourceId(),
+                new SoundObservationPolicy.SoundKey(observation.sourceId(), observation.soundEvent()),
                 new AudioThreatObservation(
                     observation.label(),
                     observation.sourceId(),
@@ -419,7 +432,7 @@ public final class SoundObserver {
         if (!origin.body() || ageMs < 0 || ageMs > SOUND_OBSERVATION_TTL_TICKS*50L) return;
         String soundId = rawSoundId.contains(":") ? rawSoundId.substring(rawSoundId.indexOf(':')+1) : rawSoundId;
         LivingEntity entity = null;
-        if (entityId != null) for (Entity candidate : world.getEntities()) {
+        if (entityId != null && world != null) for (Entity candidate : world.getEntities()) {
             if (entityId.equals(candidate.getUuid()) && candidate instanceof LivingEntity living && living.isAlive()) {
                 entity = living; break;
             }
@@ -434,31 +447,36 @@ public final class SoundObserver {
             if (label == null) label = environmentTypeFromPlayedSound(soundId,category);
             if (label == null && soundId.equals("entity.generic.explode")) label = "environment:explosion";
         }
+        // UUID付きの実音は既に発音者が確定している。分類表に無いplayer音も捨てず、音IDと由来をそのまま運ぶ。
+        if (label == null && entityId != null && entityId.equals(origin.threatTargetId())) label = "environment:player_action";
         if (label == null) return;
         String id = entityId == null ? unresolvedSoundSourceId(source,soundId) : entityId.toString();
         long now = System.nanoTime();
         long incomingHeardAt = now-ageMs*1_000_000L;
         var stamp = this.bodySoundDeduplicator.reconcile(soundId,source,incomingHeardAt,id,server,now);
         long latestPairTime = Math.max(incomingHeardAt,stamp.previousHeardAt());
-        // 一致候補の後に同じ地点で別の実音が鳴っていたら、その新しい観測を旧配送で削除しない。
+        boolean perSourceThreat = threat;
+        // 敵対音は従来どおり音源単位。非敵対音は同じ音種の新しい実音だけを旧配送から守る。
         if (java.util.stream.Stream.concat(this.recentSoundObservations.stream(),this.recentAmbientSoundObservations.stream())
                 .anyMatch(old -> (old.sourceId().equals(id) || old.sourceId().equals(stamp.previousSourceId()))
+                    && (perSourceThreat || soundId.equals(old.soundEvent()))
                     && old.heardAtNanos() > latestPairTime+100_000_000L)) return;
         long heardAt = stamp.heardAt();
         long heardTick = this.tickSource.getAsLong()-(now-heardAt)/50_000_000L;
         long replacedTick = Long.MIN_VALUE;
+        // server/clientで照合した音種だけを置換し、同じ音源の別種の警戒音も消さない。
         if (stamp.previousSourceId() != null) {
-            for (var old : this.recentSoundObservations) if (old.sourceId().equals(stamp.previousSourceId())) replacedTick = Math.max(replacedTick,old.observedTick());
-            for (var old : this.recentAmbientSoundObservations) if (old.sourceId().equals(stamp.previousSourceId())) replacedTick = Math.max(replacedTick,old.observedTick());
-            this.recentSoundObservations.removeIf(old -> old.sourceId().equals(stamp.previousSourceId()));
-            this.recentAmbientSoundObservations.removeIf(old -> old.sourceId().equals(stamp.previousSourceId()));
+            for (var old : this.recentSoundObservations) if (old.sourceId().equals(stamp.previousSourceId()) && soundId.equals(old.soundEvent())) replacedTick = Math.max(replacedTick,old.observedTick());
+            for (var old : this.recentAmbientSoundObservations) if (old.sourceId().equals(stamp.previousSourceId()) && soundId.equals(old.soundEvent())) replacedTick = Math.max(replacedTick,old.observedTick());
+            this.recentSoundObservations.removeIf(old -> old.sourceId().equals(stamp.previousSourceId()) && soundId.equals(old.soundEvent()));
+            this.recentAmbientSoundObservations.removeIf(old -> old.sourceId().equals(stamp.previousSourceId()) && soundId.equals(old.soundEvent()));
         }
         var observation = new SoundObservation(heardTick,heardAt,entityId,id,label,soundId,
             source.x,source.y,source.z,true,entity == null ? null : mobIdentity(entity));
         Deque<SoundObservation> target = threat ? this.recentSoundObservations : this.recentAmbientSoundObservations;
         // 遅れて届いた同じ音で、既に新しい実音の記録を巻き戻さない。
-        if (target.stream().anyMatch(old -> old.sourceId().equals(id) && old.heardAtNanos() > heardAt+100_000_000L)) return;
-        target.removeIf(old -> old.sourceId().equals(id));
+        if (target.stream().anyMatch(old -> old.sourceId().equals(id) && (perSourceThreat || soundId.equals(old.soundEvent())) && old.heardAtNanos() > heardAt+100_000_000L)) return;
+        target.removeIf(old -> old.sourceId().equals(id) && (perSourceThreat || soundId.equals(old.soundEvent())));
         target.addLast(observation);
         while (target.size() > 64) { target.removeFirst(); bodyHearingTruncated = true; }
         if (threat) this.lastAudioThreatObservedTick = Math.max(this.lastAudioThreatObservedTick,heardTick);
@@ -899,7 +917,15 @@ public final class SoundObserver {
         String sourceId,
         MobIdentityObservation identity
     ) {
-        double distance = Math.sqrt(player.squaredDistanceTo(source));
+        recordAmbientSoundObservation(ObservationOrigin.player(player), soundEventId, entityType, source, sourceId, identity);
+    }
+
+    /** 実音の種別を音源と組で保持する。再発音だけを更新し、同じ場所の別種の音は残す。 */
+    void recordAmbientSoundObservation(
+        ObservationOrigin origin, String soundEventId, String entityType, Vec3d source,
+        String sourceId, MobIdentityObservation identity
+    ) {
+        double distance = origin.distanceTo(source);
         if (distance > this.audioThreatDistance) {
             return;
         }
@@ -907,7 +933,7 @@ public final class SoundObserver {
             ? "ambient:" + entityType + ":" + Math.round(source.x) + ":" + Math.round(source.z)
             : sourceId;
         boolean refreshed = this.recentAmbientSoundObservations.removeIf(
-            existing -> existing.sourceId().equals(id)
+            existing -> existing.sourceId().equals(id) && existing.soundEvent().equals(soundEventId)
         );
         this.recentAmbientSoundObservations.addLast(
             new SoundObservation(

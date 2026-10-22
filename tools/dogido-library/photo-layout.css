@@ -1,0 +1,44 @@
+/* Shared frame: intrinsic bitmap ratio determines height in both books. */
+.detail-page .has-player-photo {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  border: 2px solid #c5b593;
+  outline: none;
+  background: #26342d;
+  container-type: inline-size;
+}
+.has-player-photo > .collected-photo {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: none;
+  aspect-ratio: auto;
+}
+.photo-slot img { width: 100%; height: auto; aspect-ratio: auto; }
+.photo-strip { align-items: start; }
+.has-player-photo .art-caption {
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 3px 6px;
+  font-size: 8px;
+}
+/* Scale verse to the photo width; never stretch the photo to fit the verse. */
+.has-player-photo .poem-slip {
+  top: 5%;
+  bottom: 12%;
+  right: 3%;
+  padding: 2cqw;
+  gap: 2cqw;
+}
+.has-player-photo .poem-slip span { font-size: clamp(10px, 3.4cqw, 24px); }
+.has-player-photo .poem-slip span:nth-child(2) { padding-top: .4em; }
+.has-player-photo .poem-slip span:nth-child(3) { padding-top: .8em; }
+.has-player-photo .poem-slip.horizontal { top: auto; left: 3%; bottom: 12%; }
+.has-player-photo .poem-slip.horizontal span {
+  font-size: clamp(10px, 2.6cqw, 18px);
+  padding: 0 .25em;
+}

@@ -68,3 +68,64 @@ fn removed_evaluation_prompt_is_unavailable() {
     };
     assert!(messages(&request).is_err());
 }
+
+#[test]
+fn workshop_revision_does_not_restore_removed_quality_gates_from_old_records() {
+    let fixtures: Value = serde_json::from_str(include_str!("fixtures.json")).unwrap();
+    let row = fixtures
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["request"]["kind"] == "haiku_workshop_revision")
+        .unwrap();
+    let mut request: StructuredRequest = serde_json::from_value(row["request"].clone()).unwrap();
+    request.details.insert("edit_retry_feedback".into(), json!({
+        "global_failure_reasons":["meter_too_long", "hard_forbidden_term", "duplicate_line", "meaning_not_retained"],
+        "line_failures":[{"line_index":0,"failure_reasons":["unnatural_japanese"],"assessment_comment":"OLD-QUALITY-ASSESSMENT"}]
+    }));
+    let rendered = messages(&request)
+        .unwrap()
+        .iter()
+        .map(|message| message.content.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    for stale in [
+        "かなだけ",
+        "各±1音",
+        "0=五音",
+        "meter_too_long",
+        "hard_forbidden_term",
+        "duplicate_line",
+        "meaning_not_retained",
+        "OLD-QUALITY-ASSESSMENT",
+        "前の修正案が不合格",
+    ] {
+        assert!(!rendered.contains(stale), "{stale}");
+    }
+    assert!(rendered.contains("expected_text"));
+    assert!(rendered.contains("固定行は一字も変えず"));
+}
+
+#[test]
+fn scene_and_preface_requests_do_not_restore_removed_length_or_clause_limits() {
+    let fixtures: Value = serde_json::from_str(include_str!("fixtures.json")).unwrap();
+    for kind in ["haiku_irony", "haiku_scene"] {
+        let row = fixtures
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| row["request"]["kind"] == kind)
+            .unwrap();
+        let request: StructuredRequest = serde_json::from_value(row["request"].clone()).unwrap();
+        let rendered = messages(&request)
+            .unwrap()
+            .iter()
+            .map(|message| message.content.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+        for stale in ["12〜72字", "36字以内", "72字以内", "1〜3節"] {
+            assert!(!rendered.contains(stale), "{kind}: {stale}");
+        }
+        assert!(rendered.contains("材料"));
+    }
+}

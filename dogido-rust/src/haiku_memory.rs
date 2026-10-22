@@ -211,13 +211,17 @@ impl RecallQuery {
 
 impl MemoryStore {
     pub(crate) fn local_poem_rows(&self, filename: &str) -> Result<Vec<Value>> {
-        rows(&self.root().join("long_term").join(filename))
+        crate::poem_trash::filter(
+            self.root(),
+            filename,
+            rows(&self.root().join("long_term").join(filename))?,
+        )
     }
 
     /// Old root records plus migration session records, never evaluation logs,
     /// other checkout roots, or symbolic session directories.
     pub(crate) fn poem_rows(&self, filename: &str) -> Result<Vec<Value>> {
-        let mut out = rows(&self.root().join("long_term").join(filename))?;
+        let mut out = self.local_poem_rows(filename)?;
         let entries = match fs::read_dir(self.root().join("sessions")) {
             Ok(e) => Some(e),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
@@ -232,7 +236,8 @@ impl MemoryStore {
         }
         paths.sort();
         for path in paths {
-            out.extend(rows(&path)?);
+            let dir = path.parent().unwrap().parent().unwrap();
+            out.extend(crate::poem_trash::filter(dir, filename, rows(&path)?)?);
         }
         // Entry IDs from separate sessions can share second/sequence components.
         // Deduplicate copied records, never discard a different poem on ID alone.

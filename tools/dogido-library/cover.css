@@ -1,0 +1,42 @@
+/* One quiet cover; explicit deep links still open the books directly. */
+.header-actions { margin-left:auto; display:flex; align-items:center; gap:32px; min-width:0; }
+.topbar .header-actions .books { margin-left:0; order:initial; width:auto; }
+.topbar { position:relative; z-index:20; }
+.brand-mark { display:grid; place-items:center; flex-shrink:0; padding:0; background:transparent; border:0; outline:0; }
+.brand-mark img { display:block; width:44px; height:44px; object-fit:contain; }
+.cover-page { display:none; }
+body.library-cover { background:#f8f2df; }
+.library-cover main { max-width:1100px; margin:0 auto; padding:24px; }
+.library-cover .header-actions,.library-cover .desk,.library-cover main>footer { display:none; }
+.library-cover .topbar { background:transparent; border-bottom:1px solid #d6ccb380; box-shadow:none; }
+.library-cover .brand { color:var(--ink); }
+.library-cover .cover-page { min-height:calc(100svh - 124px); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding:0 0 40px; }
+.cover-art { display:block; width:min(680px,100%); height:auto; max-height:58svh; object-fit:contain; }
+.cover-choices { display:flex; justify-content:center; gap:28px; width:min(580px,100%); }
+.cover-book { flex:1; display:flex; align-items:center; justify-content:space-between; gap:24px; min-height:82px; padding:18px 26px; font:1.625rem/1.5 var(--serif); letter-spacing:.08em; color:#fff6df; border:1px solid #243e2d; border-left:7px double #bdc5a1; background:#3e5843; box-shadow:3px 4px 0 #c5bea9,inset 0 0 0 4px #ffffff0a; text-align:left; }
+.cover-poems { background:#794f40; border-color:#573528; border-left-color:#d5bca0; }
+.cover-book span { font:1.25rem sans-serif; opacity:.8; }
+.cover-book:hover { filter:brightness(1.1); }
+body.book-intro[data-cover-book="poems"] { --cover:#794f40; }
+body.book-intro[data-cover-book="catalog"] { --cover:#3e5843; }
+body.book-intro[data-cover-book="photos"] { --cover:#496066; }
+.book-intro #detail,.book-intro main>footer { display:none; }
+.book-intro .album-preview { padding:0; display:block; }
+.book-intro .album-preview>:not(#book-cover) { display:none; }
+.book-cover-page { width:100%; margin:0; min-height:620px; padding:28px 24px 36px; background:var(--paper); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; }
+.book-cover-page h1 { color:var(--cover); font:2rem/1.5 var(--serif); letter-spacing:.12em; margin:0; }
+.book-cover-art { display:block; width:min(440px,100%); height:auto; max-height:52svh; object-fit:contain; image-rendering:pixelated; }
+@media(max-width:700px) {
+  .header-actions { gap:20px; }
+  .topbar .header-actions .books button { padding:8px 10px; }
+  .cover-choices { gap:16px; }
+  .cover-book { font-size:1.375rem; padding:16px; gap:12px; }
+}
+@media(max-width:440px) {
+  .book-cover-page { min-height:480px; padding:24px 16px; }
+  .header-actions { width:100%; justify-content:flex-end; gap:18px; }
+  .topbar .header-actions .books button { padding:6px 8px; }
+  .library-cover main { padding:16px; }
+  .cover-choices { gap:12px; }
+  .cover-book { padding:16px 12px; letter-spacing:0; }
+}

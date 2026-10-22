@@ -453,3 +453,27 @@ fn rain_after_reaction_uses_one_candidate_and_expires_with_its_window() {
     changed["smell_observation"]["rain_after_notice"]["window_id"] = json!(13);
     assert!(!still_applicable(&a, &GameEvent::parse(changed).unwrap()));
 }
+
+#[test]
+fn unified_contract_keeps_valid_speech_independent_of_invalid_body_action() {
+    for body in [json!({"action":"invented","target_id":"wrong"}),json!(23),Value::Null] {
+        let raw=json!({"action":"speak","speech":"そやな。","body_action":body}).to_string();
+        let (speech, action)=parse_reply(&raw,true).unwrap();
+        assert_eq!(speech,crate::speech_choice::Choice::Speak("そやな。".into()));
+        assert_eq!(action,Some(body));
+        assert!(parse_reply(&raw,false).is_err());
+    }
+}
+
+#[test]
+fn unified_contract_allows_silent_movement_without_repairing_invalid_speech() {
+    let body=json!({"action":"owner_near","target_id":null});
+    let (speech,action)=parse_reply(&json!({"action":"silent","speech":"","body_action":body}).to_string(),true).unwrap();
+    assert_eq!(speech,crate::speech_choice::Choice::Silent);
+    assert_eq!(action,Some(body.clone()));
+    for invalid in [json!({"action":"silent","speech":"話す","body_action":body}),
+        json!({"action":"speak","speech":"","body_action":body}),
+        json!({"action":"silent","speech":"","body_action":body,"tool":"invented"})] {
+        assert!(parse_reply(&invalid.to_string(),true).is_err());
+    }
+}

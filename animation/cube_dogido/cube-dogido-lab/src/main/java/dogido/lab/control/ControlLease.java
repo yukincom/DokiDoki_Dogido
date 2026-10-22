@@ -92,6 +92,11 @@ public final class ControlLease {
         return new ActionAdmission(result,result.outcome() == Outcome.ACCEPTED);
     }
 
+    public boolean hasActiveAction() { return activeAction != null; }
+    /** 先の行動の終了通知で、後から受け付けた行動を完了させない。 */
+    public void completeAction(java.util.UUID id, Outcome outcome, String reason) {
+        if (activeAction != null && activeAction.actionId().equals(id)) completeAction(outcome,reason);
+    }
     public void completeAction(Outcome outcome, String reason) {
         if (activeAction != null) {
             actionResult = new ActionResult(activeAction.actionId(), activeAction.sequence(), outcome, reason);

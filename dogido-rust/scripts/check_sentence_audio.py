@@ -82,6 +82,26 @@ def main():
                 assert "outputSamplingRate" not in r["body"]
         passed.append("early_first_sentence_bounded_prefetch_order_one_turn_completion")
 
+    with scenario(binary) as (base, sid, turn, hold, second, control, seen, log):
+        queued = []
+        for text in ["うん", "へっくしょん"]:
+            response = request(base, "/api/v1/player-input", {"session_id":sid, "source":"voice", "text":text})
+            assert response["accepted"] and response["queued"], response
+            queued.append(response["turn_id"])
+        # 叫声と認識された音も、始まった本文を止めない。
+        response = request(base, "/api/v1/player-input", {"session_id":sid, "source":"voice", "text":"うおおお"})
+        assert response["accepted"]
+        time.sleep(.15)
+        assert row(base, turn, {"started"}) and started_count(log) == 1
+        second.set(); hold.unlink()
+        wait_for(lambda: row(base, turn, {"completed"}))
+        for followup in queued:
+            wait_for(lambda: row(base, followup, {"completed"}))
+        history = snapshot(base)["sessions"][0]["history"]
+        assert [h["text"] for h in history if h["role"] == "user"][-2:] == ["うん", "へっくしょん"], history
+        assert len([h for h in history if h["role"] == "assistant"]) == 3, history
+        passed.append("started_reply_finishes_before_acknowledgement_sneeze_and_fifo_replies")
+
     with scenario(binary, output_sampling_rate=48000) as (base, sid, turn, hold, second, control, seen, log):
         second.set()
         hold.unlink()

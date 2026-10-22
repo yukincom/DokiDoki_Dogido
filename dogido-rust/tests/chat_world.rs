@@ -1,6 +1,6 @@
 use dogido_rust::{
     chat_catalog, chat_world,
-    environment::precipitation::Climate,
+    environment::precipitation::{self, Climate, PrecipitationKind},
     events::{GameEvent, LookTarget},
     world_catalog::{self, WorldCatalog},
 };
@@ -168,9 +168,15 @@ fn chat_world_place_and_weather_match_canonical_complete_event_projection() {
     for (i, row) in FIXTURE["weather"].as_array().unwrap().iter().enumerate() {
         let event: GameEvent = serde_json::from_value(value(row, 0).clone()).unwrap();
         let cl = c.climate(event.world.biome.as_deref()).unwrap();
+        // 凍結fixtureの砂漠・雨（210..=224）と砂漠・雷（225..=239）の旧期待値だけを補正する。
+        // 実装の降水判定から期待値を逆算せず、入力が固定されたcase IDで変更範囲を明示する。
+        let expected_label = match i {
+            210..=239 => "曇り（この場所では降水なし）",
+            _ => value(row, 1).as_str().unwrap(),
+        };
         assert_eq!(
             chat_world::weather_label(&event, &cl).unwrap(),
-            value(row, 1).as_str().unwrap(),
+            expected_label,
             "weather {i}"
         );
         assert_eq!(
@@ -178,6 +184,77 @@ fn chat_world_place_and_weather_match_canonical_complete_event_projection() {
             value(row, 2).as_str().unwrap(),
             "weather fact {i}"
         );
+    }
+}
+
+#[test]
+fn weather_labels_follow_resolved_precipitation_without_changing_unknown_weather() {
+    let c = world_catalog::catalog();
+    for (biome, weather, kind, label) in [
+        (
+            "savanna",
+            Some("rain"),
+            PrecipitationKind::None,
+            "曇り（この場所では降水なし）",
+        ),
+        (
+            "savanna",
+            Some("thunder"),
+            PrecipitationKind::None,
+            "曇り（この場所では降水なし）",
+        ),
+        ("savanna", Some("clear"), PrecipitationKind::None, "晴れ"),
+        ("savanna", None, PrecipitationKind::None, "不明"),
+        ("river", Some("rain"), PrecipitationKind::Rain, "雨"),
+        ("river", Some("thunder"), PrecipitationKind::Rain, "雷"),
+        ("river", Some("clear"), PrecipitationKind::None, "晴れ"),
+        ("river", None, PrecipitationKind::Unknown, "不明"),
+        ("snowy_plains", Some("rain"), PrecipitationKind::Snow, "雪"),
+        (
+            "snowy_plains",
+            Some("thunder"),
+            PrecipitationKind::Snow,
+            "雪",
+        ),
+        ("unknown", Some("rain"), PrecipitationKind::Unknown, "雨"),
+        ("unknown", Some("thunder"), PrecipitationKind::Unknown, "雷"),
+        ("unknown", Some("clear"), PrecipitationKind::None, "晴れ"),
+        ("unknown", None, PrecipitationKind::Unknown, "不明"),
+    ] {
+        let event = GameEvent::parse(json!({
+            "schema_version":"2026-05-24", "adapter":"fixture",
+            "observed_at":"2026-10-20T00:54:28Z",
+            "event":{"name":"status_snapshot", "source_kind":"system", "priority_hint":"background", "certainty":"high"},
+            "player":{"dimension":"minecraft:overworld", "position":{"y":64.0}},
+            "world":{"biome":biome, "weather":weather, "sky_visible":true}
+        })).unwrap();
+        let cl = c.climate(Some(biome)).unwrap();
+        assert_eq!(
+            precipitation::from_event(&event, &cl)
+                .unwrap()
+                .precipitation_kind,
+            kind,
+            "precipitation: {biome}, {weather:?}"
+        );
+        assert_eq!(
+            chat_world::weather_label(&event, &cl).unwrap(),
+            label,
+            "label: {biome}, {weather:?}"
+        );
+        // 通常会話へ公開する共通観測でも、ラベルと降水種別が同じ解決結果を使うことを確認する。
+        let context =
+            dogido_rust::conversation_observation::project(&event, None, 10.0, 3.0, 5000).unwrap();
+        assert_eq!(context.observations["weather"]["label"], json!(label));
+        assert_eq!(
+            context.observations["weather"]["precipitation_kind"],
+            json!(kind)
+        );
+        if biome == "savanna" {
+            assert_eq!(
+                context.observations["weather"]["precipitation_possible"],
+                json!(false)
+            );
+        }
     }
 }
 

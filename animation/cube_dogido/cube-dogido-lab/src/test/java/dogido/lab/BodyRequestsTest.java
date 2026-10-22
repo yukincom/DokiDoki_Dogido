@@ -56,4 +56,68 @@ class BodyRequestsTest {
         control.completeAction(Outcome.SUCCEEDED,"arrived");
         assertEquals("arrived",control.submit(move,12,null).result().reason());
     }
+    @Test void followOnlyAddsMoveToAndKeepsExternalEnableAndOtherModesRestricted() {
+        var move = request(Action.MOVE_TO,new Position(6,64,0),null);
+        assertNull(BodyRequests.action(move,Mode.FOLLOW,false,origin));
+        for (Mode mode : new Mode[]{Mode.HOLD,Mode.EXPLORE})
+            assertEquals("direct_mode_required",BodyRequests.action(move,mode,false,origin));
+        for (Action action : new Action[]{Action.REST,Action.WAIT,Action.EAT})
+            assertEquals("direct_mode_required",BodyRequests.action(request(action,null,null),Mode.FOLLOW,false,origin));
+    }
+    @Test void inspectionCannotOverridePriorityOrLeaveTheOwnersFollowRange() {
+        assertNull(BodyRequests.inspection(false,false,Activity.HOLDING,16,16,16));
+        assertEquals("call_has_priority",BodyRequests.inspection(true,false,Activity.HOLDING,2,3,16));
+        assertEquals("body_action_busy",BodyRequests.inspection(false,true,Activity.HOLDING,2,3,16));
+        for (Activity activity : new Activity[]{Activity.FOLLOWING,Activity.RETREATING,Activity.MOVING,Activity.DOWNED})
+            assertEquals("body_activity_busy",BodyRequests.inspection(false,false,activity,2,3,16));
+        assertEquals("distance_follow_has_priority",BodyRequests.inspection(false,false,Activity.HOLDING,16.01,3,16));
+        assertEquals("inspection_outside_follow_distance",BodyRequests.inspection(false,false,Activity.HOLDING,2,16.01,16));
+    }
+    @Test void inspectionResultOnlyCompletesTheMatchingAcceptedAction() {
+        ControlLease control = new ControlLease(); control.reset(context); control.local(Mode.FOLLOW,false);
+        ActionRequest move = request(Action.MOVE_TO,new Position(4,64,0),null);
+        assertTrue(control.submit(move,10,null).execute());
+        control.completeAction(UUID.randomUUID(),Outcome.SUCCEEDED,"arrived");
+        assertTrue(control.hasActiveAction()); assertEquals(Outcome.ACCEPTED,control.actionResult().outcome());
+        control.completeAction(move.actionId(),Outcome.SUCCEEDED,"arrived");
+        assertFalse(control.hasActiveAction()); assertEquals(Outcome.SUCCEEDED,control.actionResult().outcome());
+        assertFalse(control.submit(move,11,"body_activity_busy").execute());
+        assertEquals("arrived",control.actionResult().reason());
+    }
+
+    @Test void ownerApproachHasNoExternalDestinationAndCannotBorrowOtherActionModes() {
+        for (MovePurpose purpose : new MovePurpose[]{MovePurpose.OWNER_NEAR,MovePurpose.OWNER_FACE}) {
+            var request = new ActionRequest(context,1,UUID.randomUUID(),10,40,Action.MOVE_TO,null,null,purpose);
+            assertNull(BodyRequests.action(request,Mode.FOLLOW,false,origin));
+            assertEquals("owner_approach_requires_follow",BodyRequests.action(request,Mode.DIRECT,false,origin));
+            assertEquals("unexpected_destination",BodyRequests.action(new ActionRequest(context,1,request.actionId(),10,40,
+                Action.MOVE_TO,origin,null,purpose),Mode.FOLLOW,false,origin));
+            assertEquals("unexpected_move_purpose",BodyRequests.action(new ActionRequest(context,1,request.actionId(),10,40,
+                Action.WAIT,null,null,purpose),Mode.FOLLOW,false,origin));
+        }
+        assertEquals(MovePurpose.INSPECT,request(Action.MOVE_TO,origin,null).movePurpose());
+        assertEquals("invalid_move_purpose",BodyRequests.action(new ActionRequest(context,1,UUID.randomUUID(),10,40,
+            Action.MOVE_TO,null,null,null),Mode.FOLLOW,false,origin));
+    }
+    @Test void ownerApproachCanReturnFromOutsideNormalRadiusAndStillRespectsPriorityAndWork() {
+        assertNull(BodyRequests.ownerApproach(false,false,Activity.HOLDING,10,12,MovePurpose.OWNER_NEAR,true));
+        assertNull(BodyRequests.ownerApproach(false,false,Activity.HOLDING,12,12,MovePurpose.OWNER_FACE,false));
+        assertEquals("owner_working",BodyRequests.ownerApproach(false,false,Activity.HOLDING,10,12,MovePurpose.OWNER_FACE,true));
+        assertEquals("distance_follow_has_priority",BodyRequests.ownerApproach(false,false,Activity.HOLDING,12.01,12,MovePurpose.OWNER_NEAR,false));
+        assertEquals("call_has_priority",BodyRequests.ownerApproach(true,false,Activity.HOLDING,2,12,MovePurpose.OWNER_NEAR,false));
+        assertEquals("body_action_busy",BodyRequests.ownerApproach(false,true,Activity.HOLDING,2,12,MovePurpose.OWNER_NEAR,false));
+        assertEquals("body_activity_busy",BodyRequests.ownerApproach(false,false,Activity.RETREATING,2,12,MovePurpose.OWNER_NEAR,false));
+    }
+    @Test void sameActionIdCannotChangeOwnerApproachPurposeOrReplayItsArrival() {
+        ControlLease control = new ControlLease(); control.reset(context); control.local(Mode.FOLLOW,false);
+        var near = new ActionRequest(context,1,UUID.randomUUID(),10,40,Action.MOVE_TO,null,null,MovePurpose.OWNER_NEAR);
+        assertTrue(control.submit(near,10,null).execute());
+        assertFalse(control.submit(near,11,null).execute());
+        var face = new ActionRequest(context,1,near.actionId(),10,40,Action.MOVE_TO,null,null,MovePurpose.OWNER_FACE);
+        assertEquals("action_id_conflict",control.submit(face,11,null).result().reason());
+        control.completeAction(near.actionId(),Outcome.SUCCEEDED,"arrived");
+        var replay=control.submit(near,12,null);
+        assertFalse(replay.execute()); assertEquals(Outcome.SUCCEEDED,replay.result().outcome());
+    }
+
 }

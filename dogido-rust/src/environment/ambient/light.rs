@@ -1,6 +1,6 @@
 //! 照明器具の所持数が増えた際に、無言・備えへの相槌・暗所回復への安堵から一件を選ぶための処理。
 //! Ambientが完全なinventory snapshotの前後差を渡し、Danger由来の明るさ／暗所回復状態から許可actionと根拠を作る。
-//! モデルの選択が戻ったら現在観測で再検証し、発話する場合はカタログ代替文付きのSpeechを配送側へ返す。
+//! 生成済みの反応が戻ったら現在観測で再検証し、完成した本文をSpeechとして配送側へ返す。
 //! 明るさの測定・暗所警告の状態変更・モデル実行・音声再生は各担当に残し、入手方法や設置完了は推定しない。
 use super::*;
 use serde::Serialize;
@@ -23,11 +23,9 @@ pub struct LightPlanRequest {
     #[serde(skip)]
     created_at: u64,
     #[serde(skip)]
-    previous: i64,
-    #[serde(skip)]
     current: i64,
     #[serde(skip)]
-    context: LightContext,
+    body_context: Value,
 }
 /// inventory内の松明・魂の松明・ランタン・魂のランタンを合算する。近くの設置済み光源とは別の所持数。
 pub(super) fn count(e: &GameEvent) -> i64 {
@@ -113,7 +111,7 @@ impl Ambient {
     /// 戻り値trueは依頼の準備完了であり、発話決定ではない。無言しか許可されなければfalseを返す。
     pub(super) fn light_request(
         &mut self,
-        _e: &GameEvent,
+        e: &GameEvent,
         now: u64,
         focus: &AmbientFocus,
         s: &Settings,
@@ -134,19 +132,18 @@ impl Ambient {
         self.light_serial = self.light_serial.saturating_add(1);
         let request = LightPlanRequest {
             request_id: self.light_serial,
-            details: json!({"allowed_actions":actions,"facts":facts(previous,current,&focus.light,recent)}),
-            fallback_payload: json!({"action":"stay_silent","basis_ids":["light_source_gain_observed"],"confidence":0.0}),
+            details: json!({"allowed_actions":actions,"facts":facts(previous,current,&focus.light,recent),"context":common_details(e,s)}),
+            fallback_payload: json!({"action":"stay_silent","speech":""}),
             created_at: now,
-            previous,
             current,
-            context: focus.light.clone(),
+            body_context: json!(e.body_origin().and_then(|o| o.context.as_ref())),
         };
         self.light_pending = Some(request.clone());
         self.light_ready = Some(request);
         true
     }
-    /// 指定IDの応答を一度消費し、現在の所持数・会話優先・敵・暗所状態と、action／根拠／信頼度を照合する。
-    /// 条件が揃った時だけ生成leaf付きSpeechを返し、コメント時刻を進める。無言・不正・古い応答はNone。
+    /// 指定IDの応答を一度消費し、現在の所持数・会話優先・敵・暗所状態と、許可action／本文の外形を照合する。
+    /// 条件が揃った時だけ生成済みのSpeechを返し、コメント時刻を進める。無言・不正・古い応答はNone。
     pub fn resolve_light_plan(
         &mut self,
         id: u64,
@@ -178,6 +175,7 @@ impl Ambient {
             || !e.visual_threats.is_empty()
             || !e.auditory_threats.is_empty()
             || count(e) != request.current
+            || json!(e.body_origin().and_then(|o| o.context.as_ref())) != request.body_context
             || focus
                 .last_player_input_at
                 .or(self.last_player_input)
@@ -202,77 +200,24 @@ impl Ambient {
             self.last_light_comment,
             s.ms("darkness_llm_comment_cooldown_ms"),
         );
-        // 安堵の根拠は依頼時に実測した回復を保ちつつ、再び危険な暗さなら失効させる。
-        // それ以外の明るさとクールダウンは現在値で許可actionを選び直す。
-        let mut current_context = focus.light.clone();
-        current_context.dark_push_context_before = request.context.dark_push_context_before;
-        current_context.dark_push_recovered =
-            request.context.dark_push_recovered && !focus.light.severe_darkness;
-        if !allowed(request.previous, request.current, &current_context, recent).contains(&action) {
+        // 反応の許可は依頼時に確定済み。通常の移動・照明・時間帯の変化で
+        // 発話機会を消さず、危険な暗さと別コメントの重複だけをここで再照合する。
+        if recent || focus.light.severe_darkness {
             return None;
         }
-        // 根拠は依頼時に渡した重複しない1〜3件へ限定し、安堵／備えに対応する根拠も要求する。
-        let basis = payload["basis_ids"].as_array()?;
-        if !(1..=3).contains(&basis.len()) {
-            return None;
-        }
-        let mut ids = vec![];
-        for v in basis {
-            let id = v.as_str()?.trim();
-            if id.is_empty()
-                || ids.contains(&id)
-                || !request.details["facts"]
-                    .as_array()?
-                    .iter()
-                    .any(|f| f["basis_id"].as_str() == Some(id))
-            {
-                return None;
-            }
-            ids.push(id);
-        }
-        if action == "relief_after_darkness" && !ids.contains(&"dark_push_recovered") {
-            return None;
-        }
-        if action == "acknowledge_supply_gain"
-            && !ids.iter().any(|id| {
-                ["first_light_supply", "supply_before", "surroundings_light"].contains(id)
-            })
-        {
-            return None;
-        }
-        // 発話には有限の0〜1の信頼度と0.78以上が必要。stay_silentは妥当でもSpeechを作らない。
-        let confidence = payload["confidence"].as_f64()?;
-        if !confidence.is_finite()
-            || !(0.0..=1.0).contains(&confidence)
-            || action != "stay_silent" && confidence < 0.78
+        if !crate::light_plan::contract_errors(payload, &request.details).is_empty()
             || action == "stay_silent"
         {
             return None;
         }
-        let name = crate::combat::core::call_name(e, s);
-        let prefix = if name == "プレイヤー" {
-            String::new()
-        } else {
-            format!("{name}、")
-        };
-        let key = if action == "relief_after_darkness" {
-            "light_source_relief"
-        } else {
-            "light_source_gain"
-        };
-        // 選ばれたactionに対応するカタログ文を生成失敗時の代替として用意し、言い回しはleafへ渡す。
-        // 選択自体のfallbackはstay_silentなので、planner失敗だけを理由にこの固定文を発話しない。
-        let text = catalog::general("darkness", key).replace("{prefix}", &prefix);
-        let mut details = common_details(e, s);
-        details["comment_action"] = action.into();
-        details["surroundings_light"] = if focus.light.surroundings_reasonably_lit {
-            "reasonably_lit"
-        } else {
-            "not_reasonably_lit"
-        }
-        .into();
-        details["__ambient_guard"] = json!({"light_source_count":request.current});
+        let mut speech = Speech::new("light_source_gain", payload["speech"].as_str()?.trim());
+        speech.scope = Scope::Safe;
+        speech.light_comment = Some(crate::combat::model::LightComment {
+            source_count: request.current,
+            body_context: request.body_context,
+            reports: vec![],
+        });
         self.last_light_comment = Some(now);
-        Some(leaf("light_source_gain", text, details, 0.48))
+        Some(speech)
     }
 }

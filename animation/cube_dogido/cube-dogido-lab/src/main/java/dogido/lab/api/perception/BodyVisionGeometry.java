@@ -48,15 +48,33 @@ public final class BodyVisionGeometry {
             unknown && inFov ? Visibility.UNAVAILABLE : Visibility.NOT_VISIBLE,reason);
     }
 
+    /**
+     * 顔の確認は双方の顔向きと、身体の眼からownerの眼への実rayが揃った場合だけ成立する。
+     * ownerの背後・視野外・遮蔽・未取得を、単なる近さから顔の確認へ置換しない。
+     */
+    public static boolean ownerFaceVisible(long tick, Vec3d bodyEye, double bodyYaw, double bodyPitch,
+            Vec3d ownerEye, double ownerYaw, double ownerPitch, Function<Vec3d,BodyVisibility.Trace> trace) {
+        if (!finite(bodyEye) || !finite(ownerEye) || trace == null) return false;
+        if (observe(tick,ownerEye,ownerYaw,ownerPitch,List.of(bodyEye),p -> BodyVisibility.Trace.CLEAR)
+                .playerVisibility() != Visibility.VISIBLE) return false;
+        return observe(tick,bodyEye,bodyYaw,bodyPitch,List.of(ownerEye),trace).playerVisibility() == Visibility.VISIBLE;
+    }
+
     /** yaw=南0/西90。角度を一周で正規化し、水平・垂直それぞれ全角の半分へ照合する。 */
     private static boolean insideFov(Vec3d delta, double yaw, double pitch, double horizontalFov, double verticalFov) {
-        double horizontal = delta.horizontalLength();
         if (delta.lengthSquared() < EPSILON) return true;
-        double targetYaw = horizontal < EPSILON ? yaw : Math.toDegrees(Math.atan2(-delta.x,delta.z));
-        double yawDifference = ((targetYaw-yaw)%360+540)%360-180;
-        double targetPitch = -Math.toDegrees(Math.atan2(delta.y,horizontal));
+        Angles target = facing(delta,yaw,pitch);
+        double yawDifference = ((target.yaw()-yaw)%360+540)%360-180;
         return Math.abs(yawDifference) <= horizontalFov/2+EPSILON
-            && Math.abs(targetPitch-pitch) <= verticalFov/2+EPSILON;
+            && Math.abs(target.pitch()-pitch) <= verticalFov/2+EPSILON;
+    }
+    public record Angles(double yaw, double pitch) {}
+    /** owner視認と発話注視で共有する実座標差からの角度。真上/真下はyaw、同一点は両角度を維持する。 */
+    public static Angles facing(Vec3d delta, double currentYaw, double currentPitch) {
+        if (!finite(delta) || delta.lengthSquared() < EPSILON) return new Angles(currentYaw,currentPitch);
+        double horizontal = delta.horizontalLength();
+        return new Angles(horizontal < EPSILON ? currentYaw : Math.toDegrees(Math.atan2(-delta.x,delta.z)),
+            -Math.toDegrees(Math.atan2(delta.y,horizontal)));
     }
     private static boolean finite(Vec3d p) {
         return p != null && Double.isFinite(p.x) && Double.isFinite(p.y) && Double.isFinite(p.z);

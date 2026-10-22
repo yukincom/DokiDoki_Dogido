@@ -1,0 +1,34 @@
+/* The index belongs to the left navigation; the reading page has no middle column. */
+.desk,.desk.list-open { grid-template-columns:300px minmax(0,1fr); }
+.pages { display:block; }
+.binding { padding:24px 12px 20px 20px; }
+.book-label h2 { font-size:22px; }
+.seal { display:none; }
+#categories>button { width:100%; font-size:14px; }
+#categories>button>span { margin-left:auto; }
+#categories .index-page { width:100%; color:var(--ink); background:var(--paper); border:1px solid var(--line); box-shadow:none; margin:0 0 10px; }
+#categories .index-head { padding:12px 10px 8px; }
+#categories .index-head>.eyebrow,#categories .index-head>h2 { display:none; }
+#categories .entry-list { display:block; max-height:440px; overflow:auto; padding:0 6px 8px; }
+#categories .entry-list .entry { display:flex; width:100%; margin:0; padding:12px 8px; color:var(--ink); border:0; border-bottom:1px solid var(--line); border-left:3px solid transparent; }
+#categories .entry-list .entry[aria-pressed=true] { border-left-color:var(--accent); background:#ede0ce; }
+#categories .entry strong { font-size:14px; }
+#categories .entry small { font-size:11px; }
+#categories .entry .poem-tags { gap:4px; }
+#categories .index-foot { display:none; }
+#categories .result-meta { font-size:11px; }
+#categories .text-button { color:var(--muted); background:none; padding:4px 0; font-size:11px; }
+#categories .entry-list button { box-shadow:none; }
+@media(max-width:850px) {
+  .desk,.desk.list-open { grid-template-columns:1fr; }
+  .binding { padding:12px; }
+  #categories { flex-direction:row; }
+  #categories>button { width:auto; }
+  #categories .index-page { flex-basis:100%; }
+  #categories .entry-list { max-height:300px; }
+}
+
+/* 確認用の頁を開くボタンと、削除対象のチェックは独立させる。 */
+#categories .poem-index-row{display:grid;grid-template-columns:26px minmax(0,1fr);align-items:start;border-bottom:1px solid var(--line)}
+#categories .poem-index-row>input{width:18px;height:18px;margin:16px 4px;accent-color:#89513d;cursor:pointer}
+#categories .poem-index-row .entry{min-width:0;border-bottom:0}

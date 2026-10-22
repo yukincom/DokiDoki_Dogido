@@ -5,7 +5,7 @@ use crate::assist::{Input, InputSource};
 use std::sync::Arc;
 
 impl Dialogue {
-    /// 通常会話が戦闘で遮られる場合だけ使用する。平常時は従来の一回の会話生成を維持する。
+    /// 分類済みの呼び寄せ、または分類器未設定時の戦闘中入力を、既存の候補選択へ渡す。
     pub(in super::super) fn horse_assist_input(
         self: &Arc<Self>,
         d: &mut super::super::Data,
@@ -15,9 +15,17 @@ impl Dialogue {
         source: &str,
     ) -> Option<Value> {
         let s = d.sessions.get_mut(sid)?;
+        let classification = super::super::request_runtime::classification(s, text, source);
+        if classification.is_some_and(|r| r.prediction.label != crate::request_classifier::Label::RecallMount) {
+            return None;
+        }
+        if classification.is_some() && !self.config.llm_enabled {
+            return Some(json!({"accepted":false,"reason":"horse_selection_unavailable"}));
+        }
         if !self.config.llm_enabled
             || !observation_fresh(s)
-            || (s.mode == crate::combat::model::Mode::Normal
+            || super::super::workshop_focus::quiet(s)
+            || (classification.is_none() && s.mode == crate::combat::model::Mode::Normal
                 && s.chat_allowed
                 && !s.foreground.combat_active
                 && s.warning.is_none()
@@ -25,7 +33,8 @@ impl Dialogue {
         {
             return None;
         }
-        let context = capture(s, text)?;
+        // 分類済みなら依頼判定LLMを省く。候補・capability・観測の検証はcaptureが所有する。
+        let context = capture(s, text, classification)?;
         let request = crate::chat_prompt::Input {
             schema_version: 1,
             kind: "player_chat".into(),

@@ -1,0 +1,89 @@
+/* Reading-first scale. Sources and scope are documented in README.md.
+   1rem = browser default (normally 16px); never shrink mobile text to fit. */
+:root { --text-small:1rem; --text-ui:1.125rem; --text-body:1.1875rem; --text-heading:2rem; --muted:#625b4c; }
+html { font-size:100%; }
+body { font-size:var(--text-ui); line-height:1.75; }
+button,input,select,textarea { font-size:var(--text-ui); }
+button,select { min-height:44px; }
+.topbar { height:auto; min-height:74px; padding-top:12px; padding-bottom:12px; flex-wrap:wrap; gap:12px 24px; }
+.brand { font-size:var(--text-ui); }
+.topbar .prototype { margin-left:0; }
+.topbar .books { width:auto; flex-shrink:0; margin-left:auto; justify-content:flex-end; }
+.topbar .books button:not([aria-pressed=true]) { color:var(--ink); }
+@media(max-width:850px) {
+  .topbar .prototype { margin-left:auto; }
+  .topbar .books { order:2; width:100%; }
+  .topbar .books button { flex:0 0 auto; }
+}
+.top-note,.prototype,.eyebrow,.intro>div>p:last-child,.book-label small,
+.companion p,.companion small,.folio-head,.number,.demo-label,.readout,
+.preface-label,.photo-local-note,.photo-bar p,.photo-slot span,.empty-slot,
+.page-footer,footer,.facts dt,.tag,
+.entry-heading p,.index-foot { font-size:var(--text-small); line-height:1.6; }
+.companion p { color:#f3eddc; }
+.companion small { color:#d8dccd; }
+.number { color:var(--muted); }
+.books button,.favorite,.export,.photo-delete,.segmented button,
+.source-tabs button,.search input,select,#categories>button,
+#categories .entry strong,#categories .entry p,#categories .text-button,
+.entry-heading .poem-byline,.biome-tag,.time-tag,.player-note { font-size:var(--text-ui); line-height:1.6; }
+#filters label,#categories .entry small,#categories .result-meta,
+.compact .biome-tag,.compact .time-tag { font-size:var(--text-small); line-height:1.6; }
+.lead,.poem-note,.source-panel,.facts dd { font-size:var(--text-body); line-height:1.85; }
+.lead,.source-panel,.poem-note { max-width:48em; }
+.source-panel p+p { margin-top:1em; }
+.section-title,.photo-bar strong { font-size:1.5rem; line-height:1.5; }
+.book-label h2 { font-size:1.75rem; }
+.entry-heading { flex-wrap:wrap; align-items:baseline; }
+.entry-heading h2 { font-size:var(--text-heading); line-height:1.4; letter-spacing:.02em; }
+.catalog-name { display:flex; align-items:baseline; flex-wrap:wrap; gap:0 .25em; }
+.catalog-name [lang=en] { font:inherit; letter-spacing:0; }
+.entry-heading .lead { font-size:var(--text-body); line-height:1.85; margin:8px 0 0; color:var(--ink); }
+.biome-tag { white-space:normal; flex-wrap:wrap; }
+.biome-tag [lang=en] { font:inherit; }
+.search input { padding:6px 0; }
+select { padding:8px 4px; }
+.result-meta,.page-footer,.pager { flex-wrap:wrap; gap:10px; }
+.photo-slot span { white-space:normal; overflow-wrap:anywhere; text-overflow:clip; }
+.empty-slot { min-height:100px; }
+.art-caption,.poem-scene .art-caption,.has-player-photo .art-caption { font-size:var(--text-small); line-height:1.4; letter-spacing:0; }
+.specimen-mark { font-size:var(--text-small); }
+.poem-slip span,.has-player-photo .poem-slip span { font-size:1.75rem; }
+.poem-scene { height:auto; container-type:inline-size; }
+.poem-scene>svg { height:auto; aspect-ratio:620/300; }
+.desk,.desk.list-open { grid-template-columns:340px minmax(0,1fr); }
+#categories .entry-list { max-height:560px; }
+#categories .entry p { -webkit-line-clamp:3; }
+#categories .entry>span:last-child { min-width:0; }
+.facts { grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); }
+.facts dd,.link-button { overflow-wrap:anywhere; }
+.catalog-note-section + .catalog-note-section { margin-top:24px; }
+.catalog-note-section h3 { font-size:1.125rem; margin:0 0 8px; }
+.catalog-note { white-space:pre-wrap; overflow-wrap:anywhere; }
+@media(max-width:1100px) { .top-note { display:none; } }
+@media(max-width:850px) {
+  .desk,.desk.list-open { grid-template-columns:1fr; }
+  #categories .entry-list { max-height:380px; }
+  .topbar { padding-left:16px; padding-right:16px; }
+}
+/* At narrow widths a legible vertical verse needs its own space, not tiny type
+   squeezed into the photo. The bitmap itself keeps its intrinsic aspect ratio. */
+@media(max-width:700px) {
+  .poem-scene,.detail-page .has-player-photo { height:auto; display:flex; flex-direction:column; }
+  .poem-scene>svg { height:auto; aspect-ratio:620/300; }
+  .poem-slip,.has-player-photo .poem-slip { position:static; align-self:center; padding:20px; gap:20px; margin:16px; }
+  .poem-slip span,.has-player-photo .poem-slip span { font-size:1.5rem; }
+  .poem-scene .art-caption,.has-player-photo .art-caption { position:static; padding:6px 10px; }
+  .photo-bar { flex-wrap:wrap; }
+}
+@media(max-width:400px) {
+  .catalog-name { font-size:1.75rem; }
+  .folio-head { letter-spacing:0; }
+  #filters { grid-template-columns:1fr; }
+}
+/* Also cover a narrow reading column when the desktop index is expanded. */
+@container(max-width:620px) {
+  .poem-slip,.has-player-photo .poem-slip { position:static; width:fit-content; padding:20px; gap:20px; margin:16px auto; }
+  .poem-slip span,.has-player-photo .poem-slip span { font-size:1.5rem; }
+  .poem-scene .art-caption,.has-player-photo .art-caption { position:static; display:block; padding:6px 10px; }
+}

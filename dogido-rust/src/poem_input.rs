@@ -194,6 +194,11 @@ impl MemoryStore {
             "author":"player","kind":"player_haiku","text":text,"preface":null,"interpretation":null,
             "world":{"biome":e["world"]["biome"],"structure":e["world"]["structure"],"time_phase":e["world"]["time_phase"],"dimension":e["player"]["dimension"]},
             "trigger":{"event_sequence":e["sequence"],"route":null}});
+        let _poems = crate::poem_trash::lock(self.root())?;
+        ensure!(
+            !crate::poem_trash::is_deleted(self.root(), entry["id"].as_str().unwrap())?,
+            "poem_deleted"
+        );
         let mut file = locked_file(&self.entries_path())?;
         for line in BufReader::new(&file).lines() {
             if let Ok(row) = serde_json::from_str::<Value>(&line?)
@@ -217,6 +222,11 @@ impl MemoryStore {
         let _guard = SAVE_LOCK
             .lock()
             .map_err(|_| anyhow::anyhow!("haiku save mutex poisoned"))?;
+        let _poems = crate::poem_trash::lock(self.root())?;
+        ensure!(
+            !crate::poem_trash::is_deleted(self.root(), &revision.original.entry_id())?,
+            "poem_deleted"
+        );
         let mut file = locked_file(&self.root().join("long_term/haiku_revisions.jsonl"))?;
         let mut rows = vec![];
         for line in BufReader::new(&file).lines() {

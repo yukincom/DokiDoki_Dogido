@@ -367,3 +367,125 @@ fn retained_old_audio_never_reverts_a_newer_name_or_name_removal() {
         .unwrap();
     assert!(!fresh.snapshot(&old_audio, &labels).unwrap().named_mobs[0].current);
 }
+
+#[test]
+fn same_source_block_actions_survive_current_and_recent_hearing_without_claiming_an_actor() {
+    let labels = labels();
+    let mut memory = ChatObservationMemory::default();
+    let sounds: Vec<_> = ["step", "break", "place"]
+        .into_iter()
+        .map(|action| {
+            json!({
+                "type":"block:stone", "source_id":"played:block:stone:1:2:3",
+                "sound_event":format!("minecraft:block.stone.{action}"),
+                "direction":{"horizontal":"front"}, "distance_band":"close"
+            })
+        })
+        .collect();
+    let event = frame("2026-10-18T01:00:00Z", json!({"ambient_sounds":sounds}));
+    memory
+        .observe(&event, &Default::default(), &labels)
+        .unwrap();
+    let snapshot = memory.snapshot(&event, &labels).unwrap();
+    assert_eq!(snapshot.recent.hearing_memos.len(), 3);
+    let keys: std::collections::HashSet<_> = snapshot
+        .recent
+        .hearing_memos
+        .iter()
+        .map(|m| &m.dedupe_key)
+        .collect();
+    assert_eq!(keys.len(), 3);
+    for (action, text) in [
+        ("step", "石系の足音"),
+        ("break", "石系ブロックの破壊音"),
+        ("place", "石系ブロックの設置音"),
+    ] {
+        assert!(
+            snapshot
+                .recent
+                .hearing_memos
+                .iter()
+                .any(|m| m.sound_event.as_deref()
+                    == Some(format!("minecraft:block.stone.{action}").as_str()))
+        );
+        assert_eq!(snapshot.hearing.summary.matches(text).count(), 1);
+    }
+    assert_eq!(snapshot.hearing.summary.matches("発音者未確定").count(), 3);
+    let later = frame("2026-10-18T01:00:10Z", json!({}));
+    let recent = memory.snapshot(&later, &labels).unwrap();
+    assert_eq!(recent.hearing.summary.matches("ついさっき").count(), 3);
+    assert_eq!(memory.snapshot(&event, &labels).unwrap(), snapshot);
+    let expired = frame("2026-10-18T01:00:21Z", json!({}));
+    assert!(
+        memory
+            .snapshot(&expired, &labels)
+            .unwrap()
+            .hearing
+            .summary
+            .is_empty()
+    );
+}
+
+#[test]
+fn actual_mob_steps_are_not_voices_and_block_noise_is_not_an_interaction() {
+    let event = frame(
+        "2026-10-18T01:00:00Z",
+        json!({
+            "auditory_threats":[{"label":"zombie","source_id":"z","sound_event":"entity.zombie.step"}],
+            "ambient_sounds":[{"type":"wolf","source_id":"w","sound_event":"entity.wolf.step"},
+                {"type":"block:campfire","sound_event":"block.campfire.crackle"}]
+        }),
+    );
+    let snapshot = ChatObservationMemory::default()
+        .snapshot(&event, &labels())
+        .unwrap();
+    assert!(snapshot.hearing.summary.contains("ゾンビの足音"));
+    assert!(snapshot.hearing.summary.contains("オオカミの足音"));
+    assert!(snapshot.hearing.summary.contains("はぜる音"));
+    assert!(!snapshot.hearing.summary.contains("声"));
+    assert!(!snapshot.hearing.summary.contains("設置音"));
+    assert!(
+        sound_description(Some("石"), "environment", Some("block.stone.hit"), false)
+            .contains("打撃音")
+    );
+    assert!(
+        sound_description(Some("石"), "environment", Some("block.stone.fall"), false)
+            .contains("着地音")
+    );
+    assert_eq!(
+        sound_description(
+            Some("オオカミ"),
+            "ambient",
+            Some("entity.wolf.unknown"),
+            false
+        ),
+        "オオカミの音"
+    );
+    assert_eq!(
+        sound_description(None, "ambient", Some("unknown.future.step"), false),
+        "音（種別未確定）"
+    );
+    assert_eq!(
+        sound_description(Some("くろ"), "environment", Some("block.stone.step"), true),
+        "くろの足音"
+    );
+}
+
+#[test]
+fn verified_owner_sound_names_emitter_separately_and_unresolved_sound_stays_unresolved() {
+    let mut wire=crate::body::tests::fixture();let owner=wire["sample"]["context"]["owner_id"].as_str().unwrap().to_owned();
+    wire["age_ms"]=json!(0);
+    wire["sample"]["senses"]["ambient_sounds"]=json!([
+        {"type":"block:stone","source_id":owner,"sound_event":"block.stone.step","heard_ago_ms":0,"direction":{"horizontal":"front"},"distance_band":"close"},
+        {"type":"block:stone","source_id":"played:block:stone:0:0:0","sound_event":"block.stone.step","heard_ago_ms":0,"direction":{"horizontal":"front"},"distance_band":"close"}]);
+    let observation=serde_json::from_value(wire).unwrap();let now=std::time::Instant::now();let mut body=crate::body::State::default();
+    body.observe(Some(&observation),Some(&owner),Some("minecraft:overworld"),now,Some(0));
+    let event=body.sensory_event(&frame("2026-10-22T01:00:00Z",json!({})),now);
+    let mut memory=ChatObservationMemory::default();memory.observe(&event,&Default::default(),&labels()).unwrap();
+    let snapshot=memory.snapshot(&event,&labels()).unwrap();
+    assert!(snapshot.hearing.summary.contains("音：石系の足音／音の由来：プレイヤー"));
+    assert!(snapshot.hearing.summary.contains("石系の足音（発音者未確定）"));
+    assert_eq!(snapshot.recent.hearing_memos.iter().filter(|memo|memo.emitter.as_deref()==Some("プレイヤー")).count(),1);
+    let later=memory.snapshot(&frame("2026-10-22T01:00:05Z",json!({})),&labels()).unwrap();
+    assert!(later.hearing.summary.contains("音の由来：プレイヤー"));
+}

@@ -242,14 +242,28 @@ impl Audio {
         index: usize,
         started: impl FnOnce(),
     ) -> Result<()> {
+        self.play_file_at_rate(config, path, cancel, index, 1.0, started).await
+    }
+
+    /// 録音済みの数コールだけを指定倍率で再生する。afplay互換playerへrateを渡し、取消と回収は共通。
+    pub async fn play_file_at_rate(
+        &self,
+        config: &DialogueConfig,
+        path: &Path,
+        cancel: &mut watch::Receiver<bool>,
+        index: usize,
+        rate: f64,
+        started: impl FnOnce(),
+    ) -> Result<()> {
+        ensure!(rate.is_finite() && rate > 0.0 && rate <= 2.0, "invalid playback rate");
         ensure!(config.audio_enabled, "audio_disabled");
         if *cancel.borrow() {
             anyhow::bail!("cancelled");
         }
-        let mut child = Command::new(&config.player)
-            .arg(path)
-            .kill_on_drop(true)
-            .spawn()?;
+        let mut command = Command::new(&config.player);
+        command.arg(path);
+        if rate != 1.0 { command.args(["-r", &rate.to_string(), "-q", "1"]); }
+        let mut child = command.kill_on_drop(true).spawn()?;
         let pid = child.id();
         tracing::info!(event = "audio_started", ?pid, sentence = index + 1);
         started();

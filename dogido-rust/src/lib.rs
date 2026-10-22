@@ -79,9 +79,14 @@ pub mod world_catalog;
 
 pub mod chat_observation;
 
+pub mod chat_image;
+pub mod chat_image_settings;
 pub mod chat_materials;
 
 pub mod workshop_projection;
 
+pub mod bookshelf;
+pub mod poem_trash;
+pub mod screenshot;
 pub mod workshop_editing;
 mod workshop_validation;

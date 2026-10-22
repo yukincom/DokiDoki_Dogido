@@ -292,6 +292,9 @@ pub fn validate_evidence(original: &str, evidence: &str, confidence: f64) -> Res
     Ok(())
 }
 
+// TODO(request-classifier): recall_mount を依頼認識の正にしたら、この否定・引用の
+// 部分一致による再判定と validate_evidence からの呼出しを撤去する。
+// 原文との結び付け、選択結果の受理条件、候補・所有・鮮度・実行前検証は別途維持する。
 fn safe_evidence(text: &str) -> bool {
     let s = text.trim_end_matches(['。', '！', '!']);
     if [('「', '」'), ('『', '』'), ('"', '"')]

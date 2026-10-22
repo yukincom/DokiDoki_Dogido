@@ -1,0 +1,17 @@
+[
+  {
+    "case": "new_fox_and_flower",
+    "response_text": "```json\n{\"action\":\"inspect\",\"target_id\":\"c1\",\"reason\":\"新しい生き物やし、なんかおらんか気になるわ\"}\n```",
+    "expected_target_id": "c1"
+  },
+  {
+    "case": "familiar_stone_and_grass",
+    "response_text": "```json\n{\"action\":\"inspect\",\"target_id\":\"c2\",\"reason\":\"新しい種類のブロックやから\"}\n```",
+    "expected_target_id": "c2"
+  },
+  {
+    "case": "previous_choice_and_new_sunflower",
+    "response_text": "```json\n{\"action\":\"inspect\",\"target_id\":\"c2\",\"reason\":\"新しい花やし、めっちゃ綺麗やん！\"}\n```",
+    "expected_target_id": "c2"
+  }
+]

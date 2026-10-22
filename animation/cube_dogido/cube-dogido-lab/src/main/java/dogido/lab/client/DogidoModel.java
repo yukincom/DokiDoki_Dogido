@@ -7,12 +7,13 @@ import net.minecraft.client.render.entity.state.LivingEntityRenderState;
 
 /** Geometry and UV coordinates from the user's cube_dogido.java export. */
 public final class DogidoModel extends EntityModel<LivingEntityRenderState> {
+    private final ModelPart bone;
     private final ModelPart left;
     private final ModelPart right;
 
     public DogidoModel(ModelPart root) {
         super(root);
-        ModelPart bone = root.getChild("bone");
+        bone = root.getChild("bone");
         left = bone.getChild("left");
         right = bone.getChild("right");
     }
@@ -34,6 +35,7 @@ public final class DogidoModel extends EntityModel<LivingEntityRenderState> {
     @Override
     public void setAngles(LivingEntityRenderState state) {
         super.setAngles(state);
+        bone.pitch = state.pitch * ((float)Math.PI / 180F);
         float seconds = state.age / 20F;
         left.pitch = IdleMotion.angle(true, 0, seconds);
         left.yaw = IdleMotion.angle(true, 1, seconds);

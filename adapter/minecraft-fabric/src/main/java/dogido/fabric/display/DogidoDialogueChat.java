@@ -21,16 +21,18 @@ public final class DogidoDialogueChat {
     private final DogidoDialogueClient dialogue;
     private final DialogueDisplayState state = new DialogueDisplayState();
     private final Predicate<Boolean> saveVoiceEnabled;
+    private final java.util.function.Consumer<DialoguePayload.Snapshot> speechObserver;
     private CompletableFuture<DialoguePayload.Acknowledgement> acknowledgement;
 
-    private DogidoDialogueChat(DogidoEventClient events, Predicate<Boolean> saveVoiceEnabled) {
+    private DogidoDialogueChat(DogidoEventClient events, Predicate<Boolean> saveVoiceEnabled, java.util.function.Consumer<DialoguePayload.Snapshot> speechObserver) {
         this.events = events;
         this.dialogue = new DogidoDialogueClient(events);
         this.saveVoiceEnabled = saveVoiceEnabled;
+        this.speechObserver = speechObserver;
     }
 
-    public static DogidoDialogueChat register(DogidoEventClient events, Predicate<Boolean> saveVoiceEnabled) {
-        DogidoDialogueChat chat = new DogidoDialogueChat(events, saveVoiceEnabled);
+    public static DogidoDialogueChat register(DogidoEventClient events, Predicate<Boolean> saveVoiceEnabled, java.util.function.Consumer<DialoguePayload.Snapshot> speechObserver) {
+        DogidoDialogueChat chat = new DogidoDialogueChat(events, saveVoiceEnabled,speechObserver);
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
             dispatcher.register(literal("dogido")
                 .executes(context -> chat.usage())
@@ -57,6 +59,7 @@ public final class DogidoDialogueChat {
         if (context == null) return;
         this.dialogue.poll(context.session(), snapshot -> {
             if (!isCurrent(context)) return;
+            this.speechObserver.accept(snapshot);
             this.state.receive(snapshot, DogidoDialogueChat::insert);
             flushAcknowledgements(context);
         });
