@@ -45,12 +45,17 @@ class BodyAttentionTest {
         assertTrue(diagonal.contains(EYE.add(-d,0,d)));
         assertFalse(diagonal.contains(EYE.add(-d-.001,0,d+.001)));
     }
-    @Test void narrowWindowIsOneBlockInEveryDirection() {
+    @Test void narrowWindowKeepsFiveInFrontAndTwoAboveAndBelowTheEye() {
         var view=new BodyAttention.View(EYE,0,true,null);
-        assertTrue(view.contains(EYE.add(1,1,1)));
-        assertTrue(view.contains(EYE.add(-1,-1,-1)));
-        for (Vec3d delta : List.of(new Vec3d(1.001,0,0),new Vec3d(0,1.001,0),new Vec3d(0,0,1.001)))
-            assertFalse(view.contains(EYE.add(delta)));
+        assertTrue(view.contains(EYE.add(1,2,5)));
+        assertTrue(view.contains(EYE.add(-1,-2,-1)));
+        for (Vec3d delta : List.of(new Vec3d(1.001,0,0),new Vec3d(-1.001,0,0),
+                new Vec3d(0,2.001,0),new Vec3d(0,-2.001,0),new Vec3d(0,0,5.001),new Vec3d(0,0,-1.001)))
+            assertFalse(view.contains(EYE.add(delta)),delta.toString());
+        // 目より低いカメ等も、地面側の実測点が範囲内で遮られていなければ拾う。
+        var groundTarget=List.of(EYE.add(0,-1.8,4));
+        assertTrue(view.visible(groundTarget,16,p -> Trace.CLEAR));
+        assertFalse(view.visible(groundTarget,16,p -> Trace.BLOCKED));
     }
     @Test void wallsAndUnavailableRaysHideTargetsAndOutsideTheWindowNeverUsesARay() {
         var view=new BodyAttention.View(EYE,0,false,null);
@@ -143,16 +148,28 @@ class BodyAttentionTest {
             assertFalse(attention.observe(row));
         }
     }
-    @Test void reassuranceContinuouslyWidensOnlyTheSafeAmbientWindow() {
+    @Test void reassuranceRoundsEachDimensionAndKeepsTheMinimumWindow() {
         var attention=new BodyAttention(); var row=frame(100,"holding","follow_lookaround");
-        for (double value : List.of(0.0,25.0,50.0,100.0)) {
+        // 安心度、前方、左右それぞれ、上下それぞれ。半端な寸法の直前と四捨五入後を比較する。
+        double[][] cases={{0,5,1,2},{25,5,1,2},{49.999,5,1,2},{50,5,2,2},
+            {64,5,2,2},{65,6,2,2},{74.999,6,2,2},{75,6,2,3},{78,6,2,3},
+            {79,7,2,3},{92,7,2,3},{93,8,2,3},{100,8,2,3}};
+        for (double[] expected : cases) {
+            double value=expected[0],front=expected[1],side=expected[2],vertical=expected[3];
             row.getAsJsonObject("reassurance").addProperty("value",value);
-            var view=attention.view(EYE,0,row); double expansion=value/100;
-            assertTrue(view.contains(EYE.add(0,0,1+7*expansion)));
-            assertFalse(view.contains(EYE.add(0,0,1.001+7*expansion)));
-            assertTrue(view.contains(EYE.add(1+expansion,1+2*expansion,0)));
-            assertEquals(expansion,attention.observation(row).get("expansion").getAsDouble());
-            row.addProperty("activity","following"); assertTrue(attention.view(EYE,0,row).narrow());
+            var view=attention.view(EYE,0,row);
+            assertTrue(view.contains(EYE.add(side,vertical,front)),"安心度="+value);
+            assertTrue(view.contains(EYE.add(-side,-vertical,-1)),"安心度="+value);
+            for (Vec3d outside : List.of(new Vec3d(0,0,front+.001),new Vec3d(side+.001,0,0),
+                    new Vec3d(0,vertical+.001,0),new Vec3d(0,-vertical-.001,0)))
+                assertFalse(view.contains(EYE.add(outside)),"安心度="+value+" "+outside);
+            // 通信する安心度の比率は保持し、実際の注意範囲の寸法だけを丸める。
+            assertEquals(value/100,attention.observation(row).get("expansion").getAsDouble());
+            row.addProperty("activity","following");
+            var following=attention.view(EYE,0,row);
+            assertTrue(following.narrow());
+            assertTrue(following.contains(EYE.add(1,-2,5)));
+            assertFalse(following.contains(EYE.add(0,0,5.001)));
             row.addProperty("activity","holding");
         }
     }

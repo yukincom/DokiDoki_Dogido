@@ -70,7 +70,7 @@ final class BodyAttention {
                 && java.util.Set.of("inspection_dwell","owner_near_dwell","owner_face_dwell").contains(string(autonomy,"reason")))) clear();
     }
 
-    /** FOLLOW以外は既存の視野を使う。追従・到着直後・速いowner移動では各方向1blockへ絞る。待機時は実測安心度に合わせて連続的に広げる。 */
+    /** FOLLOW以外は既存の視野を使う。追従・到着直後は前5・後1・左右1・上下2block。待機時は実測安心度から整数block単位で広げる。 */
     View view(Vec3d eye, double yaw, JsonObject autonomy) {
         if (!following(autonomy)) return null;
         if (focus != null) return new View(eye,yaw,focus.purpose() != Purpose.INSPECT,focus.target());
@@ -115,8 +115,12 @@ final class BodyAttention {
             double angle=Math.toRadians(yaw);
             double forward=-Math.sin(angle)*delta.x+Math.cos(angle)*delta.z;
             double side=Math.cos(angle)*delta.x+Math.sin(angle)*delta.z;
-            return forward >= -1-1e-9 && forward <= (1+7*openness)+1e-9
-                && Math.abs(side) <= (1+openness)+1e-9 && Math.abs(delta.y) <= (1+2*openness)+1e-9;
+            // 安心度からの各寸法を四捨五入する。追従中も前方と地面を拾えるよう前5・上下2を下限にする。
+            long frontBlocks=Math.max(5,Math.round(1+7*openness));
+            long sideBlocks=Math.round(1+openness);
+            long verticalBlocks=Math.max(2,Math.round(1+2*openness));
+            return forward >= -1-1e-9 && forward <= frontBlocks+1e-9
+                && Math.abs(side) <= sideBlocks+1e-9 && Math.abs(delta.y) <= verticalBlocks+1e-9;
         }
         boolean entity(UUID id) { return target == null || "entity".equals(target.kind()) && id.equals(target.entityId()); }
         boolean block(BlockPos pos, String typeId) {
