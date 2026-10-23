@@ -166,7 +166,7 @@ class Settings(BaseSettings):
     llm_max_tokens: int = 72
 
     # 意図は共通BERT、戦闘からの再開・継続は敵が警戒範囲から消えた現在状態で判断する。
-    # OS AI分類とchat fallbackは不要になったため撤去。旧判定へ戻さない。
+    # 意図分類のBERT移行は完了。旧OSAI・chat分類fallbackの設定と経路は撤去済みで、復活させない。
     llm_chat_backend: LLM_BACKEND | None = None
     llm_chat_provider: LLM_PROVIDER | None = None
     llm_chat_mlx_model_id: str | None = None

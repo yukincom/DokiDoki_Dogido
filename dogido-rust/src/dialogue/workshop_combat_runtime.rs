@@ -6,7 +6,8 @@ use crate::{
     workshop_followup::Stage,
 };
 
-// 再開・継続は敵の現在観測と警戒解除条件でコードが決定できるため、AI分類を撤去。旧判定へ戻さない。
+// 意図分類のBERT移行は完了し、旧OSAI・chat分類fallbackの経路は撤去済み。
+// 再開・継続はBERTにも委ねず、敵の現在観測と警戒解除条件でコードが決める。旧AI判定を復活させない。
 pub(super) fn clear_for_resume(s: &Session) -> bool {
     !s.preview
         && fresh(s)

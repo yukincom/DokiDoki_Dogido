@@ -1,6 +1,7 @@
 //! 共通受付の依頼分類を既存Helperで直列実行し、原入力・接続・世代へ結果を戻す。
 //! 通常の分類待ちは新入力で取消。危険中の入力は既存reply_queueが寿命を所有する。
 //! モデルは依頼の種類だけを返し、操作・候補選択・履歴確定は既存runtimeへ渡す。
+//! 意図分類のBERT移行は完了。旧OSAI・chat分類fallbackの経路は撤去済みで、復活させない。
 use super::{Data, Dialogue, DialogueConfig, Session, bridge, id};
 use crate::request_classifier::{Classification, Classifier, Input};
 use anyhow::{Context, Result, ensure};
