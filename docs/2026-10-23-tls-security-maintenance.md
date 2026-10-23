@@ -56,3 +56,11 @@ UniDic補助の `fugashi.Tagger`、依頼分類workerの `torch`／`transformers
 - 一時フォルダにpipなしの新規venvを作り、offline ensurepip→hash固定pip→certifiの実導入に成功。Colabと同じ専用targetへpipを導入し、`python -S`で実行して別targetへcertifiを導入する正常系も成功した。Colab GPU上のモデル検証は実施していない。
 - 更新したreleaseと実設定で、本体／音声の `launch_dialogue.py --check` がともに成功。サービス起動・録音・既存サービスの再起動は行っていない。
 - 家庭用セットの完全な再作成・別Macへの配布・Minecraft実接続、OS証明書の不信頼状態と実TLS接続は未確認。作成済み配布物と稼働中プロセスには更新が自動反映されない。
+
+## 公開用差分の検証とPR（2026-10-23）
+
+[更新PR #46](https://github.com/yukincom/DokiDoki_Dogido/pull/46)を作成した。公開main `e2f808d`から、今回の更新17ファイルだけをcommit `baad89e`として切り出した。前段の分類器・身体・画像入力の変更と、進行中の本棚変更は含めていない。PR作成時点では未マージ。
+
+公開用ブランチでもRust 828件（実音声1件skip）、Python 229件（11件skip、36 subtest）が成功し、専用releaseをビルドした。公開版の標準設定による本体checkと既存音声設定のcheckが成功。先行する23分類モデルの実設定は公開版のラベル契約と異なるため、その組合せでの本体checkは不成立として公開側docsにも記録した。
+
+GitHub Actionsはユーザーの指示で停止。pushとPR作成の前後にリポジトリの `enabled=false` を確認し、CIの新規実行・再実行は行っていない。常駐サービスも再起動していない。
