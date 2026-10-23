@@ -49,15 +49,18 @@ BERTには別途学習済みモデルの設定が必要です。戦闘中断中�
 
 ### 1. 本体の準備と起動
 
+CA関連部品はcertifi 2026.10.19／pip 26.2.2／uv 0.13.4以上が必要です。[既存環境の更新手順](docs/2026-10-23-tls-security-maintenance.md)
+
 ソースから導入する開発版です。以下はmacOS／Linuxのシェル例です。リポジトリのルートで、Python補助とRust本体を準備します。
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -e .
+python -m dogido_server.tls_security --bootstrap
+python -m pip install -e .
 
 # 任意: VOICEVOXの漢字の読みを補うUniDic辞書
-# pip install -e ".[tts-reading]"
+# python -m pip install -e ".[tts-reading]"
 
 cp .env.example .env
 ./dogido-rust/cargo.sh build --release --locked

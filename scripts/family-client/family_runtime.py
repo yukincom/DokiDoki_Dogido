@@ -19,6 +19,7 @@ RUNTIME_DATA = (
     "dogido_server/config.py",
     "dogido_server/platform_ai.py",
     "dogido_server/combat_input_contract.py",
+    "dogido_server/tls_security.py",
     "dogido_server/voice_settings.py",
     "dogido_server/voice_capture.py",
     "dogido_server/echo_input.py",

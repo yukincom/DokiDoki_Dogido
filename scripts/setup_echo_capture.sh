@@ -11,6 +11,7 @@ if [[ -L "$task_runtime" ]]; then
     echo "既存echo-cancelがsymlinkです。上書きせず確認してください。" >&2
     exit 2
 fi
+sh "$task_root/scripts/check_uv.sh" uv
 mkdir -p "$task_runtime/bin"
 if [[ ! -x "$task_runtime/.venv/bin/python" ]]; then
     uv venv --python 3.11 --no-python-downloads "$task_runtime/.venv"
