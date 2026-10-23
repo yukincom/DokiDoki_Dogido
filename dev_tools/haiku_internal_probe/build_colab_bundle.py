@@ -10,11 +10,14 @@ import hashlib
 import json
 from pathlib import Path
 import shutil
+import sys
 import textwrap
 import zipfile
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
+sys.path.insert(0, str(ROOT))
+from dogido_server.tls_security import bootstrap_pip_command, MIN_CERTIFI
 OLD = ROOT / '.dogido_tools/experiments/2026-10-16-haiku-jspace'
 EXPERIMENT = ROOT / '.dogido_tools/experiments/2026-10-17-qat-jspace'
 
@@ -244,7 +247,9 @@ def package(destination, optimization=False):
     ''')
     add('code', '''
     requirements = ['mlx[cuda12]==0.32.0', 'nvidia-cuda-runtime-cu12==12.9.79', 'nvidia-cuda-nvrtc-cu12==12.9.86'] + [f'{name}=={version}' for name, version in SPEC['versions'].items() if name != 'mlx']
-    run_logged('install', [sys.executable, '-m', 'pip', 'install', '--target', str(DEPS), '--upgrade', *requirements])
+    INSTALLER = WORK / 'verified-pip'
+    run_logged('bootstrap_pip', __BOOTSTRAP_PIP_COMMAND__)
+    run_logged('install', [sys.executable, '-S', str(INSTALLER / 'pip'), '--isolated', '--disable-pip-version-check', 'install', '--target', str(DEPS), '--upgrade', 'certifi>=__MIN_CERTIFI__', *requirements])
     CUDA_ROOT = DEPS / 'nvidia' / 'cuda_runtime'
     if not (CUDA_ROOT / 'include' / 'cuda_fp8.hpp').is_file():
         raise RuntimeError('CUDA 12.9 runtime headers are missing')
@@ -341,6 +346,11 @@ def package(destination, optimization=False):
         'language_info': {'name': 'python'},
         'colab': {'name': notebook_name, 'provenance': []},
         'accelerator': 'GPU'}, 'cells': cells}
+    bootstrap_command = repr(bootstrap_pip_command("__PYTHON__", target="__INSTALLER__"))
+    bootstrap_command = bootstrap_command.replace("'__PYTHON__'", "sys.executable").replace("'__INSTALLER__'", "str(INSTALLER)")
+    for cell in cells:
+        if cell['cell_type'] == 'code':
+            cell['source'] = cell['source'].replace('__BOOTSTRAP_PIP_COMMAND__', bootstrap_command).replace('__MIN_CERTIFI__', MIN_CERTIFI)
     for i, cell in enumerate(cells):
         cell['id'] = f'qat-check-{i:02d}'
     path = destination / notebook_name

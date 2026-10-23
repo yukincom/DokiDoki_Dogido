@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+from importlib import metadata
 import json
 from pathlib import Path
 import re
@@ -90,10 +91,38 @@ def portable_whisper(source: Path, destination: Path) -> None:
                        check=True, capture_output=True, text=True)
 
 
+def uv_license_files(binary: Path, version: str) -> list[Path]:
+    """同じuvの配布ライセンスを確認する。Homebrew・公式archive・wheelの配置を読む。
+
+    wheelはmetadata上の版と実行ファイルの所属を照合し、別venvの資料を流用しない。
+    不足は出力先を作る前に報告し、未完の家庭用セットを残さない。
+    """
+    names = ("LICENSE-MIT", "LICENSE-APACHE")
+    for directory in (binary.parent.parent, binary.parent):
+        files = [directory / name for name in names]
+        if all(path.is_file() for path in files):
+            return files
+    for site in binary.parent.parent.glob("lib/python*/site-packages"):
+        for distribution in metadata.distributions(path=[str(site)]):
+            if distribution.metadata["Name"] != "uv" or distribution.version != version:
+                continue
+            entries = distribution.files or []
+            if not any(Path(distribution.locate_file(entry)).resolve() == binary for entry in entries):
+                continue
+            files = [Path(distribution.locate_file(entry)) for name in names for entry in entries
+                     if entry.name == name and ".dist-info/licenses/" in str(entry)]
+            if len(files) == len(names) and all(path.is_file() for path in files):
+                return files
+    raise ValueError("指定uvのLICENSE-MIT／LICENSE-APACHEが不足しています。公式配布物を確認してください。")
+
+
 def build(args: argparse.Namespace) -> None:
     source, target = args.source_root.resolve(), args.output.resolve()
     if target.exists() or target.with_suffix(".zip").exists():
         raise ValueError("出力先は未使用のフォルダ名を指定してください")
+    # Python取得より前に使う同梱uvを、出力先を作る前に検査する。
+    uv_version = output("sh", source / "scripts/check_uv.sh", args.uv.resolve()).strip()
+    uv_licenses = uv_license_files(args.uv.resolve(), uv_version)
     validate_runtime(source)
     # A prepared Apple Silicon release is shipped; the receiving Mac needs no Rust compiler.
     binary = source / RUST_BINARY
@@ -147,8 +176,9 @@ def build(args: argparse.Namespace) -> None:
               target / ".dogido_tools/models/ggml-kotoba-whisper-v2.0-q5_0.bin")
     copy_file(args.vad_model, target / ".dogido_tools/models/ggml-silero-v6.2.0.bin")
     copy_file(args.uv.resolve(), target / ".dogido_tools/uv")
-    for name in ("LICENSE-MIT", "LICENSE-APACHE"):
-        copy_file(args.uv.resolve().parents[1] / name, target / "licenses" / f"uv-{name}")
+    copy_file(source / "scripts/check_uv.sh", target / ".dogido_tools/check_uv.sh")
+    for license_path in uv_licenses:
+        copy_file(license_path, target / "licenses" / f"uv-{license_path.name}")
     copy_file(args.whisper_root / "LICENSE", target / "licenses/whisper-MIT.txt")
     (target / "licenses/SOURCES.md").write_text(
         "# 同梱部品の出典\n\n"
@@ -179,6 +209,7 @@ def build(args: argparse.Namespace) -> None:
         "source": "main working tree including current local fixes",
         "mode": "Rust independent single player; remote Qwen; local VOICEVOX and STT",
         "runtime": "rust",
+        "uv_version": uv_version,
         "files": {},
     }
     for path in sorted(target.rglob("*")):

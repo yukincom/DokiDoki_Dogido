@@ -10,6 +10,7 @@ fi
 print -- "息子さん用ドギドの準備をします。"
 print -- "Minecraft と Minecraft Launcher を、それぞれ ⌘Q で終了してください。"
 read -r "reply?終了したらこの画面へ戻り、Enter で初期設定を開始します（中止は Ctrl+C）: "
+sh ./.dogido_tools/check_uv.sh ./.dogido_tools/uv
 export UV_PYTHON_INSTALL_DIR="$PWD/.dogido_tools/python"
 export UV_CACHE_DIR="$PWD/.dogido_tools/uv-cache"
 task_stage="1/3 ドギド専用Python環境と依存部品"
