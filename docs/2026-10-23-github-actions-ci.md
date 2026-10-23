@@ -16,6 +16,6 @@ Apple Foundation Models／Foundry LocalのSDK依存・設定・worker・Rust接�
 
 ## 検証範囲
 
-統合後の公開用treeでRust全34 targetは874件成功・実音声1件skip、Python補助は196件成功・11件skip・22 subtest成功、本棚JavaScriptは76件成功。実装・テスト・設定が検証済みの開発mainと一致し、追加差分が依頼されたコメントとdocsだけであることも確認した。読取りレビューで旧経路の残留がないこと、BERT失敗時の非fallback・原文と版の検査・敵観測による再開の回帰テストを確認した。更新ブランチとmainへのpushでもCIを検証する。
+統合後の公開用treeでRust全34 targetは848件成功・実音声1件skip、Python補助は196件成功・11件skip・22 subtest成功、本棚JavaScriptは76件成功。実装・テスト・設定が検証済みの開発mainと一致し、追加差分が依頼されたコメントとdocsだけであることも確認した。読取りレビューで旧経路の残留がないこと、BERT失敗時の非fallback・原文と版の検査・敵観測による再開の回帰テストを確認した。更新ブランチとmainへのpushでもCIを検証する。
 
 実機のMinecraft・音声・macOSアプリ、家庭用セットの配布はCIの対象外。既存の実機用opt-inテストも自動では有効にしない。状況要約の保持案と実機での発話品質は、静止時の視覚仕様に記録した未実装・未確認の範囲を維持する。
