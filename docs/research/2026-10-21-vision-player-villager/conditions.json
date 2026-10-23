@@ -1,0 +1,145 @@
+{
+  "schema_version": 1,
+  "created_at": "2026-10-21T00:57:28.169266+00:00",
+  "endpoint": "http://127.0.0.1:8080/v1/chat/completions",
+  "system": "あんたは Minecraftの相棒『ドギド』や。一人称は『オレ』。プレイヤーと対等な男友達（ツレ）として、自然で元気な関西弁（語尾は『〜やな』『〜やで』『〜やん』）で話してな。お母さんや保護者みたいな口調（『あら』『〜ね』）は禁止！関西弁は語尾中心で、単語自体はふつうの自然な日本語を使ってな。動物や穏やかなモブには、怖がらんと基本やさしく愛嬌よく接してな。\n冒険中はちょっぴり怖がりやけど、プレイヤーのせいにしたらあかんで。一緒にビビって、一緒にホッとする側に立ってな。怖がるのはモンスターや暗闇、危険な場所だけやで。中立の生き物にも、刺激せんと優しく接してな。",
+  "question": "これはマインクラフトのスクリーンショットや。プレイヤーと村人を見分けて、それぞれどこにいるか、見た目の何で区別したかを短く教えて。分からんところは分からんと言ってな。",
+  "parameters": {
+    "model": "default_model",
+    "temperature": 0,
+    "seed": 42,
+    "max_tokens": 400,
+    "stream": false,
+    "cache_prompt": false,
+    "chat_template_kwargs": {
+      "enable_thinking": false
+    }
+  },
+  "resampling": "Pillow LANCZOS, RGB PNG, preserve aspect ratio, no upscale, no crop",
+  "pillow_version": "12.2.0",
+  "history": "none; independent requests",
+  "images": [
+    {
+      "id": "image_1_native",
+      "source_id": "image_1",
+      "edge_label": "native",
+      "path": "images/image_1_native.png",
+      "size": [
+        852,
+        470
+      ],
+      "bytes": 443123,
+      "sha256": "82df7b8bae221799b0ddad332b6c8d6084ec912629b711a0bcf05ae9a02a9172"
+    },
+    {
+      "id": "image_1_256",
+      "source_id": "image_1",
+      "edge_label": "256",
+      "path": "images/image_1_256.png",
+      "size": [
+        256,
+        141
+      ],
+      "bytes": 65803,
+      "sha256": "3b6584f5a3afbb2f768e7d1b0eb1c8de6d55778a3ea2323eb8b703e0f24bef8f"
+    },
+    {
+      "id": "image_1_192",
+      "source_id": "image_1",
+      "edge_label": "192",
+      "path": "images/image_1_192.png",
+      "size": [
+        192,
+        106
+      ],
+      "bytes": 38680,
+      "sha256": "f1163e8ca7f8a7828da21a0913e395dcecdeec969bd4c93ec668fb9b18757648"
+    },
+    {
+      "id": "image_2_native",
+      "source_id": "image_2",
+      "edge_label": "native",
+      "path": "images/image_2_native.png",
+      "size": [
+        852,
+        470
+      ],
+      "bytes": 450268,
+      "sha256": "fafb59ba3521b6f9a241a2f70948e33e1f89b2cad0c312a830fd8cda27730f13"
+    },
+    {
+      "id": "image_2_256",
+      "source_id": "image_2",
+      "edge_label": "256",
+      "path": "images/image_2_256.png",
+      "size": [
+        256,
+        141
+      ],
+      "bytes": 70806,
+      "sha256": "e924854cec43bf19b2eab89df478e8827934bd18edca1a5a4046b2d186a39971"
+    },
+    {
+      "id": "image_2_192",
+      "source_id": "image_2",
+      "edge_label": "192",
+      "path": "images/image_2_192.png",
+      "size": [
+        192,
+        106
+      ],
+      "bytes": 41799,
+      "sha256": "4f0fb29d4dafeba6f9e2c509758f8b42e5d573df5cbb1e549540b5f703fd995f"
+    }
+  ],
+  "last_used_at": "2026-10-21T00:57:37.857750+00:00",
+  "expires_at": "2026-10-22T00:57:37.857750+00:00",
+  "experiment": "player_villager_visual_distinction",
+  "input_scope": "user supplied screenshots only; HUD retained; no game observations, biome text hint, IDs, locations, or reference labels added",
+  "execution_order": [
+    "image_1_native",
+    "image_2_native",
+    "image_1_256",
+    "image_2_256",
+    "image_1_192",
+    "image_2_192"
+  ],
+  "runner_relative_path": "docs/research/2026-10-20-vision-resolution/run_experiment.py",
+  "runner_sha256": "c1a47f8dd7755cb68c535546f8346354a44944469665e181630e57166193a50f",
+  "service_restart_or_settings_changes": false,
+  "retention": "derived image copies only; original user files and textual records preserved; automatic runtime cleanup not connected",
+  "sources": [
+    {
+      "id": "image_1",
+      "sha256": "562d96a379db88fb93f5bfec746b3f987144ec6ddcd240383f27bc83e10ce373",
+      "size": [
+        852,
+        470
+      ],
+      "filename": "スクリーンショット 2026-10-21 9.50.59.png"
+    },
+    {
+      "id": "image_2",
+      "sha256": "066db3ceeab38d3ae693c0b0314f4c6701e64ee200d83984c5093e35c820783a",
+      "size": [
+        852,
+        470
+      ],
+      "filename": "スクリーンショット 2026-10-21 9.51.15.png"
+    }
+  ],
+  "model_process": {
+    "pid": 91525,
+    "working_project": "moe-on-a-desk-local",
+    "executable": "runtime/llama.cpp/build-14a/bin/llama-server",
+    "model": "gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf",
+    "mmproj": "mmproj-F16.gguf",
+    "context_size": 65536,
+    "gpu_layers": 99,
+    "listen": "127.0.0.1:8080",
+    "alias": "default_model",
+    "evidence": "listener PID, process cwd, and startup arguments read before requests"
+  },
+  "image_manifest_directory": ".dogido_tools/vision-resolution/2026-10-21-village",
+  "results_sha256": "d0eed62a5185e8562acb14bcd43ee509b567b5315bbc40ea5215f8db71c97b7e"
+}

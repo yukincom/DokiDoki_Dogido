@@ -2,13 +2,15 @@
 
 DokiDoki Dogido の設計・仕様ドキュメントです。
 
-本体の現行入口は [Rust本体の案内](../dogido-rust/README.md)。旧Python本体・比較oracleの運用は終了しました。Pythonには設定・辞書token・音声機器・端末AI・Web SDKの接続補助を残します。残存モジュールと資料は [Rust本体の補助一覧](../dogido-rust/README.md#残すpython補助と資料) を参照してください。終了した文書は冒頭の状態と後継リンクを読み、過去の起動コマンドや未接続の記述を現在の指示として使わないでください。
+本体の現行入口は [Rust本体の案内](../dogido-rust/README.md) です。旧Python本体および比較oracleの運用は終了しました。現在Python側には、起動設定・辞書トークン・音声入出力機器・端末AIの接続補助のみを残しています。残存モジュールと資料の一覧は [Rust本体の補助一覧](../dogido-rust/README.md#残すpython補助と資料) を参照してください。過去に完了・終了した文書については冒頭のステータスと後継リンクを確認し、過去の起動コマンドや未接続の記述を現在の指示として扱わないようご注意ください。
 
 | 入口 | 対象 |
 |---|---|
 | [../README.md](../README.md) | 製品コンセプト・クイックスタート |
 | [../AGENTS.md](../AGENTS.md) | 実装エージェント向けの制約と作業ガイド |
+| [ローカルの軽量処理優先とLLM呼出監査](2026-10-18-dialogue-model-call-audit.md) | コード・分類器を優先する方針、呼出回数、分類追加と移行の状況 |
 | [../dev_tools/README.md](../dev_tools/README.md) | 表示プレビュー・音声診断・対話評価・独立試作 |
+| [通常会話のドギド視点画像](2026-10-21-chat-image.md) | 一枚撮影・192px・同時生成・一時画像の保持 |
 | [Minecraftのテキスト会話](2026-10-09-minecraft-text-dialogue.md) | `/dogido`、音声の切替、表示確認の仕様と確認状況 |
 | [2026-10-11の全体検査](2026-10-11-checkpoint-verification.md) | コミット整理前の成功・失敗内訳と実機確認報告 |
 | [実機チェック](../dogido-rust/manual-dialogue-check.md) | 起動条件、最初の一巡、個別の確認、結果の記録 |
@@ -28,14 +30,14 @@ DokiDoki Dogido の設計・仕様ドキュメントです。
 | **終了・履歴** | 過去の実装・試験記録。現行の起動・編集手順には使わない | 旧Python再配置・py_trees・独立国語試験・`debug-checklist`・初期RAG案 |
 | **調査 (`research/`)** | 追加の作業メモ。**現行仕様ではない**が、捨てた資料ではない | `research/haiku` · TTS 地図 · `research/mob_list` |
 
-**状態（済 / 未 / 一部）は各ドキュメント本体と GitHub issue を正とする。**  
-索引で横断の「済」表を置かない。
+**機能のステータス（完了 / 未着手 / 一部実装）は、各ドキュメント本体および GitHub Issue の記述を正とします。**
+本索引ページで横断的な「完了」一覧表を設けて管理することはしません。
 
-実装上の禁止事項は [../AGENTS.md](../AGENTS.md) を正とする。
+実装上の制約・禁止事項は [../AGENTS.md](../AGENTS.md) を正として遵守してください。
 
 ### 関連issueと読む文書
 
-issueの開閉状態はリンク先で確認する。本文を更新するときは現行実装と検証記録へ照合し、過去の実機結果を変更後の本体の確認済みへ読み替えない。
+Issueの開閉（Open/Close）状態はリンク先にて確認してください。ドキュメント本文を更新する際は、現行のコード実装および検証記録と厳格に照合し、過去の実機試験結果を変更後の本体での確認完了として読み替えないでください。
 
 | Issue | 主題 | 主ドキュメント |
 |---|---|---|
@@ -85,6 +87,9 @@ issueの開閉状態はリンク先で確認する。本文を更新するとき
 | 9 | [3D身体とRust本線の連携境界](../dogido-rust/docs/body-integration-boundary.md) | Body API v3、自他位置のP1接続、身体と本線の分担・残る接続 |
 | 10 | [身体統合の作業計画](2026-10-11-body-integration-plan.md) | 開発・統合履歴、観測地点の移行、P1受け入れ条件 |
 | 11 | [3D身体P1の本線導入記録](2026-10-12-body-p1-install.md) | 導入版・検査結果・起動確認・次の実機操作・復旧点 |
+| 12 | [現在観測と位置関係の変化](2026-10-15-body-position-observation.md) | 両視点・上下・距離を現在観測へ入れ、変化した結果を既存changesへ渡す |
+| 13 | [身体の注意範囲と集中](2026-10-17-body-attention.md) | 向き付き探索範囲、3秒の判断間隔、実到着後5秒の観察 |
+| 13a | [発話中の対象を見る](2026-10-18-body-speech-gaze.md) | 実再生中のモブ・音源への注視と終了時の解除 |
 
 Minecraft クライアント側の手順は [adapter/minecraft-fabric/README.md](../adapter/minecraft-fabric/README.md) を参照してください。
 
@@ -141,18 +146,20 @@ casual（原則） ──┬── sm-vs-prompt（分担・履歴）
 | # | 文書 | 内容 |
 |---|---|---|
 | 1 | [haiku-architecture.md](haiku-architecture.md) | 発句パイプライン |
-| 2 | [haiku-player-improvement-plan.md](haiku-player-improvement-plan.md) | プレイヤー主導の改善（workshop・OS／端末内AIの限定意味抽出） |
-| 3 | [haiku-workshop-intake-patterns.md](haiku-workshop-intake-patterns.md) | 取り込みパターン調査（観察の正本は **#8**） |
-| 4 | [haiku-feedback-plan.md](haiku-feedback-plan.md) | フィードバックと長期保存 |
-| 5 | [memory-architecture.md](memory-architecture.md) | 記憶モデル |
-| 6 | [multi-user-tenancy.md](multi-user-tenancy.md) | 複数ユーザー・記憶境界（**#20**） |
-| 7 | [senryu-roadmap.md](senryu-roadmap.md) | ロードマップ |
-| 8 | [senryu-rag-plan.md](senryu-rag-plan.md) | カタログ直引きと RAG 方針 |
-| 9 | [rag.md](rag.md) | 初期RAG案の履歴。現行方針は`senryu-rag-plan` |
-| 10 | [dogido-display-overlay-plan.md](dogido-display-overlay-plan.md) | ゲーム内セリフ表示 UI（計画・#28 関連） |
-| 11 | [knowledge-query-integration.md](knowledge-query-integration.md) | 国語・詩形・Minecraft公式技術DBを明示質問だけに接続する境界 |
-| 12 | [language-learning-progress-plan.md](language-learning-progress-plan.md) | 子ども向けの説明保留、脱線・再開、学習指導要領対応チェックリストの境界 |
-| 13 | [dogido-utterance-display.md](dogido-utterance-display.md) | ゲーム外の発言履歴、参考資料、STT・LLM・川柳の診断ログ、夜の実機確認手順 |
+| 1a | [川柳の材料選びの修正記録](2026-10-20-haiku-material-selection.md) | 周辺材料の候補順、身体観測待ち、見どころの指示文と検証 |
+| 2 | [2026-10-18-temporary-senryu-data-collection.md](2026-10-18-temporary-senryu-data-collection.md) | 川柳データ採取中の一時設定と終了後の復帰手順 |
+| 3 | [haiku-player-improvement-plan.md](haiku-player-improvement-plan.md) | プレイヤー主導の改善（workshop・OS／端末内AIの限定意味抽出） |
+| 4 | [haiku-workshop-intake-patterns.md](haiku-workshop-intake-patterns.md) | 取り込みパターン調査（観察の正本は **#8**） |
+| 5 | [haiku-feedback-plan.md](haiku-feedback-plan.md) | フィードバックと長期保存 |
+| 6 | [memory-architecture.md](memory-architecture.md) | 記憶モデル |
+| 7 | [multi-user-tenancy.md](multi-user-tenancy.md) | 複数ユーザー・記憶境界（**#20**） |
+| 8 | [senryu-roadmap.md](senryu-roadmap.md) | ロードマップ |
+| 9 | [senryu-rag-plan.md](senryu-rag-plan.md) | カタログ直引きと RAG 方針 |
+| 10 | [rag.md](rag.md) | 初期RAG案の履歴。現行方針は`senryu-rag-plan` |
+| 11 | [dogido-display-overlay-plan.md](dogido-display-overlay-plan.md) | ゲーム内セリフ表示 UI（計画・#28 関連） |
+| 12 | [knowledge-query-integration.md](knowledge-query-integration.md) | 詩・Minecraft公式技術DBを明示質問だけに接続する境界 |
+| 13 | [language-learning-progress-plan.md](language-learning-progress-plan.md) | 終了: 別リポジトリで保持する旧learnの計画 |
+| 14 | [dogido-utterance-display.md](dogido-utterance-display.md) | ゲーム外の発言履歴、参考資料、STT・LLM・川柳の診断ログ、夜の実機確認手順 |
 
 **つながり:**
 
@@ -265,6 +272,12 @@ architecture（どう詠む）
 
 調査・レビュー用の作業メモです。**仕様の正本ではありません。** ただし現役の検討材料として残っています。
 
+- [身体視点・座標枠・192pxの単発診断](research/2026-10-21-body-view-probe.md) … 実機の一枚で撮影・枠・受信を確認、Gemmaが中央のプレイヤーと右の村人を区別
+- [村人とプレイヤーの画像判別](research/2026-10-21-vision-player-villager.md) … 提供2枚・3解像度の6回答、取り違えと細部・構図依存の確認
+- [視野進入の先読み・初回実測](research/2026-10-21-vision-entry-run-01.md) … 飛行を含む180秒の予備試験、的中・外れと待ち時間試算の限界
+- [画像の遅延・changes・予測補正の接続監査](research/2026-10-21-vision-temporal-integration.md) … LLM一回・予測補正はコードの合意、次回の座標実測手順と未接続の範囲
+- [Minecraft画像の解像度・バイオーム・人物判別](research/2026-10-20-vision-resolution.md) … 提供4枚・48回の直接Gemma試験、一時画像枠の要件と未接続の境界
+- [安心ゲージ導入後の対人アライメント失敗](research/2026-10-20-reassurance-alignment.md) … 変更経緯、2026-10-20の実機発話、ログ照合、画像入力に関する仮説
 - [research/haiku.md](research/haiku.md)
 - [research/biome.md](research/biome.md)
 - [research/guardrail.md](research/guardrail.md)

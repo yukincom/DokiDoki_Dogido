@@ -1,0 +1,2596 @@
+{
+  "schema_version": 1,
+  "audit_created_at": "2026-10-20T17:43:45.358699+09:00",
+  "source_log": ".dogido_tools/server-manager/logs/server.log",
+  "session_id": "ses_185244d74c18",
+  "window_jst": {
+    "from": "2026-10-20T17:30:00+09:00",
+    "to": "2026-10-20T17:35:10+09:00"
+  },
+  "source_excerpt_lines": {
+    "first": 772546,
+    "last": 779394
+  },
+  "source_line_definition": "1-based LF-delimited physical lines, matching rg -n and sed. Universal-newline readers also count embedded CR and can give different line numbers.",
+  "session_registration": {
+    "evidence": {
+      "source_line_start": 772633,
+      "source_line_end": 772634,
+      "event": "adapter_session_created",
+      "timestamp_jst": "2026-10-20 17:30:15.180 +09:00"
+    },
+    "raw_header": "2026-10-20 17:30:15.180 +09:00 [INFO] event=\"adapter_session_created\" message=\"接続を登録しました session_id=ses_185244d74c18\""
+  },
+  "evidence_limits": [
+    "User-pasted UI timestamps are not independently tied to adjacent text. The exact turn IDs and server queued/started/completed timestamps are authoritative for this audit.",
+    "warning_status completed is logged audio playback completion. A separate text_displayed ACK was not found in the audited interval, so text delivery time is unknown.",
+    "Utterance text is recovered from subsequent reaction history entries containing the exact turn_id:reply. A queued action text can be a fallback and must not be treated as the spoken generated text.",
+    "Reassurance and distance are observed input values at queue time, not reconstructed values at audio playback time.",
+    "No raw model body_action field is logged in the audited interval. Validated command purpose, null command, and rejection are kept separate.",
+    "No causal conclusion is drawn from reassurance value, distance, visibility, repeated speech, or body rejection.",
+    "Environment-reaction model name/provider/route are not recorded here. Adjacent haiku model metadata is retained separately and is not attributed to reassurance speech.",
+    "Model weights, quantization, and running binary SHA were not present in the audited log range; they remain unknown."
+  ],
+  "turns": [
+    {
+      "turn_id": "warning_b556da0f79f043beb968352b34977ddd",
+      "primary_target": true,
+      "utterance": {
+        "text": "なぁ、ツレ！どこ行ったんや？オレ、置いてけたらあかんで！",
+        "basis": "completed assistant reply referenced by exact turn_id in later reaction input history",
+        "evidence": {
+          "source_line_start": 773074,
+          "source_line_end": 773076,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:30:39.080 +09:00"
+        }
+      },
+      "queued": {
+        "timestamp_jst": "2026-10-20 17:30:27.081 +09:00",
+        "source_line": 772648
+      },
+      "audio_statuses": {
+        "started": {
+          "timestamp_jst": "2026-10-20 17:30:31.116 +09:00",
+          "source_line": 772991
+        },
+        "completed": {
+          "timestamp_jst": "2026-10-20 17:30:38.963 +09:00",
+          "source_line": 773040
+        }
+      },
+      "text_displayed_ack": null,
+      "generation_source": {
+        "action_kind": "reassurance_notice",
+        "leaf_kind": "environment_reaction",
+        "topic": "reassurance",
+        "temperature": 0.65,
+        "queued_action_text": "",
+        "queued_action_text_is_final_speech": false,
+        "source_evidence": {
+          "source_line_start": 772648,
+          "source_line_end": 772666,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:30:27.081 +09:00"
+        },
+        "model_route": null,
+        "requested_model": null,
+        "response_model": null,
+        "provider": null,
+        "model_fields_note": "not recorded for this warning in the audited interval"
+      },
+      "observation_at_queue": {
+        "reassurance": {
+          "value": 46.737495529805976,
+          "owner_distance": 8.21453435190702,
+          "owner_visible": false,
+          "face_visible": false,
+          "owner_working": false,
+          "label": "安心度",
+          "scale": [
+            0,
+            100
+          ]
+        },
+        "reassurance_evidence": {
+          "source_line_start": 772764,
+          "source_line_end": 772775,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:30:27.081 +09:00"
+        },
+        "player_vision": {
+          "basis": "body_eye_raycast_fov",
+          "range_blocks": 16.0,
+          "horizontal_fov_degrees": 120.0,
+          "vertical_fov_degrees": 90.0,
+          "player_visibility": "not_visible",
+          "reason": "outside_fov"
+        },
+        "vision_evidence": {
+          "source_line_start": 772685,
+          "source_line_end": 772692,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:30:27.081 +09:00"
+        },
+        "observed_at_utc": "2026-10-20T08:30:27.080334Z"
+      },
+      "body_preparation": {
+        "after_owner_arrival": false,
+        "owner_working": false,
+        "available_actions": [
+          "stay",
+          "owner_near",
+          "owner_face"
+        ],
+        "evidence": {
+          "source_line_start": 772952,
+          "source_line_end": 772959,
+          "event": "environment_body_prepared",
+          "timestamp_jst": "2026-10-20 17:30:27.082 +09:00"
+        }
+      },
+      "body_selection": {
+        "raw_model_body_action": null,
+        "validated_command_purpose": "owner_near",
+        "command": {
+          "command_id": "a26bb95e-c79c-44b8-83a6-170faea5a9ff",
+          "type": "inspect_body_target",
+          "issued_at": "2026-10-20T08:30:30.842458Z",
+          "expires_at": "2026-10-20T08:30:35.842458Z",
+          "context": {
+            "owner_id": "e18eff4d-fe3f-4aaf-9f00-0346f5da6fa8",
+            "body_id": "5741d606-bd70-4d05-8b7e-df47ded85efc",
+            "epoch": "764553a2-fcf5-4ffc-b8e2-168644775b34",
+            "dimension": "minecraft:overworld"
+          },
+          "purpose": "owner_near",
+          "target": null
+        },
+        "event": "environment_body_selected",
+        "evidence": {
+          "source_line_start": 772968,
+          "source_line_end": 772984,
+          "event": "environment_body_selected",
+          "timestamp_jst": "2026-10-20 17:30:30.842 +09:00"
+        },
+        "rejection": null,
+        "note": "raw model body_action is not logged; validated command purpose is recorded when a command exists. command=null alone is not interpreted as a specific model action."
+      },
+      "body_execution_results": [
+        {
+          "event": "assist_result",
+          "result": {
+            "command_id": "a26bb95e-c79c-44b8-83a6-170faea5a9ff",
+            "command_type": "inspect_body_target",
+            "status": "succeeded",
+            "executed_at": "2026-10-20T08:30:34.571362Z",
+            "selected_slot": null,
+            "selected_item_id": null,
+            "detail_code": "arrived",
+            "body_id": "5741d606-bd70-4d05-8b7e-df47ded85efc",
+            "epoch": "764553a2-fcf5-4ffc-b8e2-168644775b34"
+          },
+          "known_command": false,
+          "evidence": {
+            "source_line_start": 773001,
+            "source_line_end": 773017,
+            "event": "assist_result",
+            "timestamp_jst": "2026-10-20 17:30:35.080 +09:00"
+          }
+        },
+        {
+          "event": "body_interest_result",
+          "result": {
+            "command_id": "a26bb95e-c79c-44b8-83a6-170faea5a9ff",
+            "type": "inspect_body_target",
+            "status": "succeeded",
+            "detail_code": "arrived",
+            "executed_at": "2026-10-20T08:30:34.571362Z",
+            "context": {
+              "owner_id": "e18eff4d-fe3f-4aaf-9f00-0346f5da6fa8",
+              "body_id": "5741d606-bd70-4d05-8b7e-df47ded85efc",
+              "epoch": "764553a2-fcf5-4ffc-b8e2-168644775b34",
+              "dimension": "minecraft:overworld"
+            }
+          },
+          "known_command": null,
+          "evidence": {
+            "source_line_start": 773018,
+            "source_line_end": 773033,
+            "event": "body_interest_result",
+            "timestamp_jst": "2026-10-20 17:30:35.081 +09:00"
+          }
+        }
+      ],
+      "preceding_warning_invalidation": null,
+      "generation_outcome_events": [
+        {
+          "outcome": "speak",
+          "evidence": {
+            "source_line_start": 772960,
+            "source_line_end": 772961,
+            "event": "environment_reaction",
+            "timestamp_jst": "2026-10-20 17:30:30.759 +09:00"
+          },
+          "association": "temporally between this turn prepared and selected/rejected; reaction event has no turn_id"
+        }
+      ]
+    },
+    {
+      "turn_id": "warning_c52db96691774e5183b414790cce8930",
+      "primary_target": true,
+      "utterance": {
+        "text": "あ、ツレ！やっと見つけたやん！どこ行ってたんや！",
+        "basis": "completed assistant reply referenced by exact turn_id in later reaction input history",
+        "evidence": {
+          "source_line_start": 773589,
+          "source_line_end": 773591,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:30:57.078 +09:00"
+        }
+      },
+      "queued": {
+        "timestamp_jst": "2026-10-20 17:30:39.080 +09:00",
+        "source_line": 773042
+      },
+      "audio_statuses": {
+        "started": {
+          "timestamp_jst": "2026-10-20 17:30:41.278 +09:00",
+          "source_line": 773501
+        },
+        "completed": {
+          "timestamp_jst": "2026-10-20 17:30:47.846 +09:00",
+          "source_line": 773517
+        }
+      },
+      "text_displayed_ack": null,
+      "generation_source": {
+        "action_kind": "reassurance_notice",
+        "leaf_kind": "environment_reaction",
+        "topic": "reassurance",
+        "temperature": 0.65,
+        "queued_action_text": "",
+        "queued_action_text_is_final_speech": false,
+        "source_evidence": {
+          "source_line_start": 773042,
+          "source_line_end": 773060,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:30:39.080 +09:00"
+        },
+        "model_route": null,
+        "requested_model": null,
+        "response_model": null,
+        "provider": null,
+        "model_fields_note": "not recorded for this warning in the audited interval"
+      },
+      "observation_at_queue": {
+        "reassurance": {
+          "value": 49.19057350901067,
+          "owner_distance": 3.719170096815707,
+          "owner_visible": true,
+          "face_visible": false,
+          "owner_working": false,
+          "label": "安心度",
+          "scale": [
+            0,
+            100
+          ]
+        },
+        "reassurance_evidence": {
+          "source_line_start": 773164,
+          "source_line_end": 773175,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:30:39.080 +09:00"
+        },
+        "player_vision": {
+          "basis": "body_eye_raycast_fov",
+          "range_blocks": 16.0,
+          "horizontal_fov_degrees": 120.0,
+          "vertical_fov_degrees": 90.0,
+          "player_visibility": "visible",
+          "reason": "in_view"
+        },
+        "vision_evidence": {
+          "source_line_start": 773085,
+          "source_line_end": 773092,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:30:39.080 +09:00"
+        },
+        "observed_at_utc": "2026-10-20T08:30:39.079572Z"
+      },
+      "body_preparation": {
+        "after_owner_arrival": true,
+        "owner_working": false,
+        "available_actions": [
+          "stay",
+          "owner_face"
+        ],
+        "evidence": {
+          "source_line_start": 773463,
+          "source_line_end": 773469,
+          "event": "environment_body_prepared",
+          "timestamp_jst": "2026-10-20 17:30:39.083 +09:00"
+        }
+      },
+      "body_selection": {
+        "raw_model_body_action": null,
+        "validated_command_purpose": "owner_face",
+        "command": {
+          "command_id": "7db34339-2912-45ba-9d18-48acb07d6bf2",
+          "type": "inspect_body_target",
+          "issued_at": "2026-10-20T08:30:41.048175Z",
+          "expires_at": "2026-10-20T08:30:46.048175Z",
+          "context": {
+            "owner_id": "e18eff4d-fe3f-4aaf-9f00-0346f5da6fa8",
+            "body_id": "5741d606-bd70-4d05-8b7e-df47ded85efc",
+            "epoch": "764553a2-fcf5-4ffc-b8e2-168644775b34",
+            "dimension": "minecraft:overworld"
+          },
+          "purpose": "owner_face",
+          "target": null
+        },
+        "event": "environment_body_selected",
+        "evidence": {
+          "source_line_start": 773478,
+          "source_line_end": 773494,
+          "event": "environment_body_selected",
+          "timestamp_jst": "2026-10-20 17:30:41.048 +09:00"
+        },
+        "rejection": null,
+        "note": "raw model body_action is not logged; validated command purpose is recorded when a command exists. command=null alone is not interpreted as a specific model action."
+      },
+      "body_execution_results": [
+        {
+          "event": "assist_result",
+          "result": {
+            "command_id": "7db34339-2912-45ba-9d18-48acb07d6bf2",
+            "command_type": "inspect_body_target",
+            "status": "succeeded",
+            "executed_at": "2026-10-20T08:30:48.323294Z",
+            "selected_slot": null,
+            "selected_item_id": null,
+            "detail_code": "arrived",
+            "body_id": "5741d606-bd70-4d05-8b7e-df47ded85efc",
+            "epoch": "764553a2-fcf5-4ffc-b8e2-168644775b34"
+          },
+          "known_command": false,
+          "evidence": {
+            "source_line_start": 773519,
+            "source_line_end": 773535,
+            "event": "assist_result",
+            "timestamp_jst": "2026-10-20 17:30:48.670 +09:00"
+          }
+        },
+        {
+          "event": "body_interest_result",
+          "result": {
+            "command_id": "7db34339-2912-45ba-9d18-48acb07d6bf2",
+            "type": "inspect_body_target",
+            "status": "succeeded",
+            "detail_code": "arrived",
+            "executed_at": "2026-10-20T08:30:48.323294Z",
+            "context": {
+              "owner_id": "e18eff4d-fe3f-4aaf-9f00-0346f5da6fa8",
+              "body_id": "5741d606-bd70-4d05-8b7e-df47ded85efc",
+              "epoch": "764553a2-fcf5-4ffc-b8e2-168644775b34",
+              "dimension": "minecraft:overworld"
+            }
+          },
+          "known_command": null,
+          "evidence": {
+            "source_line_start": 773536,
+            "source_line_end": 773551,
+            "event": "body_interest_result",
+            "timestamp_jst": "2026-10-20 17:30:48.674 +09:00"
+          }
+        }
+      ],
+      "preceding_warning_invalidation": null,
+      "generation_outcome_events": [
+        {
+          "outcome": "speak",
+          "evidence": {
+            "source_line_start": 773470,
+            "source_line_end": 773471,
+            "event": "environment_reaction",
+            "timestamp_jst": "2026-10-20 17:30:41.016 +09:00"
+          },
+          "association": "temporally between this turn prepared and selected/rejected; reaction event has no turn_id"
+        }
+      ]
+    },
+    {
+      "turn_id": "warning_5e58f835e5cc4a4ebcf81f615c44614f",
+      "primary_target": true,
+      "utterance": {
+        "text": "もう、心臓止まるかと思ったやん！次からは離れんといてな！",
+        "basis": "completed assistant reply referenced by exact turn_id in later reaction input history",
+        "evidence": {
+          "source_line_start": 774070,
+          "source_line_end": 774072,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:31:06.621 +09:00"
+        }
+      },
+      "queued": {
+        "timestamp_jst": "2026-10-20 17:30:57.078 +09:00",
+        "source_line": 773552
+      },
+      "audio_statuses": {
+        "started": {
+          "timestamp_jst": "2026-10-20 17:30:59.539 +09:00",
+          "source_line": 774016
+        },
+        "completed": {
+          "timestamp_jst": "2026-10-20 17:31:06.289 +09:00",
+          "source_line": 774026
+        }
+      },
+      "text_displayed_ack": null,
+      "generation_source": {
+        "action_kind": "reassurance_notice",
+        "leaf_kind": "environment_reaction",
+        "topic": "reassurance",
+        "temperature": 0.65,
+        "queued_action_text": "",
+        "queued_action_text_is_final_speech": false,
+        "source_evidence": {
+          "source_line_start": 773552,
+          "source_line_end": 773570,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:30:57.078 +09:00"
+        },
+        "model_route": null,
+        "requested_model": null,
+        "response_model": null,
+        "provider": null,
+        "model_fields_note": "not recorded for this warning in the audited interval"
+      },
+      "observation_at_queue": {
+        "reassurance": {
+          "value": 53.17866042770947,
+          "owner_distance": 2.217309955055809,
+          "owner_visible": true,
+          "face_visible": false,
+          "owner_working": false,
+          "label": "安心度",
+          "scale": [
+            0,
+            100
+          ]
+        },
+        "reassurance_evidence": {
+          "source_line_start": 773674,
+          "source_line_end": 773685,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:30:57.078 +09:00"
+        },
+        "player_vision": {
+          "basis": "body_eye_raycast_fov",
+          "range_blocks": 16.0,
+          "horizontal_fov_degrees": 120.0,
+          "vertical_fov_degrees": 90.0,
+          "player_visibility": "visible",
+          "reason": "in_view"
+        },
+        "vision_evidence": {
+          "source_line_start": 773600,
+          "source_line_end": 773607,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:30:57.078 +09:00"
+        },
+        "observed_at_utc": "2026-10-20T08:30:57.077161Z"
+      },
+      "body_preparation": {
+        "after_owner_arrival": true,
+        "owner_working": false,
+        "available_actions": [
+          "stay",
+          "owner_face"
+        ],
+        "evidence": {
+          "source_line_start": 773993,
+          "source_line_end": 773999,
+          "event": "environment_body_prepared",
+          "timestamp_jst": "2026-10-20 17:30:57.081 +09:00"
+        }
+      },
+      "body_selection": {
+        "raw_model_body_action": null,
+        "validated_command_purpose": null,
+        "command": null,
+        "event": null,
+        "evidence": null,
+        "rejection": {
+          "error": "body_autonomy_not_ready",
+          "evidence": {
+            "source_line_start": 774008,
+            "source_line_end": 774009,
+            "event": "environment_body_rejected",
+            "timestamp_jst": "2026-10-20 17:30:59.170 +09:00"
+          }
+        },
+        "note": "raw model body_action is not logged; validated command purpose is recorded when a command exists. command=null alone is not interpreted as a specific model action."
+      },
+      "body_execution_results": [],
+      "preceding_warning_invalidation": null,
+      "generation_outcome_events": [
+        {
+          "outcome": "speak",
+          "evidence": {
+            "source_line_start": 774000,
+            "source_line_end": 774001,
+            "event": "environment_reaction",
+            "timestamp_jst": "2026-10-20 17:30:59.131 +09:00"
+          },
+          "association": "temporally between this turn prepared and selected/rejected; reaction event has no turn_id"
+        }
+      ]
+    },
+    {
+      "turn_id": "warning_b07553270ed84103afeed4ed7fdd7c6a",
+      "primary_target": true,
+      "utterance": {
+        "text": "やっと捕まえたやん！もう、次は絶対離れんといてな！",
+        "basis": "completed assistant reply referenced by exact turn_id in later reaction input history",
+        "evidence": {
+          "source_line_start": 774958,
+          "source_line_end": 774960,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:31:22.081 +09:00"
+        }
+      },
+      "queued": {
+        "timestamp_jst": "2026-10-20 17:31:06.621 +09:00",
+        "source_line": 774028
+      },
+      "audio_statuses": {
+        "started": {
+          "timestamp_jst": "2026-10-20 17:31:08.839 +09:00",
+          "source_line": 774461
+        },
+        "completed": {
+          "timestamp_jst": "2026-10-20 17:31:15.075 +09:00",
+          "source_line": 774471
+        }
+      },
+      "text_displayed_ack": null,
+      "generation_source": {
+        "action_kind": "reassurance_notice",
+        "leaf_kind": "environment_reaction",
+        "topic": "reassurance",
+        "temperature": 0.65,
+        "queued_action_text": "",
+        "queued_action_text_is_final_speech": false,
+        "source_evidence": {
+          "source_line_start": 774028,
+          "source_line_end": 774046,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:31:06.621 +09:00"
+        },
+        "model_route": null,
+        "requested_model": null,
+        "response_model": null,
+        "provider": null,
+        "model_fields_note": "not recorded for this warning in the audited interval"
+      },
+      "observation_at_queue": {
+        "reassurance": {
+          "value": 55.1686482886457,
+          "owner_distance": 1.6882541591921572,
+          "owner_visible": true,
+          "face_visible": true,
+          "owner_working": false,
+          "label": "安心度",
+          "scale": [
+            0,
+            100
+          ]
+        },
+        "reassurance_evidence": {
+          "source_line_start": 774155,
+          "source_line_end": 774166,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:31:06.621 +09:00"
+        },
+        "player_vision": {
+          "basis": "body_eye_raycast_fov",
+          "range_blocks": 16.0,
+          "horizontal_fov_degrees": 120.0,
+          "vertical_fov_degrees": 90.0,
+          "player_visibility": "visible",
+          "reason": "in_view"
+        },
+        "vision_evidence": {
+          "source_line_start": 774081,
+          "source_line_end": 774088,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:31:06.621 +09:00"
+        },
+        "observed_at_utc": "2026-10-20T08:31:06.618449Z"
+      },
+      "body_preparation": {
+        "after_owner_arrival": true,
+        "owner_working": false,
+        "available_actions": [
+          "stay",
+          "owner_face"
+        ],
+        "evidence": {
+          "source_line_start": 774423,
+          "source_line_end": 774429,
+          "event": "environment_body_prepared",
+          "timestamp_jst": "2026-10-20 17:31:06.622 +09:00"
+        }
+      },
+      "body_selection": {
+        "raw_model_body_action": null,
+        "validated_command_purpose": "owner_face",
+        "command": {
+          "command_id": "e2d3fd26-e8c2-4b19-aace-8f6a60b17020",
+          "type": "inspect_body_target",
+          "issued_at": "2026-10-20T08:31:08.607462Z",
+          "expires_at": "2026-10-20T08:31:13.607462Z",
+          "context": {
+            "owner_id": "e18eff4d-fe3f-4aaf-9f00-0346f5da6fa8",
+            "body_id": "5741d606-bd70-4d05-8b7e-df47ded85efc",
+            "epoch": "764553a2-fcf5-4ffc-b8e2-168644775b34",
+            "dimension": "minecraft:overworld"
+          },
+          "purpose": "owner_face",
+          "target": null
+        },
+        "event": "environment_body_selected",
+        "evidence": {
+          "source_line_start": 774438,
+          "source_line_end": 774454,
+          "event": "environment_body_selected",
+          "timestamp_jst": "2026-10-20 17:31:08.607 +09:00"
+        },
+        "rejection": null,
+        "note": "raw model body_action is not logged; validated command purpose is recorded when a command exists. command=null alone is not interpreted as a specific model action."
+      },
+      "body_execution_results": [
+        {
+          "event": "assist_result",
+          "result": {
+            "command_id": "e2d3fd26-e8c2-4b19-aace-8f6a60b17020",
+            "command_type": "inspect_body_target",
+            "status": "succeeded",
+            "executed_at": "2026-10-20T08:31:23.823934Z",
+            "selected_slot": null,
+            "selected_item_id": null,
+            "detail_code": "arrived",
+            "body_id": "5741d606-bd70-4d05-8b7e-df47ded85efc",
+            "epoch": "764553a2-fcf5-4ffc-b8e2-168644775b34"
+          },
+          "known_command": false,
+          "evidence": {
+            "source_line_start": 774971,
+            "source_line_end": 774987,
+            "event": "assist_result",
+            "timestamp_jst": "2026-10-20 17:31:24.082 +09:00"
+          }
+        }
+      ],
+      "preceding_warning_invalidation": null,
+      "generation_outcome_events": [
+        {
+          "outcome": "speak",
+          "evidence": {
+            "source_line_start": 774430,
+            "source_line_end": 774431,
+            "event": "environment_reaction",
+            "timestamp_jst": "2026-10-20 17:31:08.575 +09:00"
+          },
+          "association": "temporally between this turn prepared and selected/rejected; reaction event has no turn_id"
+        }
+      ]
+    },
+    {
+      "turn_id": "warning_1b1c227346044b889f231348cfdafeea",
+      "primary_target": false,
+      "utterance": null,
+      "queued": {
+        "timestamp_jst": "2026-10-20 17:31:22.081 +09:00",
+        "source_line": 774473
+      },
+      "audio_statuses": {
+        "cancelled": {
+          "timestamp_jst": "2026-10-20 17:31:24.086 +09:00",
+          "source_line": 775446
+        }
+      },
+      "text_displayed_ack": null,
+      "generation_source": {
+        "action_kind": "dark_push_no_light",
+        "leaf_kind": "dark_push_no_light",
+        "topic": null,
+        "temperature": 0.58,
+        "queued_action_text": "手元、見えへんの怖いわ……ほんま心臓が縮むって……。",
+        "queued_action_text_is_final_speech": false,
+        "source_evidence": {
+          "source_line_start": 774473,
+          "source_line_end": 774491,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:31:22.081 +09:00"
+        },
+        "model_route": null,
+        "requested_model": null,
+        "response_model": null,
+        "provider": null,
+        "model_fields_note": "not recorded for this warning in the audited interval"
+      },
+      "observation_at_queue": {
+        "reassurance": null,
+        "reassurance_evidence": null,
+        "player_vision": null,
+        "vision_evidence": null,
+        "observed_at_utc": null
+      },
+      "body_preparation": null,
+      "body_selection": {
+        "raw_model_body_action": null,
+        "validated_command_purpose": null,
+        "command": null,
+        "event": null,
+        "evidence": null,
+        "rejection": null,
+        "note": "raw model body_action is not logged; validated command purpose is recorded when a command exists. command=null alone is not interpreted as a specific model action."
+      },
+      "body_execution_results": [],
+      "preceding_warning_invalidation": {
+        "fields": {
+          "event": "warning_invalidated",
+          "session_id": "ses_185244d74c18",
+          "source_event": "Some(StatusSnapshot)",
+          "visual_count": "0",
+          "recent": true
+        },
+        "evidence": {
+          "source_line_start": 774988,
+          "source_line_end": 774989,
+          "event": "warning_invalidated",
+          "timestamp_jst": "2026-10-20 17:31:24.083 +09:00"
+        },
+        "association": "same-session invalidation preceding this cancelled status; invalidation log itself has no turn_id",
+        "specific_reason": null
+      },
+      "generation_outcome_events": []
+    },
+    {
+      "turn_id": "warning_aa05ef60590e43a8991bb65f176a055d",
+      "primary_target": false,
+      "utterance": {
+        "text": "なんか、建物の中に入ったんか？周り、暗いなぁ。",
+        "basis": "completed assistant reply referenced by exact turn_id in later reaction input history",
+        "evidence": {
+          "source_line_start": 775881,
+          "source_line_end": 775883,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:31:40.097 +09:00"
+        }
+      },
+      "queued": {
+        "timestamp_jst": "2026-10-20 17:31:24.084 +09:00",
+        "source_line": 774992
+      },
+      "audio_statuses": {
+        "started": {
+          "timestamp_jst": "2026-10-20 17:31:26.879 +09:00",
+          "source_line": 775464
+        },
+        "completed": {
+          "timestamp_jst": "2026-10-20 17:31:33.626 +09:00",
+          "source_line": 775474
+        }
+      },
+      "text_displayed_ack": null,
+      "generation_source": {
+        "action_kind": "dark_push_after_breath",
+        "leaf_kind": "dark_push_after_breath",
+        "topic": null,
+        "temperature": 0.5,
+        "queued_action_text": "心臓に悪いわ、マジで心臓に悪いわ……。",
+        "queued_action_text_is_final_speech": false,
+        "source_evidence": {
+          "source_line_start": 774992,
+          "source_line_end": 775010,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:31:24.084 +09:00"
+        },
+        "model_route": null,
+        "requested_model": null,
+        "response_model": null,
+        "provider": null,
+        "model_fields_note": "not recorded for this warning in the audited interval"
+      },
+      "observation_at_queue": {
+        "reassurance": null,
+        "reassurance_evidence": null,
+        "player_vision": null,
+        "vision_evidence": null,
+        "observed_at_utc": null
+      },
+      "body_preparation": null,
+      "body_selection": {
+        "raw_model_body_action": null,
+        "validated_command_purpose": null,
+        "command": null,
+        "event": null,
+        "evidence": null,
+        "rejection": null,
+        "note": "raw model body_action is not logged; validated command purpose is recorded when a command exists. command=null alone is not interpreted as a specific model action."
+      },
+      "body_execution_results": [],
+      "preceding_warning_invalidation": null,
+      "generation_outcome_events": []
+    },
+    {
+      "turn_id": "warning_aba1786c4155443e9a44a6ae53130c24",
+      "primary_target": false,
+      "utterance": null,
+      "queued": {
+        "timestamp_jst": "2026-10-20 17:31:40.097 +09:00",
+        "source_line": 775476
+      },
+      "audio_statuses": {
+        "cancelled": {
+          "timestamp_jst": "2026-10-20 17:31:41.095 +09:00",
+          "source_line": 775898
+        }
+      },
+      "text_displayed_ack": null,
+      "generation_source": {
+        "action_kind": "dark_push_no_light",
+        "leaf_kind": "dark_push_no_light",
+        "topic": null,
+        "temperature": 0.58,
+        "queued_action_text": "手元、見えへんの怖いわ……ほんま心臓が縮むって……。",
+        "queued_action_text_is_final_speech": false,
+        "source_evidence": {
+          "source_line_start": 775476,
+          "source_line_end": 775494,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:31:40.097 +09:00"
+        },
+        "model_route": null,
+        "requested_model": null,
+        "response_model": null,
+        "provider": null,
+        "model_fields_note": "not recorded for this warning in the audited interval"
+      },
+      "observation_at_queue": {
+        "reassurance": null,
+        "reassurance_evidence": null,
+        "player_vision": null,
+        "vision_evidence": null,
+        "observed_at_utc": null
+      },
+      "body_preparation": null,
+      "body_selection": {
+        "raw_model_body_action": null,
+        "validated_command_purpose": null,
+        "command": null,
+        "event": null,
+        "evidence": null,
+        "rejection": null,
+        "note": "raw model body_action is not logged; validated command purpose is recorded when a command exists. command=null alone is not interpreted as a specific model action."
+      },
+      "body_execution_results": [],
+      "preceding_warning_invalidation": {
+        "fields": {
+          "event": "warning_invalidated",
+          "session_id": "ses_185244d74c18",
+          "source_event": "Some(StatusSnapshot)",
+          "visual_count": "0",
+          "recent": true
+        },
+        "evidence": {
+          "source_line_start": 775894,
+          "source_line_end": 775895,
+          "event": "warning_invalidated",
+          "timestamp_jst": "2026-10-20 17:31:41.094 +09:00"
+        },
+        "association": "same-session invalidation preceding this cancelled status; invalidation log itself has no turn_id",
+        "specific_reason": null
+      },
+      "generation_outcome_events": []
+    },
+    {
+      "turn_id": "warning_580473de463145b1b1e00263682831f1",
+      "primary_target": false,
+      "utterance": {
+        "text": "あ、外や！明るくなって、村におるみたいやな！",
+        "basis": "completed assistant reply referenced by exact turn_id in later reaction input history",
+        "evidence": {
+          "source_line_start": 776511,
+          "source_line_end": 776513,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:32:02.100 +09:00"
+        }
+      },
+      "queued": {
+        "timestamp_jst": "2026-10-20 17:31:49.095 +09:00",
+        "source_line": 775900
+      },
+      "audio_statuses": {
+        "started": {
+          "timestamp_jst": "2026-10-20 17:31:51.784 +09:00",
+          "source_line": 776442
+        },
+        "completed": {
+          "timestamp_jst": "2026-10-20 17:31:58.020 +09:00",
+          "source_line": 776452
+        }
+      },
+      "text_displayed_ack": null,
+      "generation_source": {
+        "action_kind": "reassurance_notice",
+        "leaf_kind": "environment_reaction",
+        "topic": "reassurance",
+        "temperature": 0.65,
+        "queued_action_text": "",
+        "queued_action_text_is_final_speech": false,
+        "source_evidence": {
+          "source_line_start": 775900,
+          "source_line_end": 775918,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:31:49.095 +09:00"
+        },
+        "model_route": null,
+        "requested_model": null,
+        "response_model": null,
+        "provider": null,
+        "model_fields_note": "not recorded for this warning in the audited interval"
+      },
+      "observation_at_queue": {
+        "reassurance": {
+          "value": 46.012100589590666,
+          "owner_distance": 2.0480657451349047,
+          "owner_visible": true,
+          "face_visible": false,
+          "owner_working": false,
+          "label": "安心度",
+          "scale": [
+            0,
+            100
+          ]
+        },
+        "reassurance_evidence": {
+          "source_line_start": 776037,
+          "source_line_end": 776048,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:31:49.095 +09:00"
+        },
+        "player_vision": {
+          "basis": "body_eye_raycast_fov",
+          "range_blocks": 16.0,
+          "horizontal_fov_degrees": 120.0,
+          "vertical_fov_degrees": 90.0,
+          "player_visibility": "visible",
+          "reason": "in_view"
+        },
+        "vision_evidence": {
+          "source_line_start": 775963,
+          "source_line_end": 775970,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:31:49.095 +09:00"
+        },
+        "observed_at_utc": "2026-10-20T08:31:49.093493Z"
+      },
+      "body_preparation": {
+        "after_owner_arrival": true,
+        "owner_working": false,
+        "available_actions": [
+          "stay",
+          "owner_face"
+        ],
+        "evidence": {
+          "source_line_start": 776419,
+          "source_line_end": 776425,
+          "event": "environment_body_prepared",
+          "timestamp_jst": "2026-10-20 17:31:49.097 +09:00"
+        }
+      },
+      "body_selection": {
+        "raw_model_body_action": null,
+        "validated_command_purpose": null,
+        "command": null,
+        "event": "environment_body_selected",
+        "evidence": {
+          "source_line_start": 776434,
+          "source_line_end": 776435,
+          "event": "environment_body_selected",
+          "timestamp_jst": "2026-10-20 17:31:51.545 +09:00"
+        },
+        "rejection": null,
+        "note": "raw model body_action is not logged; validated command purpose is recorded when a command exists. command=null alone is not interpreted as a specific model action."
+      },
+      "body_execution_results": [],
+      "preceding_warning_invalidation": null,
+      "generation_outcome_events": [
+        {
+          "outcome": "speak",
+          "evidence": {
+            "source_line_start": 776426,
+            "source_line_end": 776427,
+            "event": "environment_reaction",
+            "timestamp_jst": "2026-10-20 17:31:51.509 +09:00"
+          },
+          "association": "temporally between this turn prepared and selected/rejected; reaction event has no turn_id"
+        }
+      ]
+    },
+    {
+      "turn_id": "warning_ec73aa16d4624b5ca4ba2f6af2ebd8c1",
+      "primary_target": false,
+      "utterance": {
+        "text": "やっと明るいとこ戻ってこれたな！あー、落ち着くわぁ。",
+        "basis": "completed assistant reply referenced by exact turn_id in later reaction input history",
+        "evidence": {
+          "source_line_start": 777044,
+          "source_line_end": 777046,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:32:34.099 +09:00"
+        }
+      },
+      "queued": {
+        "timestamp_jst": "2026-10-20 17:32:02.100 +09:00",
+        "source_line": 776454
+      },
+      "audio_statuses": {
+        "started": {
+          "timestamp_jst": "2026-10-20 17:32:04.712 +09:00",
+          "source_line": 776970
+        },
+        "completed": {
+          "timestamp_jst": "2026-10-20 17:32:11.203 +09:00",
+          "source_line": 776980
+        }
+      },
+      "text_displayed_ack": null,
+      "generation_source": {
+        "action_kind": "reassurance_notice",
+        "leaf_kind": "environment_reaction",
+        "topic": "reassurance",
+        "temperature": 0.65,
+        "queued_action_text": "",
+        "queued_action_text_is_final_speech": false,
+        "source_evidence": {
+          "source_line_start": 776454,
+          "source_line_end": 776472,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:32:02.100 +09:00"
+        },
+        "model_route": null,
+        "requested_model": null,
+        "response_model": null,
+        "provider": null,
+        "model_fields_note": "not recorded for this warning in the audited interval"
+      },
+      "observation_at_queue": {
+        "reassurance": {
+          "value": 57.641252838797406,
+          "owner_distance": 2.1218257194658303,
+          "owner_visible": true,
+          "face_visible": false,
+          "owner_working": false,
+          "label": "安心度",
+          "scale": [
+            0,
+            100
+          ]
+        },
+        "reassurance_evidence": {
+          "source_line_start": 776596,
+          "source_line_end": 776607,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:32:02.100 +09:00"
+        },
+        "player_vision": {
+          "basis": "body_eye_raycast_fov",
+          "range_blocks": 16.0,
+          "horizontal_fov_degrees": 120.0,
+          "vertical_fov_degrees": 90.0,
+          "player_visibility": "visible",
+          "reason": "in_view"
+        },
+        "vision_evidence": {
+          "source_line_start": 776522,
+          "source_line_end": 776529,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:32:02.100 +09:00"
+        },
+        "observed_at_utc": "2026-10-20T08:32:02.098980Z"
+      },
+      "body_preparation": {
+        "after_owner_arrival": true,
+        "owner_working": false,
+        "available_actions": [
+          "stay",
+          "owner_face"
+        ],
+        "evidence": {
+          "source_line_start": 776947,
+          "source_line_end": 776953,
+          "event": "environment_body_prepared",
+          "timestamp_jst": "2026-10-20 17:32:02.102 +09:00"
+        }
+      },
+      "body_selection": {
+        "raw_model_body_action": null,
+        "validated_command_purpose": null,
+        "command": null,
+        "event": "environment_body_selected",
+        "evidence": {
+          "source_line_start": 776962,
+          "source_line_end": 776963,
+          "event": "environment_body_selected",
+          "timestamp_jst": "2026-10-20 17:32:04.393 +09:00"
+        },
+        "rejection": null,
+        "note": "raw model body_action is not logged; validated command purpose is recorded when a command exists. command=null alone is not interpreted as a specific model action."
+      },
+      "body_execution_results": [],
+      "preceding_warning_invalidation": null,
+      "generation_outcome_events": [
+        {
+          "outcome": "speak",
+          "evidence": {
+            "source_line_start": 776954,
+            "source_line_end": 776955,
+            "event": "environment_reaction",
+            "timestamp_jst": "2026-10-20 17:32:04.363 +09:00"
+          },
+          "association": "temporally between this turn prepared and selected/rejected; reaction event has no turn_id"
+        }
+      ]
+    },
+    {
+      "turn_id": "warning_7a7cc4a159074433989e52e5a7e5e42b",
+      "primary_target": false,
+      "utterance": {
+        "text": "やっと落ち着いたわぁ。ここ、砂漠やな！",
+        "basis": "completed assistant reply referenced by exact turn_id in later reaction input history",
+        "evidence": {
+          "source_line_start": 777584,
+          "source_line_end": 777586,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:32:46.935 +09:00"
+        }
+      },
+      "queued": {
+        "timestamp_jst": "2026-10-20 17:32:34.099 +09:00",
+        "source_line": 776982
+      },
+      "audio_statuses": {
+        "started": {
+          "timestamp_jst": "2026-10-20 17:32:36.787 +09:00",
+          "source_line": 777505
+        },
+        "completed": {
+          "timestamp_jst": "2026-10-20 17:32:42.004 +09:00",
+          "source_line": 777515
+        }
+      },
+      "text_displayed_ack": null,
+      "generation_source": {
+        "action_kind": "reassurance_notice",
+        "leaf_kind": "environment_reaction",
+        "topic": "reassurance",
+        "temperature": 0.65,
+        "queued_action_text": "",
+        "queued_action_text_is_final_speech": false,
+        "source_evidence": {
+          "source_line_start": 776982,
+          "source_line_end": 777000,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:32:34.099 +09:00"
+        },
+        "model_route": null,
+        "requested_model": null,
+        "response_model": null,
+        "provider": null,
+        "model_fields_note": "not recorded for this warning in the audited interval"
+      },
+      "observation_at_queue": {
+        "reassurance": {
+          "value": 55.83723869612705,
+          "owner_distance": 4.003404134687916,
+          "owner_visible": true,
+          "face_visible": false,
+          "owner_working": false,
+          "label": "安心度",
+          "scale": [
+            0,
+            100
+          ]
+        },
+        "reassurance_evidence": {
+          "source_line_start": 777129,
+          "source_line_end": 777140,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:32:34.099 +09:00"
+        },
+        "player_vision": {
+          "basis": "body_eye_raycast_fov",
+          "range_blocks": 16.0,
+          "horizontal_fov_degrees": 120.0,
+          "vertical_fov_degrees": 90.0,
+          "player_visibility": "visible",
+          "reason": "in_view"
+        },
+        "vision_evidence": {
+          "source_line_start": 777055,
+          "source_line_end": 777062,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:32:34.099 +09:00"
+        },
+        "observed_at_utc": "2026-10-20T08:32:34.098780Z"
+      },
+      "body_preparation": {
+        "after_owner_arrival": true,
+        "owner_working": false,
+        "available_actions": [
+          "stay",
+          "owner_face"
+        ],
+        "evidence": {
+          "source_line_start": 777482,
+          "source_line_end": 777488,
+          "event": "environment_body_prepared",
+          "timestamp_jst": "2026-10-20 17:32:34.101 +09:00"
+        }
+      },
+      "body_selection": {
+        "raw_model_body_action": null,
+        "validated_command_purpose": null,
+        "command": null,
+        "event": null,
+        "evidence": null,
+        "rejection": {
+          "error": "body_autonomy_not_ready",
+          "evidence": {
+            "source_line_start": 777497,
+            "source_line_end": 777498,
+            "event": "environment_body_rejected",
+            "timestamp_jst": "2026-10-20 17:32:36.541 +09:00"
+          }
+        },
+        "note": "raw model body_action is not logged; validated command purpose is recorded when a command exists. command=null alone is not interpreted as a specific model action."
+      },
+      "body_execution_results": [],
+      "preceding_warning_invalidation": null,
+      "generation_outcome_events": [
+        {
+          "outcome": "speak",
+          "evidence": {
+            "source_line_start": 777489,
+            "source_line_end": 777490,
+            "event": "environment_reaction",
+            "timestamp_jst": "2026-10-20 17:32:36.510 +09:00"
+          },
+          "association": "temporally between this turn prepared and selected/rejected; reaction event has no turn_id"
+        }
+      ]
+    },
+    {
+      "turn_id": "warning_fca21eb7cf4c498c9a7e0cc475fa6c25",
+      "primary_target": true,
+      "utterance": {
+        "text": "ツレ、どこ見てんねん？オレのこと、ちゃんと見てや！",
+        "basis": "completed assistant reply referenced by exact turn_id in later reaction input history",
+        "evidence": {
+          "source_line_start": 778041,
+          "source_line_end": 778043,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:33:14.105 +09:00"
+        }
+      },
+      "queued": {
+        "timestamp_jst": "2026-10-20 17:32:46.935 +09:00",
+        "source_line": 777517
+      },
+      "audio_statuses": {
+        "started": {
+          "timestamp_jst": "2026-10-20 17:32:49.203 +09:00",
+          "source_line": 777924
+        },
+        "completed": {
+          "timestamp_jst": "2026-10-20 17:32:55.197 +09:00",
+          "source_line": 777967
+        }
+      },
+      "text_displayed_ack": null,
+      "generation_source": {
+        "action_kind": "reassurance_notice",
+        "leaf_kind": "environment_reaction",
+        "topic": "reassurance",
+        "temperature": 0.65,
+        "queued_action_text": "",
+        "queued_action_text_is_final_speech": false,
+        "source_evidence": {
+          "source_line_start": 777517,
+          "source_line_end": 777535,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:32:46.935 +09:00"
+        },
+        "model_route": null,
+        "requested_model": null,
+        "response_model": null,
+        "provider": null,
+        "model_fields_note": "not recorded for this warning in the audited interval"
+      },
+      "observation_at_queue": {
+        "reassurance": {
+          "value": 48.39219398597009,
+          "owner_distance": 2.5764823618964576,
+          "owner_visible": false,
+          "face_visible": false,
+          "owner_working": false,
+          "label": "安心度",
+          "scale": [
+            0,
+            100
+          ]
+        },
+        "reassurance_evidence": {
+          "source_line_start": 777669,
+          "source_line_end": 777680,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:32:46.935 +09:00"
+        },
+        "player_vision": {
+          "basis": "body_eye_raycast_fov",
+          "range_blocks": 16.0,
+          "horizontal_fov_degrees": 120.0,
+          "vertical_fov_degrees": 90.0,
+          "player_visibility": "not_visible",
+          "reason": "outside_fov"
+        },
+        "vision_evidence": {
+          "source_line_start": 777595,
+          "source_line_end": 777602,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:32:46.935 +09:00"
+        },
+        "observed_at_utc": "2026-10-20T08:32:46.934682Z"
+      },
+      "body_preparation": {
+        "after_owner_arrival": true,
+        "owner_working": false,
+        "available_actions": [
+          "stay",
+          "owner_face"
+        ],
+        "evidence": {
+          "source_line_start": 777886,
+          "source_line_end": 777892,
+          "event": "environment_body_prepared",
+          "timestamp_jst": "2026-10-20 17:32:46.937 +09:00"
+        }
+      },
+      "body_selection": {
+        "raw_model_body_action": null,
+        "validated_command_purpose": "owner_face",
+        "command": {
+          "command_id": "232c3ec0-2987-4f13-9bf3-a22059c563ea",
+          "type": "inspect_body_target",
+          "issued_at": "2026-10-20T08:32:48.916350Z",
+          "expires_at": "2026-10-20T08:32:53.916350Z",
+          "context": {
+            "owner_id": "e18eff4d-fe3f-4aaf-9f00-0346f5da6fa8",
+            "body_id": "5741d606-bd70-4d05-8b7e-df47ded85efc",
+            "epoch": "764553a2-fcf5-4ffc-b8e2-168644775b34",
+            "dimension": "minecraft:overworld"
+          },
+          "purpose": "owner_face",
+          "target": null
+        },
+        "event": "environment_body_selected",
+        "evidence": {
+          "source_line_start": 777901,
+          "source_line_end": 777917,
+          "event": "environment_body_selected",
+          "timestamp_jst": "2026-10-20 17:32:48.916 +09:00"
+        },
+        "rejection": null,
+        "note": "raw model body_action is not logged; validated command purpose is recorded when a command exists. command=null alone is not interpreted as a specific model action."
+      },
+      "body_execution_results": [
+        {
+          "event": "assist_result",
+          "result": {
+            "command_id": "232c3ec0-2987-4f13-9bf3-a22059c563ea",
+            "command_type": "inspect_body_target",
+            "status": "succeeded",
+            "executed_at": "2026-10-20T08:32:51.843535Z",
+            "selected_slot": null,
+            "selected_item_id": null,
+            "detail_code": "arrived",
+            "body_id": "5741d606-bd70-4d05-8b7e-df47ded85efc",
+            "epoch": "764553a2-fcf5-4ffc-b8e2-168644775b34"
+          },
+          "known_command": false,
+          "evidence": {
+            "source_line_start": 777932,
+            "source_line_end": 777948,
+            "event": "assist_result",
+            "timestamp_jst": "2026-10-20 17:32:52.104 +09:00"
+          }
+        },
+        {
+          "event": "body_interest_result",
+          "result": {
+            "command_id": "232c3ec0-2987-4f13-9bf3-a22059c563ea",
+            "type": "inspect_body_target",
+            "status": "succeeded",
+            "detail_code": "arrived",
+            "executed_at": "2026-10-20T08:32:51.843535Z",
+            "context": {
+              "owner_id": "e18eff4d-fe3f-4aaf-9f00-0346f5da6fa8",
+              "body_id": "5741d606-bd70-4d05-8b7e-df47ded85efc",
+              "epoch": "764553a2-fcf5-4ffc-b8e2-168644775b34",
+              "dimension": "minecraft:overworld"
+            }
+          },
+          "known_command": null,
+          "evidence": {
+            "source_line_start": 777949,
+            "source_line_end": 777964,
+            "event": "body_interest_result",
+            "timestamp_jst": "2026-10-20 17:32:52.104 +09:00"
+          }
+        }
+      ],
+      "preceding_warning_invalidation": null,
+      "generation_outcome_events": [
+        {
+          "outcome": "speak",
+          "evidence": {
+            "source_line_start": 777893,
+            "source_line_end": 777894,
+            "event": "environment_reaction",
+            "timestamp_jst": "2026-10-20 17:32:48.884 +09:00"
+          },
+          "association": "temporally between this turn prepared and selected/rejected; reaction event has no turn_id"
+        }
+      ]
+    },
+    {
+      "turn_id": "warning_d799605a9a254b4b9cf5e5b37edab02d",
+      "primary_target": false,
+      "utterance": {
+        "text": "ほんまや、村や！ここならもう大丈夫やな！",
+        "basis": "completed assistant reply referenced by exact turn_id in later reaction input history",
+        "evidence": {
+          "source_line_start": 778601,
+          "source_line_end": 778603,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:33:23.105 +09:00"
+        }
+      },
+      "queued": {
+        "timestamp_jst": "2026-10-20 17:33:14.105 +09:00",
+        "source_line": 777969
+      },
+      "audio_statuses": {
+        "started": {
+          "timestamp_jst": "2026-10-20 17:33:16.667 +09:00",
+          "source_line": 778512
+        },
+        "completed": {
+          "timestamp_jst": "2026-10-20 17:33:22.142 +09:00",
+          "source_line": 778522
+        }
+      },
+      "text_displayed_ack": null,
+      "generation_source": {
+        "action_kind": "reassurance_notice",
+        "leaf_kind": "environment_reaction",
+        "topic": "reassurance",
+        "temperature": 0.65,
+        "queued_action_text": "",
+        "queued_action_text_is_final_speech": false,
+        "source_evidence": {
+          "source_line_start": 777969,
+          "source_line_end": 777987,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:33:14.105 +09:00"
+        },
+        "model_route": null,
+        "requested_model": null,
+        "response_model": null,
+        "provider": null,
+        "model_fields_note": "not recorded for this warning in the audited interval"
+      },
+      "observation_at_queue": {
+        "reassurance": {
+          "value": 59.51438573345427,
+          "owner_distance": 2.244798124813064,
+          "owner_visible": true,
+          "face_visible": false,
+          "owner_working": false,
+          "label": "安心度",
+          "scale": [
+            0,
+            100
+          ]
+        },
+        "reassurance_evidence": {
+          "source_line_start": 778131,
+          "source_line_end": 778142,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:33:14.105 +09:00"
+        },
+        "player_vision": {
+          "basis": "body_eye_raycast_fov",
+          "range_blocks": 16.0,
+          "horizontal_fov_degrees": 120.0,
+          "vertical_fov_degrees": 90.0,
+          "player_visibility": "visible",
+          "reason": "in_view"
+        },
+        "vision_evidence": {
+          "source_line_start": 778052,
+          "source_line_end": 778059,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:33:14.105 +09:00"
+        },
+        "observed_at_utc": "2026-10-20T08:33:14.103028Z"
+      },
+      "body_preparation": {
+        "after_owner_arrival": true,
+        "owner_working": false,
+        "available_actions": [
+          "stay",
+          "owner_face"
+        ],
+        "evidence": {
+          "source_line_start": 778489,
+          "source_line_end": 778495,
+          "event": "environment_body_prepared",
+          "timestamp_jst": "2026-10-20 17:33:14.108 +09:00"
+        }
+      },
+      "body_selection": {
+        "raw_model_body_action": null,
+        "validated_command_purpose": null,
+        "command": null,
+        "event": "environment_body_selected",
+        "evidence": {
+          "source_line_start": 778504,
+          "source_line_end": 778505,
+          "event": "environment_body_selected",
+          "timestamp_jst": "2026-10-20 17:33:16.407 +09:00"
+        },
+        "rejection": null,
+        "note": "raw model body_action is not logged; validated command purpose is recorded when a command exists. command=null alone is not interpreted as a specific model action."
+      },
+      "body_execution_results": [],
+      "preceding_warning_invalidation": null,
+      "generation_outcome_events": [
+        {
+          "outcome": "speak",
+          "evidence": {
+            "source_line_start": 778496,
+            "source_line_end": 778497,
+            "event": "environment_reaction",
+            "timestamp_jst": "2026-10-20 17:33:16.379 +09:00"
+          },
+          "association": "temporally between this turn prepared and selected/rejected; reaction event has no turn_id"
+        }
+      ]
+    },
+    {
+      "turn_id": "warning_e2c2430a273e4f64b4b5391476243734",
+      "primary_target": false,
+      "utterance": null,
+      "queued": {
+        "timestamp_jst": "2026-10-20 17:33:23.105 +09:00",
+        "source_line": 778524
+      },
+      "audio_statuses": {
+        "started": {
+          "timestamp_jst": "2026-10-20 17:33:26.034 +09:00",
+          "source_line": 779061
+        },
+        "completed": {
+          "timestamp_jst": "2026-10-20 17:33:32.451 +09:00",
+          "source_line": 779065
+        }
+      },
+      "text_displayed_ack": null,
+      "generation_source": {
+        "action_kind": "reassurance_notice",
+        "leaf_kind": "environment_reaction",
+        "topic": "reassurance",
+        "temperature": 0.65,
+        "queued_action_text": "",
+        "queued_action_text_is_final_speech": false,
+        "source_evidence": {
+          "source_line_start": 778524,
+          "source_line_end": 778542,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:33:23.105 +09:00"
+        },
+        "model_route": null,
+        "requested_model": null,
+        "response_model": null,
+        "provider": null,
+        "model_fields_note": "not recorded for this warning in the audited interval"
+      },
+      "observation_at_queue": {
+        "reassurance": {
+          "value": 60.81879754773118,
+          "owner_distance": 10.735107805214598,
+          "owner_visible": true,
+          "face_visible": false,
+          "owner_working": false,
+          "label": "安心度",
+          "scale": [
+            0,
+            100
+          ]
+        },
+        "reassurance_evidence": {
+          "source_line_start": 778707,
+          "source_line_end": 778718,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:33:23.105 +09:00"
+        },
+        "player_vision": {
+          "basis": "body_eye_raycast_fov",
+          "range_blocks": 16.0,
+          "horizontal_fov_degrees": 120.0,
+          "vertical_fov_degrees": 90.0,
+          "player_visibility": "visible",
+          "reason": "in_view"
+        },
+        "vision_evidence": {
+          "source_line_start": 778612,
+          "source_line_end": 778619,
+          "event": "warning_queued",
+          "timestamp_jst": "2026-10-20 17:33:23.105 +09:00"
+        },
+        "observed_at_utc": "2026-10-20T08:33:23.104106Z"
+      },
+      "body_preparation": {
+        "after_owner_arrival": false,
+        "owner_working": false,
+        "available_actions": [
+          "stay",
+          "owner_near",
+          "owner_face"
+        ],
+        "evidence": {
+          "source_line_start": 779037,
+          "source_line_end": 779044,
+          "event": "environment_body_prepared",
+          "timestamp_jst": "2026-10-20 17:33:23.109 +09:00"
+        }
+      },
+      "body_selection": {
+        "raw_model_body_action": null,
+        "validated_command_purpose": null,
+        "command": null,
+        "event": "environment_body_selected",
+        "evidence": {
+          "source_line_start": 779053,
+          "source_line_end": 779054,
+          "event": "environment_body_selected",
+          "timestamp_jst": "2026-10-20 17:33:25.438 +09:00"
+        },
+        "rejection": null,
+        "note": "raw model body_action is not logged; validated command purpose is recorded when a command exists. command=null alone is not interpreted as a specific model action."
+      },
+      "body_execution_results": [],
+      "preceding_warning_invalidation": null,
+      "generation_outcome_events": [
+        {
+          "outcome": "speak",
+          "evidence": {
+            "source_line_start": 779045,
+            "source_line_end": 779046,
+            "event": "environment_reaction",
+            "timestamp_jst": "2026-10-20 17:33:25.406 +09:00"
+          },
+          "association": "temporally between this turn prepared and selected/rejected; reaction event has no turn_id"
+        }
+      ]
+    }
+  ],
+  "contextual_model_metadata": {
+    "scope": "same-session haiku work at 17:34; not evidence of model identity for reassurance turns",
+    "events": [
+      {
+        "fields": {
+          "message": "川柳:",
+          "event": "haiku_llm_started",
+          "kind": "haiku_irony",
+          "route": "chat",
+          "model": "default_model",
+          "request_index": "1"
+        },
+        "evidence": {
+          "source_line_start": 779069,
+          "source_line_end": 779071,
+          "event": "haiku_llm_started",
+          "timestamp_jst": "2026-10-20 17:34:24.137 +09:00"
+        }
+      },
+      {
+        "fields": {
+          "message": "川柳:",
+          "event": "haiku_llm_finished",
+          "kind": "haiku_irony",
+          "request_index": "1",
+          "elapsed_ms": "1275",
+          "provider": "rig-core/openai-chat-completions",
+          "requested_model": "default_model",
+          "response_model": "default_model",
+          "response_id": "chatcmpl-QVvYvuCWFigdQTvhTdTtHRGPPIVDHPPp",
+          "finish_reason": "Some(\"stop\")",
+          "completion_tokens": "Some(119)",
+          "prompt_tokens": "Some(737)",
+          "parse_status": "accepted"
+        },
+        "evidence": {
+          "source_line_start": 779078,
+          "source_line_end": 779098,
+          "event": "haiku_llm_finished",
+          "timestamp_jst": "2026-10-20 17:34:25.412 +09:00"
+        }
+      },
+      {
+        "fields": {
+          "message": "川柳:",
+          "event": "haiku_llm_started",
+          "kind": "haiku_scene",
+          "route": "chat",
+          "model": "default_model",
+          "request_index": "2"
+        },
+        "evidence": {
+          "source_line_start": 779120,
+          "source_line_end": 779122,
+          "event": "haiku_llm_started",
+          "timestamp_jst": "2026-10-20 17:34:34.350 +09:00"
+        }
+      },
+      {
+        "fields": {
+          "message": "川柳:",
+          "event": "haiku_llm_finished",
+          "kind": "haiku_scene",
+          "request_index": "2",
+          "elapsed_ms": "2097",
+          "provider": "rig-core/openai-chat-completions",
+          "requested_model": "default_model",
+          "response_model": "default_model",
+          "response_id": "chatcmpl-L1Wvp9QhBZs2olSpAnnCL3YubgjSkZbl",
+          "finish_reason": "Some(\"length\")",
+          "completion_tokens": "Some(192)",
+          "prompt_tokens": "Some(1441)",
+          "parse_status": "accepted"
+        },
+        "evidence": {
+          "source_line_start": 779129,
+          "source_line_end": 779159,
+          "event": "haiku_llm_finished",
+          "timestamp_jst": "2026-10-20 17:34:36.448 +09:00"
+        }
+      },
+      {
+        "fields": {
+          "message": "川柳:",
+          "event": "haiku_llm_started",
+          "kind": "haiku_draft",
+          "route": "haiku",
+          "model": "default_model",
+          "request_index": "3"
+        },
+        "evidence": {
+          "source_line_start": 779160,
+          "source_line_end": 779162,
+          "event": "haiku_llm_started",
+          "timestamp_jst": "2026-10-20 17:34:36.449 +09:00"
+        }
+      },
+      {
+        "fields": {
+          "message": "川柳:",
+          "event": "haiku_llm_finished",
+          "kind": "haiku_draft",
+          "request_index": "3",
+          "elapsed_ms": "1401",
+          "provider": "rig-core/openai-chat-completions",
+          "requested_model": "default_model",
+          "response_model": "default_model",
+          "response_id": "chatcmpl-PaaoHPylsEuzLMqZinlRau00QYGC2tqD",
+          "finish_reason": "Some(\"stop\")",
+          "completion_tokens": "Some(44)",
+          "prompt_tokens": "Some(1640)",
+          "parse_status": "accepted"
+        },
+        "evidence": {
+          "source_line_start": 779169,
+          "source_line_end": 779181,
+          "event": "haiku_llm_finished",
+          "timestamp_jst": "2026-10-20 17:34:37.851 +09:00"
+        }
+      },
+      {
+        "fields": {
+          "message": "川柳:",
+          "event": "haiku_llm_started",
+          "kind": "haiku_line_grounding",
+          "route": "chat",
+          "model": "default_model",
+          "request_index": "4"
+        },
+        "evidence": {
+          "source_line_start": 779191,
+          "source_line_end": 779193,
+          "event": "haiku_llm_started",
+          "timestamp_jst": "2026-10-20 17:34:37.851 +09:00"
+        }
+      },
+      {
+        "fields": {
+          "message": "川柳:",
+          "event": "haiku_llm_finished",
+          "kind": "haiku_line_grounding",
+          "request_index": "4",
+          "elapsed_ms": "1831",
+          "provider": "rig-core/openai-chat-completions",
+          "requested_model": "default_model",
+          "response_model": "default_model",
+          "response_id": "chatcmpl-z80JIE3Qkv3SEDAU5rPwjMUdhxgiUMMS",
+          "finish_reason": "Some(\"stop\")",
+          "completion_tokens": "Some(155)",
+          "prompt_tokens": "Some(1366)",
+          "parse_status": "accepted"
+        },
+        "evidence": {
+          "source_line_start": 779200,
+          "source_line_end": 779233,
+          "event": "haiku_llm_finished",
+          "timestamp_jst": "2026-10-20 17:34:39.683 +09:00"
+        }
+      }
+    ],
+    "weights": null,
+    "quantization": null,
+    "running_binary_sha": null
+  },
+  "cancelled_turn_ids": [
+    "warning_1b1c227346044b889f231348cfdafeea",
+    "warning_aba1786c4155443e9a44a6ae53130c24"
+  ],
+  "preserved_source_excerpts": [
+    {
+      "source_line_start": 772633,
+      "source_line_end": 772634,
+      "sha256_utf8_no_final_newline": "a442baedb7b0411a578d579b93c0f18c642048a4a865755633102bb9fd7ec194",
+      "text": "2026-10-20 17:30:15.180 +09:00 [INFO] event=\"adapter_session_created\" message=\"接続を登録しました session_id=ses_185244d74c18\"\n"
+    },
+    {
+      "source_line_start": 772648,
+      "source_line_end": 772648,
+      "sha256_utf8_no_final_newline": "d4f08ead71a0f28bae94407daa8181c65edd3dc43ea5dfa0ee6f6b54192b7150",
+      "text": "2026-10-20 17:30:27.081 +09:00 [INFO] event=\"warning_queued\" session_id=\"ses_185244d74c18\" turn_id=\"warning_b556da0f79f043beb968352b34977ddd\""
+    },
+    {
+      "source_line_start": 772648,
+      "source_line_end": 772666,
+      "sha256_utf8_no_final_newline": "fb22d48cd823cbe4e3cb61c07a62a71d0b91bddf52586f35a36d3c3116a1d6db",
+      "text": "2026-10-20 17:30:27.081 +09:00 [INFO] event=\"warning_queued\" session_id=\"ses_185244d74c18\" turn_id=\"warning_b556da0f79f043beb968352b34977ddd\"\n  actions:\n    [\n      {\n        \"kind\": \"reassurance_notice\",\n        \"text\": \"\",\n        \"cue_id\": null,\n        \"cue_sequence\": [],\n        \"interrupt\": false,\n        \"protect_ms\": 0,\n        \"scope\": {\n          \"kind\": \"safe\"\n        },\n        \"leaf\": {\n          \"kind\": \"environment_reaction\",\n          \"details\": {\n            \"__reaction_guard\": {\n              \"dimension\": \"overworld\",\n              \"body_context\": {"
+    },
+    {
+      "source_line_start": 772685,
+      "source_line_end": 772692,
+      "sha256_utf8_no_final_newline": "683be70926f4dbe13190a04776ce9ee0bef67e5f5c440779a1e4a0e0510f06d5",
+      "text": "                      \"vision\": {\n                        \"basis\": \"body_eye_raycast_fov\",\n                        \"range_blocks\": 16.0,\n                        \"horizontal_fov_degrees\": 120.0,\n                        \"vertical_fov_degrees\": 90.0,\n                        \"player_visibility\": \"not_visible\",\n                        \"reason\": \"outside_fov\"\n                      },"
+    },
+    {
+      "source_line_start": 772764,
+      "source_line_end": 772775,
+      "sha256_utf8_no_final_newline": "8c98774ada14782ee41461035bc8b8e57e6ae133b36e1daaafd11373d8e6a0a6",
+      "text": "                  \"reassurance\": {\n                    \"value\": 46.737495529805976,\n                    \"owner_distance\": 8.21453435190702,\n                    \"owner_visible\": false,\n                    \"face_visible\": false,\n                    \"owner_working\": false,\n                    \"label\": \"安心度\",\n                    \"scale\": [\n                      0,\n                      100\n                    ]\n                  },"
+    },
+    {
+      "source_line_start": 772952,
+      "source_line_end": 772959,
+      "sha256_utf8_no_final_newline": "16b6651c5b005c3df67f2247f852dcba0c44b1e70cc0157e2ff1896fc4b2e626",
+      "text": "2026-10-20 17:30:27.082 +09:00 [INFO] event=\"environment_body_prepared\" turn_id=\"warning_b556da0f79f043beb968352b34977ddd\" after_owner_arrival=false owner_working=false\n  available_actions:\n    [\n      \"stay\",\n      \"owner_near\",\n      \"owner_face\"\n    ]\n"
+    },
+    {
+      "source_line_start": 772960,
+      "source_line_end": 772961,
+      "sha256_utf8_no_final_newline": "c3f07423079abd97d646fc918df1b5cf6e6b4e75401aace59356dd2c723d2e93",
+      "text": "2026-10-20 17:30:30.759 +09:00 [INFO] event=\"environment_reaction\" outcome=\"speak\"\n"
+    },
+    {
+      "source_line_start": 772968,
+      "source_line_end": 772984,
+      "sha256_utf8_no_final_newline": "6c5f8fc0629dfa44c18a040aa7f2a0be8ef499f63c6c823a0ba29bf17adce771",
+      "text": "2026-10-20 17:30:30.842 +09:00 [INFO] event=\"environment_body_selected\" turn_id=\"warning_b556da0f79f043beb968352b34977ddd\"\n  command:\n    {\n      \"command_id\": \"a26bb95e-c79c-44b8-83a6-170faea5a9ff\",\n      \"type\": \"inspect_body_target\",\n      \"issued_at\": \"2026-10-20T08:30:30.842458Z\",\n      \"expires_at\": \"2026-10-20T08:30:35.842458Z\",\n      \"context\": {\n        \"owner_id\": \"e18eff4d-fe3f-4aaf-9f00-0346f5da6fa8\",\n        \"body_id\": \"5741d606-bd70-4d05-8b7e-df47ded85efc\",\n        \"epoch\": \"764553a2-fcf5-4ffc-b8e2-168644775b34\",\n        \"dimension\": \"minecraft:overworld\"\n      },\n      \"purpose\": \"owner_near\",\n      \"target\": null\n    }\n"
+    },
+    {
+      "source_line_start": 772991,
+      "source_line_end": 772991,
+      "sha256_utf8_no_final_newline": "3e8ed1964da53396bfab56e1c20490e3bd77eed2574dd5b9302eca1b080aac84",
+      "text": "2026-10-20 17:30:31.116 +09:00 [INFO] event=\"warning_status\" session_id=\"ses_185244d74c18\" turn_id=\"warning_b556da0f79f043beb968352b34977ddd\" playback_status=\"started\""
+    },
+    {
+      "source_line_start": 773001,
+      "source_line_end": 773017,
+      "sha256_utf8_no_final_newline": "e9f3b6e45567595d71bdf260245ae5c891e76fc44d4f65fdcc20372f4ef85bb6",
+      "text": "2026-10-20 17:30:35.080 +09:00 [INFO] event=\"assist_result\" session_id=\"ses_185244d74c18\"\n  result:\n    {\n      \"result\": {\n        \"command_id\": \"a26bb95e-c79c-44b8-83a6-170faea5a9ff\",\n        \"command_type\": \"inspect_body_target\",\n        \"status\": \"succeeded\",\n        \"executed_at\": \"2026-10-20T08:30:34.571362Z\",\n        \"selected_slot\": null,\n        \"selected_item_id\": null,\n        \"detail_code\": \"arrived\",\n        \"body_id\": \"5741d606-bd70-4d05-8b7e-df47ded85efc\",\n        \"epoch\": \"764553a2-fcf5-4ffc-b8e2-168644775b34\"\n      },\n      \"known_command\": false\n    }\n"
+    },
+    {
+      "source_line_start": 773018,
+      "source_line_end": 773033,
+      "sha256_utf8_no_final_newline": "46b48bde0c4a74ef1de5758be0c908d890a94125373e663abffdec3ffb33cf5e",
+      "text": "2026-10-20 17:30:35.081 +09:00 [INFO] event=\"body_interest_result\" session_id=\"ses_185244d74c18\"\n  result:\n    {\n      \"command_id\": \"a26bb95e-c79c-44b8-83a6-170faea5a9ff\",\n      \"type\": \"inspect_body_target\",\n      \"status\": \"succeeded\",\n      \"detail_code\": \"arrived\",\n      \"executed_at\": \"2026-10-20T08:30:34.571362Z\",\n      \"context\": {\n        \"owner_id\": \"e18eff4d-fe3f-4aaf-9f00-0346f5da6fa8\",\n        \"body_id\": \"5741d606-bd70-4d05-8b7e-df47ded85efc\",\n        \"epoch\": \"764553a2-fcf5-4ffc-b8e2-168644775b34\",\n        \"dimension\": \"minecraft:overworld\"\n      }\n    }\n"
+    },
+    {
+      "source_line_start": 773040,
+      "source_line_end": 773040,
+      "sha256_utf8_no_final_newline": "c12d3cabf082a631f687b3e996a73a4010fbf68ec10495f65fd42e245a2b7be5",
+      "text": "2026-10-20 17:30:38.963 +09:00 [INFO] event=\"warning_status\" session_id=\"ses_185244d74c18\" turn_id=\"warning_b556da0f79f043beb968352b34977ddd\" playback_status=\"completed\""
+    },
+    {
+      "source_line_start": 773042,
+      "source_line_end": 773042,
+      "sha256_utf8_no_final_newline": "a642d8452588a3c5d3d90ca18ed77fe887696005ded75efc50ca76d43623635c",
+      "text": "2026-10-20 17:30:39.080 +09:00 [INFO] event=\"warning_queued\" session_id=\"ses_185244d74c18\" turn_id=\"warning_c52db96691774e5183b414790cce8930\""
+    },
+    {
+      "source_line_start": 773042,
+      "source_line_end": 773060,
+      "sha256_utf8_no_final_newline": "fa45b0abba93395ae526370b7e4ac0258d9818860589363dea8596d4fa5f467e",
+      "text": "2026-10-20 17:30:39.080 +09:00 [INFO] event=\"warning_queued\" session_id=\"ses_185244d74c18\" turn_id=\"warning_c52db96691774e5183b414790cce8930\"\n  actions:\n    [\n      {\n        \"kind\": \"reassurance_notice\",\n        \"text\": \"\",\n        \"cue_id\": null,\n        \"cue_sequence\": [],\n        \"interrupt\": false,\n        \"protect_ms\": 0,\n        \"scope\": {\n          \"kind\": \"safe\"\n        },\n        \"leaf\": {\n          \"kind\": \"environment_reaction\",\n          \"details\": {\n            \"__reaction_guard\": {\n              \"dimension\": \"overworld\",\n              \"body_context\": {"
+    },
+    {
+      "source_line_start": 773074,
+      "source_line_end": 773076,
+      "sha256_utf8_no_final_newline": "8f56f5379ee881e47763210896169244cca6a651b9a6ec76445e893193e90d80",
+      "text": "                    \"turn_id\": \"warning_b556da0f79f043beb968352b34977ddd:reply\",\n                    \"role\": \"assistant\",\n                    \"text\": \"なぁ、ツレ！どこ行ったんや？オレ、置いてけたらあかんで！\""
+    },
+    {
+      "source_line_start": 773085,
+      "source_line_end": 773092,
+      "sha256_utf8_no_final_newline": "c30232884c40d6acb7f0299f7f5511e2bdb921459e7df00e20b22b5977f9e527",
+      "text": "                      \"vision\": {\n                        \"basis\": \"body_eye_raycast_fov\",\n                        \"range_blocks\": 16.0,\n                        \"horizontal_fov_degrees\": 120.0,\n                        \"vertical_fov_degrees\": 90.0,\n                        \"player_visibility\": \"visible\",\n                        \"reason\": \"in_view\"\n                      },"
+    },
+    {
+      "source_line_start": 773164,
+      "source_line_end": 773175,
+      "sha256_utf8_no_final_newline": "c789a825ed3b931c52b509b1f475eb9c6a4689bb5f8c1f0ebb66a87376f144b9",
+      "text": "                  \"reassurance\": {\n                    \"value\": 49.19057350901067,\n                    \"owner_distance\": 3.719170096815707,\n                    \"owner_visible\": true,\n                    \"face_visible\": false,\n                    \"owner_working\": false,\n                    \"label\": \"安心度\",\n                    \"scale\": [\n                      0,\n                      100\n                    ]\n                  },"
+    },
+    {
+      "source_line_start": 773463,
+      "source_line_end": 773469,
+      "sha256_utf8_no_final_newline": "0e103385a83dae661456debced32564d2e5639b0d8b6fbfc069e6cebae5a4c66",
+      "text": "2026-10-20 17:30:39.083 +09:00 [INFO] event=\"environment_body_prepared\" turn_id=\"warning_c52db96691774e5183b414790cce8930\" after_owner_arrival=true owner_working=false\n  available_actions:\n    [\n      \"stay\",\n      \"owner_face\"\n    ]\n"
+    },
+    {
+      "source_line_start": 773470,
+      "source_line_end": 773471,
+      "sha256_utf8_no_final_newline": "c7747b72b845b4d579949a9038ff1161f65c6ada0a9b51ae6410fcd3ea7bf506",
+      "text": "2026-10-20 17:30:41.016 +09:00 [INFO] event=\"environment_reaction\" outcome=\"speak\"\n"
+    },
+    {
+      "source_line_start": 773478,
+      "source_line_end": 773494,
+      "sha256_utf8_no_final_newline": "a83ac8bbe3d692d18d6ddb018e0c4a3953b015047fbad9648df208969c4abe1a",
+      "text": "2026-10-20 17:30:41.048 +09:00 [INFO] event=\"environment_body_selected\" turn_id=\"warning_c52db96691774e5183b414790cce8930\"\n  command:\n    {\n      \"command_id\": \"7db34339-2912-45ba-9d18-48acb07d6bf2\",\n      \"type\": \"inspect_body_target\",\n      \"issued_at\": \"2026-10-20T08:30:41.048175Z\",\n      \"expires_at\": \"2026-10-20T08:30:46.048175Z\",\n      \"context\": {\n        \"owner_id\": \"e18eff4d-fe3f-4aaf-9f00-0346f5da6fa8\",\n        \"body_id\": \"5741d606-bd70-4d05-8b7e-df47ded85efc\",\n        \"epoch\": \"764553a2-fcf5-4ffc-b8e2-168644775b34\",\n        \"dimension\": \"minecraft:overworld\"\n      },\n      \"purpose\": \"owner_face\",\n      \"target\": null\n    }\n"
+    },
+    {
+      "source_line_start": 773501,
+      "source_line_end": 773501,
+      "sha256_utf8_no_final_newline": "7b4cc4677f9b77e193efebffada23044f80eeb9bbd66fde88b767561299b9b0e",
+      "text": "2026-10-20 17:30:41.278 +09:00 [INFO] event=\"warning_status\" session_id=\"ses_185244d74c18\" turn_id=\"warning_c52db96691774e5183b414790cce8930\" playback_status=\"started\""
+    },
+    {
+      "source_line_start": 773517,
+      "source_line_end": 773517,
+      "sha256_utf8_no_final_newline": "8a3558413a91de8ddabcafeb9b7005175a716d3aeefb963e5d8ce3c2f5eb685c",
+      "text": "2026-10-20 17:30:47.846 +09:00 [INFO] event=\"warning_status\" session_id=\"ses_185244d74c18\" turn_id=\"warning_c52db96691774e5183b414790cce8930\" playback_status=\"completed\""
+    },
+    {
+      "source_line_start": 773519,
+      "source_line_end": 773535,
+      "sha256_utf8_no_final_newline": "13ea642fcea3eea7ce9c9124f823df2dc6c148a1f47b677efee347454f9f10e8",
+      "text": "2026-10-20 17:30:48.670 +09:00 [INFO] event=\"assist_result\" session_id=\"ses_185244d74c18\"\n  result:\n    {\n      \"result\": {\n        \"command_id\": \"7db34339-2912-45ba-9d18-48acb07d6bf2\",\n        \"command_type\": \"inspect_body_target\",\n        \"status\": \"succeeded\",\n        \"executed_at\": \"2026-10-20T08:30:48.323294Z\",\n        \"selected_slot\": null,\n        \"selected_item_id\": null,\n        \"detail_code\": \"arrived\",\n        \"body_id\": \"5741d606-bd70-4d05-8b7e-df47ded85efc\",\n        \"epoch\": \"764553a2-fcf5-4ffc-b8e2-168644775b34\"\n      },\n      \"known_command\": false\n    }\n"
+    },
+    {
+      "source_line_start": 773536,
+      "source_line_end": 773551,
+      "sha256_utf8_no_final_newline": "e8917215ee083df997b39f388896f36cd9dfe836842f9352df6debbdbaaad28d",
+      "text": "2026-10-20 17:30:48.674 +09:00 [INFO] event=\"body_interest_result\" session_id=\"ses_185244d74c18\"\n  result:\n    {\n      \"command_id\": \"7db34339-2912-45ba-9d18-48acb07d6bf2\",\n      \"type\": \"inspect_body_target\",\n      \"status\": \"succeeded\",\n      \"detail_code\": \"arrived\",\n      \"executed_at\": \"2026-10-20T08:30:48.323294Z\",\n      \"context\": {\n        \"owner_id\": \"e18eff4d-fe3f-4aaf-9f00-0346f5da6fa8\",\n        \"body_id\": \"5741d606-bd70-4d05-8b7e-df47ded85efc\",\n        \"epoch\": \"764553a2-fcf5-4ffc-b8e2-168644775b34\",\n        \"dimension\": \"minecraft:overworld\"\n      }\n    }\n"
+    },
+    {
+      "source_line_start": 773552,
+      "source_line_end": 773552,
+      "sha256_utf8_no_final_newline": "2b488a6b18020c94119661364295a276ed5739eae48528db9e0ca5c047b63ab7",
+      "text": "2026-10-20 17:30:57.078 +09:00 [INFO] event=\"warning_queued\" session_id=\"ses_185244d74c18\" turn_id=\"warning_5e58f835e5cc4a4ebcf81f615c44614f\""
+    },
+    {
+      "source_line_start": 773552,
+      "source_line_end": 773570,
+      "sha256_utf8_no_final_newline": "d331d509cf79bfbef9c59628169a2bd063865a4492b34f7025246257cfbfb807",
+      "text": "2026-10-20 17:30:57.078 +09:00 [INFO] event=\"warning_queued\" session_id=\"ses_185244d74c18\" turn_id=\"warning_5e58f835e5cc4a4ebcf81f615c44614f\"\n  actions:\n    [\n      {\n        \"kind\": \"reassurance_notice\",\n        \"text\": \"\",\n        \"cue_id\": null,\n        \"cue_sequence\": [],\n        \"interrupt\": false,\n        \"protect_ms\": 0,\n        \"scope\": {\n          \"kind\": \"safe\"\n        },\n        \"leaf\": {\n          \"kind\": \"environment_reaction\",\n          \"details\": {\n            \"__reaction_guard\": {\n              \"dimension\": \"overworld\",\n              \"body_context\": {"
+    },
+    {
+      "source_line_start": 773589,
+      "source_line_end": 773591,
+      "sha256_utf8_no_final_newline": "c1d30cb54d9aff2b94dea05820ee860e48110c5fb3677304eacab623fbf46e59",
+      "text": "                    \"turn_id\": \"warning_c52db96691774e5183b414790cce8930:reply\",\n                    \"role\": \"assistant\",\n                    \"text\": \"あ、ツレ！やっと見つけたやん！どこ行ってたんや！\""
+    },
+    {
+      "source_line_start": 773600,
+      "source_line_end": 773607,
+      "sha256_utf8_no_final_newline": "c30232884c40d6acb7f0299f7f5511e2bdb921459e7df00e20b22b5977f9e527",
+      "text": "                      \"vision\": {\n                        \"basis\": \"body_eye_raycast_fov\",\n                        \"range_blocks\": 16.0,\n                        \"horizontal_fov_degrees\": 120.0,\n                        \"vertical_fov_degrees\": 90.0,\n                        \"player_visibility\": \"visible\",\n                        \"reason\": \"in_view\"\n                      },"
+    },
+    {
+      "source_line_start": 773674,
+      "source_line_end": 773685,
+      "sha256_utf8_no_final_newline": "bdf429cc7144c2f3b9bdc8db6c2164ae7771d65e69f834eb9a8f6449ca3a3573",
+      "text": "                  \"reassurance\": {\n                    \"value\": 53.17866042770947,\n                    \"owner_distance\": 2.217309955055809,\n                    \"owner_visible\": true,\n                    \"face_visible\": false,\n                    \"owner_working\": false,\n                    \"label\": \"安心度\",\n                    \"scale\": [\n                      0,\n                      100\n                    ]\n                  },"
+    },
+    {
+      "source_line_start": 773993,
+      "source_line_end": 773999,
+      "sha256_utf8_no_final_newline": "605de27396eea0d0db9e573f1ba26a6f07e518f9f70e1c149b165797e1bc125a",
+      "text": "2026-10-20 17:30:57.081 +09:00 [INFO] event=\"environment_body_prepared\" turn_id=\"warning_5e58f835e5cc4a4ebcf81f615c44614f\" after_owner_arrival=true owner_working=false\n  available_actions:\n    [\n      \"stay\",\n      \"owner_face\"\n    ]\n"
+    },
+    {
+      "source_line_start": 774000,
+      "source_line_end": 774001,
+      "sha256_utf8_no_final_newline": "7220d4148bb0e3ce3c7a2d55075b82942bc3a4a0daa80d4807186abe870acf56",
+      "text": "2026-10-20 17:30:59.131 +09:00 [INFO] event=\"environment_reaction\" outcome=\"speak\"\n"
+    },
+    {
+      "source_line_start": 774008,
+      "source_line_end": 774009,
+      "sha256_utf8_no_final_newline": "24610ef0b06fe63baf49429ab8d4762a1a070a67227e1740dbfbb0e505a95e5f",
+      "text": "2026-10-20 17:30:59.170 +09:00 [INFO] event=\"environment_body_rejected\" turn_id=\"warning_5e58f835e5cc4a4ebcf81f615c44614f\" error=body_autonomy_not_ready\n"
+    },
+    {
+      "source_line_start": 774016,
+      "source_line_end": 774016,
+      "sha256_utf8_no_final_newline": "8d726669558f350fe9e3ff2de1fdc372cf0f647f7ccb88a472ddf582c67d9a37",
+      "text": "2026-10-20 17:30:59.539 +09:00 [INFO] event=\"warning_status\" session_id=\"ses_185244d74c18\" turn_id=\"warning_5e58f835e5cc4a4ebcf81f615c44614f\" playback_status=\"started\""
+    },
+    {
+      "source_line_start": 774026,
+      "source_line_end": 774026,
+      "sha256_utf8_no_final_newline": "8396498b34ef1c7b21a7502c8004ad89175a356d0e04936360589e4bd50c0d5b",
+      "text": "2026-10-20 17:31:06.289 +09:00 [INFO] event=\"warning_status\" session_id=\"ses_185244d74c18\" turn_id=\"warning_5e58f835e5cc4a4ebcf81f615c44614f\" playback_status=\"completed\""
+    },
+    {
+      "source_line_start": 774028,
+      "source_line_end": 774028,
+      "sha256_utf8_no_final_newline": "fd382d380373d5d09e4fb3ae606f575f2899b0aeb74b38dc9f62684726dccdfd",
+      "text": "2026-10-20 17:31:06.621 +09:00 [INFO] event=\"warning_queued\" session_id=\"ses_185244d74c18\" turn_id=\"warning_b07553270ed84103afeed4ed7fdd7c6a\""
+    },
+    {
+      "source_line_start": 774028,
+      "source_line_end": 774046,
+      "sha256_utf8_no_final_newline": "bd24d6884b28d1555f45400261eea67697f396bab1728ac2af237eec04b02162",
+      "text": "2026-10-20 17:31:06.621 +09:00 [INFO] event=\"warning_queued\" session_id=\"ses_185244d74c18\" turn_id=\"warning_b07553270ed84103afeed4ed7fdd7c6a\"\n  actions:\n    [\n      {\n        \"kind\": \"reassurance_notice\",\n        \"text\": \"\",\n        \"cue_id\": null,\n        \"cue_sequence\": [],\n        \"interrupt\": false,\n        \"protect_ms\": 0,\n        \"scope\": {\n          \"kind\": \"safe\"\n        },\n        \"leaf\": {\n          \"kind\": \"environment_reaction\",\n          \"details\": {\n            \"__reaction_guard\": {\n              \"dimension\": \"overworld\",\n              \"body_context\": {"
+    },
+    {
+      "source_line_start": 774070,
+      "source_line_end": 774072,
+      "sha256_utf8_no_final_newline": "ad4408edd361436951048ad726442e381b63db4e8ca75b32661bea63d96a189d",
+      "text": "                    \"turn_id\": \"warning_5e58f835e5cc4a4ebcf81f615c44614f:reply\",\n                    \"role\": \"assistant\",\n                    \"text\": \"もう、心臓止まるかと思ったやん！次からは離れんといてな！\""
+    },
+    {
+      "source_line_start": 774081,
+      "source_line_end": 774088,
+      "sha256_utf8_no_final_newline": "c30232884c40d6acb7f0299f7f5511e2bdb921459e7df00e20b22b5977f9e527",
+      "text": "                      \"vision\": {\n                        \"basis\": \"body_eye_raycast_fov\",\n                        \"range_blocks\": 16.0,\n                        \"horizontal_fov_degrees\": 120.0,\n                        \"vertical_fov_degrees\": 90.0,\n                        \"player_visibility\": \"visible\",\n                        \"reason\": \"in_view\"\n                      },"
+    },
+    {
+      "source_line_start": 774155,
+      "source_line_end": 774166,
+      "sha256_utf8_no_final_newline": "a6edeb35923878b257239bb3f7e6f34e2191d96b4178b0dc16c2e53397c547d7",
+      "text": "                  \"reassurance\": {\n                    \"value\": 55.1686482886457,\n                    \"owner_distance\": 1.6882541591921572,\n                    \"owner_visible\": true,\n                    \"face_visible\": true,\n                    \"owner_working\": false,\n                    \"label\": \"安心度\",\n                    \"scale\": [\n                      0,\n                      100\n                    ]\n                  },"
+    },
+    {
+      "source_line_start": 774423,
+      "source_line_end": 774429,
+      "sha256_utf8_no_final_newline": "034d98ce56405a6b8ca17bf44aed43d0cc01700991e95cc1c724a5bdf09456e4",
+      "text": "2026-10-20 17:31:06.622 +09:00 [INFO] event=\"environment_body_prepared\" turn_id=\"warning_b07553270ed84103afeed4ed7fdd7c6a\" after_owner_arrival=true owner_working=false\n  available_actions:\n    [\n      \"stay\",\n      \"owner_face\"\n    ]\n"
+    },
+    {
+      "source_line_start": 774430,
+      "source_line_end": 774431,
+      "sha256_utf8_no_final_newline": "83082eb46b2e8e724561b07f2f646f4e0d6a9fb7aa3f5081a4392b0226c76ca7",
+      "text": "2026-10-20 17:31:08.575 +09:00 [INFO] event=\"environment_reaction\" outcome=\"speak\"\n"
+    },
+    {
+      "source_line_start": 774438,
+      "source_line_end": 774454,
+      "sha256_utf8_no_final_newline": "59d7038f0891f754bffea782474caac000dc20d7796c5928ae65ac69a1bf5667",
+      "text": "2026-10-20 17:31:08.607 +09:00 [INFO] event=\"environment_body_selected\" turn_id=\"warning_b07553270ed84103afeed4ed7fdd7c6a\"\n  command:\n    {\n      \"command_id\": \"e2d3fd26-e8c2-4b19-aace-8f6a60b17020\",\n      \"type\": \"inspect_body_target\",\n      \"issued_at\": \"2026-10-20T08:31:08.607462Z\",\n      \"expires_at\": \"2026-10-20T08:31:13.607462Z\",\n      \"context\": {\n        \"owner_id\": \"e18eff4d-fe3f-4aaf-9f00-0346f5da6fa8\",\n        \"body_id\": \"5741d606-bd70-4d05-8b7e-df47ded85efc\",\n        \"epoch\": \"764553a2-fcf5-4ffc-b8e2-168644775b34\",\n        \"dimension\": \"minecraft:overworld\"\n      },\n      \"purpose\": \"owner_face\",\n      \"target\": null\n    }\n"
+    },
+    {
+      "source_line_start": 774461,
+      "source_line_end": 774461,
+      "sha256_utf8_no_final_newline": "572b17108a9066c9530ad00ecc748036a80636a80dcf7f82f80bc60e0d00279b",
+      "text": "2026-10-20 17:31:08.839 +09:00 [INFO] event=\"warning_status\" session_id=\"ses_185244d74c18\" turn_id=\"warning_b07553270ed84103afeed4ed7fdd7c6a\" playback_status=\"started\""
+    },
+    {
+      "source_line_start": 774471,
+      "source_line_end": 774471,
+      "sha256_utf8_no_final_newline": "225c267792cbd71f0e55ce1099beca7d9ecff86076a5c8d3d636f65c1600e1d3",
+      "text": "2026-10-20 17:31:15.075 +09:00 [INFO] event=\"warning_status\" session_id=\"ses_185244d74c18\" turn_id=\"warning_b07553270ed84103afeed4ed7fdd7c6a\" playback_status=\"completed\""
+    },
+    {
+      "source_line_start": 774473,
+      "source_line_end": 774473,
+      "sha256_utf8_no_final_newline": "113727f69155c049b0fd3de18b266a93311309f6049cbd6a261563ac226821fc",
+      "text": "2026-10-20 17:31:22.081 +09:00 [INFO] event=\"warning_queued\" session_id=\"ses_185244d74c18\" turn_id=\"warning_1b1c227346044b889f231348cfdafeea\""
+    },
+    {
+      "source_line_start": 774473,
+      "source_line_end": 774491,
+      "sha256_utf8_no_final_newline": "8998765681f39b0d819854ac3719ccb72d2c0e530aab3f91e04e37a2773073da",
+      "text": "2026-10-20 17:31:22.081 +09:00 [INFO] event=\"warning_queued\" session_id=\"ses_185244d74c18\" turn_id=\"warning_1b1c227346044b889f231348cfdafeea\"\n  actions:\n    [\n      {\n        \"kind\": \"dark_push_no_light\",\n        \"text\": \"手元、見えへんの怖いわ……ほんま心臓が縮むって……。\",\n        \"cue_id\": null,\n        \"cue_sequence\": [],\n        \"interrupt\": false,\n        \"protect_ms\": 0,\n        \"scope\": {\n          \"kind\": \"event\"\n        },\n        \"leaf\": {\n          \"kind\": \"dark_push_no_light\",\n          \"details\": {\n            \"player_name\": \"プレイヤー\",\n            \"biome\": \"砂漠\",\n            \"time_phase\": \"day\","
+    },
+    {
+      "source_line_start": 774958,
+      "source_line_end": 774960,
+      "sha256_utf8_no_final_newline": "631e9694c53359dc7ef8964e4ff8177a9fa62b737f75f9e1def2c45c51f995ca",
+      "text": "                    \"turn_id\": \"warning_b07553270ed84103afeed4ed7fdd7c6a:reply\",\n                    \"role\": \"assistant\",\n                    \"text\": \"やっと捕まえたやん！もう、次は絶対離れんといてな！\""
+    },
+    {
+      "source_line_start": 774971,
+      "source_line_end": 774987,
+      "sha256_utf8_no_final_newline": "62b849f847ff7d054f53dae60d5e43e3f915a7ffd1f329781ed3e43d13505104",
+      "text": "2026-10-20 17:31:24.082 +09:00 [INFO] event=\"assist_result\" session_id=\"ses_185244d74c18\"\n  result:\n    {\n      \"result\": {\n        \"command_id\": \"e2d3fd26-e8c2-4b19-aace-8f6a60b17020\",\n        \"command_type\": \"inspect_body_target\",\n        \"status\": \"succeeded\",\n        \"executed_at\": \"2026-10-20T08:31:23.823934Z\",\n        \"selected_slot\": null,\n        \"selected_item_id\": null,\n        \"detail_code\": \"arrived\",\n        \"body_id\": \"5741d606-bd70-4d05-8b7e-df47ded85efc\",\n        \"epoch\": \"764553a2-fcf5-4ffc-b8e2-168644775b34\"\n      },\n      \"known_command\": false\n    }\n"
+    },
+    {
+      "source_line_start": 774988,
+      "source_line_end": 774989,
+      "sha256_utf8_no_final_newline": "e79f3c3d0b6e0118c4b146e3526021d0781f79caf3d5f74a78e59d8d8a7f9335",
+      "text": "2026-10-20 17:31:24.083 +09:00 [INFO] event=\"warning_invalidated\" session_id=\"ses_185244d74c18\" source_event=Some(StatusSnapshot) visual_count=0 recent=true\n"
+    },
+    {
+      "source_line_start": 774992,
+      "source_line_end": 774992,
+      "sha256_utf8_no_final_newline": "09ee5b7ccefe0c466cc6e6ed9dfafff2b062f1665361292ae6e56952b57888c1",
+      "text": "2026-10-20 17:31:24.084 +09:00 [INFO] event=\"warning_queued\" session_id=\"ses_185244d74c18\" turn_id=\"warning_aa05ef60590e43a8991bb65f176a055d\""
+    },
+    {
+      "source_line_start": 774992,
+      "source_line_end": 775010,
+      "sha256_utf8_no_final_newline": "d168d1d7d182e9df960c4a547a413fcbc402d966f07dbafa81e076bd0c96d5b4",
+      "text": "2026-10-20 17:31:24.084 +09:00 [INFO] event=\"warning_queued\" session_id=\"ses_185244d74c18\" turn_id=\"warning_aa05ef60590e43a8991bb65f176a055d\"\n  actions:\n    [\n      {\n        \"kind\": \"dark_push_after_breath\",\n        \"text\": \"心臓に悪いわ、マジで心臓に悪いわ……。\",\n        \"cue_id\": null,\n        \"cue_sequence\": [],\n        \"interrupt\": false,\n        \"protect_ms\": 2000,\n        \"scope\": {\n          \"kind\": \"event\"\n        },\n        \"leaf\": {\n          \"kind\": \"dark_push_after_breath\",\n          \"details\": {\n            \"player_name\": \"プレイヤー\",\n            \"biome\": \"砂漠\",\n            \"time_phase\": \"day\","
+    },
+    {
+      "source_line_start": 775446,
+      "source_line_end": 775446,
+      "sha256_utf8_no_final_newline": "e02fe27353c9fe0ac2b0216c264738b270ecd7146ab58379e55d700418ef0236",
+      "text": "2026-10-20 17:31:24.086 +09:00 [INFO] event=\"warning_status\" session_id=\"ses_185244d74c18\" turn_id=\"warning_1b1c227346044b889f231348cfdafeea\" playback_status=\"cancelled\""
+    },
+    {
+      "source_line_start": 775464,
+      "source_line_end": 775464,
+      "sha256_utf8_no_final_newline": "78effbed1cd0ee5e74e732c7c7c414d6abd915905e2124585c243dde3aea83c0",
+      "text": "2026-10-20 17:31:26.879 +09:00 [INFO] event=\"warning_status\" session_id=\"ses_185244d74c18\" turn_id=\"warning_aa05ef60590e43a8991bb65f176a055d\" playback_status=\"started\""
+    },
+    {
+      "source_line_start": 775474,
+      "source_line_end": 775474,
+      "sha256_utf8_no_final_newline": "7c763b0b4793aff0951ed789bd5244fe8a729c6474dd8948d7c5905a7dc878b5",
+      "text": "2026-10-20 17:31:33.626 +09:00 [INFO] event=\"warning_status\" session_id=\"ses_185244d74c18\" turn_id=\"warning_aa05ef60590e43a8991bb65f176a055d\" playback_status=\"completed\""
+    },
+    {
+      "source_line_start": 775476,
+      "source_line_end": 775476,
+      "sha256_utf8_no_final_newline": "44736db1c18a4154afd60967b167cda5a83e6601ba388b7f84a0d961419d45ac",
+      "text": "2026-10-20 17:31:40.097 +09:00 [INFO] event=\"warning_queued\" session_id=\"ses_185244d74c18\" turn_id=\"warning_aba1786c4155443e9a44a6ae53130c24\""
+    },
+    {
+      "source_line_start": 775476,
+      "source_line_end": 775494,
+      "sha256_utf8_no_final_newline": "3f0b5576e5d74d3bddaf809ac178d03cd04618d2f390924a9e302f739b95c155",
+      "text": "2026-10-20 17:31:40.097 +09:00 [INFO] event=\"warning_queued\" session_id=\"ses_185244d74c18\" turn_id=\"warning_aba1786c4155443e9a44a6ae53130c24\"\n  actions:\n    [\n      {\n        \"kind\": \"dark_push_no_light\",\n        \"text\": \"手元、見えへんの怖いわ……ほんま心臓が縮むって……。\",\n        \"cue_id\": null,\n        \"cue_sequence\": [],\n        \"interrupt\": false,\n        \"protect_ms\": 0,\n        \"scope\": {\n          \"kind\": \"event\"\n        },\n        \"leaf\": {\n          \"kind\": \"dark_push_no_light\",\n          \"details\": {\n            \"player_name\": \"プレイヤー\",\n            \"biome\": \"砂漠\",\n            \"time_phase\": \"day\","
+    },
+    {
+      "source_line_start": 775881,
+      "source_line_end": 775883,
+      "sha256_utf8_no_final_newline": "70138472349f6647ccf1fa70503e83100e9b3d0ebd5c0dc97b2a367d96e580e0",
+      "text": "                    \"turn_id\": \"warning_aa05ef60590e43a8991bb65f176a055d:reply\",\n                    \"role\": \"assistant\",\n                    \"text\": \"なんか、建物の中に入ったんか？周り、暗いなぁ。\""
+    },
+    {
+      "source_line_start": 775894,
+      "source_line_end": 775895,
+      "sha256_utf8_no_final_newline": "a3d1f54567d10617e36012984fdc4fb33f80c6c28db6610909f702d9ee3e79a8",
+      "text": "2026-10-20 17:31:41.094 +09:00 [INFO] event=\"warning_invalidated\" session_id=\"ses_185244d74c18\" source_event=Some(StatusSnapshot) visual_count=0 recent=true\n"
+    },
+    {
+      "source_line_start": 775898,
+      "source_line_end": 775898,
+      "sha256_utf8_no_final_newline": "4109df619d587a85ec089c5f0ad940221698d8796468d7f590271ffa260fd330",
+      "text": "2026-10-20 17:31:41.095 +09:00 [INFO] event=\"warning_status\" session_id=\"ses_185244d74c18\" turn_id=\"warning_aba1786c4155443e9a44a6ae53130c24\" playback_status=\"cancelled\""
+    },
+    {
+      "source_line_start": 775900,
+      "source_line_end": 775900,
+      "sha256_utf8_no_final_newline": "410680aabb47d2a63a491e2c38bc3202c738e69dfee16b381bd6402f3b2e2c24",
+      "text": "2026-10-20 17:31:49.095 +09:00 [INFO] event=\"warning_queued\" session_id=\"ses_185244d74c18\" turn_id=\"warning_580473de463145b1b1e00263682831f1\""
+    },
+    {
+      "source_line_start": 775900,
+      "source_line_end": 775918,
+      "sha256_utf8_no_final_newline": "7ab41056c5cd971713ac5ccb6803b73f9665d4c575b5a3c7453804da0fc8af93",
+      "text": "2026-10-20 17:31:49.095 +09:00 [INFO] event=\"warning_queued\" session_id=\"ses_185244d74c18\" turn_id=\"warning_580473de463145b1b1e00263682831f1\"\n  actions:\n    [\n      {\n        \"kind\": \"reassurance_notice\",\n        \"text\": \"\",\n        \"cue_id\": null,\n        \"cue_sequence\": [],\n        \"interrupt\": false,\n        \"protect_ms\": 0,\n        \"scope\": {\n          \"kind\": \"safe\"\n        },\n        \"leaf\": {\n          \"kind\": \"environment_reaction\",\n          \"details\": {\n            \"__reaction_guard\": {\n              \"dimension\": \"overworld\",\n              \"body_context\": {"
+    },
+    {
+      "source_line_start": 775963,
+      "source_line_end": 775970,
+      "sha256_utf8_no_final_newline": "c30232884c40d6acb7f0299f7f5511e2bdb921459e7df00e20b22b5977f9e527",
+      "text": "                      \"vision\": {\n                        \"basis\": \"body_eye_raycast_fov\",\n                        \"range_blocks\": 16.0,\n                        \"horizontal_fov_degrees\": 120.0,\n                        \"vertical_fov_degrees\": 90.0,\n                        \"player_visibility\": \"visible\",\n                        \"reason\": \"in_view\"\n                      },"
+    },
+    {
+      "source_line_start": 776037,
+      "source_line_end": 776048,
+      "sha256_utf8_no_final_newline": "b789526fece81758a9bff6eca9e83e77fe88cd59980b909346295cdd3914dc69",
+      "text": "                  \"reassurance\": {\n                    \"value\": 46.012100589590666,\n                    \"owner_distance\": 2.0480657451349047,\n                    \"owner_visible\": true,\n                    \"face_visible\": false,\n                    \"owner_working\": false,\n                    \"label\": \"安心度\",\n                    \"scale\": [\n                      0,\n                      100\n                    ]\n                  },"
+    },
+    {
+      "source_line_start": 776419,
+      "source_line_end": 776425,
+      "sha256_utf8_no_final_newline": "b1ee461d4c76e3c08e2756a60bb28069c45e551e0e46e5d9a902770196ff49a6",
+      "text": "2026-10-20 17:31:49.097 +09:00 [INFO] event=\"environment_body_prepared\" turn_id=\"warning_580473de463145b1b1e00263682831f1\" after_owner_arrival=true owner_working=false\n  available_actions:\n    [\n      \"stay\",\n      \"owner_face\"\n    ]\n"
+    },
+    {
+      "source_line_start": 776426,
+      "source_line_end": 776427,
+      "sha256_utf8_no_final_newline": "56b08150538233e73d326ebd2076acf4ea63264a9cec67128622cfa49b6f1d05",
+      "text": "2026-10-20 17:31:51.509 +09:00 [INFO] event=\"environment_reaction\" outcome=\"speak\"\n"
+    },
+    {
+      "source_line_start": 776434,
+      "source_line_end": 776435,
+      "sha256_utf8_no_final_newline": "f83325b713015382882b669bc39105708dc2c93387c853ea6663a93dfef93c9b",
+      "text": "2026-10-20 17:31:51.545 +09:00 [INFO] event=\"environment_body_selected\" turn_id=\"warning_580473de463145b1b1e00263682831f1\" command=null\n"
+    },
+    {
+      "source_line_start": 776442,
+      "source_line_end": 776442,
+      "sha256_utf8_no_final_newline": "cfce53ac2875e5aa7ee0caeda4fbc0f2f43bb7c032c35d207a5e436f69c59334",
+      "text": "2026-10-20 17:31:51.784 +09:00 [INFO] event=\"warning_status\" session_id=\"ses_185244d74c18\" turn_id=\"warning_580473de463145b1b1e00263682831f1\" playback_status=\"started\""
+    },
+    {
+      "source_line_start": 776452,
+      "source_line_end": 776452,
+      "sha256_utf8_no_final_newline": "3a4de43aceec57b668cb620f6746f474c0f4540f8c9c267d1c69950f08856665",
+      "text": "2026-10-20 17:31:58.020 +09:00 [INFO] event=\"warning_status\" session_id=\"ses_185244d74c18\" turn_id=\"warning_580473de463145b1b1e00263682831f1\" playback_status=\"completed\""
+    },
+    {
+      "source_line_start": 776454,
+      "source_line_end": 776454,
+      "sha256_utf8_no_final_newline": "84ba8fe4fb2bb1e1c7e1ad01f9473ee9aa4726a1bca5fe8ca9973d06fd2ba63c",
+      "text": "2026-10-20 17:32:02.100 +09:00 [INFO] event=\"warning_queued\" session_id=\"ses_185244d74c18\" turn_id=\"warning_ec73aa16d4624b5ca4ba2f6af2ebd8c1\""
+    },
+    {
+      "source_line_start": 776454,
+      "source_line_end": 776472,
+      "sha256_utf8_no_final_newline": "faa0635fd2e6809bd4e08ef3380b6598f5c1157d3ed0b7087a7f04fe7eab9b5b",
+      "text": "2026-10-20 17:32:02.100 +09:00 [INFO] event=\"warning_queued\" session_id=\"ses_185244d74c18\" turn_id=\"warning_ec73aa16d4624b5ca4ba2f6af2ebd8c1\"\n  actions:\n    [\n      {\n        \"kind\": \"reassurance_notice\",\n        \"text\": \"\",\n        \"cue_id\": null,\n        \"cue_sequence\": [],\n        \"interrupt\": false,\n        \"protect_ms\": 0,\n        \"scope\": {\n          \"kind\": \"safe\"\n        },\n        \"leaf\": {\n          \"kind\": \"environment_reaction\",\n          \"details\": {\n            \"__reaction_guard\": {\n              \"dimension\": \"overworld\",\n              \"body_context\": {"
+    },
+    {
+      "source_line_start": 776511,
+      "source_line_end": 776513,
+      "sha256_utf8_no_final_newline": "740b910ba06b6ec963bb96fad7ad509b4f1e78bdf3373bdd00c283a8d8ec90dc",
+      "text": "                    \"turn_id\": \"warning_580473de463145b1b1e00263682831f1:reply\",\n                    \"role\": \"assistant\",\n                    \"text\": \"あ、外や！明るくなって、村におるみたいやな！\""
+    },
+    {
+      "source_line_start": 776522,
+      "source_line_end": 776529,
+      "sha256_utf8_no_final_newline": "c30232884c40d6acb7f0299f7f5511e2bdb921459e7df00e20b22b5977f9e527",
+      "text": "                      \"vision\": {\n                        \"basis\": \"body_eye_raycast_fov\",\n                        \"range_blocks\": 16.0,\n                        \"horizontal_fov_degrees\": 120.0,\n                        \"vertical_fov_degrees\": 90.0,\n                        \"player_visibility\": \"visible\",\n                        \"reason\": \"in_view\"\n                      },"
+    },
+    {
+      "source_line_start": 776596,
+      "source_line_end": 776607,
+      "sha256_utf8_no_final_newline": "5d8e17b600daf44d544647730d247dd3769170e898f6e9b33ab56eb939ba386b",
+      "text": "                  \"reassurance\": {\n                    \"value\": 57.641252838797406,\n                    \"owner_distance\": 2.1218257194658303,\n                    \"owner_visible\": true,\n                    \"face_visible\": false,\n                    \"owner_working\": false,\n                    \"label\": \"安心度\",\n                    \"scale\": [\n                      0,\n                      100\n                    ]\n                  },"
+    },
+    {
+      "source_line_start": 776947,
+      "source_line_end": 776953,
+      "sha256_utf8_no_final_newline": "eeb5636c4bd3f89986296d7a9f35b13fb38ef6b933aa07eef84bf1eb734a0c5a",
+      "text": "2026-10-20 17:32:02.102 +09:00 [INFO] event=\"environment_body_prepared\" turn_id=\"warning_ec73aa16d4624b5ca4ba2f6af2ebd8c1\" after_owner_arrival=true owner_working=false\n  available_actions:\n    [\n      \"stay\",\n      \"owner_face\"\n    ]\n"
+    },
+    {
+      "source_line_start": 776954,
+      "source_line_end": 776955,
+      "sha256_utf8_no_final_newline": "5b849df4e00af87c53d4562ae8d66080d93df2a00cd2cff86b069ee5d129f0e1",
+      "text": "2026-10-20 17:32:04.363 +09:00 [INFO] event=\"environment_reaction\" outcome=\"speak\"\n"
+    },
+    {
+      "source_line_start": 776962,
+      "source_line_end": 776963,
+      "sha256_utf8_no_final_newline": "e3dea7cb26792d9df93657ba9866a5162fb562864cb2670e43d3ced437003094",
+      "text": "2026-10-20 17:32:04.393 +09:00 [INFO] event=\"environment_body_selected\" turn_id=\"warning_ec73aa16d4624b5ca4ba2f6af2ebd8c1\" command=null\n"
+    },
+    {
+      "source_line_start": 776970,
+      "source_line_end": 776970,
+      "sha256_utf8_no_final_newline": "716864a397df8de134d2fba9dbd7939063e8cdd0419099675fe796790fad575b",
+      "text": "2026-10-20 17:32:04.712 +09:00 [INFO] event=\"warning_status\" session_id=\"ses_185244d74c18\" turn_id=\"warning_ec73aa16d4624b5ca4ba2f6af2ebd8c1\" playback_status=\"started\""
+    },
+    {
+      "source_line_start": 776980,
+      "source_line_end": 776980,
+      "sha256_utf8_no_final_newline": "6de90a03586e57b4e0d85e888a99ffcb0f1269738c91ae89eb090e26803c338d",
+      "text": "2026-10-20 17:32:11.203 +09:00 [INFO] event=\"warning_status\" session_id=\"ses_185244d74c18\" turn_id=\"warning_ec73aa16d4624b5ca4ba2f6af2ebd8c1\" playback_status=\"completed\""
+    },
+    {
+      "source_line_start": 776982,
+      "source_line_end": 776982,
+      "sha256_utf8_no_final_newline": "34d60b463331b5063fcccff9ef6c8b63365c911f2505ee58cbe0a6f1eaff6201",
+      "text": "2026-10-20 17:32:34.099 +09:00 [INFO] event=\"warning_queued\" session_id=\"ses_185244d74c18\" turn_id=\"warning_7a7cc4a159074433989e52e5a7e5e42b\""
+    },
+    {
+      "source_line_start": 776982,
+      "source_line_end": 777000,
+      "sha256_utf8_no_final_newline": "4bfe84b5f16314c55a4394e04cadf36db0b464806059d4fd7d4112a493891851",
+      "text": "2026-10-20 17:32:34.099 +09:00 [INFO] event=\"warning_queued\" session_id=\"ses_185244d74c18\" turn_id=\"warning_7a7cc4a159074433989e52e5a7e5e42b\"\n  actions:\n    [\n      {\n        \"kind\": \"reassurance_notice\",\n        \"text\": \"\",\n        \"cue_id\": null,\n        \"cue_sequence\": [],\n        \"interrupt\": false,\n        \"protect_ms\": 0,\n        \"scope\": {\n          \"kind\": \"safe\"\n        },\n        \"leaf\": {\n          \"kind\": \"environment_reaction\",\n          \"details\": {\n            \"__reaction_guard\": {\n              \"dimension\": \"overworld\",\n              \"body_context\": {"
+    },
+    {
+      "source_line_start": 777044,
+      "source_line_end": 777046,
+      "sha256_utf8_no_final_newline": "ec34c605e2c2d7e64b6e776d1066464e0fcf0bfbf7b7bf29d1b946de0d17d42a",
+      "text": "                    \"turn_id\": \"warning_ec73aa16d4624b5ca4ba2f6af2ebd8c1:reply\",\n                    \"role\": \"assistant\",\n                    \"text\": \"やっと明るいとこ戻ってこれたな！あー、落ち着くわぁ。\""
+    },
+    {
+      "source_line_start": 777055,
+      "source_line_end": 777062,
+      "sha256_utf8_no_final_newline": "c30232884c40d6acb7f0299f7f5511e2bdb921459e7df00e20b22b5977f9e527",
+      "text": "                      \"vision\": {\n                        \"basis\": \"body_eye_raycast_fov\",\n                        \"range_blocks\": 16.0,\n                        \"horizontal_fov_degrees\": 120.0,\n                        \"vertical_fov_degrees\": 90.0,\n                        \"player_visibility\": \"visible\",\n                        \"reason\": \"in_view\"\n                      },"
+    },
+    {
+      "source_line_start": 777129,
+      "source_line_end": 777140,
+      "sha256_utf8_no_final_newline": "1859579ccb6970deaf09d0abe7d3b8a0e36beec5ce9ec55ab523aa502b57f1fe",
+      "text": "                  \"reassurance\": {\n                    \"value\": 55.83723869612705,\n                    \"owner_distance\": 4.003404134687916,\n                    \"owner_visible\": true,\n                    \"face_visible\": false,\n                    \"owner_working\": false,\n                    \"label\": \"安心度\",\n                    \"scale\": [\n                      0,\n                      100\n                    ]\n                  },"
+    },
+    {
+      "source_line_start": 777482,
+      "source_line_end": 777488,
+      "sha256_utf8_no_final_newline": "057ce586673e59f98cfc4775992135763a93d903c5ec21f715e638c934323994",
+      "text": "2026-10-20 17:32:34.101 +09:00 [INFO] event=\"environment_body_prepared\" turn_id=\"warning_7a7cc4a159074433989e52e5a7e5e42b\" after_owner_arrival=true owner_working=false\n  available_actions:\n    [\n      \"stay\",\n      \"owner_face\"\n    ]\n"
+    },
+    {
+      "source_line_start": 777489,
+      "source_line_end": 777490,
+      "sha256_utf8_no_final_newline": "3384516effe13d877a1a7e59f6670b01dcca6695fb2cd795eaf698ff79b9b53b",
+      "text": "2026-10-20 17:32:36.510 +09:00 [INFO] event=\"environment_reaction\" outcome=\"speak\"\n"
+    },
+    {
+      "source_line_start": 777497,
+      "source_line_end": 777498,
+      "sha256_utf8_no_final_newline": "679f349a80d3ef707edaa05a141dbe52b06d8b038b2f521e8cd8773a17c1e03f",
+      "text": "2026-10-20 17:32:36.541 +09:00 [INFO] event=\"environment_body_rejected\" turn_id=\"warning_7a7cc4a159074433989e52e5a7e5e42b\" error=body_autonomy_not_ready\n"
+    },
+    {
+      "source_line_start": 777505,
+      "source_line_end": 777505,
+      "sha256_utf8_no_final_newline": "70e3bf7fca274ee472b594bcd99cc872db7e5a7379a260340e7bb03517f6f5a9",
+      "text": "2026-10-20 17:32:36.787 +09:00 [INFO] event=\"warning_status\" session_id=\"ses_185244d74c18\" turn_id=\"warning_7a7cc4a159074433989e52e5a7e5e42b\" playback_status=\"started\""
+    },
+    {
+      "source_line_start": 777515,
+      "source_line_end": 777515,
+      "sha256_utf8_no_final_newline": "ef9425d01e976c674aa2666ba660dd66c81cdba1e4b573b59d3c260c59957c64",
+      "text": "2026-10-20 17:32:42.004 +09:00 [INFO] event=\"warning_status\" session_id=\"ses_185244d74c18\" turn_id=\"warning_7a7cc4a159074433989e52e5a7e5e42b\" playback_status=\"completed\""
+    },
+    {
+      "source_line_start": 777517,
+      "source_line_end": 777517,
+      "sha256_utf8_no_final_newline": "69df2c6fff6d12b7130dfb8b7ed5b8d5f4781c94641b2667bacf067dd643e235",
+      "text": "2026-10-20 17:32:46.935 +09:00 [INFO] event=\"warning_queued\" session_id=\"ses_185244d74c18\" turn_id=\"warning_fca21eb7cf4c498c9a7e0cc475fa6c25\""
+    },
+    {
+      "source_line_start": 777517,
+      "source_line_end": 777535,
+      "sha256_utf8_no_final_newline": "12d45a416ae4cf206be4fb3a58c2b7e60737050efb4ebeaed1cc87bc3e723854",
+      "text": "2026-10-20 17:32:46.935 +09:00 [INFO] event=\"warning_queued\" session_id=\"ses_185244d74c18\" turn_id=\"warning_fca21eb7cf4c498c9a7e0cc475fa6c25\"\n  actions:\n    [\n      {\n        \"kind\": \"reassurance_notice\",\n        \"text\": \"\",\n        \"cue_id\": null,\n        \"cue_sequence\": [],\n        \"interrupt\": false,\n        \"protect_ms\": 0,\n        \"scope\": {\n          \"kind\": \"safe\"\n        },\n        \"leaf\": {\n          \"kind\": \"environment_reaction\",\n          \"details\": {\n            \"__reaction_guard\": {\n              \"dimension\": \"overworld\",\n              \"body_context\": {"
+    },
+    {
+      "source_line_start": 777584,
+      "source_line_end": 777586,
+      "sha256_utf8_no_final_newline": "e150481cee51a9f058d8f9501491c3b0f56f8c145964a9856a84bb969ef9e683",
+      "text": "                    \"turn_id\": \"warning_7a7cc4a159074433989e52e5a7e5e42b:reply\",\n                    \"role\": \"assistant\",\n                    \"text\": \"やっと落ち着いたわぁ。ここ、砂漠やな！\""
+    },
+    {
+      "source_line_start": 777595,
+      "source_line_end": 777602,
+      "sha256_utf8_no_final_newline": "683be70926f4dbe13190a04776ce9ee0bef67e5f5c440779a1e4a0e0510f06d5",
+      "text": "                      \"vision\": {\n                        \"basis\": \"body_eye_raycast_fov\",\n                        \"range_blocks\": 16.0,\n                        \"horizontal_fov_degrees\": 120.0,\n                        \"vertical_fov_degrees\": 90.0,\n                        \"player_visibility\": \"not_visible\",\n                        \"reason\": \"outside_fov\"\n                      },"
+    },
+    {
+      "source_line_start": 777669,
+      "source_line_end": 777680,
+      "sha256_utf8_no_final_newline": "2741ee15ca9753acdfaaac13abb327edc887448f8a50f0bd137857d127863fa9",
+      "text": "                  \"reassurance\": {\n                    \"value\": 48.39219398597009,\n                    \"owner_distance\": 2.5764823618964576,\n                    \"owner_visible\": false,\n                    \"face_visible\": false,\n                    \"owner_working\": false,\n                    \"label\": \"安心度\",\n                    \"scale\": [\n                      0,\n                      100\n                    ]\n                  },"
+    },
+    {
+      "source_line_start": 777886,
+      "source_line_end": 777892,
+      "sha256_utf8_no_final_newline": "ef037cac88113c3739efeee9f902ef116c265261dbb53a8c892d2686d6ff9398",
+      "text": "2026-10-20 17:32:46.937 +09:00 [INFO] event=\"environment_body_prepared\" turn_id=\"warning_fca21eb7cf4c498c9a7e0cc475fa6c25\" after_owner_arrival=true owner_working=false\n  available_actions:\n    [\n      \"stay\",\n      \"owner_face\"\n    ]\n"
+    },
+    {
+      "source_line_start": 777893,
+      "source_line_end": 777894,
+      "sha256_utf8_no_final_newline": "8f4a2adc2dd1813fc4635b74bf41d6b8df5e8a16094742376709be217e0ec528",
+      "text": "2026-10-20 17:32:48.884 +09:00 [INFO] event=\"environment_reaction\" outcome=\"speak\"\n"
+    },
+    {
+      "source_line_start": 777901,
+      "source_line_end": 777917,
+      "sha256_utf8_no_final_newline": "315539e03674db70da57c19a68fd4b85899473d490bcdd5be6eaa14281caccf1",
+      "text": "2026-10-20 17:32:48.916 +09:00 [INFO] event=\"environment_body_selected\" turn_id=\"warning_fca21eb7cf4c498c9a7e0cc475fa6c25\"\n  command:\n    {\n      \"command_id\": \"232c3ec0-2987-4f13-9bf3-a22059c563ea\",\n      \"type\": \"inspect_body_target\",\n      \"issued_at\": \"2026-10-20T08:32:48.916350Z\",\n      \"expires_at\": \"2026-10-20T08:32:53.916350Z\",\n      \"context\": {\n        \"owner_id\": \"e18eff4d-fe3f-4aaf-9f00-0346f5da6fa8\",\n        \"body_id\": \"5741d606-bd70-4d05-8b7e-df47ded85efc\",\n        \"epoch\": \"764553a2-fcf5-4ffc-b8e2-168644775b34\",\n        \"dimension\": \"minecraft:overworld\"\n      },\n      \"purpose\": \"owner_face\",\n      \"target\": null\n    }\n"
+    },
+    {
+      "source_line_start": 777924,
+      "source_line_end": 777924,
+      "sha256_utf8_no_final_newline": "c2a5b49b819368972161e0fbf0f527cc0a77a91ce820be199cfe62323007d7f2",
+      "text": "2026-10-20 17:32:49.203 +09:00 [INFO] event=\"warning_status\" session_id=\"ses_185244d74c18\" turn_id=\"warning_fca21eb7cf4c498c9a7e0cc475fa6c25\" playback_status=\"started\""
+    },
+    {
+      "source_line_start": 777932,
+      "source_line_end": 777948,
+      "sha256_utf8_no_final_newline": "316646d8b1c31b226cae81f46faa35304307b4bbdb453989895d60cc6b446634",
+      "text": "2026-10-20 17:32:52.104 +09:00 [INFO] event=\"assist_result\" session_id=\"ses_185244d74c18\"\n  result:\n    {\n      \"result\": {\n        \"command_id\": \"232c3ec0-2987-4f13-9bf3-a22059c563ea\",\n        \"command_type\": \"inspect_body_target\",\n        \"status\": \"succeeded\",\n        \"executed_at\": \"2026-10-20T08:32:51.843535Z\",\n        \"selected_slot\": null,\n        \"selected_item_id\": null,\n        \"detail_code\": \"arrived\",\n        \"body_id\": \"5741d606-bd70-4d05-8b7e-df47ded85efc\",\n        \"epoch\": \"764553a2-fcf5-4ffc-b8e2-168644775b34\"\n      },\n      \"known_command\": false\n    }\n"
+    },
+    {
+      "source_line_start": 777949,
+      "source_line_end": 777964,
+      "sha256_utf8_no_final_newline": "b7bb973e7061a3816ea6d91ede4356b99f948837cbd27e07dd233b1c102cd382",
+      "text": "2026-10-20 17:32:52.104 +09:00 [INFO] event=\"body_interest_result\" session_id=\"ses_185244d74c18\"\n  result:\n    {\n      \"command_id\": \"232c3ec0-2987-4f13-9bf3-a22059c563ea\",\n      \"type\": \"inspect_body_target\",\n      \"status\": \"succeeded\",\n      \"detail_code\": \"arrived\",\n      \"executed_at\": \"2026-10-20T08:32:51.843535Z\",\n      \"context\": {\n        \"owner_id\": \"e18eff4d-fe3f-4aaf-9f00-0346f5da6fa8\",\n        \"body_id\": \"5741d606-bd70-4d05-8b7e-df47ded85efc\",\n        \"epoch\": \"764553a2-fcf5-4ffc-b8e2-168644775b34\",\n        \"dimension\": \"minecraft:overworld\"\n      }\n    }\n"
+    },
+    {
+      "source_line_start": 777967,
+      "source_line_end": 777967,
+      "sha256_utf8_no_final_newline": "ff5263b7b399bf2f042751d85f1e97588a66da575e05ee21ff73e480de1be501",
+      "text": "2026-10-20 17:32:55.197 +09:00 [INFO] event=\"warning_status\" session_id=\"ses_185244d74c18\" turn_id=\"warning_fca21eb7cf4c498c9a7e0cc475fa6c25\" playback_status=\"completed\""
+    },
+    {
+      "source_line_start": 777969,
+      "source_line_end": 777969,
+      "sha256_utf8_no_final_newline": "84b75b1a9329e322616d5010f403200bacf53e426efc9b7e050736d767a094a5",
+      "text": "2026-10-20 17:33:14.105 +09:00 [INFO] event=\"warning_queued\" session_id=\"ses_185244d74c18\" turn_id=\"warning_d799605a9a254b4b9cf5e5b37edab02d\""
+    },
+    {
+      "source_line_start": 777969,
+      "source_line_end": 777987,
+      "sha256_utf8_no_final_newline": "ff1d18745b5bee18f1409e250dc7514601d0e9a905cd981309c447abce20e726",
+      "text": "2026-10-20 17:33:14.105 +09:00 [INFO] event=\"warning_queued\" session_id=\"ses_185244d74c18\" turn_id=\"warning_d799605a9a254b4b9cf5e5b37edab02d\"\n  actions:\n    [\n      {\n        \"kind\": \"reassurance_notice\",\n        \"text\": \"\",\n        \"cue_id\": null,\n        \"cue_sequence\": [],\n        \"interrupt\": false,\n        \"protect_ms\": 0,\n        \"scope\": {\n          \"kind\": \"safe\"\n        },\n        \"leaf\": {\n          \"kind\": \"environment_reaction\",\n          \"details\": {\n            \"__reaction_guard\": {\n              \"dimension\": \"overworld\",\n              \"body_context\": {"
+    },
+    {
+      "source_line_start": 778041,
+      "source_line_end": 778043,
+      "sha256_utf8_no_final_newline": "2e5c2bfc4076e08ca361579290e2a609882e9d3156c67cd5bc091834af9fca07",
+      "text": "                    \"turn_id\": \"warning_fca21eb7cf4c498c9a7e0cc475fa6c25:reply\",\n                    \"role\": \"assistant\",\n                    \"text\": \"ツレ、どこ見てんねん？オレのこと、ちゃんと見てや！\""
+    },
+    {
+      "source_line_start": 778052,
+      "source_line_end": 778059,
+      "sha256_utf8_no_final_newline": "c30232884c40d6acb7f0299f7f5511e2bdb921459e7df00e20b22b5977f9e527",
+      "text": "                      \"vision\": {\n                        \"basis\": \"body_eye_raycast_fov\",\n                        \"range_blocks\": 16.0,\n                        \"horizontal_fov_degrees\": 120.0,\n                        \"vertical_fov_degrees\": 90.0,\n                        \"player_visibility\": \"visible\",\n                        \"reason\": \"in_view\"\n                      },"
+    },
+    {
+      "source_line_start": 778131,
+      "source_line_end": 778142,
+      "sha256_utf8_no_final_newline": "0339db87c8638c7617214caae8aa3b23772c06a8ac8650de01b3252ff3b61b26",
+      "text": "                  \"reassurance\": {\n                    \"value\": 59.51438573345427,\n                    \"owner_distance\": 2.244798124813064,\n                    \"owner_visible\": true,\n                    \"face_visible\": false,\n                    \"owner_working\": false,\n                    \"label\": \"安心度\",\n                    \"scale\": [\n                      0,\n                      100\n                    ]\n                  },"
+    },
+    {
+      "source_line_start": 778489,
+      "source_line_end": 778495,
+      "sha256_utf8_no_final_newline": "987c3becf97b34ceb91ffdb5942a00d8a915429c12ee19021bc5a2e4096c1bca",
+      "text": "2026-10-20 17:33:14.108 +09:00 [INFO] event=\"environment_body_prepared\" turn_id=\"warning_d799605a9a254b4b9cf5e5b37edab02d\" after_owner_arrival=true owner_working=false\n  available_actions:\n    [\n      \"stay\",\n      \"owner_face\"\n    ]\n"
+    },
+    {
+      "source_line_start": 778496,
+      "source_line_end": 778497,
+      "sha256_utf8_no_final_newline": "90e0f0d07d61e8b92a289673c2e2447cb237a446f03373788191805b23319a8e",
+      "text": "2026-10-20 17:33:16.379 +09:00 [INFO] event=\"environment_reaction\" outcome=\"speak\"\n"
+    },
+    {
+      "source_line_start": 778504,
+      "source_line_end": 778505,
+      "sha256_utf8_no_final_newline": "079da1b5fea74acb3abdab78a504a76e52d718af150bcb3051728fd0865c43e5",
+      "text": "2026-10-20 17:33:16.407 +09:00 [INFO] event=\"environment_body_selected\" turn_id=\"warning_d799605a9a254b4b9cf5e5b37edab02d\" command=null\n"
+    },
+    {
+      "source_line_start": 778512,
+      "source_line_end": 778512,
+      "sha256_utf8_no_final_newline": "d29167f20fb04196ddc5418d9fd575d73b78abac59aed7326c57f143c256b9ac",
+      "text": "2026-10-20 17:33:16.667 +09:00 [INFO] event=\"warning_status\" session_id=\"ses_185244d74c18\" turn_id=\"warning_d799605a9a254b4b9cf5e5b37edab02d\" playback_status=\"started\""
+    },
+    {
+      "source_line_start": 778522,
+      "source_line_end": 778522,
+      "sha256_utf8_no_final_newline": "149e6e360496861d29cb11ed14bec1c3d982ceffcf0e7f88c36215c0dbad3dea",
+      "text": "2026-10-20 17:33:22.142 +09:00 [INFO] event=\"warning_status\" session_id=\"ses_185244d74c18\" turn_id=\"warning_d799605a9a254b4b9cf5e5b37edab02d\" playback_status=\"completed\""
+    },
+    {
+      "source_line_start": 778524,
+      "source_line_end": 778524,
+      "sha256_utf8_no_final_newline": "d0091e69d091487cb3eac19099653ab938203087c0bdf749abda6c62a167c053",
+      "text": "2026-10-20 17:33:23.105 +09:00 [INFO] event=\"warning_queued\" session_id=\"ses_185244d74c18\" turn_id=\"warning_e2c2430a273e4f64b4b5391476243734\""
+    },
+    {
+      "source_line_start": 778524,
+      "source_line_end": 778542,
+      "sha256_utf8_no_final_newline": "7222acf2d64fe0385ad7ede58eaad561f2f03f31f80ea491e809cac3c781e17d",
+      "text": "2026-10-20 17:33:23.105 +09:00 [INFO] event=\"warning_queued\" session_id=\"ses_185244d74c18\" turn_id=\"warning_e2c2430a273e4f64b4b5391476243734\"\n  actions:\n    [\n      {\n        \"kind\": \"reassurance_notice\",\n        \"text\": \"\",\n        \"cue_id\": null,\n        \"cue_sequence\": [],\n        \"interrupt\": false,\n        \"protect_ms\": 0,\n        \"scope\": {\n          \"kind\": \"safe\"\n        },\n        \"leaf\": {\n          \"kind\": \"environment_reaction\",\n          \"details\": {\n            \"__reaction_guard\": {\n              \"dimension\": \"overworld\",\n              \"body_context\": {"
+    },
+    {
+      "source_line_start": 778601,
+      "source_line_end": 778603,
+      "sha256_utf8_no_final_newline": "065ba9fcc260d276fe4a8c768268c93257d9086a31a67a3de362bc32a5be45b2",
+      "text": "                    \"turn_id\": \"warning_d799605a9a254b4b9cf5e5b37edab02d:reply\",\n                    \"role\": \"assistant\",\n                    \"text\": \"ほんまや、村や！ここならもう大丈夫やな！\""
+    },
+    {
+      "source_line_start": 778612,
+      "source_line_end": 778619,
+      "sha256_utf8_no_final_newline": "c30232884c40d6acb7f0299f7f5511e2bdb921459e7df00e20b22b5977f9e527",
+      "text": "                      \"vision\": {\n                        \"basis\": \"body_eye_raycast_fov\",\n                        \"range_blocks\": 16.0,\n                        \"horizontal_fov_degrees\": 120.0,\n                        \"vertical_fov_degrees\": 90.0,\n                        \"player_visibility\": \"visible\",\n                        \"reason\": \"in_view\"\n                      },"
+    },
+    {
+      "source_line_start": 778707,
+      "source_line_end": 778718,
+      "sha256_utf8_no_final_newline": "dea0996f1a8ef6d8bfe1688b7dc0a67c95db437b67df842f5065fe7c0cb81dfe",
+      "text": "                  \"reassurance\": {\n                    \"value\": 60.81879754773118,\n                    \"owner_distance\": 10.735107805214598,\n                    \"owner_visible\": true,\n                    \"face_visible\": false,\n                    \"owner_working\": false,\n                    \"label\": \"安心度\",\n                    \"scale\": [\n                      0,\n                      100\n                    ]\n                  },"
+    },
+    {
+      "source_line_start": 779037,
+      "source_line_end": 779044,
+      "sha256_utf8_no_final_newline": "9749c06c18a3cc9d358cec336b0c95c33b596ba284a559f071a5fcb556921847",
+      "text": "2026-10-20 17:33:23.109 +09:00 [INFO] event=\"environment_body_prepared\" turn_id=\"warning_e2c2430a273e4f64b4b5391476243734\" after_owner_arrival=false owner_working=false\n  available_actions:\n    [\n      \"stay\",\n      \"owner_near\",\n      \"owner_face\"\n    ]\n"
+    },
+    {
+      "source_line_start": 779045,
+      "source_line_end": 779046,
+      "sha256_utf8_no_final_newline": "10f6608ee13cbb52a804970ae774c2947505a7b696c1d859c643efca5a65b4fd",
+      "text": "2026-10-20 17:33:25.406 +09:00 [INFO] event=\"environment_reaction\" outcome=\"speak\"\n"
+    },
+    {
+      "source_line_start": 779053,
+      "source_line_end": 779054,
+      "sha256_utf8_no_final_newline": "3ccd34a1f3db4b3a0099726cde1b96f7574f7a0a5799cb5d7f754b2d6662700c",
+      "text": "2026-10-20 17:33:25.438 +09:00 [INFO] event=\"environment_body_selected\" turn_id=\"warning_e2c2430a273e4f64b4b5391476243734\" command=null\n"
+    },
+    {
+      "source_line_start": 779061,
+      "source_line_end": 779061,
+      "sha256_utf8_no_final_newline": "19e63c012f2f6ca6bdad5d954e19298e3b0c2a59fb825ccdbc0f79a3649ea71a",
+      "text": "2026-10-20 17:33:26.034 +09:00 [INFO] event=\"warning_status\" session_id=\"ses_185244d74c18\" turn_id=\"warning_e2c2430a273e4f64b4b5391476243734\" playback_status=\"started\""
+    },
+    {
+      "source_line_start": 779065,
+      "source_line_end": 779065,
+      "sha256_utf8_no_final_newline": "587342a24945ff23e8ee902132ad4749d65feb6914e9cea3d156e000e16181dd",
+      "text": "2026-10-20 17:33:32.451 +09:00 [INFO] event=\"warning_status\" session_id=\"ses_185244d74c18\" turn_id=\"warning_e2c2430a273e4f64b4b5391476243734\" playback_status=\"completed\""
+    }
+  ],
+  "preservation_note": "Selected original log lines supporting the structured turn audit are preserved here. This is not a complete replay dataset. Contextual haiku model metadata is not an identification of the environment-reaction model.",
+  "audited_window_sha256_utf8_no_final_newline": "510ea6d48228a021dff5f7ba0a07085d97b23bd6ab17824853ee9736443a3319"
+}

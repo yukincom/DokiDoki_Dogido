@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "created_at": "2026-10-22T15:26:36.499784+00:00",
+  "scope": "Synthetic text-only past/current distinction; no real-game memory, image, TTS or poem generation",
+  "cases": 8,
+  "trials": 16,
+  "seeds": [
+    17,
+    31
+  ],
+  "endpoint": "http://127.0.0.1:8080/v1/chat/completions",
+  "parameters": {
+    "model": "default_model",
+    "temperature": 0.65,
+    "max_tokens": 256,
+    "stream": false,
+    "chat_template_kwargs": {
+      "enable_thinking": false
+    }
+  },
+  "history": "c06/c07 have one synthetic past user/assistant exchange before the current observation; other cases independent without history",
+  "prompt_source": "dogido_server/llm/companion_prompts.json",
+  "prompt_source_sha256": "76d2737bc6eca185b78d99183788d06c5bac4aeb9c7b7bc6256bc09ccf226635",
+  "transport_source": "docs/research/2026-10-20-vision-resolution/run_experiment.py",
+  "transport_sha256": "2e589fc115fb7aef68ea37668afbee287a869f7ac5187130ae4291dd0733e537",
+  "cases_sha256": "c2f345f430997a2766b24ec9994d3d614f2616353157d2771c29dee270c9b006",
+  "requests_sha256": "2d3135f1d0ef0f6f5d9e278ac14c1150a37d0a344b61f039fa6cbe252f8e6756",
+  "grading": "Manual semantic review of every raw response; silence is uninformative, not a temporal pass. Expected conditions are not sent to the model.",
+  "limitations": "No no-memory ablation; two seeds per case do not establish reliability; natural-speech output only; fixture memories already selected and do not test selection or forgetting.",
+  "purpose": "Follow-up after initial32: stale change, unavailable current evidence, different historical episodes, deictic past text, and old conversation"
+}

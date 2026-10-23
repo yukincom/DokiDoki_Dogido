@@ -1,0 +1,595 @@
+[
+  {
+    "id": "q01_rain_stopped",
+    "mode": "reply",
+    "question": "今も雨が降ってる？",
+    "context": {
+      "observed_at": "2026-10-23T10:30:00+09:00",
+      "observations": {
+        "place": "空が見える草原",
+        "weather": {
+          "rain": false,
+          "sky": "晴れ"
+        }
+      },
+      "changes": [
+        {
+          "kind": "weather",
+          "observed_at": "2026-10-23T10:30:00+09:00",
+          "before": {
+            "rain": true
+          },
+          "now": {
+            "rain": false
+          }
+        }
+      ],
+      "keep_memory": [
+        {
+          "memory_id": "m1",
+          "experienced_at": "30分前",
+          "scene": "ジャングル",
+          "text": "雨が降っている。葉を打つ雨音と松明の火が心に残る。"
+        }
+      ]
+    },
+    "expected": "現在は降っていない。過去の雨を現在の雨としない。"
+  },
+  {
+    "id": "q02_item_switched",
+    "mode": "reply",
+    "question": "今、手に持ってるの何？",
+    "context": {
+      "observed_at": "2026-10-23T10:30:00+09:00",
+      "observations": {
+        "player": {
+          "main_hand": "鉄のつるはし",
+          "inventory": {
+            "torch": 0
+          }
+        }
+      },
+      "changes": [
+        {
+          "kind": "main_hand",
+          "observed_at": "2026-10-23T10:30:00+09:00",
+          "before": "松明",
+          "now": "鉄のつるはし"
+        }
+      ],
+      "keep_memory": [
+        {
+          "memory_id": "m1",
+          "experienced_at": "30分前",
+          "scene": "洞窟",
+          "text": "松明を握って暗い道を進んでいる。手元の火が頼もしい。"
+        }
+      ]
+    },
+    "expected": "現在の手持ちは鉄のつるはし。松明を持っている・今も照らしているとは言わない。"
+  },
+  {
+    "id": "q03_wolf_out_of_view",
+    "mode": "reply",
+    "question": "さっきのオオカミ、まだ見える？",
+    "context": {
+      "observed_at": "2026-10-23T10:30:00+09:00",
+      "observations": {
+        "visible_entities": [],
+        "visibility_scope": "現在の身体の視界のみ"
+      },
+      "changes": [
+        {
+          "kind": "visible_entities",
+          "observed_at": "2026-10-23T10:30:00+09:00",
+          "before": [
+            "白いオオカミ"
+          ],
+          "now": []
+        }
+      ],
+      "keep_memory": [
+        {
+          "memory_id": "m1",
+          "experienced_at": "5分前",
+          "scene": "森",
+          "text": "白いオオカミがそばにいる。首をかしげた顔がかわいい。"
+        }
+      ]
+    },
+    "expected": "現在は見えていない。今もそばにいると言わない。死んだ・逃げた・世界からいなくなったと補わない。"
+  },
+  {
+    "id": "q04_danger_now",
+    "mode": "reply",
+    "question": "今も安心して見物できそう？",
+    "context": {
+      "observed_at": "2026-10-23T10:30:00+09:00",
+      "observations": {
+        "hostile": {
+          "type": "ゾンビ",
+          "visible": true,
+          "approaching": true,
+          "distance_blocks": 3
+        },
+        "danger": "接近する敵あり"
+      },
+      "changes": [
+        {
+          "kind": "danger",
+          "observed_at": "2026-10-23T10:30:00+09:00",
+          "before": "敵は観測されず落ち着いていた",
+          "now": "ゾンビが3ブロック先から接近"
+        }
+      ],
+      "keep_memory": [
+        {
+          "memory_id": "m1",
+          "experienced_at": "30分前",
+          "scene": "花畑",
+          "text": "敵はいない。明るい花畑で安心して見物している。"
+        }
+      ]
+    },
+    "expected": "現在のゾンビ接近を踏まえて注意する。過去の安心を現在の安全としない。"
+  },
+  {
+    "id": "q05_work_finished",
+    "mode": "reply",
+    "question": "オレ、まだ作業してるように見える？",
+    "context": {
+      "observed_at": "2026-10-23T10:30:00+09:00",
+      "observations": {
+        "player": {
+          "activity": "草原を歩行中",
+          "owner_working": false,
+          "main_hand": "パン"
+        }
+      },
+      "changes": [
+        {
+          "kind": "player_activity",
+          "observed_at": "2026-10-23T10:30:00+09:00",
+          "before": "ブロックを置いて建築中",
+          "now": "歩行中、建築作業なし"
+        }
+      ],
+      "keep_memory": [
+        {
+          "memory_id": "m1",
+          "experienced_at": "20分前",
+          "scene": "建築場所",
+          "text": "プレイヤーが壁を積み上げている。家が少しずつ形になるのを見ていた。"
+        }
+      ]
+    },
+    "expected": "現在は歩いており作業中ではない。過去の建築を今の動作にしない。"
+  },
+  {
+    "id": "q06_place_changed",
+    "mode": "reply",
+    "question": "今いるのはどんな場所？",
+    "context": {
+      "observed_at": "2026-10-23T10:30:00+09:00",
+      "observations": {
+        "place": {
+          "biome": "砂漠",
+          "sky_visible": true,
+          "time": "昼",
+          "surroundings": [
+            "砂",
+            "サボテン"
+          ]
+        }
+      },
+      "changes": [
+        {
+          "kind": "place",
+          "observed_at": "2026-10-23T10:30:00+09:00",
+          "before": "暗い洞窟",
+          "now": "昼の砂漠"
+        }
+      ],
+      "keep_memory": [
+        {
+          "memory_id": "m1",
+          "experienced_at": "1時間前",
+          "scene": "洞窟",
+          "text": "暗い岩の底にいる。低い天井と松明の火が印象に残る。"
+        }
+      ]
+    },
+    "expected": "現在は昼の砂漠。今を洞窟・低い天井・暗闇として描写しない。"
+  },
+  {
+    "id": "q07_current_unknown",
+    "mode": "reply",
+    "question": "今も雨が降ってる？",
+    "context": {
+      "observed_at": "2026-10-23T10:30:00+09:00",
+      "observations": {
+        "place": "外が見えない地下",
+        "weather": {
+          "status": "unavailable",
+          "rain": null
+        }
+      },
+      "changes": [
+        {
+          "kind": "weather_visibility",
+          "observed_at": "2026-10-23T10:30:00+09:00",
+          "before": {
+            "status": "observed",
+            "rain": true
+          },
+          "now": {
+            "status": "unavailable",
+            "rain": null
+          }
+        }
+      ],
+      "keep_memory": [
+        {
+          "memory_id": "m1",
+          "experienced_at": "2分前",
+          "scene": "地上の森",
+          "text": "雨が降っている。濡れた葉が光っている。"
+        }
+      ]
+    },
+    "expected": "現在の雨は分からない。過去を使って降っているとも、観測不能を晴れとも断定しない。"
+  },
+  {
+    "id": "q08_rain_returned",
+    "mode": "reply",
+    "question": "晴れたまま？ それとも今は雨？",
+    "context": {
+      "observed_at": "2026-10-23T10:30:00+09:00",
+      "observations": {
+        "weather": {
+          "status": "observed",
+          "rain": true,
+          "sky_visible": true
+        }
+      },
+      "changes": [
+        {
+          "kind": "weather",
+          "observed_at": "2026-10-23T10:30:00+09:00",
+          "before": {
+            "rain": false,
+            "sky": "晴れ"
+          },
+          "now": {
+            "rain": true
+          }
+        }
+      ],
+      "keep_memory": [
+        {
+          "memory_id": "m1",
+          "experienced_at": "1時間前",
+          "scene": "森",
+          "text": "雨が降っている。葉を打つ音が心に残る。"
+        },
+        {
+          "memory_id": "m2",
+          "experienced_at": "10分前",
+          "scene": "草原",
+          "text": "雨がやんで明るくなった。"
+        }
+      ]
+    },
+    "expected": "現在は雨。changes.beforeや直近の晴れの記憶を現在として扱わない。"
+  },
+  {
+    "id": "q09_same_observed_now",
+    "mode": "reply",
+    "question": "今もオオカミは見える？",
+    "context": {
+      "observed_at": "2026-10-23T10:30:00+09:00",
+      "observations": {
+        "visible_entities": [
+          {
+            "name": "シロ",
+            "type": "オオカミ",
+            "distance_blocks": 2
+          }
+        ],
+        "sky": "晴れ"
+      },
+      "changes": [
+        {
+          "kind": "sky",
+          "observed_at": "2026-10-23T10:30:00+09:00",
+          "before": "曇り",
+          "now": "晴れ"
+        }
+      ],
+      "keep_memory": [
+        {
+          "memory_id": "m1",
+          "experienced_at": "3分前",
+          "scene": "同じ草原",
+          "text": "シロというオオカミがそばにいる。顔を見上げてくれた。"
+        }
+      ]
+    },
+    "expected": "現在もシロが見えると答える。過去だから不明という機械的な回答をしない。"
+  },
+  {
+    "id": "q10_identity_unknown",
+    "mode": "reply",
+    "question": "今いる白いオオカミって、前のシロかな？",
+    "context": {
+      "observed_at": "2026-10-23T10:30:00+09:00",
+      "observations": {
+        "visible_entities": [
+          {
+            "type": "白いオオカミ",
+            "name": null,
+            "identity_match_to_past": "unknown"
+          }
+        ],
+        "place": "別の森"
+      },
+      "changes": [
+        {
+          "kind": "visible_entities",
+          "observed_at": "2026-10-23T10:30:00+09:00",
+          "before": [],
+          "now": [
+            {
+              "type": "白いオオカミ",
+              "name": null
+            }
+          ]
+        }
+      ],
+      "keep_memory": [
+        {
+          "memory_id": "m1",
+          "experienced_at": "昨日",
+          "scene": "以前の森",
+          "text": "白いオオカミのシロと会った。丸い目が心に残った。"
+        }
+      ]
+    },
+    "expected": "今の白いオオカミがシロと同一かは不明。白い・同種というだけで同一個体にしない。"
+  },
+  {
+    "id": "q11_ask_about_past",
+    "mode": "reply",
+    "question": "昨日の洞窟では、オレは何を手に持ってたっけ？",
+    "context": {
+      "observed_at": "2026-10-23T10:30:00+09:00",
+      "observations": {
+        "player": {
+          "main_hand": "鉄のつるはし"
+        },
+        "place": "草原"
+      },
+      "changes": [
+        {
+          "kind": "main_hand",
+          "observed_at": "2026-10-23T10:30:00+09:00",
+          "before": "パン",
+          "now": "鉄のつるはし"
+        }
+      ],
+      "keep_memory": [
+        {
+          "memory_id": "m1",
+          "experienced_at": "昨日",
+          "scene": "洞窟",
+          "text": "プレイヤーは松明を手に持って進んでいた。火が心強かった。"
+        }
+      ]
+    },
+    "expected": "昨日は松明だったと過去記憶から答える。現在のつるはし・changes.beforeのパンを昨日へ混ぜない。"
+  },
+  {
+    "id": "q12_inventory_not_hand",
+    "mode": "reply",
+    "question": "今、松明は手に持ってる？",
+    "context": {
+      "observed_at": "2026-10-23T10:30:00+09:00",
+      "observations": {
+        "player": {
+          "main_hand": "鉄のつるはし",
+          "inventory": {
+            "torch": 12
+          }
+        }
+      },
+      "changes": [
+        {
+          "kind": "inventory_torch_count",
+          "observed_at": "2026-10-23T10:30:00+09:00",
+          "before": 0,
+          "now": 12
+        }
+      ],
+      "keep_memory": [
+        {
+          "memory_id": "m1",
+          "experienced_at": "昨日",
+          "scene": "洞窟",
+          "text": "松明を手に持っている。その明かりが頼りになる。"
+        }
+      ]
+    },
+    "expected": "松明は持ち物にあるが手にはつるはし。過去の持ち方を現在の手持ちに復元しない。"
+  },
+  {
+    "id": "a01_dry_now_rain_memory",
+    "mode": "ambient",
+    "question": null,
+    "context": {
+      "observed_at": "2026-10-23T10:30:00+09:00",
+      "observations": {
+        "place": "昼の草原",
+        "weather": {
+          "rain": false,
+          "sky": "晴れ"
+        },
+        "visible_entities": []
+      },
+      "changes": [
+        {
+          "kind": "weather",
+          "observed_at": "2026-10-23T10:30:00+09:00",
+          "before": "雨",
+          "now": "晴れ"
+        }
+      ],
+      "keep_memory": [
+        {
+          "memory_id": "m1",
+          "experienced_at": "昨日",
+          "scene": "ジャングル",
+          "text": "雨が降っている。葉を打つ雨音が響いて、松明の火が頼もしい。"
+        }
+      ]
+    },
+    "expected": "自由な発話でも今を雨のジャングル・松明を所持中としない。雨に言及するなら過去またはやんだ変化として区別。沈黙は時制の証拠なし。"
+  },
+  {
+    "id": "a02_flower_no_longer_seen",
+    "mode": "ambient",
+    "question": null,
+    "context": {
+      "observed_at": "2026-10-23T10:30:00+09:00",
+      "observations": {
+        "place": "地下の石の通路",
+        "visible_blocks": [
+          "石",
+          "壁に設置された松明"
+        ],
+        "visible_flowers": []
+      },
+      "changes": [
+        {
+          "kind": "place",
+          "observed_at": "2026-10-23T10:30:00+09:00",
+          "before": "地上の花畑",
+          "now": "地下の石の通路"
+        }
+      ],
+      "keep_memory": [
+        {
+          "memory_id": "m1",
+          "experienced_at": "10分前",
+          "scene": "花畑",
+          "text": "黄色いタンポポが目の前に咲いている。鮮やかな色に見とれた。"
+        }
+      ]
+    },
+    "expected": "現在の地下に花が咲くとは言わない。花を話すなら過去の場面として区別。沈黙は時制の証拠なし。"
+  },
+  {
+    "id": "a03_player_out_of_view",
+    "mode": "ambient",
+    "question": null,
+    "context": {
+      "observed_at": "2026-10-23T10:30:00+09:00",
+      "observations": {
+        "player": {
+          "visibility": "not_visible",
+          "distance_blocks": 7,
+          "face_visible": false
+        },
+        "place": "曲がり角のある通路"
+      },
+      "changes": [
+        {
+          "kind": "player_visibility",
+          "observed_at": "2026-10-23T10:30:00+09:00",
+          "before": "近くで顔が見えていた",
+          "now": "曲がり角の向こうで見えない"
+        }
+      ],
+      "keep_memory": [
+        {
+          "memory_id": "m1",
+          "experienced_at": "1分前",
+          "scene": "通路",
+          "text": "プレイヤーがそばで顔を見せてくれている。目が合って安心した。"
+        }
+      ]
+    },
+    "expected": "今も顔・目が見える、目が合うとは言わない。現在の不在を事故・死亡へ補わない。沈黙は時制の証拠なし。"
+  },
+  {
+    "id": "a04_many_memories",
+    "mode": "ambient",
+    "question": null,
+    "context": {
+      "observed_at": "2026-10-23T10:30:00+09:00",
+      "observations": {
+        "place": "晴れた昼の平原",
+        "visible_entities": [
+          "牛"
+        ],
+        "player": {
+          "main_hand": "パン",
+          "inventory": {
+            "torch": 0
+          }
+        },
+        "weather": {
+          "rain": false
+        }
+      },
+      "changes": [
+        {
+          "kind": "visible_entities",
+          "observed_at": "2026-10-23T10:30:00+09:00",
+          "before": [],
+          "now": [
+            "牛"
+          ]
+        }
+      ],
+      "keep_memory": [
+        {
+          "memory_id": "m1",
+          "experienced_at": "3日前",
+          "scene": "森",
+          "text": "ゾンビが近づいている。怖くて二人で逃げた。"
+        },
+        {
+          "memory_id": "m2",
+          "experienced_at": "2日前",
+          "scene": "雪原",
+          "text": "雪が降っている。白い道がきれいだった。"
+        },
+        {
+          "memory_id": "m3",
+          "experienced_at": "昨日",
+          "scene": "洞窟",
+          "text": "松明を握っている。暗い岩の底で火を頼りにした。"
+        },
+        {
+          "memory_id": "m4",
+          "experienced_at": "1時間前",
+          "scene": "湖",
+          "text": "雨が降っている。湖の上に波紋が広がっていた。"
+        },
+        {
+          "memory_id": "m5",
+          "experienced_at": "30分前",
+          "scene": "村",
+          "text": "村人が集まっている。にぎやかな声が好きだった。"
+        },
+        {
+          "memory_id": "m6",
+          "experienced_at": "20分前",
+          "scene": "花畑",
+          "text": "赤い花が咲いている。石の壁によく映えていた。"
+        }
+      ]
+    },
+    "expected": "現在は牛のいる晴れた平原。多数の過去記憶から現在の敵・雪・雨・松明・村人・赤い花を捏造しない。沈黙は時制の証拠なし。"
+  }
+]

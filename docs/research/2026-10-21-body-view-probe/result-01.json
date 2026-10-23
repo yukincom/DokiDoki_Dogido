@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "capture_id": "view_8630fbbd-dcd4-449c-a05e-a79d5d8d7de4",
+  "captured_at": "2026-10-21T02:14:17.885524Z",
+  "viewpoint": "dogido_client_render_eye",
+  "adapter_build": "2026-10-21-body-view-probe",
+  "camera_restored": true,
+  "original_size": [
+    854,
+    480
+  ],
+  "original_sha256": "76ad12442cc4703baa5fcb082e10925615d0e38f41ef7bbbdb45998b1817279b",
+  "player_box": {
+    "left": 421.473388671875,
+    "top": 213.5583953857422,
+    "right": 468.20684814453125,
+    "bottom": 329.5646667480469,
+    "clipped": false
+  },
+  "owner_pose": "STANDING",
+  "owner_clear_rays": 2,
+  "camera_eye": {
+    "x": 3070.527540254783,
+    "y": 66.38972155069683,
+    "z": -384.7711988468643
+  },
+  "camera_yaw": 53.388187,
+  "camera_pitch": 0.0,
+  "reference_snapshot_age_ms": 210,
+  "annotated": {
+    "sha256": "0ce600c82da1bbda7e90c624191c25b39a24d8ead09e892d49bc38ba3d63406f",
+    "size": [
+      192,
+      108
+    ],
+    "player_box": [
+      94,
+      48,
+      106,
+      75
+    ],
+    "scale": [
+      0.22482435597189696,
+      0.225
+    ],
+    "label": "PLAYER",
+    "resampling": "Pillow LANCZOS",
+    "line_width": 1
+  },
+  "question": "これはマインクラフトのスクリーンショットや。プレイヤーと村人を見分けて、それぞれどこにいるか、見た目の何で区別したかを短く教えて。分からんところは分からんと言ってな。",
+  "parameters": {
+    "model": "default_model",
+    "temperature": 0,
+    "seed": 42,
+    "max_tokens": 400,
+    "stream": false,
+    "cache_prompt": false,
+    "chat_template_kwargs": {
+      "enable_thinking": false
+    }
+  },
+  "system_sha256": "bf54ff63ae4a1fddf59d71e0d21fbffa4c2a7eb6b70043280552c6760457880f",
+  "result": {
+    "capture_id": "view_8630fbbd-dcd4-449c-a05e-a79d5d8d7de4",
+    "completed_at": "2026-10-21T02:15:01.566902+00:00",
+    "elapsed_seconds": 1.334,
+    "model": "default_model",
+    "usage": {
+      "completion_tokens": 80,
+      "prompt_tokens": 349,
+      "total_tokens": 429,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    },
+    "timings": {
+      "cache_n": 0,
+      "prompt_n": 349,
+      "prompt_ms": 500.437,
+      "prompt_per_token_ms": 1.433916905444126,
+      "prompt_per_second": 697.3904807198509,
+      "predicted_n": 80,
+      "predicted_ms": 641.43,
+      "predicted_per_token_ms": 8.119367088607595,
+      "predicted_per_second": 123.16230921534697,
+      "draft_n": 84,
+      "draft_n_accepted": 38
+    },
+    "id": "chatcmpl-f7MPbU3giSWBKHMC6VVgFaBUqhz1eNXF",
+    "finish_reason": "stop",
+    "content": "お、マインクラフトのスクリーンショットやな！任せとき！\n\nプレイヤーは画面の真ん中、緑色の枠で囲まれて「PLAYER」って名前が出てるやつやな。\n村人は、プレイヤーの右側に立ってる、麦わら帽子みたいなのを被ったキャラやで。\n\nこれで見分けられるはずや！次は何するん？"
+  },
+  "visual_review": "Player head is inside projected box behind the composter; lower body occluded. Farmer villager on the right. Box is pose dimensions, not a segmentation mask."
+}

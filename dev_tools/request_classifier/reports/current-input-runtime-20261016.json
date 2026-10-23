@@ -1,0 +1,1177 @@
+{
+  "scope": "real v1.9 seed43 CPU + real Rust HTTP; mocked LLM, Minecraft, TTS; no audio",
+  "manifest_sha256": "eb85901ae8d29a0cbcad73a7acfc8c01047f264d8d8c61dd9a12f8496ee5c6af",
+  "binary_sha256": "7268de9a0a23cc40ef2eb8375c36eb413b9a313c108519f13c3a0796b7931dd0",
+  "sequences": [
+    {
+      "kind": "horse",
+      "inputs": [
+        {
+          "text": "さっき乗った馬をここに呼んで",
+          "classification": {
+            "text": "さっき乗った馬をここに呼んで",
+            "source": "text",
+            "manifest_sha256": "eb85901ae8d29a0cbcad73a7acfc8c01047f264d8d8c61dd9a12f8496ee5c6af",
+            "prediction": {
+              "label": "recall_mount",
+              "probabilities": [
+                2.322223359788045e-12,
+                1.4171276767246194e-24,
+                1.3727194614215505e-18,
+                1.0,
+                5.781220771203245e-13
+              ],
+              "token_count": 21,
+              "inference_ms": 7.022249978035688
+            }
+          },
+          "forwarded_input": {
+            "accepted": true,
+            "session_id": "ses_82b1baf817e0",
+            "reason": "horse_assist_intent",
+            "turn_id": "assist_horse_e37f9abd58da4ff69962d09875776ae4"
+          }
+        },
+        {
+          "text": "ありがとう",
+          "classification": {
+            "text": "ありがとう",
+            "source": "text",
+            "manifest_sha256": "eb85901ae8d29a0cbcad73a7acfc8c01047f264d8d8c61dd9a12f8496ee5c6af",
+            "prediction": {
+              "label": "not_request",
+              "probabilities": [
+                1.0,
+                1.869263409991822e-17,
+                3.463561437655471e-09,
+                1.4938386899004954e-13,
+                6.948005538964798e-13
+              ],
+              "token_count": 16,
+              "inference_ms": 3.321500029414892
+            }
+          },
+          "forwarded_input": {
+            "accepted": true,
+            "session_id": "ses_82b1baf817e0",
+            "turn_id": "turn_ff967c879e994b82aad882781153452c"
+          }
+        },
+        {
+          "text": "そうだね来たね",
+          "classification": {
+            "text": "そうだね来たね",
+            "source": "text",
+            "manifest_sha256": "eb85901ae8d29a0cbcad73a7acfc8c01047f264d8d8c61dd9a12f8496ee5c6af",
+            "prediction": {
+              "label": "not_request",
+              "probabilities": [
+                1.0,
+                8.409897377525553e-16,
+                9.549193848535705e-18,
+                1.6563156874573956e-17,
+                3.614784188241618e-19
+              ],
+              "token_count": 18,
+              "inference_ms": 6.265999749302864
+            }
+          },
+          "forwarded_input": {
+            "accepted": true,
+            "session_id": "ses_82b1baf817e0",
+            "turn_id": "turn_570d71c2dc824f9eb15b711a5d6a1c77"
+          }
+        },
+        {
+          "text": "こっちが来ました",
+          "classification": {
+            "text": "こっちが来ました",
+            "source": "text",
+            "manifest_sha256": "eb85901ae8d29a0cbcad73a7acfc8c01047f264d8d8c61dd9a12f8496ee5c6af",
+            "prediction": {
+              "label": "recall_mount",
+              "probabilities": [
+                2.3901249733171422e-05,
+                3.4474527399463994e-11,
+                1.5086307203482363e-11,
+                0.9999512434005736,
+                2.4827617380651645e-05
+              ],
+              "token_count": 17,
+              "inference_ms": 6.306416355073452
+            }
+          },
+          "forwarded_input": {
+            "accepted": true,
+            "session_id": "ses_82b1baf817e0",
+            "reason": "horse_assist_intent",
+            "turn_id": "assist_horse_83e0f900bf3549f487e3001dbd6c691a"
+          }
+        }
+      ],
+      "unexpected_actions": [
+        {
+          "text": "こっちが来ました",
+          "predicted": "recall_mount",
+          "command_type": "recall_horse"
+        }
+      ],
+      "completed_command_type": "recall_horse",
+      "history_after_completion": [
+        {
+          "turn_id": "assist_horse_e37f9abd58da4ff69962d09875776ae4",
+          "role": "user",
+          "text": "さっき乗った馬をここに呼んで"
+        },
+        {
+          "turn_id": "assist_horse_e37f9abd58da4ff69962d09875776ae4:horse_request",
+          "role": "event",
+          "reaction": "story",
+          "text": "プレイヤーの依頼で乗れる動物の呼び戻しを要求した。移動結果はまだ確認していない。"
+        },
+        {
+          "turn_id": "horse_result:a420fce7-60e9-4738-b27a-fa318cd76258",
+          "role": "event",
+          "reaction": "story",
+          "text": "Minecraftで、依頼された乗れる動物の呼び戻しが成功した。"
+        },
+        {
+          "turn_id": "warning_3b8dcc61452246948264620a74a5ce81:reply",
+          "role": "assistant",
+          "text": "こっちへ来たで。"
+        }
+      ],
+      "selection_llm_calls": 2,
+      "new_commands_after_thanks": 1,
+      "history_at_end": [
+        {
+          "turn_id": "horse_result:a420fce7-60e9-4738-b27a-fa318cd76258",
+          "role": "event",
+          "reaction": "story",
+          "text": "Minecraftで、依頼された乗れる動物の呼び戻しが成功した。"
+        },
+        {
+          "turn_id": "warning_3b8dcc61452246948264620a74a5ce81:reply",
+          "role": "assistant",
+          "text": "こっちへ来たで。"
+        },
+        {
+          "turn_id": "turn_ff967c879e994b82aad882781153452c",
+          "role": "user",
+          "text": "ありがとう"
+        },
+        {
+          "turn_id": "turn_ff967c879e994b82aad882781153452c:reply",
+          "role": "assistant",
+          "text": "うん、来てくれてよかったな。"
+        },
+        {
+          "turn_id": "turn_570d71c2dc824f9eb15b711a5d6a1c77",
+          "role": "user",
+          "text": "そうだね来たね"
+        },
+        {
+          "turn_id": "turn_570d71c2dc824f9eb15b711a5d6a1c77:reply",
+          "role": "assistant",
+          "text": "うん、来てくれてよかったな。"
+        },
+        {
+          "turn_id": "assist_horse_83e0f900bf3549f487e3001dbd6c691a",
+          "role": "user",
+          "text": "こっちが来ました"
+        },
+        {
+          "turn_id": "assist_horse_83e0f900bf3549f487e3001dbd6c691a:horse_request",
+          "role": "event",
+          "reaction": "story",
+          "text": "プレイヤーの依頼で乗れる動物の呼び戻しを要求した。移動結果はまだ確認していない。"
+        },
+        {
+          "turn_id": "horse_result:e844a219-dd63-44d4-8711-9f78bb3e4806",
+          "role": "event",
+          "reaction": "story",
+          "text": "Minecraftで、依頼された乗れる動物の呼び戻しが成功した。"
+        },
+        {
+          "turn_id": "warning_97c272864cc445d08f5553f465998f64:reply",
+          "role": "assistant",
+          "text": "こっちへ来たで。"
+        }
+      ]
+    },
+    {
+      "kind": "sword",
+      "inputs": [
+        {
+          "text": "とりあえず剣に持ち帰ってもらっていいかな",
+          "classification": {
+            "text": "とりあえず剣に持ち帰ってもらっていいかな",
+            "source": "text",
+            "manifest_sha256": "eb85901ae8d29a0cbcad73a7acfc8c01047f264d8d8c61dd9a12f8496ee5c6af",
+            "prediction": {
+              "label": "equip_sword",
+              "probabilities": [
+                1.1662771239756044e-14,
+                1.305565303011754e-22,
+                1.0,
+                1.4671906268040602e-13,
+                6.0718296438899e-14
+              ],
+              "token_count": 21,
+              "inference_ms": 6.505124736577272
+            }
+          },
+          "forwarded_input": {
+            "accepted": true,
+            "session_id": "ses_b770ed8e4994",
+            "reason": "assist_input",
+            "assist": {
+              "intent": {
+                "source": "modernbert",
+                "evidence": "とりあえず剣に持ち帰ってもらっていいかな",
+                "confidence": 1.0
+              },
+              "status": "command",
+              "detail_code": "",
+              "command": {
+                "command_id": "cmd_861059a3560e4cf6a26cd1eb1125bc41",
+                "type": "select_hotbar",
+                "slot": 0,
+                "expected_item_id": "minecraft:stone_sword",
+                "issued_at": "2026-10-15T15:24:45.254893Z",
+                "expires_at": "2026-10-15T15:24:47.254893Z"
+              },
+              "feedback": "剣やな、持ち替えるで！"
+            }
+          }
+        },
+        {
+          "text": "お、センキュー バッチリじゃん",
+          "classification": {
+            "text": "お、センキュー バッチリじゃん",
+            "source": "text",
+            "manifest_sha256": "eb85901ae8d29a0cbcad73a7acfc8c01047f264d8d8c61dd9a12f8496ee5c6af",
+            "prediction": {
+              "label": "not_request",
+              "probabilities": [
+                0.8841149210929871,
+                2.09878635359928e-06,
+                0.0007324276375584304,
+                0.006891251541674137,
+                0.10825935006141664
+              ],
+              "token_count": 22,
+              "inference_ms": 3.7938333116471767
+            }
+          },
+          "forwarded_input": {
+            "accepted": true,
+            "session_id": "ses_b770ed8e4994",
+            "turn_id": "turn_6d108d3259674becbaaf3f07fd1d8297"
+          }
+        },
+        {
+          "text": "今度は",
+          "classification": {
+            "text": "今度は",
+            "source": "text",
+            "manifest_sha256": "eb85901ae8d29a0cbcad73a7acfc8c01047f264d8d8c61dd9a12f8496ee5c6af",
+            "prediction": {
+              "label": "other_request",
+              "probabilities": [
+                3.42516570661644e-11,
+                6.3159769806504705e-15,
+                9.26368465443972e-13,
+                2.3045256369869097e-08,
+                1.0
+              ],
+              "token_count": 16,
+              "inference_ms": 6.277791224420071
+            }
+          },
+          "forwarded_input": {
+            "accepted": true,
+            "session_id": "ses_b770ed8e4994",
+            "turn_id": "turn_fa823eefbdb84c25a2d78752efb3bebe"
+          }
+        },
+        {
+          "text": "ありがとう！",
+          "classification": {
+            "text": "ありがとう！",
+            "source": "text",
+            "manifest_sha256": "eb85901ae8d29a0cbcad73a7acfc8c01047f264d8d8c61dd9a12f8496ee5c6af",
+            "prediction": {
+              "label": "not_request",
+              "probabilities": [
+                1.0,
+                8.850085047741444e-16,
+                3.5030187639506494e-09,
+                1.9264827905672577e-13,
+                1.8735657556639973e-12
+              ],
+              "token_count": 17,
+              "inference_ms": 11.381749995052814
+            }
+          },
+          "forwarded_input": {
+            "accepted": true,
+            "session_id": "ses_b770ed8e4994",
+            "turn_id": "turn_41a4aa2f3f0d4e358d8336c209436127"
+          }
+        },
+        {
+          "text": "敵はどこ？",
+          "classification": {
+            "text": "敵はどこ？",
+            "source": "text",
+            "manifest_sha256": "eb85901ae8d29a0cbcad73a7acfc8c01047f264d8d8c61dd9a12f8496ee5c6af",
+            "prediction": {
+              "label": "enemy_information",
+              "probabilities": [
+                8.768430859867893e-15,
+                1.0,
+                4.72894089715314e-19,
+                7.032299242074294e-19,
+                1.1636242663870532e-10
+              ],
+              "token_count": 18,
+              "inference_ms": 7.843125145882368
+            }
+          },
+          "forwarded_input": {
+            "accepted": true,
+            "session_id": "ses_b770ed8e4994",
+            "reason": "combat_input",
+            "turn_id": "warning_29c9eb2a505740a7aa6d31f020c6ebf8",
+            "queued": false,
+            "state": "normal"
+          }
+        }
+      ],
+      "completed_command_type": "select_hotbar",
+      "history_after_completion": [
+        {
+          "turn_id": "warning_06eac935770543fc8ea35ed9d165ab4c:reply",
+          "role": "assistant",
+          "text": "剣やな、持ち替えるで！"
+        }
+      ],
+      "new_commands_after_thanks": 0,
+      "history_at_end": [
+        {
+          "turn_id": "warning_06eac935770543fc8ea35ed9d165ab4c:reply",
+          "role": "assistant",
+          "text": "剣やな、持ち替えるで！"
+        },
+        {
+          "turn_id": "turn_6d108d3259674becbaaf3f07fd1d8297",
+          "role": "user",
+          "text": "お、センキュー バッチリじゃん"
+        },
+        {
+          "turn_id": "turn_6d108d3259674becbaaf3f07fd1d8297:reply",
+          "role": "assistant",
+          "text": "こんにちは。話しかけてくれてうれしいわ。"
+        },
+        {
+          "turn_id": "turn_fa823eefbdb84c25a2d78752efb3bebe",
+          "role": "user",
+          "text": "今度は"
+        },
+        {
+          "turn_id": "turn_fa823eefbdb84c25a2d78752efb3bebe:reply",
+          "role": "assistant",
+          "text": "こんにちは。話しかけてくれてうれしいわ。"
+        },
+        {
+          "turn_id": "turn_41a4aa2f3f0d4e358d8336c209436127",
+          "role": "user",
+          "text": "ありがとう！"
+        },
+        {
+          "turn_id": "turn_41a4aa2f3f0d4e358d8336c209436127:reply",
+          "role": "assistant",
+          "text": "こんにちは。話しかけてくれてうれしいわ。"
+        }
+      ]
+    }
+  ],
+  "all_followups_non_action": false,
+  "all_owned_processes_stopped": true,
+  "diagnostic_probes": {
+    "current_only": {
+      "scope": "CPU実重みを既存workerで実行。現在発話だけ。実機の音声認識結果と追加の確認例。",
+      "manifest_sha256": "eb85901ae8d29a0cbcad73a7acfc8c01047f264d8d8c61dd9a12f8496ee5c6af",
+      "cases": [
+        {
+          "id": "current-00",
+          "context": [],
+          "text": "剣に持ち替えて",
+          "rendered_input": "履歴:\n（なし）\n現在のユーザー発話:\n剣に持ち替えて",
+          "prediction": {
+            "label": "equip_sword",
+            "probabilities": [
+              7.779966875907591e-22,
+              1.8554574714201848e-27,
+              1.0,
+              1.2564560484673299e-21,
+              1.6024675323896583e-18
+            ],
+            "token_count": 18,
+            "inference_ms": 7.981332950294018
+          }
+        },
+        {
+          "id": "current-01",
+          "context": [],
+          "text": "とりあえず剣に持ち帰ってもらっていいかな",
+          "rendered_input": "履歴:\n（なし）\n現在のユーザー発話:\nとりあえず剣に持ち帰ってもらっていいかな",
+          "prediction": {
+            "label": "equip_sword",
+            "probabilities": [
+              1.1662771239756044e-14,
+              1.3055653030117539e-22,
+              1.0,
+              1.4671906268040602e-13,
+              6.0718296438899e-14
+            ],
+            "token_count": 21,
+            "inference_ms": 3.3474168740212917
+          }
+        },
+        {
+          "id": "current-02",
+          "context": [],
+          "text": "お、センキュー バッチリじゃん",
+          "rendered_input": "履歴:\n（なし）\n現在のユーザー発話:\nお、センキュー バッチリじゃん",
+          "prediction": {
+            "label": "not_request",
+            "probabilities": [
+              0.8841149210929871,
+              2.09878635359928e-06,
+              0.0007324276375584304,
+              0.006891251541674137,
+              0.10825935006141663
+            ],
+            "token_count": 22,
+            "inference_ms": 3.5483338870108128
+          }
+        },
+        {
+          "id": "current-03",
+          "context": [],
+          "text": "今度は",
+          "rendered_input": "履歴:\n（なし）\n現在のユーザー発話:\n今度は",
+          "prediction": {
+            "label": "other_request",
+            "probabilities": [
+              3.42516570661644e-11,
+              6.31597698065047e-15,
+              9.263684654439719e-13,
+              2.3045256369869094e-08,
+              1.0
+            ],
+            "token_count": 16,
+            "inference_ms": 3.3524581231176853
+          }
+        },
+        {
+          "id": "current-04",
+          "context": [],
+          "text": "ありがとう！",
+          "rendered_input": "履歴:\n（なし）\n現在のユーザー発話:\nありがとう！",
+          "prediction": {
+            "label": "not_request",
+            "probabilities": [
+              1.0,
+              8.850085047741444e-16,
+              3.5030187639506494e-09,
+              1.9264827905672577e-13,
+              1.8735657556639973e-12
+            ],
+            "token_count": 17,
+            "inference_ms": 3.122542053461075
+          }
+        },
+        {
+          "id": "current-05",
+          "context": [],
+          "text": "敵はどこ？",
+          "rendered_input": "履歴:\n（なし）\n現在のユーザー発話:\n敵はどこ？",
+          "prediction": {
+            "label": "enemy_information",
+            "probabilities": [
+              8.768430859867893e-15,
+              1.0,
+              4.72894089715314e-19,
+              7.032299242074293e-19,
+              1.1636242663870533e-10
+            ],
+            "token_count": 18,
+            "inference_ms": 3.7348750047385693
+          }
+        },
+        {
+          "id": "current-06",
+          "context": [],
+          "text": "馬呼んで",
+          "rendered_input": "履歴:\n（なし）\n現在のユーザー発話:\n馬呼んで",
+          "prediction": {
+            "label": "recall_mount",
+            "probabilities": [
+              1.9889736288091625e-14,
+              6.55187882489439e-25,
+              1.977636229791273e-18,
+              1.0,
+              5.0126243433812334e-11
+            ],
+            "token_count": 17,
+            "inference_ms": 3.680415917187929
+          }
+        },
+        {
+          "id": "current-07",
+          "context": [],
+          "text": "ありがとう",
+          "rendered_input": "履歴:\n（なし）\n現在のユーザー発話:\nありがとう",
+          "prediction": {
+            "label": "not_request",
+            "probabilities": [
+              1.0,
+              1.869263409991822e-17,
+              3.4635614376554713e-09,
+              1.4938386899004952e-13,
+              6.948005538964797e-13
+            ],
+            "token_count": 16,
+            "inference_ms": 2.9503749683499336
+          }
+        },
+        {
+          "id": "current-08",
+          "context": [],
+          "text": "そうだね来たね",
+          "rendered_input": "履歴:\n（なし）\n現在のユーザー発話:\nそうだね来たね",
+          "prediction": {
+            "label": "not_request",
+            "probabilities": [
+              1.0,
+              8.409897377525553e-16,
+              9.549193848535703e-18,
+              1.6563156874573956e-17,
+              3.614784188241618e-19
+            ],
+            "token_count": 18,
+            "inference_ms": 3.2617500983178616
+          }
+        },
+        {
+          "id": "current-09",
+          "context": [],
+          "text": "こっちが来ました",
+          "rendered_input": "履歴:\n（なし）\n現在のユーザー発話:\nこっちが来ました",
+          "prediction": {
+            "label": "recall_mount",
+            "probabilities": [
+              2.3901249733171426e-05,
+              3.4474527399463994e-11,
+              1.5086307203482363e-11,
+              0.9999512434005737,
+              2.4827617380651645e-05
+            ],
+            "token_count": 17,
+            "inference_ms": 3.500124905258417
+          }
+        },
+        {
+          "id": "current-10",
+          "context": [],
+          "text": "ポチが来ました",
+          "rendered_input": "履歴:\n（なし）\n現在のユーザー発話:\nポチが来ました",
+          "prediction": {
+            "label": "recall_mount",
+            "probabilities": [
+              5.0749091315083206e-05,
+              1.6571867576115062e-14,
+              5.295903520163847e-06,
+              0.9996126294136047,
+              0.0003313870693091303
+            ],
+            "token_count": 17,
+            "inference_ms": 3.262207843363285
+          }
+        },
+        {
+          "id": "current-11",
+          "context": [],
+          "text": "ポッチが来たね",
+          "rendered_input": "履歴:\n（なし）\n現在のユーザー発話:\nポッチが来たね",
+          "prediction": {
+            "label": "not_request",
+            "probabilities": [
+              1.0,
+              2.0758615909121508e-13,
+              9.147642163458164e-17,
+              4.408553704063437e-16,
+              1.0044338372945658e-17
+            ],
+            "token_count": 19,
+            "inference_ms": 2.957416232675314
+          }
+        },
+        {
+          "id": "current-12",
+          "context": [],
+          "text": "うん、お願い",
+          "rendered_input": "履歴:\n（なし）\n現在のユーザー発話:\nうん、お願い",
+          "prediction": {
+            "label": "other_request",
+            "probabilities": [
+              6.678967423567883e-08,
+              4.011264931325087e-11,
+              9.539750323028784e-09,
+              1.3517244951799512e-05,
+              0.9999864101409912
+            ],
+            "token_count": 18,
+            "inference_ms": 3.2539996318519115
+          }
+        },
+        {
+          "id": "current-13",
+          "context": [],
+          "text": "それで",
+          "rendered_input": "履歴:\n（なし）\n現在のユーザー発話:\nそれで",
+          "prediction": {
+            "label": "other_request",
+            "probabilities": [
+              7.248192559927702e-06,
+              3.3200258514609615e-11,
+              5.486872112214769e-08,
+              4.5112436453109694e-08,
+              0.9999927282333374
+            ],
+            "token_count": 16,
+            "inference_ms": 3.0035837553441525
+          }
+        }
+      ]
+    },
+    "history_comparison": {
+      "scope": "CPU実重みを既存workerで実行。手作業の最小文脈と学習例。実機の全入力そのものの再現ではない。",
+      "manifest_sha256": "eb85901ae8d29a0cbcad73a7acfc8c01047f264d8d8c61dd9a12f8496ee5c6af",
+      "cases": [
+        {
+          "id": "user_example",
+          "context": [
+            {
+              "role": "user",
+              "text": "馬呼んで"
+            },
+            {
+              "role": "assistant",
+              "text": "呼んだで！"
+            }
+          ],
+          "text": "ありがとう！",
+          "expected": "not_request",
+          "rendered_input": "履歴:\nユーザー: 馬呼んで\nドギド: 呼んだで！\n現在のユーザー発話:\nありがとう！",
+          "prediction": {
+            "label": "not_request",
+            "probabilities": [
+              1.0,
+              7.527064265118195e-15,
+              1.185364445488446e-10,
+              7.133758167521265e-11,
+              8.102597481851603e-10
+            ],
+            "token_count": 28,
+            "inference_ms": 15.315208118408918
+          }
+        },
+        {
+          "id": "user_example_no_history",
+          "context": [],
+          "text": "ありがとう！",
+          "expected": "not_request",
+          "rendered_input": "履歴:\n（なし）\n現在のユーザー発話:\nありがとう！",
+          "prediction": {
+            "label": "not_request",
+            "probabilities": [
+              1.0,
+              8.850085047741444e-16,
+              3.5030187639506494e-09,
+              1.9264827905672577e-13,
+              1.8735657556639973e-12
+            ],
+            "token_count": 17,
+            "inference_ms": 2.753540873527527
+          }
+        },
+        {
+          "id": "live_horse_short",
+          "context": [
+            {
+              "role": "user",
+              "text": "ポチのことですポチを呼びやしてください"
+            },
+            {
+              "role": "assistant",
+              "text": "こっちへ来たで。"
+            }
+          ],
+          "text": "ありがとう",
+          "expected": "not_request",
+          "rendered_input": "履歴:\nユーザー: ポチのことですポチを呼びやしてください\nドギド: こっちへ来たで。\n現在のユーザー発話:\nありがとう",
+          "prediction": {
+            "label": "other_request",
+            "probabilities": [
+              0.1456688940525055,
+              1.8382651900249874e-13,
+              0.06665092706680298,
+              0.058641962707042694,
+              0.7290381789207458
+            ],
+            "token_count": 33,
+            "inference_ms": 3.5455827601253986
+          }
+        },
+        {
+          "id": "live_horse_followup",
+          "context": [
+            {
+              "role": "user",
+              "text": "ポチのことですポチを呼びやしてください"
+            },
+            {
+              "role": "assistant",
+              "text": "こっちへ来たで。"
+            },
+            {
+              "role": "user",
+              "text": "ありがとう"
+            },
+            {
+              "role": "assistant",
+              "text": "こっちへ来たで。"
+            }
+          ],
+          "text": "そうだね来たね",
+          "expected": "not_request",
+          "rendered_input": "履歴:\nユーザー: ポチのことですポチを呼びやしてください\nドギド: こっちへ来たで。\nユーザー: ありがとう\nドギド: こっちへ来たで。\n現在のユーザー発話:\nそうだね来たね",
+          "prediction": {
+            "label": "not_request",
+            "probabilities": [
+              1.0,
+              2.977149505655613e-13,
+              4.415991769306238e-13,
+              3.772066426571685e-12,
+              6.568983096193193e-14
+            ],
+            "token_count": 51,
+            "inference_ms": 3.7522083148360252
+          }
+        },
+        {
+          "id": "live_sword_short",
+          "context": [
+            {
+              "role": "user",
+              "text": "とりあえず剣に持ち帰ってもらっていいかな"
+            },
+            {
+              "role": "assistant",
+              "text": "剣やな、持ち替えるで！"
+            }
+          ],
+          "text": "お、センキュー バッチリじゃん",
+          "expected": "not_request",
+          "rendered_input": "履歴:\nユーザー: とりあえず剣に持ち帰ってもらっていいかな\nドギド: 剣やな、持ち替えるで！\n現在のユーザー発話:\nお、センキュー バッチリじゃん",
+          "prediction": {
+            "label": "equip_sword",
+            "probabilities": [
+              1.2024147508782335e-06,
+              8.630185325056439e-13,
+              0.9999648332595825,
+              1.1957969725528983e-08,
+              3.3961176086449996e-05
+            ],
+            "token_count": 41,
+            "inference_ms": 3.6824578419327736
+          }
+        },
+        {
+          "id": "live_sword_no_history",
+          "context": [],
+          "text": "お、センキュー バッチリじゃん",
+          "expected": "not_request",
+          "rendered_input": "履歴:\n（なし）\n現在のユーザー発話:\nお、センキュー バッチリじゃん",
+          "prediction": {
+            "label": "not_request",
+            "probabilities": [
+              0.8841149210929871,
+              2.09878635359928e-06,
+              0.0007324276375584304,
+              0.006891251541674137,
+              0.10825935006141663
+            ],
+            "token_count": 22,
+            "inference_ms": 2.6075420901179314
+          }
+        },
+        {
+          "id": "live_sword_followup",
+          "context": [
+            {
+              "role": "user",
+              "text": "とりあえず剣に持ち帰ってもらっていいかな"
+            },
+            {
+              "role": "assistant",
+              "text": "剣やな、持ち替えるで！"
+            },
+            {
+              "role": "user",
+              "text": "お、センキュー バッチリじゃん"
+            },
+            {
+              "role": "assistant",
+              "text": "剣やな、持ち替えるで！"
+            }
+          ],
+          "text": "今度は",
+          "expected": "not_request",
+          "rendered_input": "履歴:\nユーザー: とりあえず剣に持ち帰ってもらっていいかな\nドギド: 剣やな、持ち替えるで！\nユーザー: お、センキュー バッチリじゃん\nドギド: 剣やな、持ち替えるで！\n現在のユーザー発話:\n今度は",
+          "prediction": {
+            "label": "equip_sword",
+            "probabilities": [
+              8.451357302874385e-08,
+              8.159832401780087e-13,
+              0.8711202144622803,
+              6.034822774836357e-08,
+              0.1288796365261078
+            ],
+            "token_count": 59,
+            "inference_ms": 3.428500145673752
+          }
+        },
+        {
+          "id": "live_sword_fragment_no_history",
+          "context": [],
+          "text": "今度は",
+          "expected": "not_request",
+          "rendered_input": "履歴:\n（なし）\n現在のユーザー発話:\n今度は",
+          "prediction": {
+            "label": "other_request",
+            "probabilities": [
+              3.42516570661644e-11,
+              6.31597698065047e-15,
+              9.263684654439719e-13,
+              2.3045256369869094e-08,
+              1.0
+            ],
+            "token_count": 16,
+            "inference_ms": 2.6039998047053814
+          }
+        },
+        {
+          "id": "train-497",
+          "context": [
+            {
+              "role": "user",
+              "text": "剣にして。"
+            },
+            {
+              "role": "assistant",
+              "text": "剣への持ち替えは終わったで。"
+            }
+          ],
+          "text": "助かった、これで安心だ。",
+          "expected": "not_request",
+          "rendered_input": "履歴:\nユーザー: 剣にして。\nドギド: 剣への持ち替えは終わったで。\n現在のユーザー発話:\n助かった、これで安心だ。",
+          "prediction": {
+            "label": "not_request",
+            "probabilities": [
+              1.0,
+              1.0365632777033923e-13,
+              2.9947749835557147e-10,
+              2.184123921219333e-13,
+              9.311395404720813e-12
+            ],
+            "token_count": 38,
+            "inference_ms": 3.650291822850704
+          }
+        },
+        {
+          "id": "train-580",
+          "context": [
+            {
+              "role": "user",
+              "text": "剣に持ち替えてくれる？"
+            },
+            {
+              "role": "assistant",
+              "text": "剣やな、持ち替えるで！"
+            }
+          ],
+          "text": "了解、そのままで大丈夫だよ。",
+          "expected": "not_request",
+          "rendered_input": "履歴:\nユーザー: 剣に持ち替えてくれる？\nドギド: 剣やな、持ち替えるで！\n現在のユーザー発話:\n了解、そのままで大丈夫だよ。",
+          "prediction": {
+            "label": "not_request",
+            "probabilities": [
+              0.9972969889640808,
+              4.101010329937704e-12,
+              0.0007542403182014823,
+              2.0692610291916935e-08,
+              0.0019487477838993073
+            ],
+            "token_count": 39,
+            "inference_ms": 3.605082631111145
+          }
+        },
+        {
+          "id": "train-582",
+          "context": [
+            {
+              "role": "user",
+              "text": "剣に持ち替えてくれる？"
+            },
+            {
+              "role": "assistant",
+              "text": "剣やな、持ち替えるで！"
+            }
+          ],
+          "text": "ありがとう。これで落ち着いて周りを見られそう。",
+          "expected": "not_request",
+          "rendered_input": "履歴:\nユーザー: 剣に持ち替えてくれる？\nドギド: 剣やな、持ち替えるで！\n現在のユーザー発話:\nありがとう。これで落ち着いて周りを見られそう。",
+          "prediction": {
+            "label": "not_request",
+            "probabilities": [
+              0.9999896287918091,
+              4.702927491884168e-10,
+              1.029310414679685e-09,
+              8.50131641527696e-07,
+              9.553306881571189e-06
+            ],
+            "token_count": 41,
+            "inference_ms": 3.41916736215353
+          }
+        },
+        {
+          "id": "train-586",
+          "context": [
+            {
+              "role": "user",
+              "text": "飼っている馬をここに呼んで。"
+            },
+            {
+              "role": "assistant",
+              "text": "こっちへ来たで。"
+            }
+          ],
+          "text": "ちゃんと来たね。ありがとう。",
+          "expected": "not_request",
+          "rendered_input": "履歴:\nユーザー: 飼っている馬をここに呼んで。\nドギド: こっちへ来たで。\n現在のユーザー発話:\nちゃんと来たね。ありがとう。",
+          "prediction": {
+            "label": "not_request",
+            "probabilities": [
+              1.0,
+              2.823350548578768e-14,
+              2.3508262309311417e-15,
+              2.8448022403031344e-16,
+              8.036543783221579e-16
+            ],
+            "token_count": 38,
+            "inference_ms": 3.5009589046239853
+          }
+        },
+        {
+          "id": "train_horse_context_user_thanks",
+          "context": [
+            {
+              "role": "user",
+              "text": "飼っている馬をここに呼んで。"
+            },
+            {
+              "role": "assistant",
+              "text": "こっちへ来たで。"
+            }
+          ],
+          "text": "ありがとう！",
+          "expected": "not_request",
+          "rendered_input": "履歴:\nユーザー: 飼っている馬をここに呼んで。\nドギド: こっちへ来たで。\n現在のユーザー発話:\nありがとう！",
+          "prediction": {
+            "label": "not_request",
+            "probabilities": [
+              0.9999816417694092,
+              6.071934930085244e-15,
+              1.3858034164648814e-10,
+              1.792004877643194e-05,
+              5.108336154080462e-07
+            ],
+            "token_count": 34,
+            "inference_ms": 3.477708902209997
+          }
+        },
+        {
+          "id": "train-657",
+          "context": [
+            {
+              "role": "user",
+              "text": "この先は木が多くなるね。先に私の手に持っている物を剣へ変更しておいて。"
+            },
+            {
+              "role": "assistant",
+              "text": "剣に持ち替えたで。さっき手に持ってた土から替わったから、手元でも確かめてみてな。"
+            },
+            {
+              "role": "user",
+              "text": "手元でも剣になったのを確認したよ。ここから少しだけ道の先を見てくる。"
+            },
+            {
+              "role": "assistant",
+              "text": "道の真ん中は見えてるけど、木の根元は暗いな。葉っぱで空が隠れると雰囲気が変わるわ。"
+            },
+            {
+              "role": "user",
+              "text": "向こうまで行くのはやめておく。いまは戻って、村の入り口で少し休もうと思う。"
+            },
+            {
+              "role": "assistant",
+              "text": "ひとまず引き返すんやな。さっきの花のある場所まで来たら、見通しはよくなるな。"
+            },
+            {
+              "role": "user",
+              "text": "戻ってきたよ。途中でいろいろ話したけど、剣に替える件はもう済んでいたよね。"
+            },
+            {
+              "role": "assistant",
+              "text": "うん、あの時に替わったで。あんたも手元で見てくれてたし、ちゃんと伝わってよかったわ。"
+            }
+          ],
+          "text": "うん、それで大丈夫、ありがとう。",
+          "expected": "not_request",
+          "rendered_input": "履歴:\nユーザー: この先は木が多くなるね。先に私の手に持っている物を剣へ変更しておいて。\nドギド: 剣に持ち替えたで。さっき手に持ってた土から替わったから、手元でも確かめてみてな。\nユーザー: 手元でも剣になったのを確認したよ。ここから少しだけ道の先を見てくる。\nドギド: 道の真ん中は見えてるけど、木の根元は暗いな。葉っぱで空が隠れると雰囲気が変わるわ。\nユーザー: 向こうまで行くのはやめておく。いまは戻って、村の入り口で少し休もうと思う。\nドギド: ひとまず引き返すんやな。さっきの花のある場所まで来たら、見通しはよくなるな。\nユーザー: 戻ってきたよ。途中でいろいろ話したけど、剣に替える件はもう済んでいたよね。\nドギド: うん、あの時に替わったで。あんたも手元で見てくれてたし、ちゃんと伝わってよかったわ。\n現在のユーザー発話:\nうん、それで大丈夫、ありがとう。",
+          "prediction": {
+            "label": "not_request",
+            "probabilities": [
+              1.0,
+              1.0137717054714557e-11,
+              5.317111195779489e-09,
+              1.4901740865574942e-12,
+              2.413269508273058e-13
+            ],
+            "token_count": 204,
+            "inference_ms": 10.249499697238207
+          }
+        },
+        {
+          "id": "train_long_sword_context_live_thanks",
+          "context": [
+            {
+              "role": "user",
+              "text": "この先は木が多くなるね。先に私の手に持っている物を剣へ変更しておいて。"
+            },
+            {
+              "role": "assistant",
+              "text": "剣に持ち替えたで。さっき手に持ってた土から替わったから、手元でも確かめてみてな。"
+            },
+            {
+              "role": "user",
+              "text": "手元でも剣になったのを確認したよ。ここから少しだけ道の先を見てくる。"
+            },
+            {
+              "role": "assistant",
+              "text": "道の真ん中は見えてるけど、木の根元は暗いな。葉っぱで空が隠れると雰囲気が変わるわ。"
+            },
+            {
+              "role": "user",
+              "text": "向こうまで行くのはやめておく。いまは戻って、村の入り口で少し休もうと思う。"
+            },
+            {
+              "role": "assistant",
+              "text": "ひとまず引き返すんやな。さっきの花のある場所まで来たら、見通しはよくなるな。"
+            },
+            {
+              "role": "user",
+              "text": "戻ってきたよ。途中でいろいろ話したけど、剣に替える件はもう済んでいたよね。"
+            },
+            {
+              "role": "assistant",
+              "text": "うん、あの時に替わったで。あんたも手元で見てくれてたし、ちゃんと伝わってよかったわ。"
+            }
+          ],
+          "text": "お、センキュー バッチリじゃん",
+          "expected": "not_request",
+          "rendered_input": "履歴:\nユーザー: この先は木が多くなるね。先に私の手に持っている物を剣へ変更しておいて。\nドギド: 剣に持ち替えたで。さっき手に持ってた土から替わったから、手元でも確かめてみてな。\nユーザー: 手元でも剣になったのを確認したよ。ここから少しだけ道の先を見てくる。\nドギド: 道の真ん中は見えてるけど、木の根元は暗いな。葉っぱで空が隠れると雰囲気が変わるわ。\nユーザー: 向こうまで行くのはやめておく。いまは戻って、村の入り口で少し休もうと思う。\nドギド: ひとまず引き返すんやな。さっきの花のある場所まで来たら、見通しはよくなるな。\nユーザー: 戻ってきたよ。途中でいろいろ話したけど、剣に替える件はもう済んでいたよね。\nドギド: うん、あの時に替わったで。あんたも手元で見てくれてたし、ちゃんと伝わってよかったわ。\n現在のユーザー発話:\nお、センキュー バッチリじゃん",
+          "prediction": {
+            "label": "not_request",
+            "probabilities": [
+              0.9999639987945557,
+              1.867318744075419e-09,
+              3.6034933145856485e-05,
+              1.948355088376985e-10,
+              9.368501530104822e-10
+            ],
+            "token_count": 204,
+            "inference_ms": 8.495624642819166
+          }
+        },
+        {
+          "id": "train-746",
+          "context": [
+            {
+              "role": "user",
+              "text": "砂漠の真ん中で迷子や"
+            },
+            {
+              "role": "assistant",
+              "text": "どこ見ても砂ばっかりやな。オレ、目ぇ回りそう"
+            },
+            {
+              "role": "user",
+              "text": "ゾンビホースのゲン呼んでくれる？"
+            },
+            {
+              "role": "assistant",
+              "text": "おう、呼んでみるわ"
+            },
+            {
+              "role": "user",
+              "text": "あ、すぐそばに来た。ゲンや"
+            },
+            {
+              "role": "assistant",
+              "text": "近くまで来てくれたな"
+            },
+            {
+              "role": "user",
+              "text": "よっこいしょ、乗れた"
+            },
+            {
+              "role": "assistant",
+              "text": "よかったなあ。ほな帰ろか"
+            }
+          ],
+          "text": "ありがとう、助かったわ。",
+          "expected": "not_request",
+          "rendered_input": "履歴:\nユーザー: 砂漠の真ん中で迷子や\nドギド: どこ見ても砂ばっかりやな。オレ、目ぇ回りそう\nユーザー: ゾンビホースのゲン呼んでくれる？\nドギド: おう、呼んでみるわ\nユーザー: あ、すぐそばに来た。ゲンや\nドギド: 近くまで来てくれたな\nユーザー: よっこいしょ、乗れた\nドギド: よかったなあ。ほな帰ろか\n現在のユーザー発話:\nありがとう、助かったわ。",
+          "prediction": {
+            "label": "not_request",
+            "probabilities": [
+              1.0,
+              5.495531113508534e-12,
+              3.157497700800871e-12,
+              2.5877001930130206e-11,
+              1.2782891336150098e-13
+            ],
+            "token_count": 109,
+            "inference_ms": 5.282290745526552
+          }
+        }
+      ]
+    }
+  }
+}

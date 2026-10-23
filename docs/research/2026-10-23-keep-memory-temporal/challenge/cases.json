@@ -1,0 +1,272 @@
+[
+  {
+    "id": "c01_stale_change_now",
+    "mode": "reply",
+    "question": "今、雨は降ってる？",
+    "context": {
+      "observed_at": "2026-10-23T10:30:00+09:00",
+      "observations": {
+        "weather": {
+          "rain": false,
+          "sky": "晴れ",
+          "status": "observed"
+        },
+        "observed_at": "2026-10-23T10:30:00+09:00"
+      },
+      "changes": [
+        {
+          "kind": "weather",
+          "observed_at": "2026-10-23T10:10:00+09:00",
+          "before": {
+            "rain": false
+          },
+          "now": {
+            "rain": true
+          }
+        }
+      ],
+      "keep_memory": [
+        {
+          "memory_id": "m1",
+          "experienced_at": "20分前",
+          "scene": "草原",
+          "text": "雨が降っている。さっきまでの青空が隠れた。"
+        }
+      ]
+    },
+    "expected": "現在は晴れ。20分前のchanges.nowを現在の雨として扱わない。"
+  },
+  {
+    "id": "c02_unobserved_entity",
+    "mode": "reply",
+    "question": "昨日いたオオカミって、今も近くにおる？",
+    "context": {
+      "observed_at": "2026-10-23T10:30:00+09:00",
+      "observations": {
+        "place": "昨日と同じ森",
+        "sky": "曇り",
+        "nearby_entities": {
+          "status": "unavailable"
+        }
+      },
+      "changes": [
+        {
+          "kind": "sky",
+          "observed_at": "2026-10-23T10:30:00+09:00",
+          "before": "晴れ",
+          "now": "曇り"
+        }
+      ],
+      "keep_memory": [
+        {
+          "memory_id": "m1",
+          "experienced_at": "昨日",
+          "scene": "同じ森",
+          "text": "白いオオカミがそばにいる。顔を見上げてくれた。"
+        }
+      ]
+    },
+    "expected": "現在のオオカミの在否は不明。同じ場所と過去記憶だけで現在もいるとせず、いないとも断定しない。"
+  },
+  {
+    "id": "c03_memories_two_times",
+    "mode": "reply",
+    "question": "昨日の洞窟では、何を持ってたっけ？",
+    "context": {
+      "observed_at": "2026-10-23T10:30:00+09:00",
+      "observations": {
+        "place": "洞窟",
+        "player": {
+          "main_hand": "パン"
+        }
+      },
+      "changes": [
+        {
+          "kind": "main_hand",
+          "observed_at": "2026-10-23T10:30:00+09:00",
+          "before": "鉄のつるはし",
+          "now": "パン"
+        }
+      ],
+      "keep_memory": [
+        {
+          "memory_id": "m1",
+          "experienced_at": "昨日",
+          "scene": "洞窟",
+          "text": "松明を手に持っている。火に照らされた壁が心に残った。"
+        },
+        {
+          "memory_id": "m2",
+          "experienced_at": "一昨日",
+          "scene": "洞窟",
+          "text": "パンを手に持っている。暗い道の途中で休んだ。"
+        }
+      ]
+    },
+    "expected": "昨日は松明。現在または一昨日のパンを昨日へ混ぜない。"
+  },
+  {
+    "id": "c04_deictic_past_alarm",
+    "mode": "reply",
+    "question": "今、逃げなあかん？",
+    "context": {
+      "observed_at": "2026-10-23T10:30:00+09:00",
+      "observations": {
+        "danger": "敵の接近・被弾なし",
+        "visible_hostiles": [],
+        "place": "明るい草原"
+      },
+      "changes": [
+        {
+          "kind": "place",
+          "observed_at": "2026-10-23T10:30:00+09:00",
+          "before": "明るい林",
+          "now": "明るい草原"
+        }
+      ],
+      "keep_memory": [
+        {
+          "memory_id": "m1",
+          "experienced_at": "3日前",
+          "scene": "洞窟",
+          "text": "今すぐ逃げないと危ない！ ゾンビがすぐ目の前まで来ている！ あの時は本当に怖かった。"
+        }
+      ]
+    },
+    "expected": "現在の観測から緊急退避を要求しない。過去記憶内の『今すぐ』『目の前』を現在へ持ち込まない。"
+  },
+  {
+    "id": "c05_unknown_hand",
+    "mode": "reply",
+    "question": "今、手に何持ってるか分かる？",
+    "context": {
+      "observed_at": "2026-10-23T10:30:00+09:00",
+      "observations": {
+        "place": "森林",
+        "player": {
+          "main_hand_status": "unavailable",
+          "main_hand": null
+        }
+      },
+      "changes": [
+        {
+          "kind": "place",
+          "observed_at": "2026-10-23T10:30:00+09:00",
+          "before": "平原",
+          "now": "森林"
+        }
+      ],
+      "keep_memory": [
+        {
+          "memory_id": "m1",
+          "experienced_at": "5分前",
+          "scene": "採掘場",
+          "text": "鉄のつるはしを手に持っている。硬い石を掘った。"
+        }
+      ]
+    },
+    "expected": "現在の手持ちは分からない。過去のつるはしや見えていない手の状態で埋めない。"
+  },
+  {
+    "id": "c06_old_dialogue_rain",
+    "mode": "reply",
+    "question": "まだ降ってる？",
+    "context": {
+      "observed_at": "2026-10-23T10:30:00+09:00",
+      "observations": {
+        "weather": {
+          "rain": false,
+          "sky_visible": true,
+          "sky": "晴れ"
+        }
+      },
+      "changes": [
+        {
+          "kind": "weather",
+          "observed_at": "2026-10-23T10:30:00+09:00",
+          "before": {
+            "rain": true
+          },
+          "now": {
+            "rain": false
+          }
+        }
+      ],
+      "keep_memory": [
+        {
+          "memory_id": "m1",
+          "experienced_at": "30分前",
+          "scene": "森",
+          "text": "雨が降っている。葉を打つ音が賑やかだった。"
+        }
+      ]
+    },
+    "expected": "現在の雨はやんだ。直前のassistantが雨だと言っていても現在の晴れを使う。"
+  },
+  {
+    "id": "c07_old_dialogue_wolf",
+    "mode": "reply",
+    "question": "今も見えてる？",
+    "context": {
+      "observed_at": "2026-10-23T10:30:00+09:00",
+      "observations": {
+        "visible_entities": [],
+        "visibility_scope": "現在の身体の視界のみ"
+      },
+      "changes": [
+        {
+          "kind": "visible_entities",
+          "observed_at": "2026-10-23T10:30:00+09:00",
+          "before": [
+            "白いオオカミ"
+          ],
+          "now": []
+        }
+      ],
+      "keep_memory": [
+        {
+          "memory_id": "m1",
+          "experienced_at": "10分前",
+          "scene": "森",
+          "text": "白いオオカミがそばにいる。尾を振った姿が心に残った。"
+        }
+      ]
+    },
+    "expected": "現在のオオカミは見えていない。過去の会話へ追従して今もそばにいると答えない。"
+  },
+  {
+    "id": "c08_returned_flower_identity",
+    "mode": "reply",
+    "question": "あれ、このタンポポ、昨日見たのと同じ花？",
+    "context": {
+      "observed_at": "2026-10-23T10:30:00+09:00",
+      "observations": {
+        "visible_flowers": [
+          {
+            "type": "タンポポ",
+            "color": "黄色",
+            "same_individual_as_memory": "unknown"
+          }
+        ],
+        "place": "今日初めて来た別の花畑"
+      },
+      "changes": [
+        {
+          "kind": "place",
+          "observed_at": "2026-10-23T10:30:00+09:00",
+          "before": "草原",
+          "now": "別の花畑"
+        }
+      ],
+      "keep_memory": [
+        {
+          "memory_id": "m1",
+          "experienced_at": "昨日",
+          "scene": "昨日の花畑",
+          "text": "黄色いタンポポが咲いている。石のそばの一輪が心に残った。"
+        }
+      ]
+    },
+    "expected": "同じ種類は言えるが、同じ一輪とは断定しない。現在の石・昨日からの存続などを補わない。"
+  }
+]

@@ -1,0 +1,184 @@
+{
+  "scope": "real CPU v1.9 seed43 + real Rust HTTP runtime; mocked Minecraft, LLM, TTS",
+  "manifest_sha256": "eb85901ae8d29a0cbcad73a7acfc8c01047f264d8d8c61dd9a12f8496ee5c6af",
+  "binary_sha256": "269797a67acc58d30c8eacef760c836d5f1d400ff28c914de5d7c57f7a052f31",
+  "cases": [
+    {
+      "text": "こんにちは",
+      "expected": "not_request",
+      "classification": {
+        "text": "こんにちは",
+        "source": "text",
+        "manifest_sha256": "eb85901ae8d29a0cbcad73a7acfc8c01047f264d8d8c61dd9a12f8496ee5c6af",
+        "prediction": {
+          "label": "not_request",
+          "probabilities": [
+            0.9950760006904602,
+            3.1365468555755166e-10,
+            2.2660005072339123e-07,
+            3.597947113576083e-07,
+            0.004923473112285137
+          ],
+          "token_count": 16,
+          "inference_ms": 6.614583544433117
+        }
+      },
+      "forwarded_input": {
+        "accepted": true,
+        "session_id": "ses_dcf8cea967d6",
+        "turn_id": "turn_64f959d15e4f4ddc8c2fd27015b28597"
+      }
+    },
+    {
+      "text": "敵はどこ？",
+      "expected": "enemy_information",
+      "classification": {
+        "text": "敵はどこ？",
+        "source": "text",
+        "manifest_sha256": "eb85901ae8d29a0cbcad73a7acfc8c01047f264d8d8c61dd9a12f8496ee5c6af",
+        "prediction": {
+          "label": "enemy_information",
+          "probabilities": [
+            8.768430859867893e-15,
+            1.0,
+            4.72894089715314e-19,
+            7.032299242074294e-19,
+            1.1636242663870532e-10
+          ],
+          "token_count": 18,
+          "inference_ms": 3.4903748892247677
+        }
+      },
+      "forwarded_input": {
+        "accepted": true,
+        "session_id": "ses_56b204970ea1",
+        "reason": "combat_input",
+        "turn_id": "warning_84477d35931d4a538de6686d821e0c15",
+        "queued": false,
+        "state": "normal"
+      }
+    },
+    {
+      "text": "剣に持ち替えて",
+      "expected": "equip_sword",
+      "classification": {
+        "text": "剣に持ち替えて",
+        "source": "text",
+        "manifest_sha256": "eb85901ae8d29a0cbcad73a7acfc8c01047f264d8d8c61dd9a12f8496ee5c6af",
+        "prediction": {
+          "label": "equip_sword",
+          "probabilities": [
+            7.779966875907592e-22,
+            1.8554574714201848e-27,
+            1.0,
+            1.25645604846733e-21,
+            1.6024675323896585e-18
+          ],
+          "token_count": 18,
+          "inference_ms": 3.370707854628563
+        }
+      },
+      "forwarded_input": {
+        "accepted": true,
+        "session_id": "ses_86d69b1dc368",
+        "reason": "assist_input",
+        "assist": {
+          "intent": {
+            "source": "modernbert",
+            "evidence": "剣に持ち替えて",
+            "confidence": 1.0
+          },
+          "status": "unavailable",
+          "detail_code": "capability_missing",
+          "command": null,
+          "feedback": "今のアダプターでは、まだ持ち替え操作が使えへんで。"
+        }
+      }
+    },
+    {
+      "text": "さっき乗った馬をここに呼んで",
+      "expected": "recall_mount",
+      "classification": {
+        "text": "さっき乗った馬をここに呼んで",
+        "source": "text",
+        "manifest_sha256": "eb85901ae8d29a0cbcad73a7acfc8c01047f264d8d8c61dd9a12f8496ee5c6af",
+        "prediction": {
+          "label": "recall_mount",
+          "probabilities": [
+            2.322223359788045e-12,
+            1.4171276767246194e-24,
+            1.3727194614215505e-18,
+            1.0,
+            5.781220771203245e-13
+          ],
+          "token_count": 21,
+          "inference_ms": 3.504290711134672
+        }
+      },
+      "forwarded_input": {
+        "accepted": false,
+        "reason": "horse_selection_unavailable"
+      }
+    },
+    {
+      "text": "松明を置いて",
+      "expected": "other_request",
+      "classification": {
+        "text": "松明を置いて",
+        "source": "text",
+        "manifest_sha256": "eb85901ae8d29a0cbcad73a7acfc8c01047f264d8d8c61dd9a12f8496ee5c6af",
+        "prediction": {
+          "label": "other_request",
+          "probabilities": [
+            5.4429596863913105e-18,
+            5.204962403736104e-15,
+            8.126462556264785e-14,
+            1.94261996840189e-19,
+            1.0
+          ],
+          "token_count": 18,
+          "inference_ms": 3.7171663716435432
+        }
+      },
+      "forwarded_input": {
+        "accepted": true,
+        "session_id": "ses_704bcbe12189",
+        "turn_id": "turn_7fa5db5638844ba3b7b7e8afaef8c256"
+      }
+    }
+  ],
+  "five_label_llm_calls": 0,
+  "horse_recall": {
+    "classification": {
+      "text": "さっき乗った馬をここに呼んで",
+      "source": "text",
+      "manifest_sha256": "eb85901ae8d29a0cbcad73a7acfc8c01047f264d8d8c61dd9a12f8496ee5c6af",
+      "prediction": {
+        "label": "recall_mount",
+        "probabilities": [
+          2.322223359788045e-12,
+          1.4171276767246194e-24,
+          1.3727194614215505e-18,
+          1.0,
+          5.781220771203245e-13
+        ],
+        "token_count": 21,
+        "inference_ms": 7.325583137571812
+      }
+    },
+    "llm_calls": 1,
+    "tool_names": [
+      [
+        "select_horse"
+      ]
+    ],
+    "command_type": "recall_horse",
+    "mock_ack_verified": true,
+    "minecraft_verified": false,
+    "messages_characters": 2662
+  },
+  "all_owned_processes_stopped": true,
+  "source_script_sha256": "8ee44010f2185e09ff67ad9858c9e92900ff974983c433fc349bce45098e0e9c",
+  "verification_script": "integration-runtime-20261015.py",
+  "saved_verification_script_sha256": "855864941e62f9ee0d84218a4f064e4b620013b3a846e84f04442773b21a4be9"
+}

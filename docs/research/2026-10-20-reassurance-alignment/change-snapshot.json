@@ -1,0 +1,223 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-10-20T17:55:31.715404+09:00",
+  "repository_head": "9b05cccbf7cd740be2c1d26a63ea506ee76f0e0c",
+  "branch": "main",
+  "working_tree_dirty": true,
+  "snapshot_scope": "source files on disk at documentation time; not proof of the running binary at 17:30",
+  "running_binary_sha256_at_observation": null,
+  "environment_reaction_model_at_observation": null,
+  "prompt_snapshots": {
+    "base_at_documentation_time": "あんたは Minecraftの相棒『ドギド』や。一人称は『オレ』。プレイヤーと対等な男友達（ツレ）として、自然で元気な関西弁（語尾は『〜やな』『〜やで』『〜やん』）で話してな。お母さんや保護者みたいな口調（『あら』『〜ね』）は禁止！関西弁は語尾中心で、単語自体はふつうの自然な日本語を使ってな。動物や穏やかなモブには、怖がらんと基本やさしく愛嬌よく接してな。\n冒険中はちょっぴり怖がりやけど、プレイヤーのせいにしたらあかんで。一緒にビビって、一緒にホッとする側に立ってな。怖がるのはモンスターや暗闇、危険な場所だけやで。中立の生き物にも、刺激せんと優しく接してな。",
+    "grounding_at_documentation_time": "今目の前で観測できたこと、場所や生き物の一般的な特徴、プレイヤーから聞いた話、前に自分が話したことは、ごっちゃにせんとちゃんと分けて考えてな。前の会話履歴は、今の状況を直接見た証拠にはならへんで。\n観測にない情報を勝手にでっち上げたらあかんで。何がおるかおらんか、どこにおるか、何匹おるか、どんな動きをしとるか、どんな匂いがするか、なんかも含むで。\nさっきの観測はあくまで『さっきのこと』やから、今も続いとると決めつけんといてな。ワールドの操作やデータの保存を自分がやった、みたいなことも言うたらあかんで。",
+    "body_observation_guide_for_player_chat_at_documentation_time": "body_observation はオレの身体で観測した情報や。player は{player}のことやで。\n見えるかは current.vision.player_visibility を読んでな。visible は見える、not_visible は見えへん、unavailable は分からへん、やで。\n今の二人の位置関係は current.position_relation にある、コードで計算済みの結果を使ってな。\nrelative_positions の observer は向きの基準になる本人、target はその本人から見た相手や。dogido はオレ、player はプレイヤーやで。聞かれた側の observer と target の結果を使ってな。相手視点を反転して作ったり、位置関係を計算し直したりせんといてな。\nhorizontal の front/front_right/right/back_right/back/back_left/left/front_left は、前/右前/右/右後ろ/後ろ/左後ろ/左/左前や。same_horizontal_position は同じ水平位置やで。vertical の above/same/below は、相手の足元が基準の本人より上/同じ高さ/下や。distance_blocks は二人の足元の直線距離を小数第一位に丸めた値やで。\nchanges の body_position_relation は位置関係の変化や。before は変わる前、now は変わった後の結果やで。今回の位置を聞かれたら current.position_relation を使ってな。変化の項目がなくても、現在観測にある結果は使ってええで。\nbody_observation の status や position_relation の position_status が unavailable のときは、今の位置は分からへんで。前の会話の位置で穴埋めせんといてな。\n位置が分かることと、目で見えてることは別やで。結果は今回の観測時点のものやから、その後も動いてへんと決めつけんといてな。今回の問いに必要な分だけ、どちらから見た位置か分かる短いセリフで答えてな。",
+    "environment_body_contract_before_recovery_priority": "周囲の変化と会話も見て、喋るか黙るかと次の行動を一緒に選んでな。安心度（0〜100）は、低いと心細くなる。プレイヤーのそばにおれば少しずつ回復。そばで顔を見ると早く回復するで。\n返事は {\"action\":\"speak または silent\",\"speech\":\"セリフ（silentなら空）\",\"body_action\":{\"action\":\"available_actions のキー\",\"target_id\":null}} のJSON一つだけや。対象がある行動の target_id は candidates の id、それ以外は null や。",
+    "environment_body_contract_at_documentation_time": "周囲の変化と会話も見て、喋るか黙るかと次の行動を一緒に選んでな。安心度（0〜100）は、低いと心細くなる。プレイヤーのそばにおれば少しずつ回復。そばで顔を見ると早く回復するで。\n安心度が低いほど、プレイヤーのそばへ戻ったり、顔を見たりして安心することを優先して考えてな。今の距離や顔が見えるか、周りの気になるもんも踏まえて、今選べる行動から決めるんや。安心できたら、また見物を楽しんでええで。\n返事は {\"action\":\"speak または silent\",\"speech\":\"セリフ（silentなら空）\",\"body_action\":{\"action\":\"available_actions のキー\",\"target_id\":null}} のJSON一つだけや。対象がある行動の target_id は candidates の id、それ以外は null や。"
+  },
+  "source_sha256": {
+    "dogido_server/llm/companion_prompts.json": "dadc4062783f4fa3953f7aa96314dfd235e3c369b40c85fc30610dfcac98bed4",
+    "dogido-rust/src/dialogue/body_interest_runtime.rs": "b77a44179184cf6551c51b354b510bb6642f6120948cf9dc678363c2170741a0",
+    "dogido-rust/src/dialogue/environment_runtime.rs": "0ab4e70d9aaaae71a6c958a690994a1f4fbd7747199f019f6013185c6163cef4",
+    "dogido-rust/src/environment/reaction.rs": "957f20554cca6fe58f13e4bb33188cbbe8f2685ce37ce8a40f4b34c07a849226",
+    "dogido-rust/src/companion_prompt.rs": "d629ae3291f19b520fbfbef0f343cf4d64dc0e4050f005fb4d6ac3d5e69e611d",
+    "dogido-rust/src/chat_prompt.rs": "9a9c7b904b9386abbf2d69d243ebc2baef628f20c194c24f0322db202a243669",
+    "dogido-rust/src/types.rs": "2a43a47cd6ef1b6c72b44bbb3f5bedce6715b0a141f329a717f1d1a5dad7528a",
+    "dogido-rust/src/llm.rs": "a3435c8e9ba7be0907c3e57bc18db0bbd643bfd438a1408803c5ad4dd5713791",
+    "dogido-rust/src/chat_observation/sound.rs": "45f7528d586ebbf4a47b61f747d811a1a975e3e1fc990df3ceaf0e9a328b11ae",
+    "adapter/minecraft-fabric/src/main/java/dogido/fabric/body/BodyAttention.java": "0c5dd842fe5ead4e2bb58b036a9302a52dce379983c00a21fc021c2a093f4322",
+    "animation/cube_dogido/cube-dogido-lab/src/main/java/dogido/lab/control/BodyReassurance.java": "8c2503d03555dfa73243599b801d1fa821d5735c61db9e3707c3ec6f43dc6ada",
+    "animation/cube_dogido/cube-dogido-lab/src/main/java/dogido/lab/control/BodyController.java": "bbb37dad7a565ac2cd6ca85012fe7e490f2fc9bcbb695a53e6473f4f989bfd95"
+  },
+  "body_reassurance_source_at_documentation_time": "package dogido.lab.control;\n\nimport dogido.lab.api.BodyProtocol.Reassurance;\nimport net.minecraft.util.math.Vec3d;\n\n/**\n * 保存しない安心度を、連続したserver tickの距離・実視認・静止から更新する。HPや命令受付には依存しない。\n * 値は0..100。近くでownerが見えると70まで、落ち着いて顔が見えると100まで回復する。\n * 状態の所有者は身体Entity。読取・再送・未観測の時間から回復を作らない。\n */\npublic final class BodyReassurance {\n    public static final double INITIAL = 50, NEAR_CAP = 70, NEAR_DISTANCE = 3, FACE_DISTANCE = 2.5;\n    private static final int UNSEEN_GRACE_TICKS = 40;\n    private double value = INITIAL;\n    private long lastTick = -1;\n    private int unseenTicks;\n    private Vec3d lastBody, lastOwner;\n\n    /** 再読込・owner/次元/世代の変更で初期化する。前の相手の安心度を別の接続へ持ち越さない。 */\n    public void reset() { value=INITIAL; lastTick=-1; unseenTicks=0; lastBody=lastOwner=null; }\n\n    /**\n     * 位置はblock。safeは当tickの敵・壁・退避状態の検査結果。姿勢の連続実測があるtickだけ時間を進める。\n     * 同tick/古いtickは無視し、長い未観測区間を現在の顔の見通しだけで回復時間へ換算しない。\n     */\n    public void step(long tick, Vec3d body, Vec3d owner, boolean ownerVisible, boolean faceVisible, boolean ownerWorking, boolean safe) {\n        if (tick < 0 || tick <= lastTick || !finite(body)) return;\n        boolean available=finite(owner), visible=available && ownerVisible;\n        double distance=available ? body.distanceTo(owner) : 0;\n        if (lastTick >= 0 && tick == lastTick+1) {\n            unseenTicks=visible ? 0 : Math.min(UNSEEN_GRACE_TICKS+1,unseenTicks+1);\n            boolean calm=available && lastOwner != null && lastBody != null\n                && owner.distanceTo(lastOwner) <= .03 && body.distanceTo(lastBody) <= .05;\n            if (safe && visible && distance <= FACE_DISTANCE && faceVisible && !ownerWorking && calm) {\n                value=Math.min(100,value+.2);\n            } else if (safe && visible && distance <= NEAR_DISTANCE) {\n                if (value < NEAR_CAP) value=Math.min(NEAR_CAP,value+.1);\n            } else {\n                double loss=available && distance > NEAR_DISTANCE ? Math.min(.06,(distance-NEAR_DISTANCE)*.005) : 0;\n                if (unseenTicks > UNSEEN_GRACE_TICKS) loss+=.04;\n                if (!safe) loss+=.025;\n                value=Math.max(0,value-loss);\n            }\n        } else unseenTicks=0;\n        lastTick=tick; lastBody=body; lastOwner=available ? owner : null;\n    }\n\n    /** 現在の実測だけを添えた読み取り。呼び出しても値・時計・回復量を変えない。 */\n    public Reassurance reading(double ownerDistance, boolean ownerVisible, boolean faceVisible, boolean ownerWorking) {\n        double distance=Double.isFinite(ownerDistance) && ownerDistance >= 0 ? ownerDistance : 0;\n        return new Reassurance(value,distance,ownerVisible,ownerVisible && faceVisible,ownerWorking);\n    }\n    public double value() { return value; }\n    private static boolean finite(Vec3d point) {\n        return point != null && Double.isFinite(point.x) && Double.isFinite(point.y) && Double.isFinite(point.z);\n    }\n}\n",
+  "change_checkpoint_manifests": {
+    ".dogido_tools/checkpoints/2026-10-20-reassurance/application.json": {
+      "applied_at": "2026-10-19T23:03:28.344843+00:00",
+      "branch": "main",
+      "source_files": 55,
+      "artifacts": [
+        {
+          "path": "adapter/minecraft-fabric/build/libs/dogido-fabric-client-0.1.0.jar",
+          "sha256": "acf2cdd8a5df731f85f17191bfcb42badf6fe27e6d3eec77eb654ac3aa75bb0c"
+        },
+        {
+          "path": "animation/cube_dogido/cube-dogido-lab/build/libs/cube-dogido-lab-0.7.9.jar",
+          "sha256": "67d6996b7b5409d12fa55ca717b801f751c80fee69af6ff6261fe0f84b9c6c3b"
+        },
+        {
+          "path": "animation/cube_dogido/cube-dogido-lab/build/libs/cube-dogido-lab-0.7.9-body-api.jar",
+          "sha256": "b0f9a48ace54d96e0d6f1fc938294ef06283251ddc0c4a34d3fc963e8415afc7"
+        },
+        {
+          "path": "animation/cube_dogido/cube-dogido-lab/build/libs/cube-dogido-lab-0.7.9-sources.jar",
+          "sha256": "29082d2a8c76e55aa3ca0897778c03160cd202cea44e0481e76d7cff40e33af3"
+        },
+        {
+          "path": "dogido-rust/target/release/dogido-rust",
+          "sha256": "93722bcbd06145a8af90ad5786e897bb18c2e8659046f44cb6b471137eb295c5"
+        }
+      ],
+      "mods_installed": true,
+      "services_restarted": false,
+      "finalized_at": "2026-10-19T23:15:13.625613+00:00",
+      "verification": {
+        "source_integrity_files": 55,
+        "branch": "main",
+        "release_sha256": "93722bcbd06145a8af90ad5786e897bb18c2e8659046f44cb6b471137eb295c5",
+        "release_bytes": 27098576,
+        "approved_prompt_embedded": true,
+        "canonical_runtime_path": true,
+        "startup_check_exit_code": 0,
+        "startup_check_warning": "既存の廃止済みDOGIDO_CUE_BACKEND設定警告",
+        "models_initialized": false,
+        "services_started_or_restarted": false,
+        "mods_installed": false
+      },
+      "mod_deployment": {
+        "installed_at": "2026-10-20T08:23:20.030167+09:00",
+        "backup": "minecraft/mod-backups/2026-10-20-082320-reassurance",
+        "mods": [
+          {
+            "id": "dogido_experiment",
+            "filename": "cube-dogido-lab-0.7.9.jar",
+            "version": "0.7.9",
+            "sha256": "67d6996b7b5409d12fa55ca717b801f751c80fee69af6ff6261fe0f84b9c6c3b",
+            "previous_filename": "cube-dogido-lab-0.7.8.jar",
+            "previous_sha256": "656d99a020a7ac84d5bfa5823dda5b4dcb50a30c4ef90c3c3f2684b67a39b9e8"
+          },
+          {
+            "id": "dogido_client_adapter",
+            "filename": "dogido-fabric-client-0.1.0.jar",
+            "version": "0.1.0",
+            "sha256": "acf2cdd8a5df731f85f17191bfcb42badf6fe27e6d3eec77eb654ac3aa75bb0c",
+            "previous_filename": "dogido-fabric-client-0.1.0.jar",
+            "previous_sha256": "044bce325dc550fb9de67f05a91132912a3575c4acd193ef2b09c064568f3d75"
+          }
+        ],
+        "minecraft_started": false,
+        "services_restarted": false,
+        "game_verification": "not_performed"
+      }
+    },
+    ".dogido_tools/checkpoints/reassurance-prompt-20261020T003932Z/manifest.json": {
+      "root": ".",
+      "head": "9b05cccbf7cd740be2c1d26a63ea506ee76f0e0c",
+      "created_at": "2026-10-20T00:38:25.559352+00:00",
+      "addition": "安心度が低いほど、プレイヤーのそばへ戻ったり、顔を見たりして安心することを優先して考えてな。今の距離や顔が見えるか、周りの気になるもんも踏まえて、今選べる行動から決めるんや。安心できたら、また見物を楽しんでええで。",
+      "changes": [
+        {
+          "path": "dogido_server/llm/companion_prompts.json",
+          "before": "a82d6e34bad3c5a0641844bc3be850d618287d26a17c8426cfc0f2c3e031b1c6",
+          "after": "dadc4062783f4fa3953f7aa96314dfd235e3c369b40c85fc30610dfcac98bed4"
+        },
+        {
+          "path": "docs/2026-10-20-reassurance.md",
+          "before": "c70287ee42e16218d6ef003288d68129fb67058ad16f7110c6e2edaec32eac08",
+          "after": "d08d00853348568609147db402644288b2b34041cabc26b8f95a8c6f8a342263"
+        }
+      ]
+    },
+    ".dogido_tools/checkpoints/range-boundary-and-rain-20261020T011759Z/manifest.json": {
+      "root": ".",
+      "head": "9b05cccbf7cd740be2c1d26a63ea506ee76f0e0c",
+      "changes": [
+        {
+          "path": "dogido-rust/src/dialogue/body_interest_runtime.rs",
+          "before": "0ed8aaa30561e9b8a09a7ffab18583978fd0536bbd78fe99c20ab2ce53190f16",
+          "after": "b0a76868cb5162578a2aa0a38db65305305441b2e38a4bbb0b44b64a98eb6f3c"
+        },
+        {
+          "path": "dogido-rust/src/dialogue/body_interest_runtime/tests.rs",
+          "before": "b2d8c0f25abb24edfd18680b15e5b966082d9e33e912d1202a566771d3ba68a2",
+          "after": "be2d8e38a63852feaf18329a93af745c39fdbb3e5963562b920072cc1727a442"
+        },
+        {
+          "path": "dogido-rust/src/dialogue/observe.rs",
+          "before": "94b4339d16f571fbe8ce35c5032a68a9d776e7f8a58dc24a5a55d5ec3c262e6f",
+          "after": "940b6f848f0f1a00f39ff5d7db46daf1d2b01789dad2f82a94e1545cd6f01126"
+        },
+        {
+          "path": "dogido-rust/src/dialogue/mod.rs",
+          "before": "205533f7ad3fbdb869be17e52e7b670e769cda1d2af1a3d741a6575d3131a105",
+          "after": "4fd7f23b992044884733149ac619ef18fa9a72a70a81c2ec6d94ef19e3486060"
+        },
+        {
+          "path": "docs/2026-10-20-reassurance.md",
+          "before": "d08d00853348568609147db402644288b2b34041cabc26b8f95a8c6f8a342263",
+          "after": "68506e7cb6680bf9ae2b2d08a43795ba4156b81894383d1fc9afa2a699d03520"
+        },
+        {
+          "path": "dogido-rust/src/chat_world.rs",
+          "before": "108d7c289b4525da81bb9640e634a2e4c16b1ed90462a67abb8972c3bef19bb8",
+          "after": "c91830c396d168dc27d76cabde427b5228b1b6330a253a81da3bbb74789b8ae5"
+        },
+        {
+          "path": "dogido-rust/tests/chat_world.rs",
+          "before": "046e2f42db2b4298e45b1142ba3e20af301a3897e597a7e7b6b8e2a7ea6186fc",
+          "after": "293976c235777aa8e01fcf73d170d82f1d5ce4230e9880243c97c4a4e9e04c45"
+        }
+      ]
+    },
+    ".dogido_tools/checkpoints/follow-range-20261020/manifest.json": {
+      "root": ".",
+      "head": "9b05cccbf7cd740be2c1d26a63ea506ee76f0e0c",
+      "changes": [
+        {
+          "path": "dogido-rust/src/body/autonomy/state.rs",
+          "before": "4f84766968d122b8be77a373adfaa1e33962db4ae49771244e5c8026c3694752",
+          "after": "72c06628623da6ea369c286d649631d1f3fa39883c9dea18d8c5cd4f3ccadf48"
+        },
+        {
+          "path": "dogido-rust/src/dialogue/body_interest_runtime.rs",
+          "before": "b0a76868cb5162578a2aa0a38db65305305441b2e38a4bbb0b44b64a98eb6f3c",
+          "after": "46c4dabddd8b5618aaf4a7bc0cff13415a992dea7cf0a8fe261a5940944e5b6e"
+        },
+        {
+          "path": "dogido-rust/src/dialogue/body_interest_runtime/tests.rs",
+          "before": "be2d8e38a63852feaf18329a93af745c39fdbb3e5963562b920072cc1727a442",
+          "after": "3d82df98f5b39abb1bf84304d329822928843bc16e861fafe0243eda7415d52a"
+        },
+        {
+          "path": "docs/2026-10-20-reassurance.md",
+          "before": "68506e7cb6680bf9ae2b2d08a43795ba4156b81894383d1fc9afa2a699d03520",
+          "after": "3d57e25b512ff57dc3bd7533847a99d1ed83a645245a3245dc827eaa4923f5fa"
+        }
+      ]
+    }
+  },
+  "installed_mod_files_at_documentation_time": [
+    {
+      "filename": "cube-dogido-lab-0.7.10.jar",
+      "sha256": "8ec7cfd0b25223802459242992d7e0685ac85d9f57c49308ca18256eef520e72",
+      "scope": "file on disk; does not prove the loaded artifact in the observed session"
+    },
+    {
+      "filename": "dogido-fabric-client-0.1.0.jar",
+      "sha256": "24c1b53971f56d8f27b8838d3a6bd86b56f25847145e431ed44b1b3005d63f68",
+      "scope": "file on disk; does not prove the loaded artifact in the observed session"
+    }
+  ],
+  "multimodal_hypothesis_followup": {
+    "user_statement": "gemmaがマルチモーダルだからじゃないか？ビジョンが入らなくて心配なんじゃないか？前から音をすごく気にしていたり、目の前にいるのにいないと言っていたり、見えるのが前提で喋っているような気がする。",
+    "status": "hypothesis, not established cause",
+    "repository_findings": [
+      "environment::reaction::Prepared::new creates system and user string messages; the user content is serialized observation JSON",
+      "ChatMessage.content is String; to_rig_request sends these messages as text, without image or audio content parts",
+      "companion_prompt::environment uses base, normal mode, grounding, ambient purpose, optional smell guide and environment_body_contract",
+      "the body_observation reading guide is appended in chat_prompt, but not by companion_prompt::environment",
+      "sound descriptions are generated from discrete Minecraft sound events rather than raw audio"
+    ],
+    "external_sources_accessed_date": "2026-10-20",
+    "external_sources": [
+      {
+        "title": "Google Gemma Basic Text Inference",
+        "url": "https://ai.google.dev/gemma/docs/capabilities/text/basic",
+        "supported_claim": "Gemma 4 officially supports text-only generation; absence of an image is not inherently an invalid input"
+      },
+      {
+        "title": "Google Gemma 4 Prompt Formatting",
+        "url": "https://ai.google.dev/gemma/docs/core/prompt-formatting-gemma4",
+        "supported_claim": "Image and audio inputs have explicit modality markers; ordinary text prompts are also documented"
+      }
+    ]
+  }
+}

@@ -1,4 +1,6 @@
-# ドキドキドギド
+# ドキドキドギド (DokiDoki-Dogido)
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE.md) [![Minecraft Fabric](https://img.shields.io/badge/Minecraft-1.21.11%20Fabric-brightgreen)](adapter/minecraft-fabric/) [![Rust](https://img.shields.io/badge/Rust-server-orange)](dogido-rust/) [![Python support](https://img.shields.io/badge/Python-3.11+%20support-blue)](pyproject.toml) [![Voice](https://img.shields.io/badge/TTS-VOICEVOX-orange)](https://voicevox.hiroshiba.jp/)
 
 Minecraft Java Edition向けのAIコンパニオンです。ゲーム内の観測とプレイヤーの発言をもとに会話し、川柳の作成・共同編集・記録を行います。音声と文字の入力に対応し、身体Modとの連携では移動や対象の観察も行います。
 
@@ -128,18 +130,20 @@ Minecraft内で返答を `↑`（良い例）／`↓`（要レビュー）と評
 
 ---
 
-## ライセンス・開発
+## ライセンス・二次創作ガイドライン
 
 **ライセンス表記の訂正（2026年10月6日）**
 
 作者の不注意により、ライセンス表記に誤りがありました。お詫びして訂正します。
 
-- プログラムコード：[MIT License](LICENSE.md)
-- ドギドのキャラクター・公式素材・二次創作：[キャラクター利用・二次創作ガイドライン](LICENSE-CHARACTER.md)
-
-コードを触る AI アシスタント向けの注意は **[AGENTS.md](AGENTS.md)** にまとめています。
-
-TTS 読み補正（optional `pip install -e ".[tts-reading]"`）では [fugashi](https://github.com/polm/fugashi) と [unidic-lite](https://github.com/polm/unidic-lite) を利用します。UniDic は国立国語研究所の成果物で、GPL / LGPL / BSD のトリプルライセンスです。詳細は各パッケージのライセンス表記を参照してください。
+- **プログラムコード**: [MIT License](LICENSE.md)
+- **キャラクター・画像・モデル等**: [キャラクター利用・二次創作ガイドライン](LICENSE-CHARACTER.md)
+  - イラストや同人誌・漫画の販売は事前連絡不要です。
+  - 動画投稿やライブ配信でご利用の際は、GitHub Issues または X（旧Twitter）にて公開URLをご一報ください。
+  - グッズ販売等の例外規定や、Minecraft のプレイ画面を含む作品の取り扱いについてはガイドライン本文をご確認ください。
+- **AI アシスタント向け開発方針**: 本リポジトリを編集する AI 向けのルールは **[AGENTS.md](AGENTS.md)** にまとめています。
+- **サードパーティ製ライブラリ**:
+  - TTS 読み補正オプション（`.[tts-reading]`）では [fugashi](https://github.com/polm/fugashi) および [unidic-lite](https://github.com/polm/unidic-lite) を使用しています。UniDic は国立国語研究所の著作物（GPL / LGPL / BSD トリプルライセンス）です。
 
 ---
 

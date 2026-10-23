@@ -2,7 +2,7 @@
 
 本体と同じ要求を使い、Gemma 4 QATの生成時活性と転用J-lensを比較する。サーバー・音声・記憶には接続しない。感情の同定や本体への接続は未実施。
 
-[実測・限界・モデル変更時の方針](../../docs/2026-10-16-haiku-internal-representations.md)
+[実測・限界・モデル変更時の方針](https://github.com/yukincom/AI-Curious-Community/blob/main/j-lens-study/docs/2026-10-16-haiku-internal-representations.md)
 
 - `validate_mlx.py`: native計算、層境界、量子化MoEのVJP検査
 - `measure.py`: 生成、token対応、全層読出し、重み・レンズ識別
@@ -31,4 +31,4 @@ MacとColab A100での実行、notebookの構文・ZIP整合性を確認済み�
 
 最後のセルで `qat_colab_result.zip` を取得し、数値差・VRAM使用量・速度を確認してから学習方法を決める。単一入力の速度外挿を本学習の所要時間保証とせず、互換性の検査をレンズの独立精度評価と混同しない。
 
-`qat_vectorized.py` と `optimization_probe.py` は、モデルのbatchを1に保って微分方向を16個まとめる改善の比較用。二入力のMac実測で高速化とforwardの一致を確認し、既存入力では8.89秒から4.10秒へ短縮した。`prepare-optimization` → 比較元の採取 → `package-optimization` で別のColab配布物を作る。CUDA再測定と本学習は未実施。[実測・再現方法・GGUF移行時の境界](../../docs/2026-10-17-qat-jacobian-optimization.md)
+`qat_vectorized.py` と `optimization_probe.py` は、モデルのbatchを1に保って微分方向を16個まとめる改善の比較用。二入力のMac実測で高速化とforwardの一致を確認し、既存入力では8.89秒から4.10秒へ短縮した。`prepare-optimization` → 比較元の採取 → `package-optimization` で別のColab配布物を作る。CUDA再測定と本学習は未実施。[実測・再現方法・GGUF移行時の境界](https://github.com/yukincom/AI-Curious-Community/blob/main/j-lens-study/docs/2026-10-17-qat-jacobian-optimization.md)

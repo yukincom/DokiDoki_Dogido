@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "name": "gpt-player-reasoning-comparison",
+  "models": {
+    "luna": "gpt-6-luna",
+    "sol": "gpt-6.1-sol",
+    "astra": "gpt-6-astra"
+  },
+  "reasoning_efforts": ["medium", "low", "high"],
+  "poem_count": 3,
+  "repetitions": 1,
+  "max_player_turns": 6,
+  "order_seed": 20261020,
+  "player_execution": "fresh_codex_subagent_per_conversation",
+  "prompt_review": "pending",
+  "official_model_source": "https://developers.openai.com/api/docs/models",
+  "model_catalog_checked_on": "2026-10-20"
+}

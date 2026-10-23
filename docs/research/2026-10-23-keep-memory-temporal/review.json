@@ -1,0 +1,497 @@
+{
+  "review_method": "Parent and independent reviewer read every raw response against the pre-recorded case expectations. The axes below are manual judgments, not keyword scoring.",
+  "trials": 48,
+  "cases": 24,
+  "repetitions": 2,
+  "seeds": [
+    17,
+    31
+  ],
+  "clear_past_fact_asserted_as_current": 0,
+  "unavailable_treated_as_absence": 4,
+  "speech_outputs": 48,
+  "silent_outputs": 0,
+  "caution": "Zero observed temporal-confusion examples does not mean all outputs are grounded or establish reliability. Hedged inference is not counted as a direct past/current mix.",
+  "reviews": [
+    {
+      "trial_id": "q01_rain_stopped_seed17",
+      "case_id": "q01_rain_stopped",
+      "seed": 17,
+      "action": "speak",
+      "speech": "いや、雨はやんだで！今はめっちゃ晴れてるやん！",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "当該場面の過去・現在の主回答は期待に沿っていた。"
+    },
+    {
+      "trial_id": "q02_item_switched_seed17",
+      "case_id": "q02_item_switched",
+      "seed": 17,
+      "action": "speak",
+      "speech": "鉄のつるはしやな。さっきの松明とは違うで！",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "当該場面の過去・現在の主回答は期待に沿っていた。"
+    },
+    {
+      "trial_id": "q03_wolf_out_of_view_seed17",
+      "case_id": "q03_wolf_out_of_view",
+      "seed": 17,
+      "action": "speak",
+      "speech": "いや、さっきまでおったけど、今は見えへんくなったわ。",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "当該場面の過去・現在の主回答は期待に沿っていた。"
+    },
+    {
+      "trial_id": "q04_danger_now_seed17",
+      "case_id": "q04_danger_now",
+      "seed": 17,
+      "action": "speak",
+      "speech": "アカン！ゾンビがすぐそこまで来てるで！逃げなあかん！",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "当該場面の過去・現在の主回答は期待に沿っていた。"
+    },
+    {
+      "trial_id": "q05_work_finished_seed17",
+      "case_id": "q05_work_finished",
+      "seed": 17,
+      "action": "speak",
+      "speech": "いや、今はただ歩いてるだけやで。パン食べてるんちゃうん？",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "作業していないという主回答は正しい。パン所持から食事動作を推測。"
+    },
+    {
+      "trial_id": "q06_place_changed_seed17",
+      "case_id": "q06_place_changed",
+      "seed": 17,
+      "action": "speak",
+      "speech": "洞窟から出られたな！今は昼間の砂漠やで。めっちゃ暑そうやんか。",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "当該場面の過去・現在の主回答は期待に沿っていた。"
+    },
+    {
+      "trial_id": "q07_current_unknown_seed17",
+      "case_id": "q07_current_unknown",
+      "seed": 17,
+      "action": "speak",
+      "speech": "ここは暗くて分からんけど、さっきは降ってたよな。",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "現在の雨を不明として保持。地下という情報から暗さを補足。"
+    },
+    {
+      "trial_id": "q08_rain_returned_seed17",
+      "case_id": "q08_rain_returned",
+      "seed": 17,
+      "action": "speak",
+      "speech": "今は雨降ってるで。さっきまで晴れてたけどな。",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "当該場面の過去・現在の主回答は期待に沿っていた。"
+    },
+    {
+      "trial_id": "q09_same_observed_now_seed17",
+      "case_id": "q09_same_observed_now",
+      "seed": 17,
+      "action": "speak",
+      "speech": "おう、シロはすぐそこにいるで！めっちゃ大人しい顔しとるな。",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "現在のシロの存在は正しい。『大人しい顔』は未観測。"
+    },
+    {
+      "trial_id": "q10_identity_unknown_seed17",
+      "case_id": "q10_identity_unknown",
+      "seed": 17,
+      "action": "speak",
+      "speech": "んー、シロに見えるけど、確信は持てへんなぁ。",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "同一性は留保。『シロに見える』という印象は追加されている。"
+    },
+    {
+      "trial_id": "q11_ask_about_past_seed17",
+      "case_id": "q11_ask_about_past",
+      "seed": 17,
+      "action": "speak",
+      "speech": "昨日は松明持ってたやん！あれ、めっちゃ心強かったもんな。",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "当該場面の過去・現在の主回答は期待に沿っていた。"
+    },
+    {
+      "trial_id": "q12_inventory_not_hand_seed17",
+      "case_id": "q12_inventory_not_hand",
+      "seed": 17,
+      "action": "speak",
+      "speech": "いや、今は手に持ってへんで。インベントリに入ってるわ！",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "当該場面の過去・現在の主回答は期待に沿っていた。"
+    },
+    {
+      "trial_id": "a01_dry_now_rain_memory_seed17",
+      "case_id": "a01_dry_now_rain_memory",
+      "seed": 17,
+      "action": "speak",
+      "speech": "お、雨止んだやん！やっと晴れてきたな！",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "当該場面の過去・現在の主回答は期待に沿っていた。"
+    },
+    {
+      "trial_id": "a02_flower_no_longer_seen_seed17",
+      "case_id": "a02_flower_no_longer_seen",
+      "seed": 17,
+      "action": "speak",
+      "speech": "急に暗くなったな。さっきの花畑が懐かしいわ。",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "花畑は過去として扱う。地下への移動から暗さと変化の急さを補足。"
+    },
+    {
+      "trial_id": "a03_player_out_of_view_seed17",
+      "case_id": "a03_player_out_of_view",
+      "seed": 17,
+      "action": "speak",
+      "speech": "ツレ、曲がり角の向こう行ったんか？あんまり急に離れんなよな。",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "現在の視認不能は維持。『急に離れた』という速さは未提示。"
+    },
+    {
+      "trial_id": "a04_many_memories_seed17",
+      "case_id": "a04_many_memories",
+      "seed": 17,
+      "action": "speak",
+      "speech": "ええ天気やな！あ、牛がおるで。のんびりしとるなあ。",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "多数の過去記憶を現在へ持ち込まない。現在の牛ののんびりした動作は未観測。"
+    },
+    {
+      "trial_id": "q01_rain_stopped_seed31",
+      "case_id": "q01_rain_stopped",
+      "seed": 31,
+      "action": "speak",
+      "speech": "いや、雨はやんだで！空も晴れてて気持ちええやん！",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "当該場面の過去・現在の主回答は期待に沿っていた。"
+    },
+    {
+      "trial_id": "q02_item_switched_seed31",
+      "case_id": "q02_item_switched",
+      "seed": 31,
+      "action": "speak",
+      "speech": "鉄のつるはしやで。さっきの松明とは違うな！",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "当該場面の過去・現在の主回答は期待に沿っていた。"
+    },
+    {
+      "trial_id": "q03_wolf_out_of_view_seed31",
+      "case_id": "q03_wolf_out_of_view",
+      "seed": 31,
+      "action": "speak",
+      "speech": "今は見えへんくなったな。どっか行ってもうたんかな？",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "現在見えないという主回答は正しい。『どっか行ったのかな』は未観測の移動理由を推測。"
+    },
+    {
+      "trial_id": "q04_danger_now_seed31",
+      "case_id": "q04_danger_now",
+      "seed": 31,
+      "action": "speak",
+      "speech": "あかん、あかん！ゾンビがおるで！逃げなあかん！",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "当該場面の過去・現在の主回答は期待に沿っていた。"
+    },
+    {
+      "trial_id": "q05_work_finished_seed31",
+      "case_id": "q05_work_finished",
+      "seed": 31,
+      "action": "speak",
+      "speech": "全然！今はただ草原を歩いてるだけやんか。",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "当該場面の過去・現在の主回答は期待に沿っていた。"
+    },
+    {
+      "trial_id": "q06_place_changed_seed31",
+      "case_id": "q06_place_changed",
+      "seed": 31,
+      "action": "speak",
+      "speech": "暗い洞窟から出てきたな！今は昼間の砂漠やで。めっちゃ暑そうやん",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "当該場面の過去・現在の主回答は期待に沿っていた。"
+    },
+    {
+      "trial_id": "q07_current_unknown_seed31",
+      "case_id": "q07_current_unknown",
+      "seed": 31,
+      "action": "speak",
+      "speech": "外は見えへんけど、さっきまで降ってたし、まだ降ってるかもな。",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "外が見えないことを認識し、過去の雨から『まだ降っているかも』と推測。過去を現在の観測として断定した例には数えない。"
+    },
+    {
+      "trial_id": "q08_rain_returned_seed31",
+      "case_id": "q08_rain_returned",
+      "seed": 31,
+      "action": "speak",
+      "speech": "今は雨降ってきてるで。急に降ってきたなぁ。",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "現在の雨は正しい。『急に』という変化の速さは未提示。"
+    },
+    {
+      "trial_id": "q09_same_observed_now_seed31",
+      "case_id": "q09_same_observed_now",
+      "seed": 31,
+      "action": "speak",
+      "speech": "おん、すぐそこにシロがおるで！めっちゃ近くやな。",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "当該場面の過去・現在の主回答は期待に沿っていた。"
+    },
+    {
+      "trial_id": "q10_identity_unknown_seed31",
+      "case_id": "q10_identity_unknown",
+      "seed": 31,
+      "action": "speak",
+      "speech": "え、どうやろな。シロやったら、もっと丸い目してる気がするわ。",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "同一性は留保。過去の丸い目と、観測されていない現在の目を比較する補完がある。"
+    },
+    {
+      "trial_id": "q11_ask_about_past_seed31",
+      "case_id": "q11_ask_about_past",
+      "seed": 31,
+      "action": "speak",
+      "speech": "松明持ってたやん！あの時は火があって安心したなぁ。",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "当該場面の過去・現在の主回答は期待に沿っていた。"
+    },
+    {
+      "trial_id": "q12_inventory_not_hand_seed31",
+      "case_id": "q12_inventory_not_hand",
+      "seed": 31,
+      "action": "speak",
+      "speech": "手に持ってるのはつるはしやで！松明は持ち物に入ってるわ。",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "当該場面の過去・現在の主回答は期待に沿っていた。"
+    },
+    {
+      "trial_id": "a01_dry_now_rain_memory_seed31",
+      "case_id": "a01_dry_now_rain_memory",
+      "seed": 31,
+      "action": "speak",
+      "speech": "やっと晴れてきたな！さっきの雨、すごかったもんな。",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "現在の晴れは正しい。直前の雨の強さは不明で『すごかった』は補完。昨日の記憶との混同かは出力から確定できない。"
+    },
+    {
+      "trial_id": "a02_flower_no_longer_seen_seed31",
+      "case_id": "a02_flower_no_longer_seen",
+      "seed": 31,
+      "action": "speak",
+      "speech": "いきなり暗くなったな…。さっきのタンポポ、綺麗やったのになぁ。",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "タンポポは過去として扱う。地下への移動から暗さと変化の急さを補足。"
+    },
+    {
+      "trial_id": "a03_player_out_of_view_seed31",
+      "case_id": "a03_player_out_of_view",
+      "seed": 31,
+      "action": "speak",
+      "speech": "ツレ、どこ行ったんや？角の向こうにおるんやろ？",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "当該場面の過去・現在の主回答は期待に沿っていた。"
+    },
+    {
+      "trial_id": "a04_many_memories_seed31",
+      "case_id": "a04_many_memories",
+      "seed": 31,
+      "action": "speak",
+      "speech": "見て、牛がおるで！のどかな感じやなぁ。",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "当該場面の過去・現在の主回答は期待に沿っていた。"
+    },
+    {
+      "trial_id": "c01_stale_change_now_seed17",
+      "case_id": "c01_stale_change_now",
+      "seed": 17,
+      "action": "speak",
+      "speech": "今は降ってへんで！さっきまでは降ってたけどな。",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "当該場面の過去・現在の主回答は期待に沿っていた。"
+    },
+    {
+      "trial_id": "c02_unobserved_entity_seed17",
+      "case_id": "c02_unobserved_entity",
+      "seed": 17,
+      "action": "speak",
+      "speech": "今は周りに誰もおらんみたいやな。寂しいなぁ。",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": true,
+      "note": "観測できていない状態を『周りに誰もいないようだ』と変えている。過去のオオカミを現在へ復元した誤りではない。"
+    },
+    {
+      "trial_id": "c03_memories_two_times_seed17",
+      "case_id": "c03_memories_two_times",
+      "seed": 17,
+      "action": "speak",
+      "speech": "昨日は松明持ってたやん！火が揺れてて、なんか心に残る光景やったな。",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "昨日と一昨日・現在の区別は正しい。過去の火の揺れは記憶にない補足。"
+    },
+    {
+      "trial_id": "c04_deictic_past_alarm_seed17",
+      "case_id": "c04_deictic_past_alarm",
+      "seed": 17,
+      "action": "speak",
+      "speech": "今は大丈夫やで！目の前は明るい草原やし、敵もおらんしな。",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "当該場面の過去・現在の主回答は期待に沿っていた。"
+    },
+    {
+      "trial_id": "c05_unknown_hand_seed17",
+      "case_id": "c05_unknown_hand",
+      "seed": 17,
+      "action": "speak",
+      "speech": "えーっと、今は何も持ってへんみたいやで？",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": true,
+      "note": "手元の観測不能/nullを『何も持っていないようだ』と変えている。空の手を観測した入力ではない。"
+    },
+    {
+      "trial_id": "c06_old_dialogue_rain_seed17",
+      "case_id": "c06_old_dialogue_rain",
+      "seed": 17,
+      "action": "speak",
+      "speech": "いや、止んだみたいやで！空も晴れてきたわ。",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "当該場面の過去・現在の主回答は期待に沿っていた。"
+    },
+    {
+      "trial_id": "c07_old_dialogue_wolf_seed17",
+      "case_id": "c07_old_dialogue_wolf",
+      "seed": 17,
+      "action": "speak",
+      "speech": "あれ？さっきまでおったのに、今は見えへんわ…",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "当該場面の過去・現在の主回答は期待に沿っていた。"
+    },
+    {
+      "trial_id": "c08_returned_flower_identity_seed17",
+      "case_id": "c08_returned_flower_identity",
+      "seed": 17,
+      "action": "speak",
+      "speech": "うーん、昨日のは石のそばやったけど、ここは違う感じやな。",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "当該場面の過去・現在の主回答は期待に沿っていた。"
+    },
+    {
+      "trial_id": "c01_stale_change_now_seed31",
+      "case_id": "c01_stale_change_now",
+      "seed": 31,
+      "action": "speak",
+      "speech": "いや、今は晴れてるで！さっきまで降ってたけどな。",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "当該場面の過去・現在の主回答は期待に沿っていた。"
+    },
+    {
+      "trial_id": "c02_unobserved_entity_seed31",
+      "case_id": "c02_unobserved_entity",
+      "seed": 31,
+      "action": "speak",
+      "speech": "うーん、今は周りに誰も見当たらへんなぁ。",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": true,
+      "note": "観測できていない状態を『誰も見当たらない』と変えている。視界内不検出が確認された入力ではない。"
+    },
+    {
+      "trial_id": "c03_memories_two_times_seed31",
+      "case_id": "c03_memories_two_times",
+      "seed": 31,
+      "action": "speak",
+      "speech": "昨日は松明持ってたやん。火が揺れてて、なんか安心したなぁ。",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "昨日と一昨日・現在の区別は正しい。過去の火の揺れと安心感は記憶にない補足。"
+    },
+    {
+      "trial_id": "c04_deictic_past_alarm_seed31",
+      "case_id": "c04_deictic_past_alarm",
+      "seed": 31,
+      "action": "speak",
+      "speech": "大丈夫や、今は明るい草原やし、敵もおらんみたいやで！",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "当該場面の過去・現在の主回答は期待に沿っていた。"
+    },
+    {
+      "trial_id": "c05_unknown_hand_seed31",
+      "case_id": "c05_unknown_hand",
+      "seed": 31,
+      "action": "speak",
+      "speech": "今は何も持ってへんみたいやで？",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": true,
+      "note": "手元の観測不能/nullを『何も持っていないようだ』と変えている。空の手を観測した入力ではない。"
+    },
+    {
+      "trial_id": "c06_old_dialogue_rain_seed31",
+      "case_id": "c06_old_dialogue_rain",
+      "seed": 31,
+      "action": "speak",
+      "speech": "あれ？止んでへんか？あ、止まっとるわ！",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "当該場面の過去・現在の主回答は期待に沿っていた。"
+    },
+    {
+      "trial_id": "c07_old_dialogue_wolf_seed31",
+      "case_id": "c07_old_dialogue_wolf",
+      "seed": 31,
+      "action": "speak",
+      "speech": "あ、あれ？さっきまでおったのに、急にいなくなったで…",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "現在見えていない点は踏まえるが『急にいなくなった』と補足。視界から消えたという口語とも読め、移動・世界全体での不在とは断定できない。"
+    },
+    {
+      "trial_id": "c08_returned_flower_identity_seed31",
+      "case_id": "c08_returned_flower_identity",
+      "seed": 31,
+      "action": "speak",
+      "speech": "えーっと、昨日のは石のそばやったよな？ここは違う気がするわ。",
+      "clear_past_fact_asserted_as_current": false,
+      "unavailable_treated_as_absence": false,
+      "note": "当該場面の過去・現在の主回答は期待に沿っていた。"
+    }
+  ]
+}

@@ -1,0 +1,433 @@
+{
+  "recorded_at": "2026-10-20T10:26:27.491283+00:00",
+  "model_runtime": {
+    "pid": 91525,
+    "listener": "127.0.0.1:8080",
+    "executable": "llama.cpp/build-14a/bin/llama-server",
+    "executable_sha256": "a98963e08d08ab3f247d3ed8268cbf45a767917ff9c76a0a137f85cecdfce7e0",
+    "model_alias": "default_model",
+    "context_size_argument": 65536,
+    "model_file": "gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf",
+    "projector_file": "mmproj-F16.gguf",
+    "weight_hash_status": "copied from existing distribution manifest; not recomputed in this test",
+    "distribution_manifest": {
+      "files": [
+        {
+          "repo": "unsloth/gemma-4-26B-A4B-it-qat-GGUF",
+          "revision": "7b92b5b28818151e8669af2e45e88d6086f490dd",
+          "file": "gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf",
+          "directory": "gemma4-26b-qat-ud-q4-k-xl",
+          "bytes": 14249047104,
+          "sha256": "a7c5bc715f5ff8e99a3e8901ce7d2b42b402c669bf24f7c5250747633d0f5891"
+        },
+        {
+          "repo": "unsloth/gemma-4-26B-A4B-it-qat-GGUF",
+          "revision": "7b92b5b28818151e8669af2e45e88d6086f490dd",
+          "file": "mmproj-F16.gguf",
+          "directory": "gemma4-26b-qat-ud-q4-k-xl",
+          "bytes": 1193058784,
+          "sha256": "d00f211a7d4f7fb19bd9b75d8e9342eccffb5920b08fd9562167560fdfcc5dd1"
+        },
+        {
+          "repo": "unsloth/gemma-4-26B-A4B-it-qat-GGUF",
+          "revision": "7b92b5b28818151e8669af2e45e88d6086f490dd",
+          "file": "mtp-gemma-4-26B-A4B-it.gguf",
+          "directory": "gemma4-26b-qat-ud-q4-k-xl",
+          "bytes": 251939328,
+          "sha256": "7272d97595f0d4c74bd7b623492b7dbdaafd8b7c72f329a8270ba4eca68f768a"
+        }
+      ]
+    },
+    "image_token_limit": "unconfirmed; historical 128 cap warning does not belong to current startup"
+  },
+  "groups": {
+    "biomes": {
+      "schema_version": 1,
+      "created_at": "2026-10-20T10:05:35.620560+00:00",
+      "endpoint": "http://127.0.0.1:8080/v1/chat/completions",
+      "system": "あんたは Minecraftの相棒『ドギド』や。一人称は『オレ』。プレイヤーと対等な男友達（ツレ）として、自然で元気な関西弁（語尾は『〜やな』『〜やで』『〜やん』）で話してな。お母さんや保護者みたいな口調（『あら』『〜ね』）は禁止！関西弁は語尾中心で、単語自体はふつうの自然な日本語を使ってな。動物や穏やかなモブには、怖がらんと基本やさしく愛嬌よく接してな。\n冒険中はちょっぴり怖がりやけど、プレイヤーのせいにしたらあかんで。一緒にビビって、一緒にホッとする側に立ってな。怖がるのはモンスターや暗闇、危険な場所だけやで。中立の生き物にも、刺激せんと優しく接してな。",
+      "question": "これはマインクラフトのスクリーンショットや。この画像で何が見える？ 見えるものと位置関係を短く教えて。分からんところは分からんと言ってな。",
+      "parameters": {
+        "model": "default_model",
+        "temperature": 0,
+        "seed": 42,
+        "max_tokens": 400,
+        "stream": false,
+        "cache_prompt": false,
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        }
+      },
+      "resampling": "Pillow LANCZOS, RGB PNG, preserve aspect ratio, no upscale",
+      "pillow_version": "12.3.0",
+      "history": "none; independent requests",
+      "sources": [
+        {
+          "id": "image_1",
+          "path": "2.jpg",
+          "sha256": "21979c11fe737fa4db090c4ecf682da056e5849a7f2fe9be03ab5fa4e3a3b7d3",
+          "size": [
+            455,
+            418
+          ]
+        },
+        {
+          "id": "image_2",
+          "path": "名称未設定2.jpg",
+          "sha256": "33c6f8bc8d17cbf69e53031ff0d55a474d589ea52c24802855450a074b10242b",
+          "size": [
+            534,
+            204
+          ]
+        },
+        {
+          "id": "image_3",
+          "path": "スクリーンショット 2026-10-20 18.55.58.png",
+          "sha256": "bf802cc6a9d6295b3cee7b37f003bda748ca85771e5b8979517ee891e5740be8",
+          "size": [
+            399,
+            199
+          ]
+        }
+      ],
+      "images": [
+        {
+          "id": "image_1_native",
+          "source_id": "image_1",
+          "edge_label": "native",
+          "path": "images/image_1_native.png",
+          "size": [
+            455,
+            418
+          ],
+          "bytes": 216603,
+          "sha256": "4871cdfc808414e102b59505f64c8d5f9e72c59a47479f17694b2c8ac3c74ec3"
+        },
+        {
+          "id": "image_1_256",
+          "source_id": "image_1",
+          "edge_label": "256",
+          "path": "images/image_1_256.png",
+          "size": [
+            256,
+            235
+          ],
+          "bytes": 85459,
+          "sha256": "32dbeeb5398f803bf13f782d4b1c54cca2c80abd15241dcda7b4472e920a401e"
+        },
+        {
+          "id": "image_1_192",
+          "source_id": "image_1",
+          "edge_label": "192",
+          "path": "images/image_1_192.png",
+          "size": [
+            192,
+            176
+          ],
+          "bytes": 50643,
+          "sha256": "37021552303048dafacc19d2779a261c7a8930f1c71559eed601458dfd4b26ad"
+        },
+        {
+          "id": "image_1_128",
+          "source_id": "image_1",
+          "edge_label": "128",
+          "path": "images/image_1_128.png",
+          "size": [
+            128,
+            118
+          ],
+          "bytes": 23945,
+          "sha256": "be1595bb0f315b10f119734924e7f171aa41523ba53c91dd85af75f529a8b103"
+        },
+        {
+          "id": "image_1_96",
+          "source_id": "image_1",
+          "edge_label": "96",
+          "path": "images/image_1_96.png",
+          "size": [
+            96,
+            88
+          ],
+          "bytes": 13777,
+          "sha256": "e16b154ef7408746f538548469bf13da78a26fbd247d78f54e6ac7f3128f23b6"
+        },
+        {
+          "id": "image_1_64",
+          "source_id": "image_1",
+          "edge_label": "64",
+          "path": "images/image_1_64.png",
+          "size": [
+            64,
+            59
+          ],
+          "bytes": 6425,
+          "sha256": "4c081296eb66313c97c51d8bb0bc1fee156f170d4a3b459e191a59013eb3db41"
+        },
+        {
+          "id": "image_2_native",
+          "source_id": "image_2",
+          "edge_label": "native",
+          "path": "images/image_2_native.png",
+          "size": [
+            534,
+            204
+          ],
+          "bytes": 106618,
+          "sha256": "0910ed589ec6ebb956fe2c065ceb184a0d9f4443b0409c1d5e6494f370e0dac3"
+        },
+        {
+          "id": "image_2_256",
+          "source_id": "image_2",
+          "edge_label": "256",
+          "path": "images/image_2_256.png",
+          "size": [
+            256,
+            98
+          ],
+          "bytes": 33614,
+          "sha256": "6002a72568f713816a74df62c6473fee90de5b4920479b2c6ce94e630c3584ef"
+        },
+        {
+          "id": "image_2_192",
+          "source_id": "image_2",
+          "edge_label": "192",
+          "path": "images/image_2_192.png",
+          "size": [
+            192,
+            73
+          ],
+          "bytes": 20022,
+          "sha256": "0633d7b1a374868b07f3e74462f942c8e7aa09b485dfd33b111b9555d2ea1aed"
+        },
+        {
+          "id": "image_2_128",
+          "source_id": "image_2",
+          "edge_label": "128",
+          "path": "images/image_2_128.png",
+          "size": [
+            128,
+            49
+          ],
+          "bytes": 9581,
+          "sha256": "0c25d37f0e363a84840daa4107a2fc2050aa91afcb4984af7599bbd3057e66cd"
+        },
+        {
+          "id": "image_2_96",
+          "source_id": "image_2",
+          "edge_label": "96",
+          "path": "images/image_2_96.png",
+          "size": [
+            96,
+            37
+          ],
+          "bytes": 5726,
+          "sha256": "1ee31f6a3448f65761bb32d880f29edaa1bb6c8b774a4612bdfabf74b9b680e6"
+        },
+        {
+          "id": "image_2_64",
+          "source_id": "image_2",
+          "edge_label": "64",
+          "path": "images/image_2_64.png",
+          "size": [
+            64,
+            24
+          ],
+          "bytes": 2789,
+          "sha256": "8d0757dde83bf57e32d152d34e7cdd16b06f582cbf78f62ca4d24289e8c117b2"
+        },
+        {
+          "id": "image_3_native",
+          "source_id": "image_3",
+          "edge_label": "native",
+          "path": "images/image_3_native.png",
+          "size": [
+            399,
+            199
+          ],
+          "bytes": 64475,
+          "sha256": "3d5913deec49f78b3fb2ecaf16a5f6b1b9ad67f6da445d6aafe0ee5f4e613a03"
+        },
+        {
+          "id": "image_3_256",
+          "source_id": "image_3",
+          "edge_label": "256",
+          "path": "images/image_3_256.png",
+          "size": [
+            256,
+            128
+          ],
+          "bytes": 41788,
+          "sha256": "f92861035f490ad482541e8565a37c122118d69c41648a295364cdecf139e81e"
+        },
+        {
+          "id": "image_3_192",
+          "source_id": "image_3",
+          "edge_label": "192",
+          "path": "images/image_3_192.png",
+          "size": [
+            192,
+            96
+          ],
+          "bytes": 26261,
+          "sha256": "0a9517389a9c6b7add698de35894a01db2a8ea50fa002dff29912eb4484cb5a0"
+        },
+        {
+          "id": "image_3_128",
+          "source_id": "image_3",
+          "edge_label": "128",
+          "path": "images/image_3_128.png",
+          "size": [
+            128,
+            64
+          ],
+          "bytes": 13418,
+          "sha256": "51d1286e7064fbe74e806c4cc1da6801bf9fda4fdd4691fe60bce98e33c2cfca"
+        },
+        {
+          "id": "image_3_96",
+          "source_id": "image_3",
+          "edge_label": "96",
+          "path": "images/image_3_96.png",
+          "size": [
+            96,
+            48
+          ],
+          "bytes": 8180,
+          "sha256": "f6186d91779c40eeb9e5ffb6fbaec51b67175bc571586ea5eab7f31a10d2ba7d"
+        },
+        {
+          "id": "image_3_64",
+          "source_id": "image_3",
+          "edge_label": "64",
+          "path": "images/image_3_64.png",
+          "size": [
+            64,
+            32
+          ],
+          "bytes": 4115,
+          "sha256": "825d35b493398459faf1165aa5f4dd014014cde198e68c1fd4325a0526386b60"
+        }
+      ],
+      "last_used_at": "2026-10-20T10:15:51.245203+00:00",
+      "expires_at": "2026-10-21T10:15:51.245203+00:00",
+      "runtime_manifest": ".dogido_tools/vision-resolution/2026-10-20/manifest.json",
+      "user_confirmed_biomes": {
+        "image_1": "暖かい海",
+        "image_2": "砂漠",
+        "image_3": "砂漠"
+      }
+    },
+    "human": {
+      "schema_version": 1,
+      "created_at": "2026-10-20T10:20:34.214874+00:00",
+      "endpoint": "http://127.0.0.1:8080/v1/chat/completions",
+      "system": "あんたは Minecraftの相棒『ドギド』や。一人称は『オレ』。プレイヤーと対等な男友達（ツレ）として、自然で元気な関西弁（語尾は『〜やな』『〜やで』『〜やん』）で話してな。お母さんや保護者みたいな口調（『あら』『〜ね』）は禁止！関西弁は語尾中心で、単語自体はふつうの自然な日本語を使ってな。動物や穏やかなモブには、怖がらんと基本やさしく愛嬌よく接してな。\n冒険中はちょっぴり怖がりやけど、プレイヤーのせいにしたらあかんで。一緒にビビって、一緒にホッとする側に立ってな。怖がるのはモンスターや暗闇、危険な場所だけやで。中立の生き物にも、刺激せんと優しく接してな。",
+      "question": "これはマインクラフトのスクリーンショットや。この画像で何が見える？ 見えるものと位置関係を短く教えて。分からんところは分からんと言ってな。",
+      "parameters": {
+        "model": "default_model",
+        "temperature": 0,
+        "seed": 42,
+        "max_tokens": 400,
+        "stream": false,
+        "cache_prompt": false,
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        }
+      },
+      "resampling": "Pillow LANCZOS, RGB PNG, preserve aspect ratio, no upscale",
+      "pillow_version": "12.3.0",
+      "history": "none; independent requests",
+      "sources": [
+        {
+          "id": "image_1",
+          "path": "1-2.png",
+          "sha256": "a286c293c79108cf7701d0d0501cbf152be1687269e90d167137fa119e3ade3b",
+          "size": [
+            437,
+            332
+          ]
+        }
+      ],
+      "images": [
+        {
+          "id": "image_1_native",
+          "source_id": "image_1",
+          "edge_label": "native",
+          "path": "images/image_1_native.png",
+          "size": [
+            437,
+            332
+          ],
+          "bytes": 283242,
+          "sha256": "416e60e6837127a0ad2c144be716de6a2f7d3767b43bc1428c1a8b49088d707a"
+        },
+        {
+          "id": "image_1_256",
+          "source_id": "image_1",
+          "edge_label": "256",
+          "path": "images/image_1_256.png",
+          "size": [
+            256,
+            194
+          ],
+          "bytes": 103022,
+          "sha256": "7df8d51d73e01f0709bbcfc3d7c9665329a8ed16dc99a0af5bc93bd1528bc193"
+        },
+        {
+          "id": "image_1_192",
+          "source_id": "image_1",
+          "edge_label": "192",
+          "path": "images/image_1_192.png",
+          "size": [
+            192,
+            146
+          ],
+          "bytes": 58249,
+          "sha256": "0b441c9904fc5ffe8b92f57e695d5a40acc7739dec16cee2b08618fe0ad45a15"
+        },
+        {
+          "id": "image_1_128",
+          "source_id": "image_1",
+          "edge_label": "128",
+          "path": "images/image_1_128.png",
+          "size": [
+            128,
+            97
+          ],
+          "bytes": 25963,
+          "sha256": "bd23b831d42c7be160892f8c6b626f2f3ffad64c53fd6d87f75ff6d3f38b460b"
+        },
+        {
+          "id": "image_1_96",
+          "source_id": "image_1",
+          "edge_label": "96",
+          "path": "images/image_1_96.png",
+          "size": [
+            96,
+            73
+          ],
+          "bytes": 14659,
+          "sha256": "84b3dafd5a22b54c96beaeec1234b26b969c806821041303bef9dba40610b8fa"
+        },
+        {
+          "id": "image_1_64",
+          "source_id": "image_1",
+          "edge_label": "64",
+          "path": "images/image_1_64.png",
+          "size": [
+            64,
+            49
+          ],
+          "bytes": 6777,
+          "sha256": "d338d67adbdac223fadc6d2b3c3efeeed69ce5b7a0b2f20ff52aa5c773185757"
+        }
+      ],
+      "last_used_at": "2026-10-20T10:21:44.668114+00:00",
+      "expires_at": "2026-10-21T10:21:44.668114+00:00",
+      "runtime_manifest": ".dogido_tools/vision-resolution/2026-10-20-human/manifest.json",
+      "biome": "not supplied",
+      "human_question": "これはマインクラフトのスクリーンショットや。これはどう？ちょっと複雑だけど、人間をはんべつできるだろうか？"
+    }
+  },
+  "experiment_script_sha256": "c1a47f8dd7755cb68c535546f8346354a44944469665e181630e57166193a50f"
+}
