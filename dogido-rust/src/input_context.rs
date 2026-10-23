@@ -12,11 +12,9 @@ pub struct Context {
     pub breaks_silence: bool,
     pub wants_quiet: bool,
     pub should_block_ambient: bool,
-    pub asks_hostile_count: bool,
-    pub asks_hostile_direction: bool,
-    pub asks_dragon_direction: bool,
     pub asks_save_last_haiku: bool,
     pub asks_inventory: bool,
+    pub asks_mob_information: bool,
     pub requests_sword: bool,
     pub assist_intent_source: String,
     pub assist_intent_evidence: String,
@@ -69,11 +67,9 @@ impl Context {
             breaks_silence: false,
             wants_quiet: false,
             should_block_ambient: false,
-            asks_hostile_count: false,
-            asks_hostile_direction: false,
-            asks_dragon_direction: false,
             asks_save_last_haiku: false,
             asks_inventory: false,
+            asks_mob_information: false,
             requests_sword: false,
             assist_intent_source: "none".into(),
             assist_intent_evidence: String::new(),
@@ -91,22 +87,11 @@ impl Context {
             return context;
         }
         let p = input_policy::classify(raw, normalized);
-        // 分類器未設定時の既存認識。共通分類がある場合はapply_request_classificationで置換する。
-        context.requests_sword =
-            crate::assist::intent::is_explicit_select_sword_request(normalized);
-        if context.requests_sword {
-            context.assist_intent_source = "code".into();
-            context.assist_intent_evidence = normalized.into();
-            context.assist_intent_confidence = 1.0;
-        } else {
-            context.knowledge_query = query::extract(semantic);
-        }
+        // BERTへ変更済み。旧判定へ戻さない。操作への配線は共通分類結果を受けた後だけ。
+        context.knowledge_query = query::extract(semantic);
         context.breaks_silence = p.should_block_ambient;
         context.wants_quiet = p.wants_quiet;
         context.should_block_ambient = p.should_block_ambient;
-        context.asks_hostile_count = p.asks_hostile_count;
-        context.asks_hostile_direction = p.asks_hostile_direction;
-        context.asks_dragon_direction = p.asks_dragon_direction;
         context.asks_save_last_haiku = p.asks_save_last_haiku;
         context.asks_inventory = p.asks_inventory;
         context.asks_about_sound = p.asks_about_sound;
@@ -121,7 +106,7 @@ impl Context {
             .and_then(|q| q.biome_id.clone());
         context
     }
-    /// 共通受付の結果で三つの依頼フラグを置換し、ここでは依頼性を再判定しない。
+    /// BERTへ変更済み。旧判定へ戻さない。共通受付の結果だけで依頼を配線する。
     pub fn apply_request_classification(
         &mut self,
         result: &crate::request_classifier::Classification,
@@ -131,15 +116,8 @@ impl Context {
         self.assist_intent_source = "modernbert".into();
         self.assist_intent_evidence = result.text.clone();
         self.assist_intent_confidence = result.prediction.probabilities[2];
-        if result.prediction.label != Label::EnemyInformation {
-            self.asks_hostile_count = false;
-            self.asks_hostile_direction = false;
-            self.asks_dragon_direction = false;
-        }
-        self.knowledge_query = if matches!(
-            result.prediction.label,
-            Label::NotRequest | Label::OtherRequest
-        ) {
+        self.asks_mob_information = result.prediction.label == Label::EnemyInformation;
+        self.knowledge_query = if result.prediction.label == Label::NotTarget {
             query::extract(&self.normalized_text)
         } else {
             None

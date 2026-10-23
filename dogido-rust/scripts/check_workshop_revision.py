@@ -3,7 +3,8 @@
 import json
 import re
 import threading
-from check_haiku_runtime import fixture, LINES
+from check_haiku_runtime import LINES
+from check_workshop_fixture import fixture
 from check_workshop_runtime import install, ready, step
 from check_workshop_edits import finish, revisions
 from check_dialogue import submit, row, wait_for
@@ -82,18 +83,21 @@ def main():
             assert hud(sid)["canonical_lines"]==LINES and stored(sid)==original and not revisions(folder,sid)
         assert len(calls)==4
         def close(text,prompt,n):
-            reply=step(text,"close_workshop")
-            reply["speech"]="今の案を保存して終了したで。"  # 保存成功の誤案内を使わない。
+            reply=step(text,"ask",speech="今の案を採用するか、破棄するか教えてな。")
             return reply
         calls=install(control,close)
         r=finish(base,send,sid,"そうおしまいにしてください")
-        assert r["workshop_action"]=="close_workshop" and r["workshop_reason"]=="accepted",r
+        assert r["workshop_action"]=="ask" and r["workshop_reason"]=="accepted",r
         assert len(calls)==1,calls
-        assert hud(sid)["state"]=="closed" and not hud(sid)["pending_lines"],hud(sid)
-        assert hud(sid)["editing"] is False and hud(sid)["selected_line"] is None
+        assert hud(sid)["state"]=="open" and hud(sid)["pending_lines"]==pending,hud(sid)
         assert stored(sid)==original and not revisions(folder,sid)
-        assert r["text"]=="元の句はそのままにして、案は採用せずにここで終わるで。",r
-        passed.append("pending_close_executes_model_decision_and_discards_only_unadopted_proposal")
+        assert r["text"]=="今の案を採用するか、破棄するか教えてな。",r
+        from check_workshop_edits import adoption
+        install(control,lambda text,prompt,n:adoption(text,"reject_pending",close=True))
+        r=finish(base,send,sid,"その案を却下して、ここでおしまいにしよう")
+        assert r["workshop_outcome"]=="pending_rejected" and hud(sid)["state"]=="closed",r
+        assert not hud(sid)["pending_lines"] and not revisions(folder,sid)
+        passed.append("bert_end_preserves_pending_until_explicit_rejection_and_close")
     with fixture() as (base,process,log,control,seen,gate,drafting,checks,send,hud,rows,stored,folder):
         sid=ready(base,send,rows);wait_for(lambda:stored(sid));original=stored(sid)
         wire(control,stored,sid)
@@ -103,7 +107,7 @@ def main():
         def delayed_close(text,prompt,n):
             if text=="今の句":return step(text,"show_current")
             entered.set();release.wait(8)
-            return step(text,"close_workshop")
+            return step(text,"ask",speech="今の案を採用するか、破棄するか教えてな。")
         install(control,delayed_close)
         try:
             old=submit(base,sid,"そうおしまいにしてください");wait_for(entered.is_set)

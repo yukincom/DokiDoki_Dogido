@@ -41,7 +41,6 @@ fn all_consultation_prompts_match_fixture_exactly() {
         "current_idea",
         "meaning_ack",
         "confirm_close",
-        "resume",
         "followup",
         "editing",
         "conversation_candidate",
@@ -332,4 +331,32 @@ fn all_consultation_templates_drop_retired_gate_instructions() {
     ] {
         assert!(!instructions.contains(stale), "{stale}");
     }
+}
+
+#[test]
+fn templates_do_not_delegate_bert_owned_line_or_end_decisions() {
+    let instructions = ASSETS.to_string();
+    for retired in [
+        "line_idはline_1",
+        "expected_textは今の編集対象行",
+        "close_workshopの例",
+        "終了の意思は、今回の発話と会話の流れから判断",
+        "対象行を読んでな",
+    ] {
+        assert!(!instructions.contains(retired), "{retired}");
+    }
+    assert!(instructions.contains("BERTへ変更済み"));
+}
+
+#[test]
+fn automatic_combat_resume_does_not_publish_confirmation_actions() {
+    let instructions = ASSETS.to_string();
+    for retired in [
+        "resume_workshop",
+        "decline_resume",
+        "combat_resume_confirmation",
+    ] {
+        assert!(!instructions.contains(retired), "{retired}");
+    }
+    assert!(ASSETS["extras"].get("resume").is_none());
 }

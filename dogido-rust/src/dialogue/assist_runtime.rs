@@ -1,9 +1,9 @@
-//! 型付き持ち替え命令の配送。自然文の限定抽出はevent workerの外で行う。
-use super::{Data, Dialogue, bridge, id, observation_fresh};
+//! BERTで受理済みの剣依頼を、現在のhotbar検査と型付き命令の配送へ渡す。
+//! BERTへ変更済み。旧判定へ戻さない。
+use super::{Data, Dialogue, observation_fresh};
 use crate::{
-    assist::{self, Input, InputSource, PreparedIntent, Submission},
+    assist::{self, Input, Submission},
     combat::model::{Delivery, Speech},
-    types::GenerationRequest,
 };
 use serde_json::{Value, json};
 use std::sync::Arc;
@@ -20,15 +20,25 @@ impl Dialogue {
     pub fn set_execution_capabilities(&self, sid: &str, capabilities: &[String]) {
         if let Some(s) = self.data.lock().unwrap().sessions.get_mut(sid) {
             s.assist = assist::AssistState::new(capabilities.iter().cloned());
-            s.screenshots.enabled = capabilities.iter().any(|c| c == crate::screenshot::CAPABILITY);
-            s.visual.enabled = capabilities.iter().any(|c| c == super::visual_runtime::CAPABILITY);
+            s.screenshots.enabled = capabilities
+                .iter()
+                .any(|c| c == crate::screenshot::CAPABILITY);
+            s.visual.enabled = capabilities
+                .iter()
+                .any(|c| c == super::visual_runtime::CAPABILITY);
             s.body_interest_enabled = capabilities.iter().any(|c| c == "body.inspect_target.v2");
-            if !s.body_interest_enabled { super::body_interest_runtime::cancel(s); }
+            s.body_requests.set_enabled(
+                capabilities
+                    .iter()
+                    .any(|c| c == crate::body::requests::CAPABILITY),
+            );
+            if !s.body_interest_enabled {
+                super::body_interest_runtime::cancel(s);
+            }
         }
     }
     pub(super) fn cancel_assist(d: &mut Data, sid: &str) {
         if let Some(s) = d.sessions.get_mut(sid) {
-            s.assist.invalidate_intent();
             if let Some(p) = s.assist_pending.take() {
                 let _ = p.cancel.send(true);
                 if let Some(row) = d.rows.iter_mut().find(|r| r["turn_id"] == p.turn) {
@@ -65,25 +75,18 @@ impl Dialogue {
         text: &str,
         source: &str,
     ) -> Option<Value> {
-        let s = d.sessions.get_mut(sid).unwrap();
+        let s = d.sessions.get_mut(sid)?;
+        // 共通受付の原文・入力元・世代に一致するBERT結果がない入力は操作にしない。
+        let classification = super::request_runtime::classification(s, text, source)?.clone();
+        if !observation_fresh(s) {
+            return None;
+        }
         let event = s.latest.as_ref()?;
-        let input = Input {
-            raw_text: text.to_owned(),
-            source: if source == "voice" {
-                InputSource::Voice
-            } else {
-                InputSource::Text
-            },
-            ..Input::default()
-        };
         let has_speech = s.warning.is_some() || s.pending_warning.is_some();
-        let submission = if let Some(classification) =
-            super::request_runtime::classification(s, text, source).cloned() {
-            s.assist.submit_classified(&classification, event, chrono::Utc::now(), has_speech)
-        } else {
-            s.assist.submit(input.clone(), event, chrono::Utc::now(), has_speech)
-        };
-        match submission {
+        match s
+            .assist
+            .submit_classified(&classification, event, chrono::Utc::now(), has_speech)
+        {
             Submission::NotHandled => None,
             Submission::Handled(dispatch) => {
                 Self::cancel_chat(d, sid, "assist_input");
@@ -95,169 +98,6 @@ impl Dialogue {
                     json!({"accepted":true,"session_id":sid,"reason":"assist_input","assist":dispatch}),
                 )
             }
-            Submission::NeedsIntent(prepared) => {
-                // 「剣の耐久値は？」等は知識質問。危険中は抽出jobの最新一件枠に
-                // 入れる前にFIFOへ渡し、次の発話で質問を消さない。
-                if let Some(queued) = self.queue_reply_input(d, jobs, sid, text, source, false) {
-                    return Some(queued);
-                }
-                Self::cancel_chat(d, sid, "assist_intent");
-                let turn = id("assist");
-                let (cancel, rx) = watch::channel(false);
-                let s = d.sessions.get_mut(sid).unwrap();
-                s.assist_pending = Some(Pending {
-                    input,
-                    turn: turn.clone(),
-                    cancel,
-                    generation: s.input_generation,
-                });
-                if d.rows.len() == 200 {
-                    d.rows.pop_front();
-                }
-                d.rows.push_back(
-                    json!({"utterance_id":id("utt"),"turn_id":turn,"session_id":sid,
-                    "category":"assist","text":"","source":source,"player_input_text":text,
-                    "created_at":chrono::Utc::now(),"reference_ids":[],"output_mode":"text",
-                    "playback_status":"generating","assist_status":"extracting"}),
-                );
-                d.revision += 1;
-                let this = self.clone();
-                let session = sid.to_owned();
-                let tid = turn.clone();
-                jobs.push(tokio::spawn(async move {
-                    this.run_assist(session, tid, prepared, rx).await;
-                }));
-                Some(
-                    json!({"accepted":true,"session_id":sid,"reason":"assist_intent","turn_id":turn}),
-                )
-            }
-        }
-    }
-    // 分類器未設定時の既存経路。有効時はsubmit_classifiedから実測検証へ直接進む。
-    async fn run_assist(
-        self: Arc<Self>,
-        sid: String,
-        turn: String,
-        prepared: PreparedIntent,
-        mut cancel: watch::Receiver<bool>,
-    ) {
-        let routing = bridge::render(
-            &self.config,
-            &self.llm,
-            json!({"op":"assist_route","text":prepared.player_text}),
-            &mut cancel,
-        )
-        .await;
-        let generate = routing
-            .as_ref()
-            .is_ok_and(|r| r["knowledge_query"] == false);
-        let mut request = GenerationRequest {
-            schema_version: 1,
-            kind: "assist_select_sword_intent".into(),
-            model: self.config.model.clone(),
-            messages: serde_json::from_value(json!(prepared.messages))
-                .expect("closed assist messages"),
-            temperature: prepared.temperature,
-            max_tokens: prepared.max_tokens.into(),
-            enable_thinking: false,
-        };
-        let mut payload = Value::Null;
-        for attempt in 0..2 {
-            if !generate {
-                break;
-            }
-            let report = tokio::select! {
-                _=bridge::cancelled(&mut cancel)=>return,
-                result=self.llm.generate(&request)=>result,
-            };
-            let report = match report {
-                Ok(report) => report,
-                Err(error) => {
-                    tracing::warn!(event="assist_intent_failed",session_id=sid,error=%error);
-                    break;
-                }
-            };
-            tracing::info!(event="assist_intent_result",session_id=sid,attempt,elapsed_ms=report.elapsed_ms as u64,
-                finish_reason=?report.generated.finish_reason,completion_tokens=?report.generated.completion_tokens);
-            let Some(value) = crate::planner::extract_object(&report.generated.text) else {
-                break;
-            };
-            let errors = assist::intent::contract_errors(&value);
-            if errors.is_empty() {
-                payload = value;
-                break;
-            }
-            if attempt == 0 {
-                request.messages = serde_json::from_value(json!(assist::intent::repair_messages(
-                    &prepared.player_text,
-                    &value.to_string(),
-                    &errors
-                )))
-                .expect("closed assist repair messages");
-            }
-        }
-        let fallback = {
-            let mut jobs = self.jobs.lock().unwrap();
-            jobs.retain(|j| !j.is_finished());
-            let mut d = self.data.lock().unwrap();
-            if d.stopped || *cancel.borrow() {
-                return;
-            }
-            let Some(s) = d.sessions.get_mut(&sid) else {
-                return;
-            };
-            if !s.assist_pending.as_ref().is_some_and(|p| p.turn == turn) {
-                return;
-            }
-            let p = s.assist_pending.take().unwrap();
-            let submission = if observation_fresh(s) {
-                let event = s.latest.as_ref().expect("observed assist snapshot");
-                s.assist.complete_intent(
-                    prepared,
-                    &payload,
-                    &p.input,
-                    event,
-                    chrono::Utc::now(),
-                    s.warning.is_some() || s.pending_warning.is_some(),
-                )
-            } else {
-                s.assist.invalidate_intent();
-                Submission::NotHandled
-            };
-            if let Some(row) = d.rows.iter_mut().find(|r| r["turn_id"] == turn) {
-                row["playback_status"] = "quiet".into();
-                row["assist_status"] = if matches!(submission, Submission::Handled(_)) {
-                    "handled"
-                } else {
-                    "not_handled"
-                }
-                .into();
-                row["assist_result"] = json!(submission);
-            }
-            d.revision += 1;
-            if let Submission::Handled(dispatch) = submission {
-                tracing::info!(event="assist_dispatch",session_id=sid,dispatch=%json!(dispatch));
-                if let Some(text) = dispatch.feedback {
-                    self.queue_fixed_reply(&mut d, &mut jobs, &sid, text, Some(&p.input.raw_text));
-                }
-                None
-            } else {
-                Some((p.input, p.generation))
-            }
-        };
-        if let Some((input, generation)) = fallback {
-            self.submit_inner(
-                Some(&sid),
-                &input.raw_text,
-                if input.source == InputSource::Voice {
-                    "voice"
-                } else {
-                    "text"
-                },
-                true,
-                Some((generation, None)),
-                false,
-            );
         }
     }
 }

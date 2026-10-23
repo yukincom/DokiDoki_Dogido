@@ -25,7 +25,6 @@ def _clear_runtime_llm_environment(monkeypatch: pytest.MonkeyPatch) -> None:
         if key.startswith("DOGIDO_LLM_") or key in {
             "DOGIDO_ENV_PROFILE",
             "DOGIDO_MLX_MODEL_ID",
-            "DOGIDO_PLATFORM_AI_PROVIDER",
         }:
             monkeypatch.delenv(key, raising=False)
 
@@ -50,7 +49,7 @@ def test_standalone_profile_keeps_existing_dotenv_behavior(
     assert settings.llm_backend == "mlx"
     assert settings.mlx_model_id == "synthetic-standalone-model"
     assert settings.llm_max_tokens == 87
-    assert settings.platform_ai_provider == "auto"
+    assert not any(name.startswith("platform_ai_") for name in type(settings).model_fields)
 
 
 def test_shared_profile_overlays_and_validates_both_routes(
@@ -81,7 +80,7 @@ def test_shared_profile_overlays_and_validates_both_routes(
     settings = get_settings()
 
     assert settings.llm_timeout_sec == 23
-    assert settings.platform_ai_provider == "chat"
+    assert not any(name.startswith("platform_ai_") for name in type(settings).model_fields)
     assert settings.mlx_model_id == "synthetic-standalone-model"
     for route, expected_max_tokens in (("chat", 321), ("haiku", 193)):
         route_settings = settings.llm_route_settings(route)

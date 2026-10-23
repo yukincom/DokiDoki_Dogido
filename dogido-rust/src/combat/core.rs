@@ -109,27 +109,22 @@ impl Engine {
     pub fn take_name_updates(&mut self) -> crate::chat_observation::NameOutcomeUpdate {
         self.outcomes.take_name_updates()
     }
-    pub fn answer_query(
+    /// BERTへ変更済み。旧判定へ戻さない。
+    /// 一度受理した周囲モブ質問を、発話直前の身体観測で再計算する。
+    pub fn answer_classified_query(
         &self,
         event: &GameEvent,
         text: &str,
         now: u64,
-        s: &Settings,
     ) -> Option<Speech> {
-        queries::answer(
+        queries::answer_classified(
             event,
             text,
-            s,
             self.last_named
                 .as_ref()
                 .map(|(kind, at)| (kind.as_str(), *at)),
             now,
         )
-    }
-    /// 一度受理した敵情報を、発話直前の観測で再計算する。依頼性を再判定しない。
-    pub fn answer_classified_query(&self, event: &GameEvent, text: &str, now: u64, s: &Settings) -> Option<Speech> {
-        queries::answer_classified(event, text, s,
-            self.last_named.as_ref().map(|(kind, at)| (kind.as_str(), *at)), now)
     }
     /// 受信済みの観測と呼び手の時計から、優先警告・会話可否・音声停止を決める。
     /// completeは全視認を含むかを示す。falseなら直近の視認を補い、観測省略を敵の不在と誤認しない。
@@ -276,19 +271,7 @@ impl Engine {
         } else if self.mode != Mode::Aftermath
             && (!explicit || matches!(event.event.name, EventName::CombatEnded))
         {
-            let text = event.meta.user_text.as_deref().filter(|_| !quiet);
-            for speech in self.select(
-                &e,
-                now,
-                complete,
-                busy,
-                previous,
-                prior_audio,
-                text,
-                s,
-                ws,
-                &mut d.input_handled,
-            ) {
+            for speech in self.select(&e, now, complete, busy, previous, prior_audio, s, ws) {
                 self.deliver(&e, now, speech, &mut d);
             }
         }
@@ -313,22 +296,26 @@ impl Engine {
         s: &Settings,
         ws: &threats::Settings,
     ) -> Option<Decision> {
-        self.input_with_enemy_request(event, text, now, s, ws, None)
+        self.input_with_enemy_request(event, text, now, s, ws, false)
     }
-    /// Someは共通分類の結果。falseでは敵質問の旧語句認識を通さず、quiet等の既存制御は保つ。
+    /// BERTへ変更済み。旧判定へ戻さない。
+    /// モブ質問は共通分類が受理した場合だけ答える。quiet等の直接制御は別に保つ。
     #[allow(clippy::too_many_arguments)]
     pub fn input_with_enemy_request(
-        &mut self, event: &GameEvent, text: &str, now: u64,
-        s: &Settings, ws: &threats::Settings, enemy_request: Option<bool>,
+        &mut self,
+        event: &GameEvent,
+        text: &str,
+        now: u64,
+        s: &Settings,
+        ws: &threats::Settings,
+        enemy_request: bool,
     ) -> Option<Decision> {
         let previous = self.mode;
         let quiet = wants_quiet(text);
-        let query = if quiet || enemy_request == Some(false) {
-            None
-        } else if enemy_request == Some(true) {
-            self.answer_classified_query(event, text, now, s)
+        let query = if !quiet && enemy_request {
+            self.answer_classified_query(event, text, now)
         } else {
-            self.answer_query(event, text, now, s)
+            None
         };
         if !quiet && query.is_none() {
             return None;
@@ -455,10 +442,8 @@ impl Engine {
         busy: bool,
         previous: Mode,
         prior_audio: Option<u64>,
-        text: Option<&str>,
         s: &Settings,
         ws: &threats::Settings,
-        input_handled: &mut bool,
     ) -> Vec<Speech> {
         let mut actions = Vec::new();
         if let Some(sonic) = self.specials.sonic_boom(e, now, s) {
@@ -479,7 +464,7 @@ impl Engine {
                     "warden" | "wither" | "ender_dragon" | "elder_guardian" | "ravager"
                 )
             });
-        let body = self.select_body(e, now, complete, busy, previous, text, s, ws, input_handled);
+        let body = self.select_body(e, now, complete, busy, previous, s, ws);
         let reserved = body.as_ref().is_some_and(|a| {
             matches!(
                 a.kind,
@@ -544,10 +529,8 @@ impl Engine {
         complete: bool,
         busy: bool,
         previous: Mode,
-        text: Option<&str>,
         s: &Settings,
         ws: &threats::Settings,
-        input_handled: &mut bool,
     ) -> Option<Speech> {
         // 新規導火は呼吸ループや進行中本文より優先。cue-onlyで警告本文を消費しない。
         if complete && let Some(plan) = self.policy.fuse(e, now, ws) {
@@ -589,18 +572,7 @@ impl Engine {
             speech.cue_id = Some(id);
             return Some(speech);
         }
-        if let Some(speech) = text.and_then(|text| {
-            queries::answer(
-                e,
-                text,
-                s,
-                self.last_named.as_ref().map(|(k, t)| (k.as_str(), *t)),
-                now,
-            )
-        }) {
-            *input_handled = true;
-            return Some(speech);
-        }
+        // モブ質問はBERTへ変更済み。旧判定へ戻さない。通常の観測更新で入力を再分類しない。
         if let Some(speech) = self
             .specials
             .warden_tactic(e, now, s)

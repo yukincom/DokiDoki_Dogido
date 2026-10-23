@@ -1,23 +1,18 @@
-//! Offline JSONL probe for the Python/Rust assist comparison. Never opens sockets.
+//! BERT分類済みの支援配送をJSONLで検査する。接続や旧語句判定は行わない。
 use chrono::{DateTime, Utc};
 use dogido_rust::{
-    assist::{self, AssistState, Input, Submission, intent},
+    assist::{self, AssistState, Submission},
     events::{AdapterCommandResult, GameEvent, HotbarSlot},
+    request_classifier::Classification,
 };
 use serde_json::{Value, json};
 use std::io::{self, BufRead};
 fn run(row: Value) -> anyhow::Result<Value> {
-    Ok(match row["op"].as_str().unwrap_or("rule") {
-        "rule" => {
-            let t = row["text"].as_str().unwrap_or("");
-            let p = row.get("payload").cloned().unwrap_or_else(|| json!({"intent":"select_weapon","weapon_kind":"sword","is_request":true,"evidence":t,"confidence":0.99}));
-            json!({"explicit":intent::is_explicit_select_sword_request(t),"voice_explicit":intent::is_explicit_voice_select_sword_request(t),"unambiguous":intent::is_unambiguous_select_sword_request(t),"voice_unambiguous":intent::is_unambiguous_voice_select_sword_request(t),"repair":intent::interpret_voice_select_sword_request(t),"requested":intent::validate_payload(&p,t,0.90).is_some(),"contract":intent::contract_errors(&p).is_empty(),"workshop":intent::has_workshop_edit_context(t)})
-        }
+    Ok(match row["op"].as_str().unwrap_or("") {
         "select" => {
             let slots: Vec<HotbarSlot> = serde_json::from_value(row["slots"].clone())?;
             json!(assist::select_weapon_slot(&slots))
         }
-        "messages" => json!(intent::messages(row["text"].as_str().unwrap_or(""))),
         "session" => {
             let mut state = AssistState::new(serde_json::from_value::<Vec<String>>(
                 row["capabilities"].clone(),
@@ -31,19 +26,12 @@ fn run(row: Value) -> anyhow::Result<Value> {
                 let now: DateTime<Utc> = serde_json::from_value(step["now"].clone())?;
                 let busy = step["busy"].as_bool().unwrap_or(false);
                 if step["type"] == "input" {
-                    let input: Input = serde_json::from_value(step["input"].clone())?;
+                    let classification: Classification =
+                        serde_json::from_value(step["classification"].clone())?;
                     let event =
                         GameEvent::parse(step["event"].clone()).map_err(anyhow::Error::msg)?;
-                    let result = state.submit(input.clone(), &event, now, busy);
-                    let result = if let Submission::NeedsIntent(p) = result {
-                        if let Some(payload) = step.get("payload") {
-                            state.complete_intent(p, payload, &input, &event, now, busy)
-                        } else {
-                            Submission::NeedsIntent(p)
-                        }
-                    } else {
-                        result
-                    };
+                    // BERTへ変更済み。旧判定へ戻さない。呼出側の明示分類を使う。
+                    let result = state.submit_classified(&classification, &event, now, busy);
                     match result {
                         Submission::Handled(d) => {
                             if let Some(c) = &d.command {
@@ -51,12 +39,7 @@ fn run(row: Value) -> anyhow::Result<Value> {
                             }
                             outputs.push(json!({"handled":true,"command": d.command.map(|c| json!({"slot":c.slot,"expected_item_id":c.expected_item_id,"issued_at":c.issued_at,"expires_at":c.expires_at})),"feedback":d.feedback}));
                         }
-                        Submission::NeedsIntent(_) => {
-                            outputs.push(json!({"handled":false,"needs_intent":true}))
-                        }
-                        Submission::NotHandled => {
-                            outputs.push(json!({"handled":false,"needs_intent":false}))
-                        }
+                        Submission::NotHandled => outputs.push(json!({"handled":false})),
                     }
                 } else if step["type"] == "results" {
                     let mut results = step["results"].clone();

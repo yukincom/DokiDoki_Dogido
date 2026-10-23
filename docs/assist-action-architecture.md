@@ -1,5 +1,7 @@
 # 支援アクションの操縦席 — Hermes Agent の設計パターン評価
 
+**2026-10-23追記:** 本文のOS AI・端末AI接続と旧分類fallbackは当時の記録。現在は共通BERTで意図を分類し、戦闘からの再開・継続はRustが警戒解除を観測して決める。旧経路を復元せず、[現行仕様](2026-10-23-modernbert-23class-integration.md)を参照する。
+
 **現行実装: Rust本体（2026-10-03）。** 型付き限定操作・原文根拠・実行直前検証・重複防止という設計は継続する。実装は `dogido-rust/src/assist/` と `dialogue/assist_runtime.rs`、評価記録は `src/episode_log.rs`。以下のPython配置案・単一worker・py_trees・実装順は移植前の記録として保持し、その経路の運用は終了した。D以降の将来機能まで完了とはしない。現行の起動・責務は [Rust本体](../dogido-rust/README.md) と [API仕様](adapter-api.md) を参照する。
 
 **日付:** 2026-08-14  

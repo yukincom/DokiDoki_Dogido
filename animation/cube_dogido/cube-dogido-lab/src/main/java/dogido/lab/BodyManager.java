@@ -52,7 +52,8 @@ final class BodyManager {
         return id == null ? null : LOADED.getOrDefault(player.getEntityWorld().getServer(),Map.of()).get(id);
     }
     /** 明示された呼び寄せだけから呼ぶ。既存の所有個体を優先し、身体がない場合に安全な空間で一体を生成・登録する。 */
-    static ActionResult recall(ServerPlayerEntity player) {
+    static ActionResult recall(ServerPlayerEntity player) { return recall(player,UUID.randomUUID()); }
+    static ActionResult recall(ServerPlayerEntity player, UUID actionId) {
         MinecraftServer server = player.getEntityWorld().getServer();
         if (!server.isOnThread()) throw new IllegalStateException("logical_server_thread_required");
         if (server.getPlayerManager().getPlayer(player.getUuid()) != player || !player.isAlive() || player.isSpectator())
@@ -63,13 +64,13 @@ final class BodyManager {
             .filter(b -> !b.isRemoved() && b.isAlive() && b.ownerId() == null
                 && b.getEntityWorld() == player.getEntityWorld() && b.squaredDistanceTo(player) <= 64).toList();
         switch (BodyRecallPolicy.resolve(owners.body(player.getUuid()) != null,existing != null,nearby.size())) {
-            case EXISTING -> { return existing.localCall(player); }
+            case EXISTING -> { return existing.localCall(player,actionId); }
             case UNLOADED -> { return rejected("body_chunk_not_loaded"); }
             case AMBIGUOUS -> { return rejected("multiple_unbound_bodies"); }
             case BIND_NEARBY -> {
                 DogidoEntity found = nearby.getFirst();
                 String result = found.bind(player);
-                return result.equals("bound") ? found.localCall(player) : rejected(result);
+                return result.equals("bound") ? found.localCall(player,actionId) : rejected(result);
             }
             case SPAWN -> { }
         }
@@ -98,7 +99,7 @@ final class BodyManager {
         // 実生成と所有登録に成功した個体だけ演出する。パーティクルを接近の到着結果として扱わない。
         player.getEntityWorld().spawnParticles(ParticleTypes.END_ROD,destination.x,destination.y+.3,destination.z,
             36,.45,.45,.45,.035);
-        return created.localCall(player);
+        return created.localCall(player,actionId);
     }
     private static ActionResult rejected(String reason) { return new ActionResult(null,-1,Outcome.REJECTED,reason); }
     /** server発音の実座標を同じ世界で読込み済みの身体へ渡す。各身体が所有関係・到達距離を検証する。 */

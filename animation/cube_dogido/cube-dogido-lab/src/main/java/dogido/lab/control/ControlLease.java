@@ -135,4 +135,8 @@ public final class ControlLease {
     public Mode mode() { return mode; }
     public StateResult stateResult() { return stateResult; }
     public ActionResult actionResult() { return actionResult; }
+    public ActionResult actionResult(java.util.UUID id) {
+        Remembered found = actions.get(id);
+        return found == null ? null : found.result();
+    }
 }

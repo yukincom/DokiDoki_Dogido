@@ -91,14 +91,13 @@ DOGIDO_MEMORY_DIR=.dogido_memory/rust-migration
 
 ### 残すPython補助と資料
 
-パスはリポジトリのルートからの相対表記です。
+パスはリポジトリのルートからの相対表記です。意図は共通BERTで分類し、戦闘後の相談再開はRustの現在観測で決めるため、OS AI接続・専用設定・SDK依存は撤去しました。[分類と再開の責務](../docs/2026-10-23-modernbert-23class-integration.md)。
 
 | パス | 残す役割 |
 |---|---|
 | `dogido_server/__init__.py` · `dogido_server/config.py` | パッケージ入口と既存設定の解決 |
-| `dogido_server/platform_ai.py` · `dogido_server/combat_input_contract.py` | 戦闘中断中の限定分類に必要な端末AI接続と出力契約 |
 | `dogido_server/voice_settings.py` · `dogido_server/voice_capture.py` · `dogido_server/echo_input.py` | 音声設定・録音機器・AECの接続 |
-| `dogido-rust/scripts/request_classifier_worker.py` | 採用記録で検証するModernBERT推論補助。本体未接続の[組み込み準備](../docs/2026-10-15-modernbert-integration-preparation.md) |
+| `dogido-rust/scripts/request_classifier_worker.py` | 採用記録と重みを検証するModernBERT推論補助。[23分類の共通受付](../docs/2026-10-23-modernbert-23class-integration.md) |
 | `dogido-rust/scripts/haiku_tokens.py` · `dogido-rust/scripts/tts_tokens_worker.py` | Rustからの辞書token要求を受けるworker。相談・読みの判定・保存はRustが担当 |
 | `dogido-rust/scripts/tts_shared_tokens.py` · `dogido-rust/scripts/tts_unidic_adapter.py` | UniDic token取得。`tts_shared_tokens._reader = Unidic()` をworker内で共有し、辞書は初回利用時に初期化 |
 | `dogido_server/llm/companion_prompts.json` · `dogido_server/llm/reaction_situations.json` | 共有プロンプト・状況文の正本データ |

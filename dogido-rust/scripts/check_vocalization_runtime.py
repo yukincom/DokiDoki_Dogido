@@ -4,13 +4,15 @@ from datetime import datetime, timedelta, timezone
 import json
 
 from check_dialogue import register, request, row, snapshot, submit, wait_for
-from check_haiku_runtime import fixture, LINES
+from check_haiku_runtime import LINES
+from check_workshop_fixture import fixture
 from check_workshop_combat import SETTINGS, MOB, end, enter, returned
 from check_workshop_runtime import ready, session, install, step
 from check_workshop_edits import finish, edit, adoption, revisions
 from check_workshop_revision import wire
-from check_workshop_provisional import classifier, intent, stable, done, threatening
+from check_workshop_provisional import done, threatening
 from check_workshop_combat import actions, drive
+from request_classifier_fixture import resolve_input_response
 
 
 def context(base):
@@ -21,7 +23,8 @@ def context(base):
 
 
 def scream(base, sid=None, text="うわああ！", source="voice"):
-    return request(base, "/api/v1/player-input", {"text":text, "source":source, **({"session_id":sid} if sid else {})})
+    result = request(base, "/api/v1/player-input", {"text":text, "source":source, **({"session_id":sid} if sid else {})})
+    return resolve_input_response(base, result)
 
 
 def calls(seen):
@@ -159,9 +162,6 @@ def main():
         returned(send, rows, sid)
         # 安全復帰の句再掲が完了すると相談を受け付ける状態に戻る。
         assert context(base)["prompt_mode"] == "haiku_workshop"
-        install(control, lambda text, prompt, n: {**step(text,"resume_workshop"),"purpose":"continue_discussion"})
-        finish(base, send, sid, "うん")
-        assert context(base)["prompt_mode"] == "haiku_workshop"
         install(control, lambda text, prompt, n: adoption(text, action="reject_pending"))
         rejected = finish(base, send, sid, "その案を却下して")
         assert rejected.get("workshop_outcome") == "pending_rejected", rejected
@@ -187,20 +187,23 @@ def main():
             gate.set()
         passed.append("preparing_poem_uses_normal_context_and_scream_cancels_unfinished_generation")
 
-    with fixture(combat_settings=SETTINGS, low_threat_resume_delay_ms=1000) as f:
+    with fixture(combat_settings=SETTINGS) as f:
         base, _, _, control, _, _, _, _, send, hud, rows, _, _ = f
-        classifier(control, lambda text: intent(text))
+        workshop_calls = install(control, lambda text, prompt, n: step(text))
         sid = ready(base, send, rows)
-        stable(send, rows, sid)
+        enter(send, rows, sid)
         assert context(base)["prompt_mode"] == "normal"
         turn = submit(base, sid, "句の続きを話そう")
-        assert done(base, send, sid, turn)["combat_input_outcome"] == "provisional_resume"
-        drive(lambda s: threatening(send, s), sid, lambda: any(
-            r["playback_status"] == "completed" for r in actions(rows, sid, "workshop_direct_resume")))
+        wait_for(lambda: row(base, turn, {"queued"}))
+        threatening(send, sid)
+        assert context(base)["prompt_mode"] == "normal" and not workshop_calls
+        end(send, rows, sid)
+        result = done(base, send, sid, turn, hostile=False)
+        assert result["workshop_action"] == "explain" and len(workshop_calls) == 1, result
         assert context(base)["prompt_mode"] == "haiku_workshop"
         send(sid, visual_threats=[{**MOB, "approaching":True}], combat={"combat_active_hint":True})
         assert hud(sid)["state"] == "danger" and context(base)["prompt_mode"] == "normal"
-        passed.append("explicit_stable_enemy_resume_uses_workshop_context_until_new_danger")
+        passed.append("held_input_keeps_normal_stt_until_enemy_clear_then_restores_workshop_context")
 
     print(f"PASS {len(passed)} vocalization checks; all owned processes stopped")
     for case in passed:

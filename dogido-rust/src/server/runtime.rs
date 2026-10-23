@@ -131,7 +131,7 @@ impl Published {
             "schema_version": 1, "session_id": session_id, "revision": self.hud_revision,
             "observed_sequence": session.last_sequence.unwrap_or(0), "workshop_id": null,
             "state": "closed", "character_state": "normal", "canonical_lines": [],
-            "pending_lines": [], "editing": false, "selected_line": null, "provisional_resume": false,
+            "pending_lines": [], "editing": false, "selected_line": null,
         }))
     }
 }

@@ -2,7 +2,7 @@
 """共有履歴を実HTTPと模擬モデル/音声で確認する。外部モデルは呼ばない。"""
 import json
 from check_dialogue import wait_for
-from check_haiku_runtime import fixture
+from check_workshop_fixture import fixture
 from check_workshop_runtime import ready, session, install, step
 from check_workshop_edits import finish
 from check_workshop_combat import SETTINGS, enter, end, returned, event
@@ -50,6 +50,7 @@ def main():
             wait_for(lambda: any(r.get("kind") == "combat_fact" and r["text"] == text.rstrip("。") for r in short_records(folder, sid)))
         end(send, rows, sid)
         returned(send, rows, sid)
+        assert session(base, sid)["workshop_followup"] == "discussion"
         common = session(base, sid)["history"]
         assert sum(r["text"] == "句の話に戻る。" for r in common) == 1, common
         facts = wait_for(lambda: [r for r in short_records(folder, sid) if r.get("kind") == "combat_fact"])
@@ -61,10 +62,11 @@ def main():
         finish(base, send, sid, "さっきの続きにしよう")
         prompt = calls[-1][1]
         assert all(text.rstrip("。") in prompt for *_, text in outcomes), prompt
-        assert "会話段階: combat_resume_confirmation" in prompt, prompt
-        assert "句の話に戻る。" not in prompt, "既存の復帰段階と別の復帰指示を二重注入している"
+        assert "会話段階: discussion" in prompt, prompt
+        assert "resume_workshop" not in prompt and "decline_resume" not in prompt, prompt
+        assert "句の話に戻る。" not in prompt, "復帰の出来事を別の再開指示として二重注入している"
         assert len(calls) == 1
-        passed.append("existing_combat_facts_and_resume_stage_reach_workshop_through_one_bridge")
+        passed.append("existing_combat_facts_reach_automatically_resumed_discussion_through_one_bridge")
 
     with fixture(combat_settings=SETTINGS, memory_enabled=False) as context:
         base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder = context

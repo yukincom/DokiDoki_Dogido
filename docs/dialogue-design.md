@@ -1,5 +1,7 @@
 # 対話設計
 
+**2026-10-23追記:** 本文のOS AI・端末AI接続と旧分類fallbackは当時の記録。現在は共通BERTで意図を分類し、戦闘からの再開・継続はRustが警戒解除を観測して決める。旧経路を復元せず、[現行仕様](2026-10-23-modernbert-23class-integration.md)を参照する。
+
 **現行実装: Rust本体（2026-10-03）。** モードは `base / normal / tension / workshop`、平時は `normal`。共通バトルトーンと旧Python本体の運用は終了した。現在の共通対話仕様は [雑談仕様のRust本体節](player-chat-casual-plan.md#2026-10-01-rust本体の共通対話) を優先する。以下のpeace／battle、py_trees、次game-eventへの相乗りは旧実装の設計記録として残し、現在の起動・配線へ復活させない。
 
 この文書は、ドギドの**口調・キャラクター性**を壊さないための対話モード仕様です。

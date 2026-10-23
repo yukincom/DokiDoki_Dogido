@@ -45,9 +45,7 @@ impl Dialogue {
                 == crate::events::AdapterCommandResultCommandType::CaptureBodyView
                 || s.visual.owns(&result.command_id)
             {
-                if s.visual
-                    .receive(result, chrono::Utc::now())
-                {
+                if s.visual.receive(result, chrono::Utc::now()) {
                     screenshot_acks.push(result.command_id.clone());
                 }
             } else if result.command_type
@@ -144,19 +142,6 @@ impl Dialogue {
                 s.audio_latest = Some(event.clone());
                 s.audio_received = recent.then(Instant::now);
             }
-            if complete {
-                if recent {
-                    s.stable_threat.observe(
-                        &event,
-                        now,
-                        self.config.warnings.recent_damage_window_ms,
-                    );
-                } else {
-                    s.stable_threat.reset();
-                }
-            } else if recent && warnings::interruption_reason(&event).is_some() {
-                s.stable_threat.reset();
-            }
             if recent {
                 s.environment_latest = Some(environment_runtime::context(s, &event, complete));
                 let (boss, ominous) = s.combat.environmental_presence(now, &self.config.combat);
@@ -215,6 +200,7 @@ impl Dialogue {
                 Self::cancel_light(&mut d, session_id);
                 let s = d.sessions.get_mut(session_id).unwrap();
                 super::body_interest_runtime::cancel(s);
+                s.body_requests.cancel();
                 s.input_generation = s.input_generation.wrapping_add(1);
                 input_generation = Some(s.input_generation);
                 s.record_private_generation = Some((s.input_generation, private));
@@ -288,11 +274,6 @@ impl Dialogue {
                 };
                 if decision.dimension_changed {
                     Self::cancel_combat_input(&mut d, session_id);
-                    d.sessions
-                        .get_mut(session_id)
-                        .unwrap()
-                        .stable_threat
-                        .reset();
                     Self::cancel_assist(&mut d, session_id);
                     let s = d.sessions.get_mut(session_id).unwrap();
                     s.input_generation = s.input_generation.wrapping_add(1);
@@ -340,6 +321,28 @@ impl Dialogue {
             self.tick_workshop(&mut d, session_id);
             if recent && complete && text.trim().is_empty() {
                 self.start_workshop_recovery(&mut d, &mut jobs, session_id);
+            }
+            d.revision += 1;
+        }
+        let body_reports =
+            super::body_request_runtime::observe(d.sessions.get_mut(session_id).unwrap(), &event);
+        for report in body_reports {
+            if let Some(row) = d.rows.iter_mut().find(|row| {
+                row["session_id"] == session_id
+                    && row["body_request_command_id"] == report.command_id
+            }) {
+                row["body_request_status"] = report.value["status"].clone();
+                row["body_request_result"] = report.value.clone();
+            }
+            tracing::info!(event="body_request_result",session_id,result=%report.value);
+            if let Some(feedback) = report.feedback {
+                self.queue_fixed_reply(
+                    &mut d,
+                    &mut jobs,
+                    session_id,
+                    feedback.into(),
+                    Some(&report.original),
+                );
             }
             d.revision += 1;
         }
@@ -402,6 +405,7 @@ impl Dialogue {
                     }
                     let mut commands: Vec<Value> = s.assist.commands(utc).iter().map(|command| json!(command)).collect();
                     commands.extend(s.body_autonomy.commands(Instant::now(),utc));
+                    commands.extend(super::body_request_runtime::commands(s));
                     commands.extend(s.screenshots.commands(utc));
                     let capture_context = (self.config.chat_image.enabled && !s.preview && !s.foreground.game_paused)
                         .then(|| s.body_observation.accepted(Instant::now()).map(|v| v.context.clone())).flatten();
@@ -412,6 +416,13 @@ impl Dialogue {
                 .unwrap_or_default()
         };
         let event_id = id("evt");
+        let body_request_generation = self
+            .data
+            .lock()
+            .unwrap()
+            .sessions
+            .get(session_id)
+            .map(|s| s.input_generation);
         let recorded_at = chrono::Utc::now();
         if let Some((before, mode_after, combat_active, actions)) = episode_snapshot {
             // ACKs may repeat. Only newly consumed real receipts establish execution evidence.
@@ -440,6 +451,6 @@ impl Dialogue {
             });
         }
         json!({"accepted":true,"event_id":event_id,"session_id":session_id,"sequence":sequence,"deduplicated":duplicate,
-            "state":null,"outputs":null,"commands":commands,"acknowledged_command_ids":results.acknowledged_ids,"server_time":recorded_at,"phase":"dialogue","player_input":input,"_workshop_direct_input":input_handled})
+            "state":null,"outputs":null,"commands":commands,"body_request_generation":body_request_generation,"acknowledged_command_ids":results.acknowledged_ids,"server_time":recorded_at,"phase":"dialogue","player_input":input,"_workshop_direct_input":input_handled})
     }
 }

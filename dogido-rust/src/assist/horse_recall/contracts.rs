@@ -42,6 +42,23 @@ pub enum MountKind {
     TraderLlama,
 }
 impl MountKind {
+    /// 実行できる種類の正本。依頼分類はこの範囲外の動物も受け、個体選択時に可否を伝える。
+    pub const ALL: [Self; 14] = [
+        Self::Horse,
+        Self::Donkey,
+        Self::Mule,
+        Self::SkeletonHorse,
+        Self::ZombieHorse,
+        Self::Camel,
+        Self::CamelHusk,
+        Self::Pig,
+        Self::Strider,
+        Self::HappyGhast,
+        Self::Nautilus,
+        Self::ZombieNautilus,
+        Self::Llama,
+        Self::TraderLlama,
+    ];
     /// バニラで所有者が付かない種類に限り、名札と乗用装備を呼び戻し資格にする。
     /// 所有者が実際に記録されている個体では、この条件で他人の所有を迂回しない。
     fn permits_named_equipment(self) -> bool {
@@ -209,23 +226,30 @@ pub struct Prepared {
     pub candidates: Vec<Candidate>,
 }
 impl Prepared {
-    pub fn new(snapshot: Snapshot, original: &str) -> Result<Self> {
+    /// BERTへ変更済み。旧判定へ戻さない。
+    /// 分類結果と原文を束ね、個体選択後に同じ依頼の意味を語句で再判定しない。
+    pub fn from_classified(
+        snapshot: Snapshot,
+        classification: &crate::request_classifier::Classification,
+    ) -> Result<Self> {
+        ensure!(
+            classification.prediction.label == crate::request_classifier::Label::RecallMount,
+            "horse_request_not_classified"
+        );
         snapshot.validate()?;
-        ensure!(!original.trim().is_empty(), "horse_empty_input");
+        ensure!(!classification.text.trim().is_empty(), "horse_empty_input");
         let mut candidates = snapshot.candidates.clone();
         candidates.sort_by(|a, b| a.entity_id.cmp(&b.entity_id));
         Ok(Self {
             snapshot,
-            original: original.to_owned(),
+            original: classification.text.clone(),
             candidates,
         })
     }
     /// 形式と原文根拠を検査し、対象を最初のsnapshotへ結ぶ。
     /// 呼びかけの意味と表記ゆれはLLMが選び、名前や肯定操作語の完全一致を入口条件にしない。
     pub fn resolve(&self, choice: &Choice) -> Result<&Candidate> {
-        validate_evidence(&self.original, &choice.evidence, choice.confidence)?;
-        // 根拠の部分抜き出しで否定を落とさせない。明白な禁止だけを最後に拒否する。
-        // 「呼んでくれる？」のような依頼は、疑問符だけを理由に棄却しない。
+        validate_original_evidence(&self.original, &choice.evidence, choice.confidence)?;
         let i = choice
             .candidate_id
             .strip_prefix('h')
@@ -279,7 +303,8 @@ pub struct Choice {
     pub confidence: f64,
 }
 
-pub fn validate_evidence(original: &str, evidence: &str, confidence: f64) -> Result<()> {
+/// confidenceは個体選択の確かさ。BERTの依頼確率とは別で、既存の選択条件を維持する。
+fn validate_original_evidence(original: &str, evidence: &str, confidence: f64) -> Result<()> {
     ensure!(
         confidence.is_finite() && (0.9..=1.0).contains(&confidence),
         "horse_low_confidence"
@@ -288,40 +313,7 @@ pub fn validate_evidence(original: &str, evidence: &str, confidence: f64) -> Res
         evidence == original.trim(),
         "horse_original_evidence_required"
     );
-    ensure!(safe_evidence(evidence), "horse_contradictory_evidence");
     Ok(())
-}
-
-// TODO(request-classifier): recall_mount を依頼認識の正にしたら、この否定・引用の
-// 部分一致による再判定と validate_evidence からの呼出しを撤去する。
-// 原文との結び付け、選択結果の受理条件、候補・所有・鮮度・実行前検証は別途維持する。
-fn safe_evidence(text: &str) -> bool {
-    let s = text.trim_end_matches(['。', '！', '!']);
-    if [('「', '」'), ('『', '』'), ('"', '"')]
-        .iter()
-        .any(|(a, b)| s.starts_with(*a) && s.ends_with(*b))
-    {
-        return false;
-    }
-    ![
-        "呼ばないで",
-        "呼ばんといて",
-        "呼ぶな",
-        "呼ばなくていい",
-        "呼ばなくてよい",
-        "呼ぶ必要はない",
-        "連れてこないで",
-        "連れてこんといて",
-        "連れてくるな",
-        "移動させないで",
-        "呼んでほしくない",
-        "という意味ではない",
-        "という意味じゃない",
-        "とは言ってない",
-        "って言ってない",
-    ]
-    .iter()
-    .any(|v| text.contains(v))
 }
 
 #[cfg(test)]

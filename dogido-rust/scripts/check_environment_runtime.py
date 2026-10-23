@@ -12,13 +12,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from dogido_server.runtime_settings import COMBAT_DEFAULTS
 
 from body_senses_fixture import attach_body, OWNER_ID
+from request_classifier_fixture import mock_request_classifier, resolve_input_response
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def main():
     passed = []
-    with tempfile.TemporaryDirectory(prefix="dogido-environment-") as tmp, dependencies() as (dep, control, seen):
+    labels = {"剣に持ち替えて":"equip_sword", "剣お願い":"equip_sword", "県に持ち替えて":"equip_sword",
+              "そろそろ剣の方がよくない？":"equip_sword", "敵は何体？":"enemy_information",
+              "ダイヤモンドの剣の耐久値は？":"not_target", "こんにちは":"not_target", "静かにして":"not_target"}
+    with tempfile.TemporaryDirectory(prefix="dogido-environment-") as tmp, dependencies() as (dep, control, seen), mock_request_classifier(labels) as (classifier_args, _):
         folder = Path(tmp)
         player = folder / "player"
         player.write_text(f"#!{sys.executable}\nfrom pathlib import Path\nimport time\ntime.sleep(float(Path(__file__).with_name('delay').read_text()))\n")
@@ -29,7 +33,7 @@ def main():
                     "dark_push_after_breath_protect_ms": 0}
         # 存在する設定だけを使い、所要時間の長いCDはこの模擬試験内に限り短縮。
         settings = {k: v for k, v in settings.items() if k in COMBAT_DEFAULTS}
-        with running(ROOT / "target/debug/dogido-rust", folder, dep, player=player, combat_settings=settings,
+        with running(ROOT / "target/debug/dogido-rust", folder, dep, player=player, combat_settings=settings, extra_args=classifier_args,
                      haiku_settings={"memory_dir":str(folder / "memory")}) as (base, process, log):
             seq = 0
             def register(capable=True):
@@ -51,7 +55,7 @@ def main():
             def say(sid, text, source="voice"):
                 got = request(base, "/api/v1/player-input", {"session_id": sid, "source": source, "text": text})
                 assert got["accepted"], got
-                return got
+                return resolve_input_response(base, got)
             def rows(sid): return [r for r in snapshot(base)["utterances"] if r["session_id"] == sid]
             def match(sid, kind, status):
                 return next((r for r in reversed(rows(sid)) if r["playback_status"] == status
@@ -86,51 +90,49 @@ def main():
             wait_for(lambda: match(sid, "assist_feedback", "completed")); close(sid)
             passed.append("execution_capability_required")
 
-            sid = register(); send(sid, hotbar=bar())
-            before = calls(); got = say(sid, "県に持ち替えて")
-            assert got["assist"]["intent"]["source"] == "code_voice_asr" and calls() == before, got
-            close(sid)
-            sid = register(); send(sid, hotbar=bar())
-            got = say(sid, "県に持ち替えて", "text")
-            assert got.get("reason") != "assist_input", got
-            wait_for(lambda: row(base, got["turn_id"], {"completed", "unsupported"})); assert not send(sid)["commands"]
-            close(sid); passed.append("sword_homophone_correction_voice_only")
+            for source in ("voice", "text"):
+                sid = register(); send(sid, hotbar=bar())
+                before = calls(); got = say(sid, "県に持ち替えて", source)
+                assert got["assist"]["intent"]["source"] == "modernbert" and calls() == before, got
+                assert got["assist"]["intent"]["evidence"] == "県に持ち替えて", got
+                assert got["assist"]["command"]["slot"] == 2, got
+                close(sid)
+            passed.append("classified_sword_uses_original_input_without_source_specific_word_gate")
 
             sid = register(); send(sid, hotbar=bar())
             text = "そろそろ剣の方がよくない？"
-            control["structured"] = {96: {"intent": "select_weapon", "weapon_kind": "sword", "is_request": True, "evidence": text, "confidence": .98}}
-            control["delay"] = .35
-            before = calls(); got = say(sid, text)
-            assert got["reason"] == "assist_intent", got
-            duplicate = say(sid, text); assert duplicate.get("deduplicated"), duplicate
             send(sid, hotbar=bar(5))
-            wait_for(lambda: row(base, got["turn_id"], {"quiet"}))
-            command = send(sid, hotbar=bar(5))["commands"][0]
-            assert command["slot"] == 5 and calls() == before + 1, command
-            close(sid); control["delay"] = 0
-            passed.append("natural_request_one_bounded_call_rechecks_current_slot")
+            before = calls(); got = say(sid, text)
+            command = got["assist"]["command"]
+            assert got["reason"] == "assist_input" and command["slot"] == 5 and calls() == before, got
+            duplicate = say(sid, text)
+            assert duplicate.get("deduplicated") or duplicate.get("assist", {}).get("status") == "pending", duplicate
+            assert send(sid, hotbar=bar(5))["commands"] == [command]
+            close(sid)
+            passed.append("bert_natural_sword_request_checks_current_slot_without_llm")
 
             sid = register(); send(sid, hotbar=bar())
-            control["delay"] = .4
-            got = say(sid, text); wait_for(lambda: calls() > before + 1)
+            got = say(sid, text)
+            command = got["assist"]["command"]
+            wait_for(lambda: match(sid, "assist_feedback", "completed"))
             newer = say(sid, "こんにちは")
             wait_for(lambda: row(base, newer["turn_id"], {"completed"}))
-            assert row(base, got["turn_id"], {"cancelled"}) and not send(sid, hotbar=bar())["commands"]
-            close(sid); control["delay"] = 0
-            passed.append("new_input_cancels_pending_world_intent")
+            assert send(sid, hotbar=bar())["commands"] == [command]
+            close(sid)
+            passed.append("new_input_does_not_cancel_already_issued_sword_command")
 
             sid = register(); send(sid, hotbar=bar())
-            control["delay"] = .4; before = calls()
-            got = say(sid, text); wait_for(lambda: calls() > before)
+            before = calls(); got = say(sid, text)
+            command = got["assist"]["command"]
             send(sid, hotbar=bar(), meta={"user_text": "静かにして"})
-            time.sleep(.5)
-            assert row(base, got["turn_id"], {"cancelled"}) and not send(sid, hotbar=bar())["commands"]
-            close(sid); control["delay"] = 0
-            passed.append("piggyback_combat_input_cancels_pending_world_intent")
+            assert send(sid, hotbar=bar())["commands"] == [command]
+            assert calls() == before
+            close(sid)
+            passed.append("piggyback_input_does_not_reclassify_or_cancel_issued_command")
 
             sid = register(); send(sid, hotbar=bar()); before = calls()
             got = say(sid, "ダイヤモンドの剣の耐久値は？")
-            # assistの事前振り分けturnとは別の会話turnへ一度だけ引き渡す。
+            # BERTのNotTargetは既存の知識問い合わせへ渡し、剣の生成判定を挟まない。
             answer = wait_for(lambda: next((r for r in rows(sid)
                 if r.get("category") == "knowledge" and r["playback_status"] == "completed"), None))
             assert answer["knowledge_status"] in {"found", "unavailable", "not_found"}, answer
@@ -165,7 +167,7 @@ def main():
             passed.append("started_darkness_comment_finishes_after_light_recovery")
 
             zombie = {"type": "zombie", "entity_id": "z", "distance": 3,
-                "direction": {"horizontal": "right", "cardinal": "east"}}
+                "direction": {"horizontal": "right", "cardinal": "east"}, "environment": {"on_ground": True}}
             sid = register(); send(sid, world=dark)
             wait_for(lambda: match(sid, "dark_push_no_light", "completed"))
             (folder / "delay").write_text(".4")

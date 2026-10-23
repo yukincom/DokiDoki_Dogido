@@ -17,6 +17,8 @@ pub enum AdapterCommandResultCommandType {
     RecallHorse,
     #[serde(rename = "inspect_body_target")]
     InspectBodyTarget,
+    #[serde(rename = "body_request")]
+    BodyRequest,
     #[serde(rename = "capture_screenshot")]
     CaptureScreenshot,
     #[serde(rename = "capture_body_view")]
@@ -430,7 +432,9 @@ pub struct AdapterCommandResult {
 #[derive(Clone, Deserialize)]
 pub struct BodyViewPayload(pub Value);
 impl std::fmt::Debug for BodyViewPayload {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { f.write_str("BodyViewPayload(<redacted>)") }
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("BodyViewPayload(<redacted>)")
+    }
 }
 /// buildAmbientSoundsが送る非敵対Mob・環境・ブロックなどの聴覚観測一件。
 /// 音の種類、根拠ID、経過時間を会話へ渡し、現在見えている対象とは分けて扱う。

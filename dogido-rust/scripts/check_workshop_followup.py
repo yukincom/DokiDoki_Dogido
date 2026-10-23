@@ -2,7 +2,8 @@
 """Model-owned acknowledgements preserve conversation and completed playback boundaries."""
 import json
 from check_dialogue import request, row, submit, wait_for
-from check_haiku_runtime import fixture, LINES
+from check_haiku_runtime import LINES
+from check_workshop_fixture import fixture
 from check_workshop_runtime import install, ready, session, step
 from check_workshop_edits import finish, revisions
 

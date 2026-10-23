@@ -5,7 +5,8 @@ import fcntl
 import threading
 
 from check_dialogue import request, row, submit, wait_for
-from check_haiku_runtime import fixture, LINES
+from check_haiku_runtime import LINES
+from check_workshop_fixture import fixture
 from check_memory_runtime import records
 from check_workshop_edits import finish, revisions
 from check_workshop_revision import wire
@@ -15,12 +16,13 @@ from check_workshop_combat import SETTINGS, MOB, end, returned
 
 
 PRAISE = "余韻が心に残る"
-INPUT = PRAISE + "。今日はここまでにしよう"
+INPUT = PRAISE + "。この余韻の話を続けよう"
+END_INPUT = PRAISE + "。今日はここまでにしよう"
 VALID = {"kind": "praise", "evidence": PRAISE}
 
 
-def closing(text, feedback=VALID, speech=""):
-    result = step(text, "close_workshop")
+def feedback_reply(text, feedback=VALID, speech="気に入ってもらえてうれしいわ。"):
+    result = step(text, "respond")
     result["speech"] = speech
     if feedback is not None:
         result["feedback"] = feedback
@@ -32,29 +34,21 @@ def main():
     story_record = None
     with fixture() as context:
         base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder = context
-        # 不正な補助情報は終了を妨げず、称賛記録も増やさない。
-        for feedback in [VALID, None, {"kind": "other", "evidence": PRAISE},
-                         {"kind": "praise", "evidence": 7}, {"kind": "praise", "evidence": ""},
-                         {"kind": "praise", "evidence": "好きだ"},
-                         {"kind": "praise", "evidence": PRAISE, "extra": True}]:
+        # 分類済み終了にはモデルを呼ばず、未取得のfeedbackを捏造しない。
+        for feedback in [VALID, None, {"kind": "praise", "evidence": 7}]:
             sid = ready(base, send, rows)
             before = stored(sid)
             critiques, lessons = records(folder, "critiques"), records(folder, "lessons")
-            calls = install(control, lambda text, prompt, n: closing(text, feedback))
-            result = finish(base, send, sid, INPUT)
+            calls = install(control, lambda text, prompt, n: feedback_reply(text, feedback))
+            result = finish(base, send, sid, END_INPUT)
             assert result["workshop_action"] == "close_workshop" and hud(sid)["state"] == "closed", result
             assert result["text"] == "ほな、この句はここまでにしよか。", result
-            assert len(calls) == 1 and stored(sid) == before and not revisions(folder, sid)
-            after = records(folder, "critiques")
-            assert records(folder, "lessons") == lessons
-            if feedback == VALID:
-                assert result.get("workshop_feedback_outcome") == "saved", result
-                assert len(after) == len(critiques) + 1 and after[:-1] == critiques
-                assert after[-1]["kind"] == "praise" and after[-1]["player_text"] == INPUT
-            else:
-                assert after == critiques and not result.get("workshop_feedback_outcome"), result
+            assert not calls and not result["llm_reports"], result
+            assert stored(sid) == before and not revisions(folder, sid)
+            assert records(folder, "critiques") == critiques and records(folder, "lessons") == lessons
+            assert not result.get("workshop_feedback_outcome"), result
             request(base, "/api/v1/adapter-sessions/" + sid, method="DELETE")
-        passed.append("optional_feedback_does_not_block_close_or_add_a_model_call")
+        passed.append("bert_end_without_generation_does_not_invent_unreceived_feedback")
 
         sid = ready(base, send, rows)
         before = stored(sid)
@@ -74,9 +68,9 @@ def main():
             assert stored(sid) == before and not revisions(folder, sid)
         passed.append("praise_is_saved_without_closing_or_changing_the_verse")
 
-        # 操作が不成立でも、発話中の検証済み称賛は同じ一件として残る。
+        # 会話の補助confidenceが不正でも、発話中の検証済み称賛は一件だけ残る。
         def skipped_close(text, prompt, n):
-            result = closing(text, VALID, "また一緒に詠もな。")
+            result = feedback_reply(text, VALID, "また一緒に詠もな。")
             result["confidence"] = "invalid"
             return result
         calls = install(control, skipped_close)
@@ -85,7 +79,7 @@ def main():
         assert result["text"] == "また一緒に詠もな。" and hud(sid)["state"] == "open", result
         assert len(records(folder, "critiques")) == len(critiques) + 1
         assert records(folder, "critiques")[-1]["player_text"] == INPUT
-        passed.append("praise_and_model_speech_survive_skipped_close_without_retry")
+        passed.append("praise_and_model_speech_survive_unused_metadata_without_retry")
         request(base, "/api/v1/adapter-sessions/" + sid, method="DELETE")
 
         sid = ready(base, send, rows)
@@ -94,17 +88,17 @@ def main():
         pending = hud(sid)["pending_lines"]
         assert pending
         critiques, lessons = records(folder, "critiques"), records(folder, "lessons")
-        calls = install(control, lambda text, prompt, n: closing(text))
+        calls = install(control, lambda text, prompt, n: {**feedback_reply(text), "action":"ask", "speech":"この案を採用するか、破棄するか教えてな。"})
         send(sid)
-        turn = submit(base, sid, INPUT)
-        result = wait_for(lambda: row(base, turn, {"quiet"}))
-        assert result["workshop_action"] == "respond" and hud(sid)["state"] == "open", result
-        assert result["text"] == "" and len(calls) == 1, result
+        turn = submit(base, sid, END_INPUT)
+        result = wait_for(lambda: row(base, turn, {"completed"}))
+        assert result["workshop_action"] == "ask" and hud(sid)["state"] == "open", result
+        assert result["text"] == "この案を採用するか、破棄するか教えてな。" and len(calls) == 1, result
         assert hud(sid)["pending_lines"] == pending and not revisions(folder, sid)
         assert len(records(folder, "critiques")) == len(critiques) + 1
         assert records(folder, "lessons") == lessons
         assert records(folder, "critiques")[-1]["pending_at_input"]["lines"]
-        passed.append("praise_is_saved_while_invalid_close_keeps_pending_verse")
+        passed.append("bert_end_asks_pending_adoption_and_saves_received_praise_once")
         request(base, "/api/v1/adapter-sessions/" + sid, method="DELETE")
 
     # モデルの返事を待っていても戦闘音声はすぐ通し、返答が届いたら物語を補完する。
@@ -119,11 +113,11 @@ def main():
             if n == 1:
                 entered.set()
                 assert release.wait(timeout=15)
-                return closing(text, speech=intended)
+                return feedback_reply(text, speech=intended)
             assert "そのときの出来事（返答は未発話）" in prompt, prompt
             assert "言葉を飲み込んで、戦いに挑んだ。" in prompt, prompt
             assert intended in prompt, prompt
-            assert "会話段階: combat_resume_confirmation" in prompt, prompt
+            assert "会話段階: discussion" in prompt, prompt
             return {"action": "respond", "speech": "さっきは返事を飲み込んでもうたな。気に入ってもらえてうれしいわ。"}
         calls = install(control, delayed)
         try:
@@ -209,7 +203,7 @@ def main():
         planned = "気に入ってもらえてうれしいわ。もう少しこの余韻を楽しもな。"
         def invalid_retry(text, prompt, n):
             if n == 1:
-                result = closing(text, speech=planned)
+                result = feedback_reply(text, speech=planned)
                 result["action"] = "propose_revision"
                 result["purpose"] = "improve_wording"
                 result["confidence"] = "invalid"
@@ -241,7 +235,7 @@ def main():
         def closing_connection(text, prompt, n):
             entered.set()
             release.wait(timeout=15)
-            return closing(text, speech="気に入ってもらえてうれしいわ。")
+            return feedback_reply(text, speech="気に入ってもらえてうれしいわ。")
         install(control, closing_connection)
         try:
             turn = submit(base, sid, INPUT)
@@ -263,13 +257,13 @@ def main():
             sid = ready(base, send, rows)
             if mode == "save_failed":
                 (folder / "memory/long_term/haiku_critiques.jsonl").mkdir(parents=True)
-            install(control, lambda text, prompt, n: closing(text))
+            install(control, lambda text, prompt, n: feedback_reply(text))
             result = finish(base, send, sid, INPUT)
-            assert result["workshop_action"] == "close_workshop" and hud(sid)["state"] == "closed", result
+            assert result["workshop_action"] == "respond" and hud(sid)["state"] == "open", result
             assert result.get("workshop_feedback_outcome") == ("save_failed" if mode == "save_failed" else None), result
             assert not records(folder, "critiques") and not records(folder, "lessons")
             assert not revisions(folder, sid)
-            passed.append(mode + "_does_not_prevent_valid_close")
+            passed.append(mode + "_does_not_prevent_conversation")
     print(json.dumps({"passed": passed, "count": len(passed), "story_record": story_record}, ensure_ascii=False, indent=2))
 
 

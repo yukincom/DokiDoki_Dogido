@@ -10,11 +10,31 @@ fn now() -> DateTime<Utc> {
 fn event() -> GameEvent {
     GameEvent::parse(json!({"schema_version":"2026-05-24","game":"minecraft-java","adapter":"test","sequence":1,"observed_at":now(),"event":{"name":"status_snapshot","source_kind":"system","priority_hint":"background","certainty":"high"},"player":{"name":"test","position":{"x":0,"y":64,"z":0},"dimension":"minecraft:overworld","hotbar":{"selected_slot":8,"slots":[{"slot":0,"item_id":"minecraft:stone_sword","count":1,"damage":0,"max_damage":131,"attack_damage":5,"weapon_kind":"sword"}]}},"world":{"time_phase":"day","weather":"clear","biome":"plains","local_light":15,"sky_visible":true,"danger_darkness_score":0},"combat":{"combat_active_hint":false}})).unwrap()
 }
-fn input(text: &str) -> Input {
-    Input {
-        raw_text: text.into(),
-        ..Input::default()
+fn classified(
+    text: &str,
+    label: crate::request_classifier::Label,
+    source: &str,
+) -> crate::request_classifier::Classification {
+    let mut probabilities = [0.0; crate::request_classifier::LABEL_COUNT];
+    let index = crate::request_classifier::LABELS
+        .iter()
+        .position(|candidate| *candidate == label)
+        .unwrap();
+    probabilities[index] = 1.0;
+    crate::request_classifier::Classification {
+        text: text.into(),
+        source: source.into(),
+        manifest_sha256: "fixture-bert23".into(),
+        prediction: crate::request_classifier::Prediction {
+            label,
+            probabilities,
+            token_count: 8,
+            inference_ms: 0.1,
+        },
     }
+}
+fn sword(text: &str) -> crate::request_classifier::Classification {
+    classified(text, crate::request_classifier::Label::EquipSword, "text")
 }
 fn state() -> AssistState {
     AssistState::new([SELECT_HOTBAR_CAPABILITY.into()])
@@ -34,103 +54,52 @@ fn result(
     serde_json::from_value(json!({"command_id":command.command_id,"command_type":"select_hotbar","status":status,"executed_at":at,"selected_slot":slot,"selected_item_id":command.expected_item_id})).unwrap()
 }
 #[test]
-fn explicit_negative_quoted_and_voice_boundaries() {
-    for text in [
-        "剣",
-        "ドギド、剣に持ち替えてください",
-        "斧から剣に装備して",
-        "剣を変更してください",
+fn bert_request_result_owns_request_intent_and_preserves_original_text() {
+    // BERTへ変更済み。旧判定へ戻さない。原文語句で分類結果を再判定しない。
+    for (text, source) in [
+        ("剣", "text"),
+        ("そっちの武器に替えて", "text"),
+        ("県を変えて", "voice"),
     ] {
-        assert!(intent::is_explicit_select_sword_request(text), "{text}");
+        let classification = classified(text, crate::request_classifier::Label::EquipSword, source);
+        let d = dispatch(state().submit_classified(&classification, &event(), now(), false));
+        assert_eq!(d.intent.source, "modernbert");
+        assert_eq!(d.intent.evidence, text);
+        assert!(d.command.is_some());
     }
-    for text in [
-        "けん",
-        "県を変えて",
-        "明日は剣にして",
-        "剣にしてとは言ってない",
-        "剣にしてほしくない",
-        "「剣にして」",
-        "剣にしたんだけど",
-        "剣を作って",
-        "剣の耐久値は？",
-    ] {
-        assert!(!intent::is_explicit_select_sword_request(text), "{text}");
-    }
-    assert_eq!(
-        intent::interpret_voice_select_sword_request("時と県に変えて"),
-        Some("時と剣に変えて".into())
-    );
-    assert!(intent::interpret_voice_select_sword_request("県を変えてという意味ではない").is_none());
-    assert!(matches!(
-        state().submit(input("県を変えて"), &event(), now(), false),
-        Submission::NotHandled
-    ));
-    let d = dispatch(state().submit(
-        Input {
-            source: InputSource::Voice,
-            ..input("県を変えて")
-        },
-        &event(),
-        now(),
-        false,
-    ));
-    assert_eq!(d.intent.source, "code_voice_asr");
-    assert!(d.command.is_some());
 }
+
 #[test]
-fn workshop_and_knowledge_ownership() {
-    let mut s = state();
-    for text in ["剣", "剣にして", "剣の方がよくない？"] {
+fn all_other_bert_labels_leave_sword_execution_unhandled() {
+    for label in crate::request_classifier::LABELS {
+        if label == crate::request_classifier::Label::EquipSword {
+            continue;
+        }
+        let mut state = state();
         assert!(matches!(
-            s.submit(
-                Input {
-                    workshop_open: true,
-                    ..input(text)
-                },
+            state.submit_classified(
+                &classified("剣に装備して", label, "text"),
                 &event(),
                 now(),
                 false
             ),
             Submission::NotHandled
         ));
+        assert!(state.commands(now()).is_empty(), "{label:?}");
     }
-    assert!(
-        dispatch(s.submit(
-            Input {
-                workshop_open: true,
-                ..input("剣に装備して")
-            },
-            &event(),
-            now(),
-            true
-        ))
-        .command
-        .is_some()
-    );
-    assert!(matches!(
-        s.submit(
-            Input {
-                knowledge_query: true,
-                ..input("剣に装備して")
-            },
-            &event(),
-            now(),
-            false
-        ),
-        Submission::NotHandled
-    ));
 }
+
 #[test]
 fn pending_retransmission_success_cooldown_and_duplicate_ack() {
     let mut s = state();
     let t = now();
-    let c = dispatch(s.submit(input("剣"), &event(), t, false))
+    let c = dispatch(s.submit_classified(&sword("剣"), &event(), t, false))
         .command
         .unwrap();
     assert_eq!(s.pending_commands(t)[0].command_id, c.command_id);
     assert!(
-        dispatch(s.submit(
-            input("剣"),
+        dispatch(s.submit_classified(
+            &sword("剣"),
             &event(),
             t + Duration::milliseconds(100),
             false
@@ -145,7 +114,7 @@ fn pending_retransmission_success_cooldown_and_duplicate_ack() {
     assert!(out.feedback.is_none());
     assert!(s.pending_commands(t).is_empty());
     assert_eq!(
-        dispatch(s.submit(input("剣"), &event(), t + Duration::seconds(2), false))
+        dispatch(s.submit_classified(&sword("剣"), &event(), t + Duration::seconds(2), false))
             .feedback
             .as_deref(),
         Some("もう持ち替えたで！")
@@ -156,7 +125,7 @@ fn pending_retransmission_success_cooldown_and_duplicate_ack() {
             .is_empty()
     );
     assert!(
-        dispatch(s.submit(input("剣"), &event(), t + Duration::seconds(3), false))
+        dispatch(s.submit_classified(&sword("剣"), &event(), t + Duration::seconds(3), false))
             .command
             .is_some()
     );
@@ -169,7 +138,7 @@ fn deadline_mismatch_and_unknown_results() {
         (Duration::seconds(1), 1, "result_mismatch"),
     ] {
         let mut s = state();
-        let c = dispatch(s.submit(input("剣"), &event(), now(), false))
+        let c = dispatch(s.submit_classified(&sword("剣"), &event(), now(), false))
             .command
             .unwrap();
         let out = s.observe_results(
@@ -180,13 +149,18 @@ fn deadline_mismatch_and_unknown_results() {
         assert_eq!(out.observed[0].result.detail_code, detail);
         assert!(out.feedback.is_some());
         assert!(
-            dispatch(s.submit(input("剣"), &event(), now() + Duration::seconds(2), true))
-                .command
-                .is_some()
+            dispatch(s.submit_classified(
+                &sword("剣"),
+                &event(),
+                now() + Duration::seconds(2),
+                true
+            ))
+            .command
+            .is_some()
         );
     }
     let mut s = state();
-    let c = dispatch(s.submit(input("剣"), &event(), now(), false))
+    let c = dispatch(s.submit_classified(&sword("剣"), &event(), now(), false))
         .command
         .unwrap();
     let mut r = result(&c, now(), "failed", 0);
@@ -200,10 +174,11 @@ fn deadline_mismatch_and_unknown_results() {
 #[test]
 fn submit_expiry_does_not_claim_success_and_keeps_result() {
     let mut s = state();
-    let c = dispatch(s.submit(input("剣"), &event(), now(), false))
+    let c = dispatch(s.submit_classified(&sword("剣"), &event(), now(), false))
         .command
         .unwrap();
-    let new = dispatch(s.submit(input("剣"), &event(), now() + Duration::seconds(2), false));
+    let new =
+        dispatch(s.submit_classified(&sword("剣"), &event(), now() + Duration::seconds(2), false));
     assert!(new.command.is_some());
     assert_ne!(new.feedback.as_deref(), Some("もう持ち替えたで！"));
     let out = s.observe_results(&[], now() + Duration::seconds(2), false);
@@ -212,96 +187,68 @@ fn submit_expiry_does_not_claim_success_and_keeps_result() {
     assert_eq!(out.observed[0].result.detail_code, "server_result_timeout");
 }
 #[test]
-fn fresh_completion_and_single_use_token() {
+fn classified_submission_retains_pending_command_deduplication() {
     let mut s = state();
-    let i = input("剣の方がよくない？");
-    let Submission::NeedsIntent(p) = s.submit(i.clone(), &event(), now(), false) else {
-        panic!()
-    };
-    let payload = json!({"intent":"select_weapon","weapon_kind":"sword","is_request":true,"evidence":i.raw_text,"confidence":0.99});
-    assert!(intent::contract_errors(&payload).is_empty());
-    let again = p.clone();
-    let d = dispatch(s.complete_intent(p, &payload, &i, &event(), now(), false));
-    assert!(d.command.is_some());
-    assert!(matches!(
-        s.complete_intent(again, &payload, &i, &event(), now(), false),
-        Submission::NotHandled
-    ));
-    let Submission::NeedsIntent(p) = s.submit(i.clone(), &event(), now(), false) else {
-        panic!()
-    };
-    s.submit(input("やめて"), &event(), now(), false);
-    assert!(matches!(
-        s.complete_intent(p, &payload, &i, &event(), now(), false),
-        Submission::NotHandled
-    ));
+    let classification = sword("そっちへ替えて");
+    let first = dispatch(s.submit_classified(&classification, &event(), now(), false))
+        .command
+        .unwrap();
+    let duplicate = dispatch(s.submit_classified(&classification, &event(), now(), false));
+    assert_eq!(duplicate.status, "pending");
+    assert!(duplicate.command.is_none());
+    assert_eq!(s.commands(now()).len(), 1);
+    assert_eq!(s.commands(now())[0]["command_id"], first.command_id);
 }
+
 #[test]
-fn natural_payload_checks_whole_utterance_and_strict_shape() {
-    for text in ["剣の方がよくない？", "ここは剣の方がいいん？"] {
-        let p = json!({"intent":"select_weapon","weapon_kind":"sword","is_request":true,"evidence":text,"confidence":0.9});
-        assert!(intent::validate_payload(&p, text, 0.9).is_some());
-    }
-    let mut p = json!({"intent":"select_weapon","weapon_kind":"sword","is_request":true,"evidence":"剣にして","confidence":0.99});
-    for t in [
-        "剣にしてという意味ではない",
-        "剣にしてと言った",
-        "「剣にして」",
-        "剣にした",
-    ] {
-        assert!(intent::validate_payload(&p, t, 0.9).is_none());
-    }
-    p["confidence"] = json!(true);
-    assert!(intent::validate_payload(&p, "剣にして", 0.9).is_none());
-    assert!(!intent::contract_errors(&p).is_empty());
-    p["confidence"] = json!("0.99");
-    assert!(!intent::contract_errors(&p).is_empty());
+fn bert_probability_is_diagnostic_without_an_extra_threshold() {
+    let mut classification = sword("剣に替えて");
+    classification.prediction.probabilities = [0.8 / 22.0; crate::request_classifier::LABEL_COUNT];
+    classification.prediction.probabilities[2] = 0.2;
+    let d = dispatch(state().submit_classified(&classification, &event(), now(), false));
+    assert!(d.command.is_some());
+    assert_eq!(d.intent.confidence, 0.2);
 }
+
 #[test]
 fn capability_and_current_snapshot_selection() {
-    let d = dispatch(AssistState::new([]).submit(input("剣"), &event(), now(), false));
+    let classification = sword("剣に替えて");
+    let d =
+        dispatch(AssistState::new([]).submit_classified(&classification, &event(), now(), false));
     assert!(d.command.is_none());
     assert_eq!(d.detail_code, "capability_missing");
-    let mut s = state();
-    let i = input("剣の方がいい？");
-    let Submission::NeedsIntent(p) = s.submit(i.clone(), &event(), now(), false) else {
-        panic!()
-    };
     let mut value = serde_json::to_value(event()).unwrap();
     value["player"]["hotbar"]["slots"] = json!([]);
     let e = GameEvent::parse(value).unwrap();
-    let payload = json!({"intent":"select_weapon","weapon_kind":"sword","is_request":true,"evidence":i.raw_text,"confidence":1.0});
-    let d = dispatch(s.complete_intent(p, &payload, &i, &e, now(), false));
+    let d = dispatch(state().submit_classified(&classification, &e, now(), false));
     assert!(d.command.is_none());
     assert_eq!(d.detail_code, "no_candidate");
 }
+
 #[test]
-fn intent_is_bound_to_session_and_current_owner() {
+fn classified_commands_and_result_ownership_remain_per_session() {
     let mut first = state();
     let mut other = state();
-    let i = input("剣の方がいい？");
-    let Submission::NeedsIntent(p) = first.submit(i.clone(), &event(), now(), false) else {
-        panic!()
-    };
-    other.submit(i.clone(), &event(), now(), false);
-    let payload = json!({"intent":"select_weapon","weapon_kind":"sword","is_request":true,"evidence":i.raw_text,"confidence":1.0});
-    assert!(matches!(
-        other.complete_intent(p.clone(), &payload, &i, &event(), now(), false),
-        Submission::NotHandled
-    ));
-    let changed = Input {
-        workshop_open: true,
-        ..i
-    };
-    assert!(matches!(
-        first.complete_intent(p, &payload, &changed, &event(), now(), false),
-        Submission::NotHandled
-    ));
+    let first_command = dispatch(first.submit_classified(&sword("剣"), &event(), now(), false))
+        .command
+        .unwrap();
+    let other_command = dispatch(other.submit_classified(&sword("剣"), &event(), now(), false))
+        .command
+        .unwrap();
+    assert_ne!(first_command.command_id, other_command.command_id);
+    let report = result(&first_command, now(), "succeeded", first_command.slot);
+    let out = other.observe_results(&[report], now(), false);
+    assert!(!out.observed[0].known_command);
+    assert_eq!(
+        other.pending_commands(now())[0].command_id,
+        other_command.command_id
+    );
 }
+
 #[test]
 fn naive_result_time_fails_closed_and_policy_never_issues() {
     let mut s = state();
-    let c = dispatch(s.submit(input("剣"), &event(), now(), false))
+    let c = dispatch(s.submit_classified(&sword("剣"), &event(), now(), false))
         .command
         .unwrap();
     let mut r = result(&c, now(), "succeeded", c.slot);
@@ -315,7 +262,7 @@ fn naive_result_time_fails_closed_and_policy_never_issues() {
         let mut s = state();
         s.set_policy(policy);
         assert!(
-            dispatch(s.submit(input("剣"), &event(), now(), false))
+            dispatch(s.submit_classified(&sword("剣"), &event(), now(), false))
                 .command
                 .is_none()
         );

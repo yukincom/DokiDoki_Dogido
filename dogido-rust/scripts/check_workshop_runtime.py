@@ -7,7 +7,8 @@ import threading
 import time
 
 from check_dialogue import acknowledge, display_row, request, register, row, snapshot, submit, submit_text, wait_for
-from check_haiku_runtime import fixture, LINES
+from check_haiku_runtime import LINES
+from check_workshop_fixture import fixture
 
 
 def step(text, action="explain", speech="葉の明るさと斧の黒さを並べた句やで。", checks=()):
@@ -47,36 +48,11 @@ def native_mock_message(payload, prompt, number):
         arguments = {key:payload[key] for key in ("checks", "inspect_text", "inspect_line_index") if key in payload}
     else:
         name = action
-        context = {}
-        decoder = json.JSONDecoder()
-        for match in re.finditer(r'\{', prompt):
-            try:
-                value, _ = decoder.raw_decode(prompt[match.start():])
-            except ValueError:
-                continue
-            if isinstance(value, dict) and "current_verse" in value and "saved_line_sources" in value:
-                context = value
-        lines = (context.get("pending_verse") or context.get("current_verse") or "").splitlines()
+        # 行IDと元句はBERT結果から本体が補完する。モデルは原文の語句だけを渡す。
         proposal = payload.get("line_proposal", {})
-        reference = payload.get("line_reference", {})
-        fragment = proposal.get("target_fragment", "")
-        index = None
-        concept = reference.get("concept_id") if reference.get("found") else None
-        if concept in {"line_1", "line_2", "line_3"}:
-            index = int(concept[-1]) - 1
-        elif fragment:
-            matches = [i for i, line in enumerate(lines) if fragment in line]
-            if len(matches) == 1:
-                index = matches[0]
-        if index is None:
-            target = context.get("discussion_target") or {}
-            index = target.get("line_index")
-        arguments = {"line_id":f"line_{index + 1}" if isinstance(index, int) else "unknown",
-            "expected_text":lines[index] if isinstance(index, int) and 0 <= index < len(lines) else "",
-            "target_fragment":fragment, "replacement_text":proposal.get("replacement_text", ""),
+        arguments = {"target_fragment":proposal.get("target_fragment", ""),
+            "replacement_text":proposal.get("replacement_text", ""),
             "evidence":payload.get("evidence"), "confidence":payload.get("confidence")}
-        if reference.get("found") and reference.get("evidence"):
-            arguments["line_reference_evidence"] = reference["evidence"]
     return {"role":"assistant", "content":None, "tool_calls":[{
         "id":f"fixture-tool-{number}", "type":"function",
         "function":{"name":name, "arguments":json.dumps(arguments, ensure_ascii=False)}}]}
@@ -205,9 +181,9 @@ def main():
         send(sid)
         turn = submit(base, sid, "今日は相談はここでおしまいにしよう")
         result = wait_for(lambda: row(base, turn, {"completed"}))
-        assert result["workshop_action"] == "close_workshop" and len(calls4) == 1, result
+        assert result["workshop_action"] == "close_workshop" and len(calls4) == 0, result
         assert hud(sid)["state"] == "closed", hud(sid)
-        passed.append("natural_close_applied_once_after_original_evidence_check")
+        passed.append("bert_close_applied_once_without_model")
 
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         calls = install(control, lambda text, prompt, n: {
@@ -217,8 +193,8 @@ def main():
         before = stored(sid)
         turn = submit(base, sid, "この句の相談はここで終わりにしよう。")
         result = wait_for(lambda: row(base, turn, {"completed"}))
-        assert result["workshop_action"] == "close_workshop" and len(calls) == 1, result
-        assert result["text"] == "ほな、また話そな。" and hud(sid)["state"] == "closed"
+        assert result["workshop_action"] == "close_workshop" and len(calls) == 0, result
+        assert result["text"] == "ほな、この句はここまでにしよか。" and hud(sid)["state"] == "closed"
         record_path = folder / "memory/sessions" / sid / "long_term/haiku_workshop_turns.jsonl"
         def completed_records():
             if not record_path.exists():
@@ -231,7 +207,7 @@ def main():
         assert len(recorded) == 1 and recorded[0]["state_after"]["open"] is False, recorded
         assert recorded[0]["state_after"]["close_reason"] == "explicit_close", recorded
         assert stored(sid) == before
-        passed.append("missing_checks_defaulted_and_close_completed_without_model_retry")
+        passed.append("bert_close_ignores_unused_model_metadata_and_records_completed_state")
 
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         def mistaken_close(text, prompt, n):
@@ -253,30 +229,23 @@ def main():
         send(sid)
         turn = submit(base, sid, "終了でいいよ")
         result = wait_for(lambda: row(base, turn, {"completed"}))
-        assert result["workshop_action"] == "close_workshop" and len(calls) == 5
+        assert result["workshop_action"] == "close_workshop" and len(calls) == 4
         assert hud(sid)["state"] == "closed"
-        assert result["text"] == "ほな今日はここまでや。また話そな。"
-        passed.append("short_close_uses_model_decision_and_model_speech")
+        assert result["text"] == "ほな、この句はここまでにしよか。" and not result["llm_reports"]
+        passed.append("short_bert_close_uses_code_reply_without_model")
 
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
-        for overrides in [{"evidence": "今日は終了"}, {"checks": "meter"},
-                          {"checks": ["shell"]}, {"confidence": "invalid", "speech": ""}]:
-            calls = install(control, lambda text, prompt, n: {
-                **step(text, "close_workshop"), "speech": "この句の話、聞いとるで。", **overrides})
-            sid = ready(base, send, rows)
-            before = stored(sid)
-            turn = submit(base, sid, "相談はここでおしまい")
-            result = wait_for(lambda: row(base, turn, {"completed", "quiet"}))
-            assert result["workshop_action"] == "respond" and result["workshop_reason"] == "close_skipped", result
-            assert len(calls) == 1 and len(result["llm_reports"]) == 1, result
-            assert hud(sid)["state"] == "open" and hud(sid)["canonical_lines"] == LINES
-            assert stored(sid) == before
-            if overrides.get("speech") == "":
-                assert result["text"] == "" and result["playback_status"] == "quiet", result
-            else:
-                assert result["text"] == "この句の話、聞いとるで。" and result["playback_status"] == "completed", result
-                assert session(base, sid)["workshop_history"][-1]["dogido_text"] == result["text"]
-        passed.append("invalid_close_keeps_original_reply_or_silence_without_retry_or_failure_message")
+        # BERT対象外の相談で旧終了actionを返しても、終了経路へ戻らない。
+        calls = install(control, lambda text, prompt, n: step(text, "close_workshop") if n == 1
+                        else step(text, "respond", "この句の話を続けよか。"))
+        sid = ready(base, send, rows)
+        before = stored(sid)
+        turn = submit(base, sid, "この句をもう少し話そう")
+        result = wait_for(lambda: row(base, turn, {"completed"}))
+        assert result["workshop_action"] == "respond" and len(calls) == 2, result
+        assert hud(sid)["state"] == "open" and stored(sid) == before
+        assert all(s.get("action") != "close_workshop" for s in result["workshop_steps"]), result
+        passed.append("not_target_cannot_reenter_removed_model_close_path")
 
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         calls = install(control, lambda text, prompt, n: {"action": "explain"} if n == 1 else step(text))
@@ -386,21 +355,44 @@ def main():
         entered = threading.Event(); release = threading.Event()
         def delayed_close(text, prompt, n):
             entered.set(); release.wait(timeout=6)
-            return step(text, "close_workshop")
+            return step(text, "explain")
         calls = install(control, delayed_close)
         sid = ready(base, send, rows)
         try:
-            turn = submit(base, sid, "そろそろ相談はおしまいにしよう")
+            turn = submit(base, sid, "この句の意味をもう少し説明して")
             wait_for(entered.is_set)
             time.sleep(3)  # 返答を生成している時間は無操作に数えない。
             assert hud(sid)["state"] == "open"
             assert not row(base, turn, {"cancelled"})
             release.set()
             wait_for(lambda: row(base, turn, {"completed"}), timeout=4)
-            assert hud(sid)["state"] == "closed"  # 明示終了の意思で閉じる。
+            assert hud(sid)["state"] == "open"
+            closing = submit(base, sid, "そろそろ相談はおしまいにしよう")
+            wait_for(lambda: row(base, closing, {"completed"}))
+            assert hud(sid)["state"] == "closed" and len(calls) == 1
             passed.append("inflight_workshop_response_survives_idle_timeout_and_explicit_close_still_works")
         finally:
             release.set()
+
+    for text,label,index in [
+        ("最初の行の意味を教えて", "senryu_line_upper", 0),
+        ("真ん中の行の意味を教えて", "senryu_line_middle", 1),
+        ("最後の行の意味を教えて", "senryu_line_lower", 2),
+    ]:
+        with fixture(bert_labels={text:label}) as (base, _, _, control, _, _, _, _, send, hud, rows, stored, folder):
+            def explain_selected(text,prompt,n):
+                payload = step(text)
+                # 旧モデル行番号を返しても分類済みの対象は変わらない。
+                payload["line_reference"] = {"found":True, "concept_id":f"line_{(index+1)%3+1}", "evidence":text, "confidence":.99}
+                return payload
+            calls = install(control, explain_selected)
+            sid = ready(base, send, rows)
+            turn = submit(base, sid, text)
+            result = wait_for(lambda: row(base, turn, {"completed"}))
+            assert result["workshop_action"] == "explain" and len(calls) == 1, result
+            assert session(base,sid)["workshop_discussion_target"]["line_index"] == index
+            assert hud(sid)["canonical_lines"] == LINES and not hud(sid)["pending_lines"]
+            passed.append("bert_line_selects_target_without_authorizing_repair:" + label)
 
     print(json.dumps({"passed": len(passed), "cases": passed}, ensure_ascii=False, indent=2))
 

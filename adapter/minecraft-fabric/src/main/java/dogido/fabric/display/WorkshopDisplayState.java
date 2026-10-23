@@ -49,7 +49,7 @@ final class WorkshopDisplayState {
     void unavailable() { latest = null; hideNow(); }
 
     void update(long now) {
-        if (latest == null || now - lastReceivedMs > 3000 || (localDanger && !latest.provisionalResume())
+        if (latest == null || now - lastReceivedMs > 3000 || localDanger
                 || latest.observedSequence() < barrierSequence || latest.state().equals("danger")) {
             hideNow();
             return;

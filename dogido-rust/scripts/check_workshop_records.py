@@ -3,11 +3,12 @@
 
 import json
 from check_dialogue import row, submit, wait_for
-from check_haiku_runtime import fixture, LINES
+from check_haiku_runtime import LINES
+from check_workshop_fixture import fixture
 from check_workshop_runtime import install, ready, step
 from check_workshop_edits import edit, adoption
-from check_workshop_provisional import classifier, intent, threatening, done
-from check_workshop_combat import SETTINGS, enter
+from check_workshop_provisional import done
+from check_workshop_combat import SETTINGS, enter, end
 
 
 def records(folder, sid):
@@ -36,13 +37,11 @@ def finished(folder, sid, turn):
 
 
 def model(text, prompt, n):
-    # 操作は現行のモデル応答で選ぶ。旧い固定語ルートへ委ねない。
+    # 対象・具体変更・終了はBERTへ変更済み。本文モデルへ旧判定を戻さない。
     if "段階: after_validation" in prompt:
         raise AssertionError("failed edit must not trigger another model call")
     if text == "今の句":
         return step(text, "show_current")
-    if text == "終了でいいよ":
-        return step(text, "close_workshop")
     if text in {"採用して", "却下して"}:
         return adoption(text, "accept_pending" if text == "採用して" else "reject_pending")
     if text.startswith("上五を『"):
@@ -159,6 +158,7 @@ def main():
         count += 1
         (folder / "player_mode").write_text("slow")
         send(sid)
+        earlier_admissions = {v["id"] for v in records(folder, sid) if v["event_kind"] == "input_admission"}
         old = submit(base, sid, "この句はどういう意味？")
         wait_for(lambda: row(base, old, {"started"}))
         duplicate = submit(base, sid, "この句はどういう意味？")
@@ -170,16 +170,17 @@ def main():
         assert old_record["result"]["playback_status"] == "completed", old_record
         r = finished(folder, sid, close)
         assert r["state_before"]["open"] and not r["state_after"]["open"], r
-        assert (
-            len(
-                [
-                    v
-                    for v in records(folder, sid)
-                    if v["event_kind"] == "input_admission" and v["turn_id"] == old
-                ]
-            )
-            == 1
-        )
+        # 最初の受付IDはBERT分類待ちの行。返答turnへの転送と重複抑止を別々に確認する。
+        admissions = [v for v in records(folder, sid)
+                      if v["event_kind"] == "input_admission" and v["id"] not in earlier_admissions
+                      and v["player_text"] == "この句はどういう意味？"]
+        assert len(admissions) == 1, admissions
+        routing = next(v for v in rows(sid) if v["turn_id"] == admissions[0]["turn_id"])
+        assert routing["forwarded_input"]["turn_id"] == old, routing
+        assert len([v for v in records(folder, sid)
+                    if v["event_kind"] == "forwarded_admission" and v["turn_id"] == old]) == 1
+        assert len([v for v in records(folder, sid)
+                    if v["event_kind"] == "turn_result" and v["turn_id"] == old]) == 1
         count += 2
 
     with fixture(combat_settings=SETTINGS) as (
@@ -197,20 +198,29 @@ def main():
         stored,
         folder,
     ):
-        classifier(control, lambda text: intent(text, "uncertain", 0))
+        calls = install(control, model)
         sid = ready(base, send, rows)
         enter(send, rows, sid)
         turn = submit(base, sid, "なんの話？")
-        done(base, send, sid, turn)
+        held = wait_for(lambda: row(base, turn, {"queued"}))
+        assert held["combat_input_outcome"] == "held", held
+        assert held["combat_input_result"]["provider"] == "code", held
+        assert held["combat_input_result"]["analysis"]["action"] == "deferred_input", held
+        assert not calls and not held["combat_input_result"]["llm_reports"], held
+        end(send, rows, sid)
+        result = done(base, send, sid, turn, hostile=False)
+        assert result["workshop_action"] == "explain" and len(calls) == 1, result
         r = finished(folder, sid, turn)
-        assert r["result"]["combat_action"] == "uncertain", r
+        assert r["result"]["combat_action"] == "deferred_input", r
         assert r["state_before"]["combat_paused"], r
+        enter(send, rows, sid)
         closing = submit(base, sid, "終了")
         result = done(base, send, sid, closing)
         assert result["combat_input_outcome"] == "close_checked", result
         closed = finished(folder, sid, closing)
         assert closed["result"]["combat_action"] == "close_workshop", closed
         assert closed["state_before"]["open"] and not closed["state_after"]["open"], closed
+        assert len(calls) == 1
         count += 2
 
     with fixture() as (

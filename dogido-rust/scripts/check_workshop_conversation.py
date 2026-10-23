@@ -1,46 +1,41 @@
 #!/usr/bin/env python3
 """Model decisions and wording, retained target, validation recovery and saved revisions."""
 import json
-from check_haiku_runtime import fixture, LINES
+from check_haiku_runtime import LINES
+from check_workshop_fixture import fixture
 from check_workshop_runtime import install, ready, session, step
 from check_workshop_edits import edit, finish, revisions, adoption
 
 
+def discuss_candidate(text, replacement):
+    # 旧事前抽出へ戻さず、現行prompt契約どおりmodelが相談案の原文を返す。
+    p = edit(text, replacement=replacement, reference="", fragment=LINES[0])
+    p["action"] = "respond"
+    p["speech"] = "その言い方の響き、一緒に考えよか。"
+    return p
+
+
 def main():
     passed = []
-    # 実報告と同じ省略を再生し、診断と会話・終了状態を分離する。
+    # 保存済みの句を確認した後、分類済みの終了は生成せず一度だけ実行する。
     from check_haiku_runtime import wait_for
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
-        incomplete = "<では終了で！>"
-        def save_and_close(text, prompt, n):
-            assert '"current_verse_saved"' in prompt
-            assert "confidence:missing" not in prompt and "evidence:missing" not in prompt
-            if text == incomplete:
-                return {"action":"close_workshop", "purpose":"finish_workshop", "speech":"また話そな。"}
-            if text == "今回はここまでにしよう":
-                p = step(text, "close_workshop")
-                p["speech"] = "うん、また話そな。"
-                return p
-            return step(text, "respond", "この句は今の形で保存されとるで。")
-        calls = install(control, save_and_close)
-        sid = ready(base, send, rows)
-        before = wait_for(lambda: stored(sid))
-        r = finish(base, send, sid, "<これはこのまま保存しよう！>")
-        assert r["workshop_action"] == "respond" and hud(sid)["state"] == "open", r
-        assert stored(sid) == before and not revisions(folder, sid)
-        r = finish(base, send, sid, incomplete)
-        assert r["workshop_reason"] == "close_skipped" and hud(sid)["state"] == "open", r
-        assert len(calls) == 2, "不成立の単独終了は再試行しない"
-        assert "workshop_close_rejected" in log.read_text()
-        assert "confidence:missing" in log.read_text() and "evidence:missing" in log.read_text()
-        r = finish(base, send, sid, "今回はここまでにしよう")
-        assert r["workshop_action"] == "close_workshop" and hud(sid)["state"] == "closed", r
-        assert len(calls) == 3 and stored(sid) == before and not revisions(folder, sid)
-        passed.append("saved_current_verse_and_explicit_close_keep_storage_and_diagnostics_separate")
+        calls = install(control, lambda text,prompt,n: step(text,"respond","この句は今の形で保存されとるで。"))
+        for ending in ["<では終了で！>", "今回はここまでにしよう"]:
+            sid = ready(base, send, rows)
+            before = wait_for(lambda: stored(sid))
+            r = finish(base, send, sid, "<これはこのまま保存しよう！>")
+            assert r["workshop_action"] == "respond" and hud(sid)["state"] == "open", r
+            count = len(calls)
+            r = finish(base, send, sid, ending)
+            assert r["workshop_action"] == "close_workshop" and hud(sid)["state"] == "closed", r
+            assert len(calls) == count and not r["llm_reports"], r
+            assert stored(sid) == before and not revisions(folder, sid)
+        passed.append("bert_explicit_close_keeps_saved_storage_without_model_metadata")
 
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         def model(text, prompt, n):
-            if text in {"いい句だね", "終了でいいよ"}:
+            if text in {"いい句だね", "まだ続けていいよ"}:
                 return step(text, "ask", "この句の響き、まだ一言話してもええ？")
             if text == "下五の意味を教えて":
                 return step(text, speech="『あさのいろ』の明るさに、気持ちもほどける感じがするな。")
@@ -65,10 +60,10 @@ def main():
             return step(text, "respond", "うん、朝の色の話を続けよか。")
         calls = install(control, model)
         sid = ready(base, send, rows)
-        for text in ["いい句だね", "終了でいいよ"]:
+        for text in ["いい句だね", "まだ続けていいよ"]:
             r = finish(base, send, sid, text)
             assert r["workshop_action"] == "ask" and hud(sid)["state"] == "open", r
-        passed.append("submission_does_not_close_before_model_selects_action")
+        passed.append("not_target_conversation_keeps_workshop_open")
         r = finish(base, send, sid, "下五の意味を教えて")
         assert r["text"].startswith("『あさのいろ』")
         for text in ["なるほど", "まだ話したい", "そういう感じか", "もう少し考えて", "おわらんわ。"]:
@@ -79,30 +74,32 @@ def main():
         r = finish(base, send, sid, "それを『あさひかる』にして")
         assert r.get("workshop_outcome") == "player_edit_saved", r
         assert hud(sid)["canonical_lines"] == [*LINES[:2], "あさひかる"]
-        assert r["text"] == "\n".join([*LINES[:2], "あさひかる"]) and len(revisions(folder, sid)) == 1
+        assert r["text"] == "変更したで。" and len(revisions(folder, sid)) == 1
         assert r["workshop_steps"][0]["transport"] == "native_tool", r
         passed.append("native_edit_with_omitted_target_uses_retained_line_and_confirmed_verse")
         r = finish(base, send, sid, "冒頭の五音を『さくらいろ』にして")
         assert r.get("workshop_outcome") == "player_edit_saved", r
         assert hud(sid)["canonical_lines"] == ["さくらいろ", LINES[1], "あさひかる"]
         assert session(base, sid)["workshop_discussion_target"]["line_index"] == 0
-        passed.append("model_resolves_new_line_reference_outside_fixed_aliases")
+        passed.append("bert_resolves_new_line_reference_and_model_only_extracts_words")
         r = finish(base, send, sid, "それを『さくら』にして")
-        assert r["workshop_action"] == "respond" and len(r["llm_reports"]) == 1, r
-        assert "元の句" in r["text"] and len(revisions(folder, sid)) == 2
-        passed.append("failed_edit_returns_code_result_and_keeps_canonical")
+        assert r["workshop_outcome"] == "player_edit_saved" and len(r["llm_reports"]) == 1, r
+        assert hud(sid)["canonical_lines"][0] == "さくら" and len(revisions(folder, sid)) == 3
+        passed.append("bert_targeted_short_replacement_saves_without_quality_rejection")
         r = finish(base, send, sid, "きょうはここらで区切っとこか")
         assert r["workshop_action"] == "close_workshop" and hud(sid)["state"] == "closed", r
-        assert r["text"] == "うん、今日はここまでや。またこの句を話そな。"
-        passed.append("natural_close_uses_model_selected_action_and_reply")
+        assert r["text"] == "ほな、この句はここまでにしよか。" and not r["llm_reports"]
+        passed.append("natural_close_uses_bert_and_code_reply")
 
     # A discussed candidate keeps its own target through a detour. A failed
     # candidate gets the code result, never a pre-validation success claim.
-    for replacement, succeeds in [("さくらいろ", True), ("さくら", False)]:
+    for replacement in ["さくらいろ", "さくら"]:
         with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
             def model(text, prompt, n):
                 if "段階: after_validation" in prompt:
                     raise AssertionError("failed candidate must not call the model again")
+                if text == f"『さくらのは』を『{replacement}』にしたらどうかな":
+                    return discuss_candidate(text, replacement)
                 if text == "さっきの案にして":
                     p = step(text, "stage_conversation_candidate")
                     p["purpose"] = "improve_wording"
@@ -114,28 +111,27 @@ def main():
             finish(base, send, sid, f"『さくらのは』を『{replacement}』にしたらどうかな")
             finish(base, send, sid, "下五の意味を教えて")
             r = finish(base, send, sid, "さっきの案にして")
-            if succeeds:
-                assert r.get("workshop_outcome") == "player_edit_saved", r
-                assert hud(sid)["canonical_lines"] == [replacement, *LINES[1:]]
-                assert session(base, sid)["workshop_discussion_target"]["line_index"] == 0
-            else:
-                assert r["workshop_action"] == "respond" and len(r["llm_reports"]) == 1, r
-                assert "直したで" not in r["text"] and hud(sid)["canonical_lines"] == LINES
-                assert not revisions(folder, sid)
-            passed.append("candidate_selection_after_detour_" + ("saved" if succeeds else "kept_on_failure"))
+            assert r.get("workshop_outcome") == "player_edit_saved", r
+            assert hud(sid)["canonical_lines"] == [replacement, *LINES[1:]]
+            assert session(base, sid)["workshop_discussion_target"]["line_index"] == 0
+            assert len(revisions(folder, sid)) == 1
+            passed.append("candidate_selection_after_detour_saved:" + replacement)
 
     # Malformed tool arguments must not execute or borrow an older candidate.
-    # The bounded recovery is conversation-only after a tool decoding failure.
+    # BERT変更の限定抽出が不成立なら一回で終え、以前の案へ戻らない。
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
-        new_text = "やっぱり上五をあさひかるに変えて"
+        new_text = "上五ならあさひかるがいい。変更をお願い"
         attempts = 0
         def missing_arguments_then_conversation(text, prompt, n):
             nonlocal attempts
+            if text == "『さくらのは』を『さくらいろ』にしたらどうかな":
+                return discuss_candidate(text, "さくらいろ")
             if text != new_text:
                 return step(text, "respond", "その響きもええな。")
             attempts += 1
             if attempts == 1:
-                assert '"conversation_candidate": {' in prompt and '"replacement_text": "さくらいろ"' in prompt
+                # BERT具体変更は今回の原文だけを限定抽出し、古い案の採用は提示しない。
+                assert '"conversation_candidate": {' not in prompt
             p = edit(text, replacement="あさひかる", reference="上五")
             if attempts == 1:
                 del p["confidence"]
@@ -149,7 +145,8 @@ def main():
         finish(base, send, sid, "『さくらのは』を『さくらいろ』にしたらどうかな")
         assert hud(sid)["canonical_lines"] == LINES
         r = finish(base, send, sid, new_text)
-        assert attempts == 2 and r["workshop_action"] == "ask", r
+        assert attempts == 1 and len(r["llm_reports"]) == 1, r
+        assert r["workshop_action"] == "respond", r
         assert hud(sid)["canonical_lines"] == LINES and not hud(sid)["pending_lines"]
         assert not revisions(folder, sid)
         assert "workshop_tool_rejected" in log.read_text()

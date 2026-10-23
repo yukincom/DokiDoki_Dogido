@@ -11,7 +11,7 @@ public final class WorkshopDisplayPayload {
 
     public record Snapshot(String sessionId, String workshopId, long revision, long observedSequence,
                     String state, List<String> canonical, List<String> pending,
-                    boolean editing, Integer selectedLine, boolean provisionalResume, String characterState) {
+                    boolean editing, Integer selectedLine, String characterState) {
         public List<String> shownLines() { return pending.isEmpty() ? canonical : pending; }
     }
 
@@ -28,8 +28,6 @@ public final class WorkshopDisplayPayload {
             if (!state.equals("closed") && (id == null || id.isBlank() || canonical.size() != 3)) return null;
             JsonElement editingValue = json.get("editing");
             if (!editingValue.isJsonPrimitive() || !editingValue.getAsJsonPrimitive().isBoolean()) return null;
-            JsonElement provisional = json.get("provisional_resume");
-            if (!provisional.isJsonPrimitive() || !provisional.getAsJsonPrimitive().isBoolean()) return null;
             Long selectedValue = json.get("selected_line").isJsonNull() ? null : integer(json, "selected_line");
             if (selectedValue != null && (selectedValue < 0 || selectedValue > 2)) return null;
             Integer selected = selectedValue == null ? null : selectedValue.intValue();
@@ -40,7 +38,7 @@ public final class WorkshopDisplayPayload {
             String character = json.has("character_state") ? string(json, "character_state") : "normal";
             if (!List.of("normal", "thinking").contains(character)) return null;
             return new Snapshot(sessionId, id, revision, observed, state, canonical, pending,
-                editingValue.getAsBoolean(), selected, provisional.getAsBoolean(), character);
+                editingValue.getAsBoolean(), selected, character);
         } catch (RuntimeException error) {
             return null;
         }

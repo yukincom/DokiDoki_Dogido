@@ -31,11 +31,11 @@ class BodySnapshotPayloadTest {
         return result;
     }
 
-    @Test void ordinarySnapshotRoundTripsV10AndPreservesUnknownPitch() {
+    @Test void ordinarySnapshotRoundTripsV11AndPreservesUnknownPitch() {
         Snapshot original = snapshot("holding",List.of(),sounds());
         String encoded = BodySnapshotPayload.encode(original);
         Snapshot decoded = JSON.fromJson(encoded,Snapshot.class);
-        assertEquals(10,decoded.version());
+        assertEquals(11,decoded.version());
         assertEquals(new ControlObservation(true,Mode.FOLLOW,16,24,new Reassurance(87.5,2.1,true,true,false)),decoded.control());
         assertEquals(original,decoded);
         assertNull(decoded.hearing().sounds().getFirst().pitch());
@@ -80,6 +80,23 @@ class BodySnapshotPayloadTest {
         assertFalse(decoded.hearing().sounds().isEmpty());
     }
 
+    @Test void recallReceiptSharesTheSnapshotByteBudgetAndIsNeverTrimmed() {
+        Snapshot seed = snapshot("",List.of(),sounds());
+        Context context = seed.context(); UUID action = UUID.randomUUID();
+        RecallReceipt recall = new RecallReceipt(context.ownerId(),UUID.randomUUID(),action,context.dimension(),context,
+            new ActionResult(action,100,Outcome.SUCCEEDED,"arrived"));
+        var initial = JSON.toJsonTree(seed).getAsJsonObject(); initial.add("recall_result",JSON.toJsonTree(recall));
+        int padding = BodySnapshotPayload.MAX_BYTES+1-JSON.toJson(initial).getBytes(StandardCharsets.UTF_8).length;
+        assertTrue(padding > 0);
+        Snapshot original = snapshot("x".repeat(padding),List.of(),sounds());
+        String encoded = BodySnapshotPayload.encode(original,recall);
+        assertTrue(encoded.getBytes(StandardCharsets.UTF_8).length <= BodySnapshotPayload.MAX_BYTES);
+        var envelope = com.google.gson.JsonParser.parseString(encoded).getAsJsonObject();
+        assertEquals(recall,JSON.fromJson(envelope.get("recall_result"),RecallReceipt.class));
+        Snapshot decoded = JSON.fromJson(envelope,Snapshot.class);
+        assertEquals(original.pose(),decoded.pose()); assertTrue(decoded.hearing().truncated());
+        assertTrue(decoded.hearing().sounds().size() < original.hearing().sounds().size());
+    }
     @Test void utf8LimitIsCheckedAndOversizedNonHearingValuesFailBeforeSend() {
         Snapshot original = snapshot("あ".repeat(BodySnapshotPayload.MAX_BYTES/2),List.of(),sounds());
         assertThrows(IllegalArgumentException.class,() -> BodySnapshotPayload.encode(original));

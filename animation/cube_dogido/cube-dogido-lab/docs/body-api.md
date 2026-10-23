@@ -1,17 +1,32 @@
-# Body API v10
+# Body API v11
 
-## v10の明示注視（BERT完成時に接続）
+## v11のBERT明示呼び寄せ・注視
 
-`LOOK_AT`を追加。`destination`へ注視するワールド座標（block）を送り、その場で向きを変えます。移動先には使いません。実装・自動検証の範囲と未接続箇所は[準備仕様](../../../../docs/2026-10-22-body-look-preparation.md)を参照してください。
+BERTへ変更済み。旧判定へ戻さない。身体Mod **0.7.11 / protocol 11** とadapterを組で更新します。entrypointは`dogido:body_bridge_v11`、payloadは`body_request_v11`／`body_snapshot_v11`。旧版の受信口とfallbackはありません。HTTP観測v3・自律制御v2は維持します。
 
-- entrypointは`dogido:body_bridge_v10`、payloadは`body_request_v10`／`body_snapshot_v10`。身体Modとadapterを組で更新します。HTTP観測v3・自律制御v2は変更しません。
-- `foodId=null`、`movePurpose=INSPECT`（既存コンストラクタの既定値）。64block以内の有限な点を受け、所有者・context・sequence・期限・重複は既存action受付で検査します。
-- 待機・通常探索中だけ受け、呼び戻し・進行中action・追従・危険回避を優先します。実行中も優先行動が始まれば解除します。
-- yaw最大6度/tick・pitch最大4度/tickで合わせ、適用後の両角度が1度以内なら`SUCCEEDED/facing_target`。受付から最大100tickだけ注視を保持し、未到達の期限切れは`EXPIRED/look_timeout`。通常の上下浮遊は継続します。
-- `BodyLookController.direction`と`player`はBERT完成時に接続する準備コードです。現在の受付・自然文・モデル分類からは呼びません。稼働中のModへの導入と実機確認は未実施です。
+### 注視
 
+HTTP `body.request.v1`の`look_direction / look_target / look_player / look_relative_*`を既存`LOOK_AT`へ接続します。相対8方向は受付時の**身体自身のyaw**を基準とする水平8block先、同じ方向は身体の眼からplayerの現在の視線に沿う8block先、対象は現在crosshairの実ヒット点、player注視は本人の現在の眼です。移動先には使いません。
 
-身体Mod **0.7.10 / protocol 9** の既存仕様を引き継ぎ、上記の準備コードを **protocol 10** として追加した実装契約です。自他姿勢・owner視認・身体地点の感覚に加え、FOLLOWの制御状態を公開し、検証済み対象への観察移動を接続します。[安心度と統合判断の仕様・確認状態](../../../../docs/2026-10-20-reassurance.md)を参照してください。
+- `ActionRequest.destination`は注視点。64block以内の有限点、所有者・context・sequence・期限・重複は既存action受付で検査します。
+- `MOVE_TO`と`LOOK_AT`はadapterの同じsequenceと送信枠を使います。明示CALLはこの枠を越えて既存の呼び寄せ優先処理へ渡します。再送では元の点・観測tick・action IDを保持します。
+- 待機・通常探索中だけ受け、呼び寄せ・進行中action・追従・危険回避を優先します。実行中も優先行動が始まれば解除します。
+- yaw最大6度/tick・pitch最大4度/tickで合わせ、適用後の両角度が1度以内なら`SUCCEEDED/facing_target`。受付から最大100tickだけ保持し、未到達は`EXPIRED/look_timeout`。
+
+### 明示呼び寄せ
+
+`BodyBridge.requestRecall(RecallRequest)`は、owner UUID・接続ID・命令ID・現在dimension・最新snapshotのserver tick・20tick以内の期限を受けます。実送信者をserverで確認して、既存`BodyManager.recall`へ一度だけ渡します。通常`ActionRequest`のcontext検証は変更しません。
+
+- 所有する既存個体を優先し、未ロードなら失敗。未所有個体の取得・新規生成・安全な配置は既存の明示CALL規則を使います。
+- 同じ命令IDは直近32件の結果を再利用し、再度の生成やCALLを起こしません。接続の実playerが変わると別の台帳です。
+- `RecallReceipt`は元のowner・接続・命令ID・dimensionと、実身体から得たcontext・action結果を持ちます。snapshotの`recall_result`で配送し、`recallReceipt(actionId)`から取得します。
+- `QUEUED / ACCEPTED`は受付。`SUCCEEDED/arrived`だけを到着としてHTTPへ返します。同じ個体のCALL転送で変わるepochは実身体から追跡します。
+
+### HTTPの寿命と入力世代
+
+`body_request`は命令ID、最大5秒の送信期限、owner、dimension、入力世代、look時はcontextを必須にします。adapterはsession・world epoch・入力世代・実時計を送信直前にも照合し、切断・世界変更・新しい入力世代の古いcallbackを配送しません。取消や期限切れでadapterの元命令の送信枠を解放します。実行結果は命令IDとsequence（look）または接続ID（recall）を照合し、35秒以内に終端結果がなければ期限切れです。すでに身体へ受理された行動は身体側の有界制御と既存の優先規則に従います。
+
+2026-10-23に身体Modの166テストとadapterの286テスト・ビルドを確認し、普段のMinecraftの`mods`へ配置しました。ゲーム内動作は未確認です。[検証・配備記録](../../../../docs/2026-10-23-modernbert-23class-integration.md)を参照してください。
 
 ## 0.7.10の帰還後の顔確認
 
@@ -121,7 +136,7 @@
 - v2当時は初回bind／再読み込み／失効／復活後にDIRECT待機。v7では登録・旧保存読込み・復活の既定をFOLLOWへ変更（外部lease失効は停止を維持）
 - v1の固定追従・探索・退避はローカル試験コマンドに限定
 
-v1〜v9のクラスやJARをv10として扱いません。entrypointとprotocolの両方を照合します。旧entrypoint／payloadの受信口はありません。
+v1〜v10のクラスやJARをv11として扱いません。entrypointとprotocolの両方を照合します。旧entrypoint／payloadの受信口はありません。
 
 ## 公開APIとスレッド
 
@@ -135,17 +150,19 @@ public interface BodyBridge {
     long snapshotAgeMillis();
     BodyProtocol.Submission applyState(BodyProtocol.StateRequest request);
     BodyProtocol.Submission requestAction(BodyProtocol.ActionRequest request);
+    BodyProtocol.Submission requestRecall(BodyProtocol.RecallRequest request);
+    Optional<BodyProtocol.RecallReceipt> recallReceipt(UUID actionId);
     BodyProtocol.Submission observeOwnerWork(BodyProtocol.OwnerWorkObservation observation);
 }
 ```
 
-adapterはprotocol 10の`cube-dogido-lab-*-body-api.jar`を**compileOnly**で参照します。0.7.9で安心度とowner接近目的を加えたAPIへ更新しました。現在の追従範囲で観察先を選ぶ修正を含むadapterを組み合わせます。APIクラスをadapterへ重複同梱しません。身体Mod不在でもadapterを読み込めるよう、任意連携クラスを分けます。
+adapterはprotocol 11の`cube-dogido-lab-*-body-api.jar`を**compileOnly**で参照します。0.7.9で安心度とowner接近目的を加えたAPIへ更新しました。現在の追従範囲で観察先を選ぶ修正を含むadapterを組み合わせます。APIクラスをadapterへ重複同梱しません。身体Mod不在でもadapterを読み込めるよう、任意連携クラスを分けます。
 
 `available()`と送信はMinecraftのclient thread上で行います。`snapshot()`は不変データを読むだけで、HTTP workerから参照できます。受信後3秒を過ぎたsnapshotは空です。HTTP転送時はclient threadでsnapshotと経過msを続けて読み、3秒未満だけを現在値として送ります。受信登録と10client tickごとのポーリングは身体Modが所有します。
 
 ## 最小例
 
-次のクラスをロードする前に、呼び出し側で`FabricLoader.getInstance().isModLoaded("dogido_experiment")`とv10 entrypointの存在を確認します。
+次のクラスをロードする前に、呼び出し側で`FabricLoader.getInstance().isModLoaded("dogido_experiment")`とv11 entrypointの存在を確認します。
 
 ```java
 BodyBridge bridge = FabricLoader.getInstance()

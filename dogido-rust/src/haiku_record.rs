@@ -278,7 +278,6 @@ pub struct Workshop {
     pub drift_count: usize,
     pub followup: crate::workshop_followup::Stage,
     pub recovery: crate::workshop_combat::Recovery,
-    pub provisional: Option<String>,
     completed: Instant,
     last_activity: Instant,
     paused_at: Option<Instant>,
@@ -332,7 +331,6 @@ impl Workshop {
             drift_count: 0,
             followup: crate::workshop_followup::Stage::Discussion,
             recovery: crate::workshop_combat::Recovery::default(),
-            provisional: None,
             completed,
             last_activity: completed,
             paused_at: None,
@@ -358,7 +356,6 @@ impl Workshop {
         self.editing = None;
         self.conversation_candidate = None;
         self.discussion_target = None;
-        self.provisional = None;
         self.recovery = crate::workshop_combat::Recovery::default();
         self.followup = crate::workshop_followup::Stage::Discussion;
         self.open = false;
@@ -370,7 +367,6 @@ impl Workshop {
             return false;
         }
         self.paused_at = Some(now.max(self.completed));
-        self.provisional = None;
         self.recovery = crate::workshop_combat::Recovery::default();
         self.followup = crate::workshop_followup::Stage::Discussion;
         true
@@ -412,9 +408,7 @@ pub fn project_workshop(
     thinking: bool,
 ) -> Value {
     let active = workshop.filter(|w| w.open);
-    let danger = active.is_some_and(|w| {
-        w.combat_paused() || (w.provisional.is_none() && matches!(mode, "alert" | "panic"))
-    });
+    let danger = active.is_some_and(|w| w.combat_paused() || matches!(mode, "alert" | "panic"));
     json!({"schema_version":1,"session_id":session_id,"observed_sequence":observed_sequence.unwrap_or(0),
         "workshop_id":active.map(|w|w.hud_id.as_str()),
         "state":if active.is_some() {if danger {"danger"} else {"open"}} else {"closed"},
@@ -422,8 +416,7 @@ pub fn project_workshop(
         "canonical_lines":active.map(|w|w.current_lines.iter().map(|l|l.surface_text.trim()).collect::<Vec<_>>()).unwrap_or_default(),
         "pending_lines":active.and_then(|w|w.pending.as_ref()).map(|p|p.lines.iter().map(|l|l.surface_text.as_str()).collect::<Vec<_>>()).unwrap_or_default(),
         "editing":active.is_some_and(|w|w.editing.is_some()),
-        "selected_line":active.and_then(|w|w.editing.as_ref()).and_then(|editing|editing.selected_line),
-        "provisional_resume":active.is_some_and(|w|w.provisional.is_some())})
+        "selected_line":active.and_then(|w|w.editing.as_ref()).and_then(|editing|editing.selected_line)})
 }
 
 #[cfg(test)]

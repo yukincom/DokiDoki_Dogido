@@ -2,13 +2,14 @@
 
 DokiDoki Dogido の設計・仕様ドキュメントです。
 
-本体の現行入口は [Rust本体の案内](../dogido-rust/README.md) です。旧Python本体および比較oracleの運用は終了しました。現在Python側には、起動設定・辞書トークン・音声入出力機器・端末AIの接続補助のみを残しています。残存モジュールと資料の一覧は [Rust本体の補助一覧](../dogido-rust/README.md#残すpython補助と資料) を参照してください。過去に完了・終了した文書については冒頭のステータスと後継リンクを確認し、過去の起動コマンドや未接続の記述を現在の指示として扱わないようご注意ください。
+本体の現行入口は [Rust本体の案内](../dogido-rust/README.md) です。旧Python本体および比較oracleの運用は終了しました。現在Python側には、起動設定・辞書トークン・音声入出力機器・ModernBERT推論の補助を残しています。OS AI接続は撤去しました。残存モジュールと資料の一覧は [Rust本体の補助一覧](../dogido-rust/README.md#残すpython補助と資料) を参照してください。過去に完了・終了した文書については冒頭のステータスと後継リンクを確認し、過去の起動コマンドや未接続の記述を現在の指示として扱わないようご注意ください。
 
 | 入口 | 対象 |
 |---|---|
 | [../README.md](../README.md) | 製品コンセプト・クイックスタート |
 | [../AGENTS.md](../AGENTS.md) | 実装エージェント向けの制約と作業ガイド |
 | [ローカルの軽量処理優先とLLM呼出監査](2026-10-18-dialogue-model-call-audit.md) | コード・分類器を優先する方針、呼出回数、分類追加と移行の状況 |
+| [ModernBERT 23分類の本体接続](2026-10-23-modernbert-23class-integration.md) | 890件版seed42の採用、川柳・モブ・身体操作の接続 |
 | [../dev_tools/README.md](../dev_tools/README.md) | 表示プレビュー・音声診断・対話評価・独立試作 |
 | [通常会話のドギド視点画像](2026-10-21-chat-image.md) | 一枚撮影・192px・同時生成・一時画像の保持 |
 | [Minecraftのテキスト会話](2026-10-09-minecraft-text-dialogue.md) | `/dogido`、音声の切替、表示確認の仕様と確認状況 |
@@ -41,7 +42,7 @@ Issueの開閉（Open/Close）状態はリンク先にて確認してくださ�
 
 | Issue | 主題 | 主ドキュメント |
 |---|---|---|
-| [#8](https://github.com/yukincom/DokiDoki_Dogido/issues/8) | workshop 入り口（OS AIの限定意味抽出・共同編集者 leaf） | [haiku-workshop-intake-patterns.md](haiku-workshop-intake-patterns.md) · [共同編集](haiku-player-improvement-plan.md) |
+| [#8](https://github.com/yukincom/DokiDoki_Dogido/issues/8) | workshop 入り口（BERT分類・共同編集） | [haiku-workshop-intake-patterns.md](haiku-workshop-intake-patterns.md) · [共同編集](haiku-player-improvement-plan.md) |
 | [#37](https://github.com/yukincom/DokiDoki_Dogido/issues/37) | workshop チェックポイント記憶（薄くためて発句のみ） | [haiku-workshop-checkpoint-plan.md](haiku-workshop-checkpoint-plan.md) · `memory-architecture` |
 | [#13](https://github.com/yukincom/DokiDoki_Dogido/issues/13) | ボイス速度・間 | `voice-delivery-plan` |
 | [#20](https://github.com/yukincom/DokiDoki_Dogido/issues/20) | 複数ユーザー・記憶境界 | `multi-user-tenancy` · `memory-architecture` |

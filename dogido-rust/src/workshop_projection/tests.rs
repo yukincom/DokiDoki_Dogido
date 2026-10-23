@@ -27,20 +27,6 @@ fn canonical_context_details_and_revision_goldens() {
     }
 }
 #[test]
-fn combat_resume_preserves_whole_utterance_conditions() {
-    let data: Value = serde_json::from_str(include_str!("fixtures.json")).unwrap();
-    let rows = data["combat_resume"].as_array().unwrap();
-    assert_eq!(rows.len(), 714);
-    for row in rows {
-        assert_eq!(
-            fixed_combat_resume(row["text"].as_str().unwrap()),
-            row["expected"].as_bool().unwrap(),
-            "{row}"
-        );
-    }
-}
-
-#[test]
 fn shared_context_joins_workshop_projection_without_repeating_the_existing_dialogue() {
     let fixture: Value = serde_json::from_str(include_str!("fixtures.json")).unwrap();
     let case = fixture["projection"]
@@ -52,7 +38,9 @@ fn shared_context_joins_workshop_projection_without_repeating_the_existing_dialo
     let mut input = case["input"].clone();
     input["workshop"]["shared_context"] = "出来事: ゾンビを倒した".into();
     let details = details_for(&input).unwrap();
-    let text = details["workshop_context"]["recent_dialogue"].as_str().unwrap();
+    let text = details["workshop_context"]["recent_dialogue"]
+        .as_str()
+        .unwrap();
     assert_eq!(text.matches("ゾンビを倒した").count(), 1);
     assert_eq!(text.matches("プレイヤー: 何の対比？").count(), 1);
     assert_eq!(text.matches("ドギド: 葉と斧。").count(), 1);
@@ -61,12 +49,19 @@ fn shared_context_joins_workshop_projection_without_repeating_the_existing_dialo
 #[test]
 fn current_verse_save_confirmation_comes_only_from_the_runtime_flag() {
     let fixture: Value = serde_json::from_str(include_str!("fixtures.json")).unwrap();
-    let case = fixture["projection"].as_array().unwrap().iter()
-        .find(|row| row["op"] == "details").unwrap();
+    let case = fixture["projection"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["op"] == "details")
+        .unwrap();
     let mut input = case["input"].clone();
     input["workshop"]["entry_id"] = "hk_saved".into();
-    assert!(details_for(&input).unwrap()["workshop_context"]
-        .get("current_verse_saved").is_none());
+    assert!(
+        details_for(&input).unwrap()["workshop_context"]
+            .get("current_verse_saved")
+            .is_none()
+    );
     for saved in [false, true] {
         input["workshop"]["current_verse_saved"] = saved.into();
         let before = input.clone();
@@ -79,7 +74,10 @@ fn current_verse_save_confirmation_comes_only_from_the_runtime_flag() {
 #[test]
 fn pending_allows_explicit_close_only_during_the_decision_phase() {
     let fixture: Value = serde_json::from_str(include_str!("fixtures.json")).unwrap();
-    let case = fixture["projection"].as_array().unwrap().iter()
+    let case = fixture["projection"]
+        .as_array()
+        .unwrap()
+        .iter()
         .find(|row| row["op"] == "details" && row["input"]["workshop"]["pending"].is_object())
         .unwrap();
     let mut input = case["input"].clone();
@@ -88,8 +86,14 @@ fn pending_allows_explicit_close_only_during_the_decision_phase() {
         input["allowed_actions"] = json!(crate::workshop::allowed_actions(phase, true, false));
         let before = input.clone();
         let details = details_for(&input).unwrap();
-        assert_eq!(details["allowed_actions"].as_array().unwrap()
-            .iter().any(|action| action == "close_workshop"), phase == "decide");
+        assert_eq!(
+            details["allowed_actions"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|action| action == "close_workshop"),
+            phase == "decide"
+        );
         assert_eq!(input, before);
     }
 }

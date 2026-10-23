@@ -1,4 +1,4 @@
-//! 意図の原文と個体の現在性の境界を検査する。モデル精度は別の実モデル比較で測る。
+//! BERT受理後の原文と個体の現在性の境界を検査する。モデル精度は別の実モデル比較で測る。
 use super::*;
 use crate::assist::horse_recall::intent;
 use serde_json::json;
@@ -18,6 +18,30 @@ fn choice(text: &str) -> Choice {
     }
 }
 
+fn classified(
+    text: &str,
+    label: crate::request_classifier::Label,
+) -> crate::request_classifier::Classification {
+    use crate::request_classifier::{Classification, LABELS, Prediction};
+    Classification {
+        text: text.into(),
+        source: "text".into(),
+        manifest_sha256: "fixture".into(),
+        prediction: Prediction {
+            label,
+            probabilities: LABELS.map(|candidate| if candidate == label { 1.0 } else { 0.0 }),
+            token_count: 1,
+            inference_ms: 0.0,
+        },
+    }
+}
+fn prepared(snapshot: Snapshot, text: &str) -> Result<Prepared> {
+    Prepared::from_classified(
+        snapshot,
+        &classified(text, crate::request_classifier::Label::RecallMount),
+    )
+}
+
 #[test]
 fn names_are_not_an_execution_gate_but_evidence_and_latest_identity_are() {
     for text in [
@@ -26,8 +50,9 @@ fn names_are_not_an_execution_gate_but_evidence_and_latest_identity_are() {
         "さっき乗った子をお願い",
         "buchiを呼んでくれる？",
         "「buchi」をここへ連れてきて",
+        "ロバを呼ばないで、馬を呼んで",
     ] {
-        let p = Prepared::new(snapshot(), text).unwrap();
+        let p = prepared(snapshot(), text).unwrap();
         assert!(p.resolve(&choice(text)).is_ok(), "{text}");
         let mut latest = p.snapshot.clone();
         latest.revision += 1;
@@ -35,20 +60,20 @@ fn names_are_not_an_execution_gate_but_evidence_and_latest_identity_are() {
         latest.candidates[0].custom_name = Some("another".into());
         assert!(p.revalidate(&choice(text), &latest, Utc::now()).is_err());
     }
-    for text in [
-        "ぶちを呼ばないで",
-        "「ぶちを呼んで」",
-        "buchiを呼んでという意味じゃない",
-    ] {
-        let p = Prepared::new(snapshot(), text).unwrap();
-        assert!(p.resolve(&choice(text)).is_err());
-    }
-    let p = Prepared::new(snapshot(), "ぶちを呼んでという意味ではない").unwrap();
-    assert!(p.resolve(&choice("ぶちを呼んで")).is_err());
+    let text = "ぶちを呼んで";
+    assert!(
+        Prepared::from_classified(
+            snapshot(),
+            &classified(text, crate::request_classifier::Label::NotTarget)
+        )
+        .is_err()
+    );
+    let p = prepared(snapshot(), "ロバを呼ばないで、馬を呼んで").unwrap();
+    assert!(p.resolve(&choice("馬を呼んで")).is_err());
 }
 #[test]
 fn stale_other_world_unsafe_and_unknown_candidates_fail_closed() {
-    let p = Prepared::new(snapshot(), "ぶちを呼んで").unwrap();
+    let p = prepared(snapshot(), "ぶちを呼んで").unwrap();
     let c = choice(&p.original);
     for mutate in [
         |s: &mut Snapshot| s.observed_at -= chrono::Duration::seconds(4),
@@ -79,77 +104,53 @@ fn stale_other_world_unsafe_and_unknown_candidates_fail_closed() {
     assert!(p.resolve(&c).is_err());
 }
 #[test]
-fn native_stage_contracts_reject_truncation_multiple_calls_and_wrong_stage() {
-    use intent::{Decision, Stage};
+fn native_selection_rejects_truncation_multiple_calls_and_wrong_tool() {
+    use intent::Decision;
     let args = json!({"candidate_id":"h1","evidence":"ぶちを呼んで","confidence":0.99});
     let call = json!({"id":"c1","type":"function","function":{"name":"select_horse","arguments":args.to_string()}});
     let native = json!({"tool_calls":[call.clone()],"content":null});
     assert!(matches!(
-        intent::decode(Stage::Selection, &native, "tool_calls").unwrap(),
+        intent::decode(&native, "tool_calls").unwrap(),
         Decision::Select(_)
     ));
-    assert!(intent::decode(Stage::Intent, &native, "tool_calls").is_err());
-    assert!(intent::decode(Stage::Selection, &native, "length").is_err());
-    assert!(
-        intent::decode(
-            Stage::Selection,
-            &json!({"tool_calls":[call.clone(),call]}),
-            "tool_calls"
-        )
-        .is_err()
-    );
+    let mut wrong = native.clone();
+    wrong["tool_calls"][0]["function"]["name"] = json!("unknown_action");
+    assert!(intent::decode(&wrong, "tool_calls").is_err());
+    assert!(intent::decode(&native, "length").is_err());
+    assert!(intent::decode(&json!({"tool_calls":[call.clone(),call]}), "tool_calls").is_err());
     let body=json!({"action":"select_horse","candidate_id":"h1","evidence":"ぶちを呼んで","confidence":0.99}).to_string();
     assert!(matches!(
-        intent::decode(Stage::Selection, &json!({"content":body}), "stop").unwrap(),
+        intent::decode(&json!({"content":body}), "stop").unwrap(),
         Decision::Conversation
     ));
     assert_eq!(intent::conversation(&body).status, "rejected");
-    let intent = intent::Intent {
-        evidence: "ぶちを呼んで".into(),
-        confidence: 0.99,
-    };
-    assert!(intent.validate("ぶちを呼んで").is_ok());
-    assert!(intent.validate("ぶちを呼んでという意味じゃない").is_err());
 }
 #[test]
-fn first_stage_preserves_personality_without_candidates_then_selection_exposes_them() {
-    use intent::Stage;
+fn classified_selection_preserves_personality_and_exposes_only_bounded_candidates() {
     let mut snapshot = snapshot();
     snapshot.candidates[0].custom_name = Some("candidate_sentinel_not_in_request".into());
-    let p = Prepared::new(snapshot, "さっきの馬を呼んで").unwrap();
-    for stage in [Stage::Intent, Stage::Selection] {
-        let base = crate::chat_prompt::Input {
-            schema_version: 1,
-            kind: "player_chat".into(),
-            model: "fixture".into(),
-            details: json!({"dialogue_choice":true,"user_text":p.original}),
-            temperature: 0.65,
-            max_tokens: 192,
-            enable_thinking: false,
-        }
-        .into_request()
-        .unwrap();
-        let (request, tools) = intent::request(base, &p.original, Some(&p), stage).unwrap();
-        let system = &request.messages[0].content;
-        assert!(system.contains(crate::companion_prompt::base()));
-        assert!(!system.contains(crate::companion_prompt::choice_contract()));
-        let serialized = serde_json::to_string(&request.messages).unwrap();
-        assert_eq!(
-            serialized.contains("candidate_sentinel_not_in_request"),
-            stage == Stage::Selection
-        );
-        assert!(!serialized.contains(&p.snapshot.world_id));
-        assert!(!serialized.contains(&p.candidates[0].entity_id));
-        assert_eq!(tools.len(), 1);
-        assert_eq!(
-            tools[0]["function"]["name"],
-            if stage == Stage::Intent {
-                "list_horses"
-            } else {
-                "select_horse"
-            }
-        );
+    let p = prepared(snapshot, "さっきの馬を呼んで").unwrap();
+    let base = crate::chat_prompt::Input {
+        schema_version: 1,
+        kind: "player_chat".into(),
+        model: "fixture".into(),
+        details: json!({"dialogue_choice":true,"user_text":p.original}),
+        temperature: 0.65,
+        max_tokens: 192,
+        enable_thinking: false,
     }
+    .into_request()
+    .unwrap();
+    let (request, tools) = intent::request(base, &p).unwrap();
+    let system = &request.messages[0].content;
+    assert!(system.contains(crate::companion_prompt::base()));
+    assert!(!system.contains(crate::companion_prompt::choice_contract()));
+    let serialized = serde_json::to_string(&request.messages).unwrap();
+    assert!(serialized.contains("candidate_sentinel_not_in_request"));
+    assert!(!serialized.contains(&p.snapshot.world_id));
+    assert!(!serialized.contains(&p.candidates[0].entity_id));
+    assert_eq!(tools.len(), 1);
+    assert_eq!(tools[0]["function"]["name"], "select_horse");
 }
 
 #[test]
@@ -176,7 +177,7 @@ fn mount_species_and_ownerless_equipment_are_checked_before_selection() {
         s.candidates[0].tamed = kind.requires_taming();
         assert_eq!(s.eligible(&s.candidates[0]), ownerless, "{kind:?}");
         if ownerless {
-            let p = Prepared::new(s.clone(), "ポチをここに呼んで").unwrap();
+            let p = prepared(s.clone(), "ポチをここに呼んで").unwrap();
             assert!(p.resolve(&choice(&p.original)).is_ok());
             for mutate in [
                 |s: &mut Snapshot| s.candidates[0].custom_name = None,
@@ -214,7 +215,7 @@ fn mount_species_and_ownerless_equipment_are_checked_before_selection() {
 #[test]
 fn species_changes_invalidate_prepared_identity_even_if_the_name_is_the_same() {
     let s = snapshot();
-    let p = Prepared::new(s.clone(), "ぶちを呼んで").unwrap();
+    let p = prepared(s.clone(), "ぶちを呼んで").unwrap();
     let mut latest = s;
     latest.candidates[0].entity_type = MountKind::Donkey;
     assert!(latest.eligible(&latest.candidates[0]));
@@ -262,28 +263,26 @@ fn no_eligible_candidate_keeps_reasons_visible_without_advertising_selection() {
         if empty {
             s.candidates.clear();
         }
-        let p = Prepared::new(s.clone(), "ぶちを呼んで").unwrap();
-        for stage in [intent::Stage::Intent, intent::Stage::Selection] {
-            let base = crate::chat_prompt::Input {
-                schema_version: 1,
-                kind: "player_chat".into(),
-                model: "fixture".into(),
-                details: json!({"dialogue_choice":true,"user_text":p.original}),
-                temperature: 0.65,
-                max_tokens: 192,
-                enable_thinking: false,
-            }
-            .into_request()
-            .unwrap();
-            let (request, tools) = intent::request(base, &p.original, Some(&p), stage).unwrap();
-            assert_eq!(tools.len(), usize::from(stage == intent::Stage::Intent));
-            if stage == intent::Stage::Selection && !empty {
-                assert!(
-                    serde_json::to_string(&request.messages)
-                        .unwrap()
-                        .contains("その個体に乗員がいる")
-                );
-            }
+        let p = prepared(s.clone(), "ぶちを呼んで").unwrap();
+        let base = crate::chat_prompt::Input {
+            schema_version: 1,
+            kind: "player_chat".into(),
+            model: "fixture".into(),
+            details: json!({"dialogue_choice":true,"user_text":p.original}),
+            temperature: 0.65,
+            max_tokens: 192,
+            enable_thinking: false,
+        }
+        .into_request()
+        .unwrap();
+        let (request, tools) = intent::request(base, &p).unwrap();
+        assert!(tools.is_empty());
+        if !empty {
+            assert!(
+                serde_json::to_string(&request.messages)
+                    .unwrap()
+                    .contains("その個体に乗員がいる")
+            );
         }
     }
 }

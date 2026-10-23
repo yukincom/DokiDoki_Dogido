@@ -17,6 +17,7 @@ final class BodyInspectController {
             BodyApproachGeometry.Bounds bodyShape,boolean ceiling) {}
     interface Access {
         Live capture();
+        default long nextSequence(Context context,long prior,long tick,long last) { return Math.max(Math.max(last,prior),tick)+1; }
         /** 現在の生存・種類・非敵対・視認を再検査し、実座標を返す。未確認はnull。 */
         ResolvedTarget resolve(Target target,Live live);
         /** 同じsessionの撮影時対応表へ見た目の属性を問い合わせる。通常候補表とは独立に現物を確定する。 */
@@ -97,7 +98,7 @@ final class BodyInspectController {
             }
             long tick=live.autonomy().get("server_tick").getAsLong();
             long prior=live.autonomy().has("action_result") ? live.autonomy().getAsJsonObject("action_result").get("sequence").getAsLong() : 0;
-            long sequence=Math.max(Math.max(lastSequence,prior),tick)+1;
+            long sequence=access.nextSequence(command.context(),prior,tick,lastSequence);
             if (sequence <= 0) { finish(command,"rejected","invalid_sequence",now); return; }
             var request=new BodyConnection.MoveRequest(command.context(),sequence,command.commandId(),tick,100,destination,command.purpose());
             // 視認と衝突検査の間にもHTTP callbackは世代を更新できる。送信直前に世代と実時計を再照合する。

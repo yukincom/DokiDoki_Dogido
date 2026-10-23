@@ -63,7 +63,7 @@ impl Dialogue {
                         && (result.is_none_or(|r| {
                             !matches!(
                                 r["workshop_action"].as_str(),
-                                Some("confirm_close" | "decline_resume")
+                                Some("confirm_close")
                             )
                         }) || (w.pending.is_none()
                             && result.is_some_and(|r| r["workshop_version"] == w.version)))
@@ -91,7 +91,7 @@ impl Dialogue {
                     && workshop_id.is_some()
                     && matches!(
                         result["workshop_action"].as_str(),
-                        Some("close_workshop" | "confirm_close" | "decline_resume")
+                        Some("close_workshop" | "confirm_close")
                     )
                 {
                     // This validated queued transition closes the pin below.
@@ -266,7 +266,6 @@ impl Dialogue {
                         }
                         if result["workshop_action"] == "close_workshop"
                             || result["workshop_action"] == "confirm_close"
-                            || result["workshop_action"] == "decline_resume"
                         {
                             // 原文の終了意思と同じworkshop・版・処理世代の検証後だけ
                             // 未採用案を外す。現在句と保存済みrevisionは書き換えない。

@@ -13,7 +13,6 @@ from dogido_server.runtime_settings import COMBAT_DEFAULTS, SERVER_DEFAULTS, DEF
 
 LLM_PROVIDER = Literal["local", "openai", "openrouter", "claude", "grok", "gemini", "custom"]
 LLM_BACKEND = Literal["mlx", "openai_compatible", "chat_completions", "noop"]
-PLATFORM_AI_PROVIDER = Literal["auto", "apple", "foundry", "chat"]
 HAIKU_GENERATION_STRATEGY = Literal[
     "whole_poem",
     "three_slot",
@@ -166,18 +165,8 @@ class Settings(BaseSettings):
     llm_timeout_sec: float = 20.0
     llm_max_tokens: int = 72
 
-    # 小さな structured task 用の OS / 端末内 AI。
-    # auto: Apple Foundation Models → Foundry Local → chat route fallback。
-    # モデルの実行結果で切り替えず、可用性と設定だけで provider を決める。
-    platform_ai_provider: PLATFORM_AI_PROVIDER = "auto"
-    platform_ai_refresh_sec: float = 300.0
-    platform_ai_timeout_sec: float = 8.0
-    platform_ai_failure_cooldown_sec: float = 60.0
-    # Foundry は model ID でなく alias を使い、SDK に端末向け variant を選ばせる。
-    platform_ai_foundry_model_alias: str = "qwen2.5-7b"
-    # 意図しない大容量 download を避ける。配布UIで同意を取れるまでは false。
-    platform_ai_allow_model_download: bool = False
-
+    # 意図は共通BERT、戦闘からの再開・継続は敵が警戒範囲から消えた現在状態で判断する。
+    # OS AI分類とchat fallbackは不要になったため撤去。旧判定へ戻さない。
     llm_chat_backend: LLM_BACKEND | None = None
     llm_chat_provider: LLM_PROVIDER | None = None
     llm_chat_mlx_model_id: str | None = None
@@ -305,9 +294,6 @@ class Settings(BaseSettings):
     # 4方式は一つずつ固定して比較する。材料からの自動選択はまだ行わない。
     haiku_generation_strategy: HAIKU_GENERATION_STRATEGY = "three_slot"
     haiku_max_regeneration_rounds: int = Field(default=6, ge=0, le=8)
-    # 動けない敵を無視して句へ戻る場合も、同じ敵がこの時間以上静止し、
-    # プレイヤーの再開意思をOS AI／fallback規則から確定できたときだけ暫定許可する。
-    workshop_low_threat_resume_delay_ms: int = Field(default=8000, ge=1000)
     hostile_comment_cooldown_ms: int = COMBAT_DEFAULTS["hostile_comment_cooldown_ms"]
     occluded_hostile_presence_comment_cooldown_ms: int = COMBAT_DEFAULTS["occluded_hostile_presence_comment_cooldown_ms"]
     other_realm_swarm_visual_threshold: int = COMBAT_DEFAULTS["other_realm_swarm_visual_threshold"]
@@ -472,9 +458,6 @@ def _validate_shared_profile(settings: Settings) -> None:
             errors.append(f"{prefix}_BASE_URL must resolve to {SHARED_LLM_BASE_URL}")
         if route_settings.llm_model != SHARED_LLM_MODEL:
             errors.append(f"{prefix}_MODEL must resolve to {SHARED_LLM_MODEL}")
-
-    if settings.platform_ai_provider != "chat":
-        errors.append("DOGIDO_PLATFORM_AI_PROVIDER must be chat")
 
     if errors:
         detail = "; ".join(errors)

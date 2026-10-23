@@ -18,10 +18,15 @@ pub fn base() -> &'static str {
 pub fn mode(mode: &str) -> &'static str {
     TEXT["modes"][mode].as_str().unwrap_or("")
 }
-pub fn image_move_notice() -> &'static str { TEXT["image_move_notice"].as_str().unwrap() }
-pub fn image_body_contract() -> &'static str { TEXT["image_body_contract"].as_str().unwrap() }
-pub fn chat_image() -> &'static str { TEXT["chat_image"].as_str().unwrap() }
-pub fn chat_tools() -> &'static str { TEXT["chat_tools"].as_str().unwrap() }
+pub fn image_move_notice() -> &'static str {
+    TEXT["image_move_notice"].as_str().unwrap()
+}
+pub fn image_body_contract() -> &'static str {
+    TEXT["image_body_contract"].as_str().unwrap()
+}
+pub fn chat_image() -> &'static str {
+    TEXT["chat_image"].as_str().unwrap()
+}
 pub fn grounding() -> &'static str {
     TEXT["grounding"].as_str().unwrap()
 }
@@ -97,7 +102,9 @@ pub fn environment(smell_observed: bool, body_actions: bool) -> String {
     if body_actions {
         prompt.strip_suffix(choice_contract()).unwrap().to_owned()
             + TEXT["environment_body_contract"].as_str().unwrap()
-    } else { prompt }
+    } else {
+        prompt
+    }
 }
 
 /// Expand references in generated task assets from the same source as live dialogue.

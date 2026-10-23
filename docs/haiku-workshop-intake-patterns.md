@@ -1,5 +1,7 @@
 # 川柳 workshop 取り込みパターン調査
 
+**2026-10-23追記:** 本文のOS AI・端末AI接続と旧分類fallbackは当時の記録。現在は共通BERTで意図を分類し、戦闘からの再開・継続はRustが警戒解除を観測して決める。旧経路を復元せず、[現行仕様](2026-10-23-modernbert-23class-integration.md)を参照する。
+
 **日付:** 2026-08-12
 **状態:** 調査・比較（H1〜H5.2・H7-lite 反映済み）。**観察ログの正本は Issue #8**
 **Issue:** [#8 観察台帳](https://github.com/yukincom/DokiDoki_Dogido/issues/8) ← **実例はここにどんどん追加**  

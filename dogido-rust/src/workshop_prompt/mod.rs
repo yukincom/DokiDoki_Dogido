@@ -91,9 +91,16 @@ pub(super) fn prepare_with_assets(
         ("stage", details.conversation_stage.clone()),
         ("phase", details.phase.clone()),
         ("problems", details.allowed_problem_types.join(", ")),
-        ("actions", details.allowed_actions.iter()
-            .filter(|action| !crate::workshop::tools::requires_native_call(action))
-            .cloned().collect::<Vec<_>>().join(", ")),
+        (
+            "actions",
+            details
+                .allowed_actions
+                .iter()
+                .filter(|action| !crate::workshop::tools::requires_native_call(action))
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", "),
+        ),
         ("purposes", details.allowed_purposes.join(", ")),
         (
             "steps",
@@ -105,15 +112,9 @@ pub(super) fn prepare_with_assets(
         ),
         ("context", context),
     ]);
-    let followup = [
-        "acknowledge_meaning",
-        "confirm_close",
-        "continue_workshop",
-        "resume_workshop",
-        "decline_resume",
-    ]
-    .iter()
-    .any(|a| allowed(a));
+    let followup = ["acknowledge_meaning", "confirm_close", "continue_workshop"]
+        .iter()
+        .any(|a| allowed(a));
     let conditions = [
         (
             "raw_semantic",
@@ -128,7 +129,6 @@ pub(super) fn prepare_with_assets(
         ),
         ("meaning_ack", allowed("acknowledge_meaning")),
         ("confirm_close", allowed("confirm_close")),
-        ("resume", allowed("resume_workshop")),
         ("followup", followup),
         ("editing", allowed("stage_player_edit")),
         (

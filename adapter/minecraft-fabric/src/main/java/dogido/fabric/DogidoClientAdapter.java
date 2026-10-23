@@ -69,6 +69,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private com.google.gson.JsonObject bodyObservation;
     private com.google.gson.JsonObject bodyAutonomy;
     private dogido.fabric.body.BodyInspectRuntime bodyInspect;
+    private dogido.fabric.body.BodyRequestRuntime bodyRequests;
     private dogido.fabric.body.BodySensesCollector bodySenses;
     private final dogido.fabric.body.BodySpeechGaze bodySpeechGaze = new dogido.fabric.body.BodySpeechGaze(bodyConnection);
     private final SmellObserver smellObserver = new SmellObserver();
@@ -138,6 +139,10 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.bodyInspect = new dogido.fabric.body.BodyInspectRuntime(this.bodyConnection,this.bodySenses,
             result -> this.eventClient.rememberCommandResult(result),ref -> this.eventClient != null && this.eventClient.isCurrent(ref),
             (ref,command,request) -> this.eventClient.submitBodyInspect(ref,command,request,this.bodyConnection::moveTo));
+        this.bodyRequests = new dogido.fabric.body.BodyRequestRuntime(this.bodyConnection,
+            (ref,generation) -> this.eventClient != null && this.eventClient.isCurrentBodyRequest(ref,generation),
+            (ref,command,sender) -> this.eventClient.submitBodyRequest(ref,command,sender),
+            (ref,result) -> this.eventClient.rememberBodyRequestResult(ref,result));
         var screenshots = new dogido.fabric.screenshot.ScreenshotRuntime();
         this.eventClient = new DogidoEventClient(LOGGER,
             new DogidoEventClient.ConnectionSettings(this.config.enabled, this.config.serverBaseUrl, this.config.authToken),
@@ -145,7 +150,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             (command,ref) -> screenshots.execute(command,ref,this.eventClient),
             (command,ref) -> dogido.fabric.screenshot.BodyViewCapture.request(command,
                 () -> this.eventClient.isCurrent(ref),result -> this.eventClient.rememberBodyViewResult(ref,result)),
-            dogido.fabric.screenshot.BodyViewCapture::acknowledged);
+            dogido.fabric.screenshot.BodyViewCapture::acknowledged,this.bodyRequests::handle);
         this.eventClient.rememberVoicePreference(this.config.voiceEnabled());
         this.dialogueChat = DogidoDialogueChat.register(this.eventClient, this.config::saveVoiceEnabled, snapshot -> {
             var ref=this.eventClient.currentSession();
@@ -221,6 +226,8 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         if (!this.config.enabled) {
             this.horseRecall.clear();
             this.bodyInspect.clear();
+            this.bodyRequests.clear();
+            this.bodyConnection.clearActions();
             this.bodySpeechGaze.clear();
             this.characterHud.reset();
             return;
@@ -281,6 +288,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.bodyObservation = this.bodySenses.capture(bodyFrame,client);
         this.bodyAutonomy = this.bodySenses.autonomy(bodyFrame,this.bodyObservation);
         this.bodyInspect.tick();
+        this.bodyRequests.tick();
         this.eventClient.ensureSession(this.playerObserver.resolvePlayerName(player),player.getUuid(),this.bodyConnection.supported());
         this.soundObserver.expireSoundObservations();
         this.worldObserver.expireBlockBreakObservations(this.tickCounter);
@@ -422,6 +430,8 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.bodyObservation = null;
         this.bodyAutonomy = null;
         this.bodyInspect.clear();
+        this.bodyRequests.clear();
+        this.bodyConnection.clearActions();
         this.bodySpeechGaze.clear();
         this.ambientMobObserver.resetRangeTracking();
         this.worldObserver.resetRangeTracking();

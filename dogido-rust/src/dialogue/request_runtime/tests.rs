@@ -11,7 +11,7 @@ impl Fixture {
         let dir =
             std::env::temp_dir().join(format!("dogido-request-runtime-{}", uuid::Uuid::new_v4()));
         fs::create_dir(&dir).unwrap();
-        fs::write(dir.join("adopted-model.json"), r#"{"schema_version":1,"path_base":"repository_root","evaluated_input":{"max_history_utterances":10,"max_length":512,"truncation":false}}"#).unwrap();
+        fs::write(dir.join("adopted-model.json"), r#"{"schema_version":1,"path_base":"repository_root","evaluated_input":{"max_history_utterances":0,"max_length":128,"truncation":false}}"#).unwrap();
         fs::write(
             dir.join("helper.py"),
             "raise AssertionError('no generic helper')\n",
@@ -21,25 +21,25 @@ impl Fixture {
 import json, sys, time
 from pathlib import Path
 base = Path(__file__).parent
-labels = ['not_request','enemy_information','equip_sword','recall_mount','other_request']
 for line in sys.stdin:
     f = json.loads(line)
     r = {k:f[k] for k in ('schema_version','request_id','manifest_sha256')}
     if f['op'] == 'load':
-        r.update(ready=True, labels=labels, limits={'max_history_utterances':10,'max_length':512,'truncation':False})
+        r.update(ready=True, labels=labels, limits={'max_history_utterances':0,'max_length':128,'truncation':False})
     else:
         blocked = base.joinpath('block-inference').exists()
         with base.joinpath('inputs.jsonl').open('a') as out: out.write(json.dumps(f,ensure_ascii=False)+'\n')
         if blocked: time.sleep(60)
         time.sleep(DELAY)
         if FAIL: r['error'] = 'deliberate test failure'
-        else: r['prediction'] = {'label':labels[LABEL], 'probabilities':[int(i==LABEL) for i in range(5)],'token_count':30,'inference_ms':1}
+        else: r['prediction'] = {'label':labels[LABEL], 'probabilities':[int(i==LABEL) for i in range(len(labels))],'token_count':30,'inference_ms':1}
     print(json.dumps(r),flush=True)
 "#;
+        let labels = serde_json::to_string(&crate::request_classifier::LABELS).unwrap();
         fs::write(
             dir.join("request_classifier_worker.py"),
             format!(
-                "LABEL={label}\nDELAY={delay}\nFAIL={}\n{script}",
+                "labels={labels}\nLABEL={label}\nDELAY={delay}\nFAIL={}\n{script}",
                 if fail { "True" } else { "False" }
             ),
         )
@@ -117,8 +117,8 @@ async fn wait_for_file(path: &Path) {
 }
 
 #[tokio::test]
-async fn five_labels_use_existing_routes_without_legacy_sword_override() {
-    for label in 0..5 {
+async fn classified_labels_use_existing_routes_without_legacy_sword_override() {
+    for label in 0..crate::request_classifier::LABEL_COUNT {
         let f = Fixture::new(label, 0.0, false);
         f.d.prepare_request_classifier().await.unwrap();
         let text = if label == 2 {
@@ -189,7 +189,7 @@ async fn newer_input_cancels_pending_work_without_inheriting_preceding_request()
 
 #[tokio::test]
 async fn danger_queue_keeps_both_questions_and_replays_without_reclassification() {
-    let f = Fixture::new(4, 0.1, false);
+    let f = Fixture::new(0, 0.1, false);
     f.d.data
         .lock()
         .unwrap()

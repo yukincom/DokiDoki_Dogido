@@ -17,6 +17,7 @@
   "items": {
     "bee": {
       "label": "ミツバチ",
+      "spoken_aliases": ["蜂", "ハチ"],
       "threat_class": "swarm",
       "priority": "low",
       "provoked_only": true,
@@ -53,6 +54,7 @@
     },
     "cave_spider": {
       "label": "洞窟スパイダー",
+      "spoken_aliases": ["洞窟グモ", "洞窟クモ", "クモ", "蜘蛛"],
       "observed_speech_aliases": [
         "スパイダー"
       ],
@@ -204,6 +206,7 @@
     },
     "fox": {
       "label": "キツネ",
+      "spoken_aliases": ["狐"],
       "threat_class": "utility",
       "priority": "low",
       "poetic": {
@@ -235,6 +238,7 @@
     },
     "goat": {
       "label": "ヤギ",
+      "spoken_aliases": ["山羊"],
       "threat_class": "melee",
       "priority": "low",
       "provoked_only": false,
@@ -268,6 +272,7 @@
     },
     "iron_golem": {
       "label": "アイアンゴーレム",
+      "spoken_aliases": ["鉄ゴーレム"],
       "threat_class": "tank",
       "priority": "high",
       "provoked_only": true,
@@ -439,6 +444,7 @@
     },
     "polar_bear": {
       "label": "シロクマ",
+      "spoken_aliases": ["白熊", "ホッキョクグマ"],
       "threat_class": "melee",
       "priority": "medium",
       "provoked_only": true,
@@ -472,6 +478,7 @@
     },
     "spider": {
       "label": "スパイダー",
+      "spoken_aliases": ["クモ", "蜘蛛"],
       "threat_class": "ambush",
       "priority": "medium",
       "poetic": {
@@ -540,6 +547,7 @@
     },
     "wolf": {
       "label": "オオカミ",
+      "spoken_aliases": ["狼"],
       "threat_class": "melee",
       "priority": "medium",
       "provoked_only": true,

@@ -23,7 +23,7 @@ class ManifestTests(unittest.TestCase):
         for name in worker.REQUIRED_FILES:
             (self.checkpoint / name).write_text(json.dumps(self.config) if name == "config.json" else "fixture")
         self.spec = {"schema_version": 1, "path_base": "repository_root", "checkpoint_path": "weights",
-                     "evaluated_input": {"max_history_utterances": 10, "max_length": 256, "truncation": False},
+                     "evaluated_input": {"max_history_utterances": 0, "max_length": 128, "truncation": False},
                      "checkpoint_files_sha256": {name: worker.digest(self.checkpoint / name) for name in worker.REQUIRED_FILES},
                      "extra_selection_metadata": {"ignored": True}}
 
@@ -34,8 +34,8 @@ class ManifestTests(unittest.TestCase):
         return {"manifest_path": str(path), "model_root": str(self.root),
                 "manifest_sha256": hashlib.sha256(raw).hexdigest()}
 
-    def test_limits_preserved_for_old_and_new_models(self):
-        for size in (256, 512):
+    def test_declared_limits_preserved_for_23_class_model(self):
+        for size in (128, 256):
             self.spec["evaluated_input"]["max_length"] = size
             checkpoint, _, limits = worker.read_spec(self.frame())
             self.assertEqual(checkpoint, self.checkpoint.resolve())

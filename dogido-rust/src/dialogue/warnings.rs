@@ -984,11 +984,7 @@ fn leaf_details_after_cue(action: &Speech, thunder_scream_completed: bool) -> Va
 }
 
 pub(super) fn is_query(actions: &[Speech]) -> bool {
-    actions.len() == 1
-        && matches!(
-            actions[0].kind,
-            "hostile_direction" | "hostile_count" | "dragon_direction" | "smell"
-        )
+    actions.len() == 1 && matches!(actions[0].kind, "smell" | "mob_information")
 }
 
 pub(super) fn answer_fixed_query(
@@ -996,7 +992,7 @@ pub(super) fn answer_fixed_query(
     text: &str,
     kind: &str,
     now: u64,
-    settings: &crate::combat::model::Settings,
+    _settings: &crate::combat::model::Settings,
 ) -> Speech {
     if kind == "smell" {
         let raw = session
@@ -1009,15 +1005,12 @@ pub(super) fn answer_fixed_query(
         reply.delivery = Delivery::PlayerReply;
         return reply;
     }
+    let raw = session.latest.as_ref().expect("fresh query");
+    let event = super::body_runtime::event(session, raw);
     session
         .combat
-        .answer_classified_query(
-            session.latest.as_ref().expect("fresh query"),
-            text,
-            now,
-            settings,
-        )
-        .unwrap_or_else(|| Speech::new("hostile_direction", "今は方位と距離を確かめられへんわ。"))
+        .answer_classified_query(&event, text, now)
+        .unwrap_or_else(|| Speech::new("mob_information", "今は周りを確かめられへんわ。"))
 }
 
 #[cfg(test)]

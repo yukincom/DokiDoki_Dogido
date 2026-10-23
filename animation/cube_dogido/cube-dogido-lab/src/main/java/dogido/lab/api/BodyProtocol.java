@@ -5,8 +5,8 @@ import java.util.List;
 
 /** 身体の実測と操作を不変データで渡す。HP/食料は身体の情報で、player観測や嗅覚へ混入させない。 */
 public final class BodyProtocol {
-    public static final int VERSION = 10;
-    public static final String ENTRYPOINT = "dogido:body_bridge_v10";
+    public static final int VERSION = 11;
+    public static final String ENTRYPOINT = "dogido:body_bridge_v11";
     /** FOLLOWが高さを合わせ直す幅（block）。身体とadapterの停止位置計算で共有する。 */
     public static final double FOLLOW_HEIGHT_DISTANCE = 4;
     /** ownerの目の高さと身体の実寸から、通常追従する身体底面の高さを足元基準で返す。 */
@@ -56,6 +56,12 @@ public final class BodyProtocol {
             this(context,sequence,actionId,observedServerTick,validForTicks,action,null,null);
         }
     }
+    /** 所有者と接続に束縛した明示CALL。身体が未生成でも、最新snapshotのtickを必須にする。 */
+    public record RecallRequest(UUID ownerId, UUID connectionId, UUID actionId, String dimension,
+            long observedServerTick, int validForTicks) {}
+    /** 受付と完了を分離する。resolvedContextは実際に所有確認した身体からだけ取得する。 */
+    public record RecallReceipt(UUID ownerId, UUID connectionId, UUID actionId, String dimension,
+            Context resolvedContext, ActionResult result) {}
     public record StateResult(long revision, Outcome outcome, String reason) {}
     public record ActionResult(UUID actionId, long sequence, Outcome outcome, String reason) {}
     /** tickは同じサーバー稼働中の値。sequenceは個体内で保存し、同じ被弾の再配送を識別する。 */

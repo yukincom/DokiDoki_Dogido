@@ -5,6 +5,7 @@ pub mod contracts;
 pub mod evaluation;
 pub mod geometry;
 pub mod position;
+pub mod requests;
 pub mod senses;
 mod state;
 pub use state::State;

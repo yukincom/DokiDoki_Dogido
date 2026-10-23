@@ -1,17 +1,24 @@
 #!/usr/bin/env python3
 """Rust音近傍補正の実HTTP配線。モデル/TTSは模擬、全所有プロセスを回収する。"""
 import json
-from check_dialogue import request, row, submit, wait_for
-from check_haiku_runtime import fixture, LINES
+from check_dialogue import row, submit, wait_for
+from check_haiku_runtime import LINES
+from check_workshop_fixture import fixture
 from check_workshop_runtime import install, ready, session, step
 from check_workshop_edits import edit, finish, revisions
-from check_workshop_combat import enter, SETTINGS
-from check_workshop_provisional import classifier, intent, done
+from check_workshop_combat import enter, end, SETTINGS
+from check_workshop_provisional import done
 
 
 def main():
     passed = []
-    with fixture(combat_settings=SETTINGS) as f:
+    # BERTへ変更済み。旧判定へ戻さない。原文ごとの期待ラベルを固定する。
+    labels = dict.fromkeys([
+        "上五を『はるのくさ』にして",
+        "上五なら『ハルノクザ』がいい。変更をお願い",
+        "ハルノクサをあおいくさに変えて",
+    ], "senryu_change_upper")
+    with fixture(combat_settings=SETTINGS, bert_labels=labels) as f:
         base, _, log, control, _, _, _, _, send, hud, rows, stored, folder = f
         calls = install(control, lambda text, prompt, n: step(text))
         sid = ready(base, send, rows)
@@ -29,8 +36,8 @@ def main():
         passed.append("voice_corrects_current_verse_question_with_one_call_and_raw_history")
 
         send(sid)
-        typed = request(base, "/api/v1/player-input", {"session_id":sid, "text":raw, "source":"text"})
-        result = wait_for(lambda: row(base, typed["turn_id"], {"completed"}))
+        typed = submit(base, sid, raw, source="text")
+        result = wait_for(lambda: row(base, typed, {"completed"}))
         assert result["interpreted_player_input_text"] == raw and not result["asr_corrections"]
         assert len(calls) == 2 and calls[-1][0] == raw
         passed.append("typed_input_does_not_inherit_voice_correction")
@@ -46,18 +53,24 @@ def main():
         assert hud(sid)["canonical_lines"] == current and len(revisions(folder, sid)) == 1
         passed.append("saved_canonical_is_current_candidate_source")
 
-        install(control, lambda text, prompt, n: edit("にして", replacement="はるのくさ"))
-        result = finish(base, send, sid, "上五を『ハルノクザ』にして")
-        assert result["asr_corrections"] and result["workshop_action"] == "fallback", result
+        # 原文A/Bの直接編集にせず、限定抽出が補正語を誤って返した場合を調べる。
+        calls = install(control, lambda text, prompt, n: edit(text, replacement="はるのくさ"))
+        result = finish(base, send, sid, "上五なら『ハルノクザ』がいい。変更をお願い")
+        assert result["asr_corrections"] and result["workshop_action"] == "respond", result
+        assert len(calls) == len(result["llm_reports"]) == 1, result
         assert hud(sid)["canonical_lines"] == current and len(revisions(folder, sid)) == 1
         assert stored(sid) == original
         passed.append("corrected_replacement_cannot_authorize_edit_or_save")
 
-        calls = install(control, lambda text, prompt, n: step(text))
-        result = finish(base, send, sid, "ハルノクサをあおいくさに変えて")
+        raw_edit = "ハルノクサをあおいくさに変えて"
+        calls = install(control, lambda text, prompt, n: edit(raw_edit, replacement="あおいくさ", fragment="ハルノクサ"))
+        result = finish(base, send, sid, raw_edit)
         assert result["asr_corrections"] and result.get("workshop_outcome") == "player_edit_saved", result
-        assert not calls and hud(sid)["canonical_lines"][0] == "あおいくさ" and len(revisions(folder, sid)) == 2
-        passed.append("original_fixed_edit_survives_correction_and_saves_once_without_model")
+        assert len(calls) == len(result["llm_reports"]) == 1, result
+        assert calls[0][0] == "はるのくさをあおいくさに変えて", calls
+        assert hud(sid)["canonical_lines"][0] == "あおいくさ" and len(revisions(folder, sid)) == 2
+        passed.append("bert_target_and_original_edit_arguments_survive_correction_and_save_once")
+        calls = install(control, lambda text, prompt, n: step(text))
 
         result = finish(base, send, sid, "ハルノクザって何？")
         assert result["interpreted_player_input_text"] == "ハルノクザって何？" and not result["asr_corrections"]
@@ -65,13 +78,20 @@ def main():
         passed.append("superseded_canonical_candidate_does_not_leak_to_next_turn")
 
         calls = install(control, lambda text, prompt, n: step(text))
-        classifications = classifier(control, lambda text: intent(text, "uncertain"))
         enter(send, rows, sid)
-        result = done(base, send, sid, submit(base, sid, raw))
-        assert classifications == [raw] and not calls
-        assert not result.get("asr_corrections") and hud(sid)["state"] == "danger"
+        turn = submit(base, sid, raw)
+        held = wait_for(lambda: row(base, turn, {"queued"}))
+        assert held["combat_input_outcome"] == "held" and held["player_input_text"] == raw, held
+        assert held["combat_input_result"]["analysis"]["action"] == "deferred_input", held
+        assert held["combat_input_result"]["provider"] == "code" and not held["combat_input_result"]["llm_reports"], held
+        assert not calls and not held.get("asr_corrections") and hud(sid)["state"] == "danger", held
+        end(send, rows, sid)
+        result = done(base, send, sid, turn, hostile=False)
+        assert result["player_input_text"] == raw and result["interpreted_player_input_text"] == interpreted, result
+        assert result["asr_corrections"] and result["workshop_action"] == "explain", result
+        assert len(calls) == 1 and calls[0][0] == interpreted and hud(sid)["state"] == "open", calls
         assert "asr_fix_conversation" in log.read_text()
-        passed.append("combat_pause_classifies_original_without_workshop_correction")
+        passed.append("combat_pause_holds_raw_then_code_resume_corrects_current_verse_once")
 
     # 閉鎖後には句候補を保持しない。
     with fixture() as f:

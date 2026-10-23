@@ -16,7 +16,7 @@ adapter/minecraft-fabric  →  dogido-rust (状態機械 + LLM leaf)  →  TTS /
 ```
 
 - **判断の主**はRustのコード（状態機械 / 優先規則 / 検証）
-- **ローカル処理はコード・辞書・分類器を優先**し、LLMは自然な返答・説明・新しい句案など、生成が必要な箇所に絞る。現行workshopの次手選択・限定抽出や戦闘中断中のOS AI分類は移行前の実装であり、拡張の既定にしない。状態変更・保存判断はコード
+- **ローカル処理はコード・辞書・分類器を優先**し、LLMは自然な返答・説明・新しい句案など、生成が必要な箇所に絞る。workshopの本文・新しい案・限定語句抽出だけを生成モデルへ任せる。意図は共通BERT、戦闘からの再開は現在観測でコードが決める。OS AI分類と旧fallbackは撤去済み。状態変更・保存判断はコード
 - **記憶**は JSONL（few-shot 山盛りや Hermes 系汎用エージェントは使わない）
 
 汎用チャットボットや「なんでもできるエージェント」に改造しない。
@@ -47,7 +47,7 @@ adapter/minecraft-fabric  →  dogido-rust (状態機械 + LLM leaf)  →  TTS /
 | `dogido-rust/src/assist/` | 明示依頼と現在hotbarを検証する限定操作。`horse_recall/` は乗れる動物14種の候補要求・選択と実行前検証 |
 | `dogido-rust/src/player_text.rs` · `contextual_asr.rs` · `input_policy.rs` | 原文を残す正規化、現在候補だけのSTT補正、入力優先 |
 | `dogido-rust/src/voice/` · `dialogue/audio.rs` · `tts_reading.rs` | 録音・STTの制御、配送・取消・実再生結果、読みの判定 |
-| `dogido-rust/scripts/` · `dogido_server/` | 起動設定、UniDic token、Whisper設定、AEC、端末AIのPython接続補助 |
+| `dogido-rust/scripts/` · `dogido_server/` | 起動設定、UniDic token、Whisper設定、AEC、BERT分類のPython補助 |
 | `dogido_server/llm/companion_prompts.json` · `reaction_situations.json` | 人が編集する共有プロンプト・状況文。Rustビルドへ反映する |
 | `adapter/minecraft-fabric/` | rootはtick・送信・ライフサイクル。`observation/` は観測と履歴、`protocol/` は通信契約、`commands/` は限定操作、`display/` はHUD。詳細はadapter README |
 | `docs/` | 現行仕様と履歴。終了文書には後継を明記し、古い計画を再実装しない |
@@ -66,13 +66,15 @@ adapter/minecraft-fabric  →  dogido-rust (状態機械 + LLM leaf)  →  TTS /
 
 ## 2026-10-21 現在の生成・知識範囲
 
-自動発句は意味・日本語の自然さの評価LLMを使わない。今使える材料の本文を渡し、管理IDはコードで持つ。空行・折返しは補完し、再生成は初案＋設定上限で管理する。行別材料は渡した資料の記録であって使用出典の検証結果ではない。国語は詩形・枕詞等の最低限の詩の知識だけを残し、一般文法・漢字学年の専用回答と国語学習workerは本体対象外。Minecraft質問の拡張BERTラベルは学習素材側で整理中で、本体へ重複分類を増設しない。[現行仕様](docs/2026-10-21-generation-and-knowledge-scope.md)。以前の国語・評価LLMの記述はこの方針で更新する。
+自動発句は意味・日本語の自然さの評価LLMを使わない。今使える材料の本文を渡し、管理IDはコードで持つ。空行・折返しは補完し、再生成は初案＋設定上限で管理する。行別材料は渡した資料の記録であって使用出典の検証結果ではない。国語は詩形・枕詞等の最低限の詩の知識だけを残し、一般文法・漢字学年の専用回答と国語学習workerは本体対象外。Minecraft知識全般の専用BERTラベルは未収録。2026-10-23にモブ情報を含む23分類を本体へ接続した。重複分類を増設しない。[現行仕様](docs/2026-10-21-generation-and-knowledge-scope.md)。以前の国語・評価LLMの記述はこの方針で更新する。
 
 ## 2026-10-22 川柳相談の検査撤去
 
 川柳WSから音数計測・5/7/5との比較・固定の音数案内を撤去する。撤去済みの品質・語形・confidenceの判定を、tool説明やプロンプトの要求として残さない。本人の指定語はそのまま編集へ渡し、コードが対象・元句・版・保存結果を管理する。読み方と保存材料は本人の質問に必要なときだけ参照し、編集失敗後の再応答には参照toolを提示しない。自動発句の生成条件はこの撤去の対象外。[現行仕様](docs/rust-workshop-validation.md)。以下に残る旧来の音数・品質検査の記述には、この方針を優先する。
 
 ## 3. 設計の不変条件（破ると方針と衝突）
+
+**2026-10-23のBERT接続:** 890件版の元seed42・23分類を既存の共通受付へ接続する。現在発話だけを一度分類し、モブ情報・剣・乗用動物・ドギド呼び出し・視線11種・川柳の行3種／具体変更3種／終了へ渡す。川柳の行分類だけで編集を開始しない。原文の置換語と現在句・版を照合し、保存は既存処理が所有する。モブ情報は友好・敵対を含む現在のドギド視点を使う。Minecraft知識・その他の現在観測の専用ラベルは未収録。再開・継続は敵の現在観測と警戒解除条件でコードが決めるため、OS AI・chat分類fallback・再開同意判定・敵が残る間の暫定再開は撤去した。旧判定へ戻さない。[接続記録](docs/2026-10-23-modernbert-23class-integration.md)。以下の「BERT拡張待ち」は、この接続範囲を除いた課題として扱う。
 
 **文字配送の補足（2026-10-09、関連自動テスト確認済み）:** `dialogue_text.v1` のMinecraft接続では音声完了に加え、画面へ挿入後の表示ACKも会話の配送完了に使う。`text_displayed` と音声の `playback_status` は分離し、同じ返答の履歴確定は一度だけ。以下の「実再生後だけ」という履歴記述にはこの表示確認を含める。`voice off` はマイク・STT・TTSを休止する。詳しくは [文字会話仕様](docs/2026-10-09-minecraft-text-dialogue.md)。
 
@@ -86,7 +88,7 @@ adapter/minecraft-fabric  →  dogido-rust (状態機械 + LLM leaf)  →  TTS /
 - 一つの応答で必要な生成は原則1回。反応の選択と本文は同じ呼出しで生成する。前段planner、同じ分類の再判定、別LLMによる自然さ・意味の採点、形式修復や修正失敗後の返答再生成を連鎖させない。追加呼出しが必要なら、途中で初めて得られる情報などの理由と回数上限を設計時に示す。
 - 分類拡張は担当チャットと正本データの進捗を確認して接続する。ラベル案・収集済みデータ・学習済みモデル・本体採用を区別し、並行作業と重複して分類体系を作らない。
 
-2026-10-18に照明の一回生成と、川柳修正の意味LLM検査・編集後再応答生成の撤去を実装。川柳・Minecraft知識・現在観測・戦闘中断の意図分類はBERT拡張待ち（国語学習は対象外）で、該当コードのTODO(BERT)を移行先として守る。応答への不満に対してLLM分類を積み増さない。実装と検証結果は区別する。詳細と移行状況は [モデル呼び出し監査と軽量処理への移行](docs/2026-10-18-dialogue-model-call-audit.md) を参照。
+2026-10-18に照明の一回生成と、川柳修正の意味LLM検査・編集後再応答生成の撤去を実装。2026-10-23に川柳の行・具体変更・終了とモブ情報等の23分類をBERTへ接続した。Minecraft知識等の未収録部分だけを今後の分類拡張候補とし、戦闘後の再開をAI分類へ戻さない。応答への不満に対してLLM分類を積み増さない。実装と検証結果は区別する。詳細と移行状況は [モデル呼び出し監査と軽量処理への移行](docs/2026-10-18-dialogue-model-call-audit.md) を参照。
 
 ### 3.0a コードはLLMの出力を受け取り、補完し、実行する
 
@@ -106,7 +108,6 @@ adapter/minecraft-fabric  →  dogido-rust (状態機械 + LLM leaf)  →  TTS /
 - 通常workshopの自然な相談は、一つの有界stepが現在句・pending・直近対話から `respond / explain / ask / inspect / propose_revision / compare / show_current / stage_player_edit / accept_pending / reject_pending / close_workshop / unrelated` の次手を選べる。普通の相談・説明・比較はactionと非空のspeechで受け取り、purpose・confidence・evidence・使わない項目の不備で棄却しない。読み・音数・出典を確かめる必要性はモデルが判断してinspectを選び、確認結果を参考に一度だけ返答を続ける。inspect_textを指定すれば相談中の語・候補も既存UniDicでひらがなと音数を確認でき、未解決は未確定として返す。修正検証後はコードで結果を返し、LLMで返答を再生成しない。句正本・編集対象・CAS・採否の実行・保存・戦闘中断はコード所有を維持する。局所編集・採否・終了はモデルの選択を受け取り、原文evidenceと実行データの対応を照合する。疑問・否定・条件・引用・伝聞や読み・音数・表現の品質で選択を覆さない。同じ発話の採否＋終了は各意思をそれぞれ検証して一つのtransactionとして実行する
 - workshopは会話・読み取り・操作を分け、そのactionが実際に使う入力だけ検証する。編集・採否・終了の原文意思と正本整合性は従来どおり守る。assist等の structured 出力は kind ごとにRustの各ドメイン検証器で現行外形を検査する。自動川柳の `haiku_draft` / `haiku_irony` / `haiku_scene` / `haiku_line_regeneration` は、空行・折返しのコード補完と既存の音数・文字種・hard制約を使う。意味・自然さの評価LLMと出力の出典・表現重複棄却は撤去し、未採用材料を渡して既定最大6回の再生成を行う。新kind追加時は呼出箇所・prompt例・fallback・consumer・テストを同時に揃える
 - STT文脈補正は `source=voice` と現在候補だけ。`raw/normalized` は保持して明示操作の正、`interpreted/semantic` は会話理解と限定意味抽出に使う。意味抽出から保存するときも原文・evidence・CASを検証する。剣支援の実測誤変換 `県に持ち替え/変えて/ハインコ（変更）/チェンに変更` は voice-only・操作語直結の閉じた規則で解釈面だけ補正し、typed・単独の候補語・その語の会話は対象外
-- platform provider は設定と可用性だけで選ぶ。Foundry のモデル自動 download は既定 off を守る
 - 乗り物は乗車中だけ `player.vehicle` を送る。LLM には必ず「プレイヤーはXXに乗って…」の主語付き事実として渡す
 - 本体の一般雑談は既存 `player_chat`。詩の基礎知識とMinecraft資料だけを既存の正本DBへ渡す。旧learnの専用対話・Web調査・宛先確認・互換設定・一般文法／漢字／語彙資料は撤去済み。foregroundは `none / casual / knowledge / haiku_preparation / haiku_workshop`。戦況、assist、workshop、状態変更と保存はコードが所有する。assistant履歴と会話由来の川柳材料は実再生または表示確認後だけ確定し、失敗・取消・古いepochを混ぜない。
 - 音声出力が始まった台詞は極力切らない。相槌・くしゃみ等の新入力は既存FIFOへ保持し、現在の台詞の完了後に同じ受付へ戻す。再生前は入力優先。通常の観測変化・観測失効・期限だけで途中停止せず、緊急警告・明示停止・voice off・接続／世界／サーバー終了は取消を維持する。川柳の生成・前置き・本文・相談中の夕方警告は、従来どおり発話前にコードで抑止する。通常会話の再生中にも夕方警告の保留を追加する。詳細は `docs/main-dialogue-integration.md`。
@@ -117,7 +118,7 @@ adapter/minecraft-fabric  →  dogido-rust (状態機械 + LLM leaf)  →  TTS /
 - 照明器具のinventory増加はクラフト／設置とは断定しない。半スタック以上＋暗所警告外、5分以内の重複、継続中の危険な暗さはコードで無言にし、それ以外だけ `light_source_comment_plan` が反応選択と本文を一回で生成する。不正出力・生成失敗は無言で終え、再試行や別の発話leafを呼ばない。暗所状態の停止は現在観測でコード確定し、モデルへ正確な本数を渡さない
 - 雑談中の自動川柳は通常10分周期を維持し、現在のplayer replyの後ろまたは次の安全なqueue境界で始める。再生完了済みの直近3 turnだけを、最大80字・最大3 motif・source turn IDつきの `player_reported_context` soft材料として使う。正本DBの資料照会を扱う `knowledge` foreground中は発句時計を凍結する
 - 世界操作を汎用のtools一覧としてLLMへ渡さない。代表命令はコード、自然形は閉じたintent/evidence/confidence抽出まで。乗れる動物の呼び戻しは馬系・ラクダ系・ブタ・ストライダー・ハッピーガスト・オウムガイ系・ラマ系の14種に限り、本人の依頼を受けてからMinecraftの候補一覧を渡し、native APIの `list_horses / select_horse` で一頭を選ばせる二段階だけ。名前の完全一致で入口を絞らず、原文・種類・所有者・最新個体・会話世代・期限・重複をRustが検証し、実移動と着地点は統合サーバーで再検査する。Ownerありは本人だけ、Ownerがない許可済み種類は名札と鞍／ハーネスを条件にする。オウムガイ2種は横3×3の水域、ハッピーガストは身体全体の空間を必須にする。失敗理由は既存結果から短期の出来事へ返し、一覧にない理由を距離と断定しない。相手を確認できない場合の案内は「声が届かへんかったみたいや」。呼べる候補が0頭なら選択toolを公開せず、同じ二回目の会話へ候補と具体的な理由を渡す。逃走用途の明示依頼は戦闘・警告中も既存assistの入力世代で受け付け、足場・空間等の実状態検査は維持する。実行結果と出現演出の完了は分ける（[仕様](docs/2026-10-11-horse-recall.md)）。その他の実行capability・現在snapshot・slot・期限・期待item・重複もコード検証する
-- `select_sword` は明示依頼だけ。非戦闘中の明示依頼は可だが自動持ち替えは禁止。会話用LLMの限定抽出を使い、OS AIの用途を広げない
+- `select_sword` は明示依頼だけ。非戦闘中の明示依頼は可だが自動持ち替えは禁止。共通BERTの分類を使い、現在hotbar・世代・期限・結果をコードで検証する
 
 ### 3.2 川柳 lesson は soft
 
@@ -183,7 +184,7 @@ adapter/minecraft-fabric  →  dogido-rust (状態機械 + LLM leaf)  →  TTS /
 - `request_repair`: 会話モデルが修正要求と対象findingを返し、コードが現在行への対応を補完・照合した後、大きいhaiku routeが `expected_text` / `replacement_text` つき差分で修正。コードが元行一致・対象外不変・出典IDの整合性を確認する。重複・音数・発句時hard制約でWSの修正を拒否しない。意味保持・自然さの別LLM評価と案の再生成はしない。出典IDの一致を意味の検証済みと扱わない。案は採用まで保存せず、採用時にも同じ元句へ適用できるか再確認する。提示文は句本文・採用案内をコードで返す
 - プレイヤー局所編集: 三行は安定ID `line_1/2/3`、概念番号1/2/3、配列index 0/1/2、位置upper/middle/lower、正規名上五/中七/下五を持つ。各行は表示表記・確定ひらがな読み・出典・provenanceも同じオブジェクトに持ち、表記と読みを別の句にしない。自然な提案では会話モデルが「上の句」「二の句」「真ん中」「後ろのパート」等をこの概念へ対応させ、発話中の行呼称evidence・置換語・句中target fragmentを抽出する。コードはモデルの行概念と現在句を対応させ、欠けた対象だけを既存の一意なfragmentや保持対象から補完する。既知の行呼称だけでモデルの対応づけを覆さない。finding／明示行／検証済み行概念／一意なfragmentに加え、「旧句より新句」の発話中にある現在句の一行でも対象を固定する。句フレーズ指定はSTTが漢字化しても読みへ戻し、現在の三行へ一意に一致するときだけ採用する。コードは取得できた読みを表記と同じ行に保持し、未知読みは未確定のまま扱う。音数・hard制約・表現重複で拒否せず、原文の置換語と元句を照合した後、プレイヤー指定の局所編集は保存して現在句へ反映する。AI生成の未採用案への編集は採用待ちを維持する。AIが発話にない語を補作したら捨てる。本文・現在句照会はLLMに生成させない。意味質問は保存済み出典を手がかりに、句・当時の材料・見どころ・直近対話を会話モデルが比較して説明する。対応や前の説明の取り違えは認めるが、句・出典記録を自動で書き換えず、不明な意味や由来を作らない。現在はプレイヤーの呼称を訂正せず、生の呼称・正規名・概念IDを将来learning版のフックとしてログへ残す
 - pending採否: 同じ共同編集stepが採用／破棄／比較／継続を選ぶ。利用不可時は未採用案を保持してコード固定の採否確認へ戻す。モデルの採否選択を受け取り、原文中evidence・現在pending・CASを照合し、`accept+close` は保存後、`reject+close` は破棄後にcloseする。終了だけの明示依頼は、元の句を残して未採用案を採用・保存せずcloseする。称賛だけでは終了せず、自然な終了はモデル判断と原文・現在状態の検証を通す。入力のacceptedと終了後のclosedは別に確認する。closeを伴わない採用後は句を次の基準へ昇格しpinを維持
-- 戦闘中断: visual／auditory脅威・直近被弾で句とpendingを保持したままpauseし、workshop用ASR補正・timeout・driftを止める。通常敵はadapterの論理サーバー死亡イベント／クライアント死亡状態／実爆発パケットを使い、プレイヤー撃破／爆発死／その他死亡／クリーパー爆散／離脱で復帰文を分ける。死亡音・経験値・攻撃履歴・観測範囲からの消失だけではプレイヤー撃破扱いにしない。死亡は `hostile_defeated`、爆散は `creeper_detonated` で即時に一度だけ反応し、後の `combat_ended` は安全確認の安堵へ分ける。導火開始と通常／帯電クリーパー爆散は慌て方を変え、一度話した個体IDは後の敵離脱へ持ち越さない。戦闘音声後の静かなnormalフレームで三行を再掲して継続確認する。中断中発話はOS／端末内AI優先（失敗時はchat fallback）で `resume_workshop / workshop_input / close_workshop / unrelated / uncertain` だけを根拠つき抽出し、全AIが利用不可・低信頼・不正出力のときだけ閉じた規則へfallbackする。安全判定と実際の再開／closeはコード。単独敵が8秒以上非接近・無被弾でも、再開意思を確定できたときだけ暫定再開。再接近・被弾・敵数／個体変化で即pause
+- 戦闘中断: visual／auditory脅威・直近被弾で句とpendingを保持したままpauseし、workshop用ASR補正・timeout・driftを止める。通常敵はadapterの論理サーバー死亡イベント／クライアント死亡状態／実爆発パケットを使い、プレイヤー撃破／爆発死／その他死亡／クリーパー爆散／離脱で復帰文を分ける。死亡音・経験値・攻撃履歴・観測範囲からの消失だけではプレイヤー撃破扱いにしない。死亡は `hostile_defeated`、爆散は `creeper_detonated` で即時に一度だけ反応し、後の `combat_ended` は安全確認の安堵へ分ける。導火開始と通常／帯電クリーパー爆散は慌て方を変え、一度話した個体IDは後の敵離脱へ持ち越さない。敵が警戒範囲から消え、既存の警戒解除と配送条件を満たしたらコードで再開する。保持入力があれば同じ原文・入力世代を一度だけ受付へ戻し、なければ三行を再掲して通常相談へ戻す。終了はBERT、現在句・版・pending・保存はコードで照合する。再開のAI分類・語句による同意判定・敵が残る間の暫定再開は撤去済み。旧判定へ戻さない。
 - 全文直し・自作句保存の入口は `dogido-rust/src/poem_input.rs`。自然な相談は有界stepと原文検証を通す
 - 明示緩めはworkshop外でも可。保存の所有者はRustのmemory runtime
 - 読み辞書の編集はあんちょこ画面から行う。会話を辞書保存命令にしない
@@ -201,7 +202,7 @@ adapter/minecraft-fabric  →  dogido-rust (状態機械 + LLM leaf)  →  TTS /
 - `haiku` … 句（irony/scene 経由のことも）  
 - 低レイテンシ戦況は LLM なし  
 - route ごとに provider を分けられる（`.env` / Settings）
-- platform structured は戦闘中断中の小分類だけに使い、`auto=Apple Foundation Models → Foundry Local → chat`。任意依存で、失敗しても workshop を壊さない
+- OS AI専用のSDK・worker・設定・依存は撤去済み。共通BERTが利用できない場合に旧LLM分類や語句判定へfallbackしない。
 
 ---
 
@@ -354,6 +355,6 @@ player テキスト注入（開発用・**アクティブセッション必須**
 - エピソード決定記録 A: 非重複イベントごとに発話あり／なしを `eval/episodes.jsonl` へbest-effort追記 **済**（記憶へは混ぜない）
 - 支援 B/C `select_sword`: hotbar 0〜8実測 + 実行capability分離 + game-event応答のtyped command + Fabricメインスレッド再検証 + result/ack + episode相関まで **コード・自動テスト・Minecraft実機確認済み**（2026-08-16。自動持ち替え・救助・馬は未）
 - 完成度の次の本丸: **観測 materials の解像度**（水辺・旗など。地下での地表背景抑止・落下物・採掘文脈は済）
-- 任意: 戦闘中断用OS AI・chat fallback、通常workshop agent・修正案の実ログ評価、Phase E整理、VLM、TTS読みPhase 3実測、5-7-5分割読み
+- 任意: BERT分類・警戒解除後の復帰・通常workshop会話と修正案の実ログ評価、Phase E整理、VLM、TTS読みPhase 3実測、5-7-5分割読み
 
 この節は履歴として保持する。新しい仕様・検証結果は現行仕様と対象ドメインの文書へ記録する。

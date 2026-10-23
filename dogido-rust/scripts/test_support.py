@@ -100,7 +100,7 @@ def assert_closed_hud(body, session_id, sequence):
         "schema_version": 1, "session_id": session_id, "observed_sequence": sequence,
         "workshop_id": None, "state": "closed", "character_state": "normal",
         "canonical_lines": [], "pending_lines": [], "editing": False,
-        "selected_line": None, "provisional_resume": False,
+        "selected_line": None,
     }
     assert isinstance(body, dict), body
     assert {k: v for k, v in body.items() if k != "revision"} == expected, body

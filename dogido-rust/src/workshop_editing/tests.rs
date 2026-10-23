@@ -11,6 +11,13 @@ fn legacy_inputs_keep_data_integrity_under_model_owned_edits() {
         };
         let f = &case["input"];
         let op = text(&case["op"]);
+        if op == "combat_fallback" {
+            // BERTへ変更済み。旧判定へ戻さない。旧fixtureは操作の撤去を確認する。
+            let mut retired = f.clone();
+            retired["op"] = op.into();
+            assert!(engine.project(&retired).is_err());
+            continue;
+        }
         let actual: Result<Value> = match op {
             "normalize" => engine.normalized(text(&f["text"]), true).map(|v| json!(v)),
             "material" => engine

@@ -197,6 +197,7 @@
     },
     "cat": {
       "label": "ネコ",
+      "spoken_aliases": ["猫"],
       "poetic": {
         "visual_tags": [
           "しなやか",
@@ -226,6 +227,7 @@
     },
     "chicken": {
       "label": "ニワトリ",
+      "spoken_aliases": ["鶏"],
       "poetic": {
         "visual_tags": [
           "白い羽",
@@ -289,6 +291,7 @@
     },
     "copper_golem": {
       "label": "銅のゴーレム",
+      "spoken_aliases": ["銅ゴーレム"],
       "note": "銅のチェスト内のアイテムを仕分ける。",
       "environment_notes": [
         "時間経過で酸化し、完全に酸化すると像になる。落雷が命中すると酸化が一段階戻る。水や雨に触れることを酸化の進行条件とはしない。"
@@ -324,6 +327,7 @@
     },
     "cow": {
       "label": "ウシ",
+      "spoken_aliases": ["牛"],
       "poetic": {
         "visual_tags": [
           "まだら",
@@ -353,6 +357,7 @@
     },
     "frog": {
       "label": "カエル",
+      "spoken_aliases": ["蛙"],
       "note": "温帯種オレンジ色、熱帯種白色、冷帯種緑色。ドロップリーフの上で遊ぶ。スライムボールが好物。",
       "environment_notes": [
         "水中で呼吸でき、陸上でも乾燥や窒息はしない。"
@@ -453,6 +458,7 @@
     },
     "horse": {
       "label": "ウマ",
+      "spoken_aliases": ["馬"],
       "poetic": {
         "visual_tags": [
           "たてがみ",
@@ -666,6 +672,7 @@
     },
     "pig": {
       "label": "ブタ",
+      "spoken_aliases": ["豚"],
       "environment_notes": [
         "ピースフル以外では、落雷が実際に命中するとゾンビピグリンになる。雷雨や雷鳴だけでは変身したことにならない。"
       ],
@@ -734,6 +741,7 @@
     },
     "rabbit": {
       "label": "ウサギ",
+      "spoken_aliases": ["兎"],
       "poetic": {
         "visual_tags": [
           "白",
@@ -797,6 +805,7 @@
     },
     "sheep": {
       "label": "ヒツジ",
+      "spoken_aliases": ["羊"],
       "poetic": {
         "visual_tags": [
           "白い",
@@ -1065,6 +1074,7 @@
     },
     "turtle": {
       "label": "カメ",
+      "spoken_aliases": ["亀"],
       "aquatic": true,
       "dies_on_land": false,
       "environment_notes": [

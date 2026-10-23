@@ -1,11 +1,12 @@
-//! 通常会話で呼び寄せ依頼を受けた後に候補を見せ、LLMの選択を現在のSessionへ照合する。
+//! BERTで呼び寄せ依頼を受けた後に候補を見せ、一回のLLM選択を現在のSessionへ照合する。
+//! BERTへ変更済み。旧判定へ戻さない。
 //! LLMは発話と対象選択だけを返す。通常turnはepoch、戦闘支援は入力世代を照合し、実移動はFabricが担当する。
 //! 要求の発行とMinecraftの実行結果を出来事として分け、未確認の成功を発話履歴へ入れない。
 use super::{Dialogue, Session, bridge, observation_fresh};
 use crate::{
     assist::horse_recall::{
         contracts::{Availability, Choice, Prepared, Snapshot},
-        intent::{self, Decision, Stage},
+        intent::{self, Decision},
     },
     events::{AdapterCommandResultCommandType, AdapterCommandResultStatus, EventName, GameEvent},
     llm::RigLlm,
@@ -21,7 +22,7 @@ mod assist;
 #[derive(Default)]
 pub(super) struct State {
     snapshot: Option<Snapshot>,
-    /// 操作支援から通常入力へ返した同じ発話を、もう一度馬判定へ回さないための世代。
+    /// 同じBERT受理依頼を重複して候補選択へ回さないための入力世代。
     checked_generation: Option<u64>,
 }
 impl State {
@@ -58,12 +59,11 @@ impl State {
     }
 }
 
-/// 依頼の判定は可能だが、状態によって候補選択へ進めない場合もある。
+/// BERTで依頼を受理していても、現在状態によって候補選択へ進めない場合もある。
 /// 停止理由と候補を生成直前に固定し、実行時はSessionの現在状態へ再照合する。
 #[derive(Clone)]
 pub(super) struct Request {
     original: String,
-    classified: bool,
     prepared: Option<Prepared>,
     blocked: Option<Blocked>,
 }
@@ -105,24 +105,34 @@ fn available(s: &Session) -> bool {
         && s.assist.supports_horse_recall()
 }
 
-/// 生成直前の馬候補を固定する。名前や操作語による入口の絞込みは行わない。
+/// BERTへ変更済み。旧判定へ戻さない。分類済み原文に生成直前の候補を固定する。
 pub(super) fn capture(
-    s: &Session, raw: &str, classification: Option<&crate::request_classifier::Classification>,
+    s: &Session,
+    raw: &str,
+    classification: Option<&crate::request_classifier::Classification>,
 ) -> Option<Request> {
-    if classification.is_some_and(|r| r.text != raw || r.prediction.label != crate::request_classifier::Label::RecallMount)
-        || s.horse_recall.checked_generation == Some(s.input_generation) {
+    let classification = classification?;
+    if classification.text != raw
+        || classification.prediction.label != crate::request_classifier::Label::RecallMount
+        || s.horse_recall.checked_generation == Some(s.input_generation)
+    {
         return None;
     }
-    let unavailable = s.preview || !s.assist.supports_horse_recall();
-    if classification.is_none() && unavailable { return None; }
-    let blocked = if unavailable { Some(Blocked::Unavailable) } else { blocking_reason(s) };
-    let prepared = blocked
-        .is_none()
-        .then(|| Prepared::new(s.horse_recall.snapshot.as_ref()?.clone(), raw).ok())
-        .flatten();
+    let blocked = if s.preview || !s.assist.supports_horse_recall() {
+        Some(Blocked::Unavailable)
+    } else {
+        blocking_reason(s)
+    };
+    let prepared = if blocked.is_none() {
+        Some(
+            Prepared::from_classified(s.horse_recall.snapshot.as_ref()?.clone(), classification)
+                .ok()?,
+        )
+    } else {
+        None
+    };
     Some(Request {
         original: raw.to_owned(),
-        classified: classification.is_some(),
         prepared,
         blocked,
     })
@@ -145,102 +155,22 @@ fn blocking_reason(s: &Session) -> Option<Blocked> {
     (snapshot.status == Availability::Unavailable).then_some(Blocked::Unavailable)
 }
 
-/// 既存の診断snapshotへ観測と停止理由を添える。モデルの一回目にはこの一覧を渡さない。
+/// 既存の診断snapshotへ観測と停止理由を添える。
 pub(super) fn snapshot(s: &Session) -> Value {
     json!({"supported":s.assist.supports_horse_recall(),
         "blocked_reason":blocking_reason(s).map(Blocked::code),
         "observation":s.horse_recall.snapshot})
 }
 
-/// 戦闘支援の既存入口。位置照会を追加せず、従来の馬専用依頼判定から同じ選択処理へ進む。
-// TODO(request-classifier): 戦闘中も recall_mount を入口に使い、ここでの最初の
-// Stage::Intent 生成・復号を撤去して、受理済み依頼から render_selection へ接続する。
-// 一頭の選択・曖昧時の確認・取消・実行前の再照合は現5分類だけでは置き換えられない。
+/// BERTへ変更済み。旧判定へ戻さない。
+/// 受付済みの依頼について、候補選択と必要な返答を一回で生成する。
 pub(super) async fn render(
     mut request: GenerationRequest,
     llm: &RigLlm,
     context: &Request,
     cancel: &mut watch::Receiver<bool>,
 ) -> Result<Value> {
-    if context.classified {
-        return render_selection_inner(request, llm, context, None, vec![], cancel).await;
-    }
-    request.max_tokens = request.max_tokens.max(192);
-    let (first, tools) = intent::request(
-        request.clone(),
-        &context.original,
-        context.prepared.as_ref(),
-        Stage::Intent,
-    )?;
-    ensure!(
-        !*cancel.borrow() && cancel.has_changed().is_ok(),
-        "cancelled"
-    );
-    let response = tokio::select! {biased;
-        _=bridge::cancelled(cancel)=>anyhow::bail!("cancelled"),
-        r=llm.generate_with_tools(&first,&tools,&[],true)=>r,
-    };
-    ensure!(
-        !*cancel.borrow() && cancel.has_changed().is_ok(),
-        "cancelled"
-    );
-    let (report, native) = match response {
-        Ok(v) => v,
-        Err(e) => {
-            let out = crate::chat_validation::finish(None);
-            return Ok(
-                json!({"op":"result","text":out.text,"dialogue_action":out.action,
-                "dialogue_outcome":out.status,"dialogue_reason":out.reason,
-                "llm_reports":[{"kind":"player_chat","horse_stage":"Intent","error":e.to_string()}]}),
-            );
-        }
-    };
-    let message = native.unwrap_or_else(|| json!({"content":report.generated.text}));
-    let decoded = intent::decode(
-        Stage::Intent,
-        &message,
-        report.generated.finish_reason.as_deref().unwrap_or(""),
-    );
-    let reports = vec![json!(report)];
-    let mut result = match decoded {
-        Ok(Decision::List(intent)) => {
-            return render_selection(request, llm, context, &intent, reports, cancel).await;
-        }
-        Ok(Decision::Conversation) => {
-            let out = intent::conversation(message["content"].as_str().unwrap_or(""));
-            json!({"op":"result","text":out.text,"dialogue_action":out.action,
-                "dialogue_outcome":out.status,"dialogue_reason":out.reason})
-        }
-        Err(e) => rejected(e),
-        _ => rejected(anyhow::anyhow!("horse_invalid_intent")),
-    };
-    result["llm_reports"] = json!(reports);
-    result["horse_recall_requested"] = json!(false);
-    Ok(result)
-}
-
-/// 共通の会話生成で選ばれた呼び寄せ依頼を検証し、一度だけ候補選択する。
-pub(super) async fn render_selection(
-    request: GenerationRequest, llm: &RigLlm, context: &Request,
-    intent: &intent::Intent, reports: Vec<Value>, cancel: &mut watch::Receiver<bool>,
-) -> Result<Value> {
-    render_selection_inner(request, llm, context, Some(intent), reports, cancel).await
-}
-
-async fn render_selection_inner(
-    mut request: GenerationRequest,
-    llm: &RigLlm,
-    context: &Request,
-    intent: Option<&intent::Intent>,
-    mut reports: Vec<Value>,
-    cancel: &mut watch::Receiver<bool>,
-) -> Result<Value> {
-    ensure!(context.classified || intent.is_some(), "horse_request_not_classified");
-    if let Some(Err(error)) = intent.map(|intent| intent.validate(&context.original)) {
-        let mut result = rejected(error);
-        result["llm_reports"] = json!(reports);
-        return Ok(result);
-    }
+    let mut reports = Vec::new();
     if let Some(reason) = context.blocked {
         return Ok(
             json!({"op":"result","text":reason.speech(),"horse_recall_requested":true,
@@ -252,8 +182,7 @@ async fn render_selection_inner(
         .as_ref()
         .context("horse_prepared_missing")?;
     request.max_tokens = request.max_tokens.max(192);
-    let (request, tools) =
-        intent::request(request, &context.original, Some(prepared), Stage::Selection)?;
+    let (request, tools) = intent::request(request, prepared)?;
     ensure!(
         !*cancel.borrow() && cancel.has_changed().is_ok(),
         "cancelled"
@@ -277,7 +206,6 @@ async fn render_selection_inner(
     };
     let message = native_message.unwrap_or_else(|| json!({"content":report.generated.text}));
     let decoded = intent::decode(
-        Stage::Selection,
         &message,
         report.generated.finish_reason.as_deref().unwrap_or(""),
     );
@@ -314,7 +242,7 @@ fn rejected(error: anyhow::Error) -> Value {
         | "horse_snapshot_changed" => crate::assist::horse_recall::feedback::failure(&code).1,
         _ => "呼ぶ相手を確かめられへんかったわ。どの子を呼ぼか？",
     };
-    json!({"op":"result","text":text,"horse_recall_status":"rejected","horse_recall_reason":code})
+    json!({"op":"result","text":text,"horse_recall_requested":true,"horse_recall_status":"rejected","horse_recall_reason":code})
 }
 
 impl Dialogue {

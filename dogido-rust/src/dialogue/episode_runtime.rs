@@ -210,8 +210,28 @@ mod tests {
         d.set_execution_capabilities("s", &["client.hotbar.select.v1".into()]);
         let mut e = json!(event(1));
         e["player"]["hotbar"] = json!({"selected_slot":8,"slots":[{"slot":0,"item_id":"minecraft:stone_sword","count":1,"damage":0,"max_damage":131,"attack_damage":5,"weapon_kind":"sword"}]});
-        e["meta"]["user_text"] = json!("剣に持ち替えて");
-        let reply = d.observe("s", crate::events::GameEvent::parse(e).unwrap(), None);
+        let snapshot = crate::events::GameEvent::parse(e).unwrap();
+        // BERTへ変更済み。旧判定へ戻さない。配送記録は受理済み分類からの命令で検査する。
+        let classification = crate::request_classifier::Classification {
+            text: "剣に持ち替えて".into(),
+            source: "text".into(),
+            manifest_sha256: "fixture".into(),
+            prediction: crate::request_classifier::Prediction {
+                label: crate::request_classifier::Label::EquipSword,
+                probabilities: std::array::from_fn(|i| if i == 2 { 1.0 } else { 0.0 }),
+                token_count: 8,
+                inference_ms: 0.1,
+            },
+        };
+        d.data
+            .lock()
+            .unwrap()
+            .sessions
+            .get_mut("s")
+            .unwrap()
+            .assist
+            .submit_classified(&classification, &snapshot, chrono::Utc::now(), false);
+        let reply = d.observe("s", snapshot, None);
         let command = &reply["commands"][0];
         assert!(command["command_id"].is_string(), "{reply}");
         let mut receipt = json!(event(2));
@@ -227,19 +247,18 @@ mod tests {
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0]["action"]["adapter_commands"], reply["commands"]);
         assert_eq!(rows[0]["result"]["scope"], "service_decision");
-        assert!(
-            rows[0]["action"]["items"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .any(|a| a["text"] == reply["player_input"]["assist"]["feedback"])
-        );
+        // 入力受付はこのfixture外。観測は命令を配送し、受理時の返答を重複生成しない。
+        assert_eq!(rows[0]["action"]["items"], json!([]));
         assert_eq!(rows[1]["result"]["scope"], "adapter_execution_observed");
         let observed = &rows[1]["result"]["adapter_command_results"][0];
         assert_eq!(observed["status"], "failed");
         assert_eq!(observed["detail_code"], "result_mismatch");
-        // The first reply is still queued; the unchanged queue is not a new selection.
-        assert_eq!(rows[1]["action"]["items"], json!([]));
+        // 命令の不一致は実行済み扱いにせず、結果の短い案内を一度だけ記録する。
+        assert_eq!(rows[1]["action"]["items"].as_array().unwrap().len(), 1);
+        assert_eq!(
+            rows[1]["action"]["items"][0]["text"],
+            "手元が変わったから、勝手に別の枠へは替えんかったで。"
+        );
         std::fs::remove_dir_all(root).unwrap();
     }
     #[tokio::test]

@@ -17,7 +17,85 @@ use crate::{
 };
 use anyhow::{Context, ensure};
 
-const CONVERSATION_PROTOCOL: &str = "現在の会話プロトコル: 現在句・未採用案・直近対話・discussion_targetを読み、次の返答またはfunction callをあなたが選ぶ。実行方法と可能な処理は、今回提示されたtoolsと本文JSONのaction一覧に従う。本人の意思を文脈から理解し、今回許可されている一手だけを選ぶ。「終了ー」「お開きー」など言い方によらず終了意思を読む。「いい句だね」などの称賛だけでは終了を決めない。未採用案があり採否が不明な終了希望にはaskで採用か破棄かを確認し、勝手に閉じない。採否と終了がともに明確ならaccept_pendingまたはreject_pendingにclose_after_actionと各意思の根拠を付ける。コードは出力を受け取り、既知情報を補完して対象へ適用し、元句・版・保存結果を管理する。新しい対象を本人が指定するまではdiscussion_targetの行と語を保ち、話題が分かっているのに『どこを見たいか』を聞き直さない。意味・由来・連想は自由に話す。本人の指定語はそのまま編集へ渡し、句の品質や表現の形式を実行の前提にしない。本人から読み方や保存材料を尋ねられて手元の情報で答えられないときだけ、inspect_verseで参照できる。function callでは本文の返事を付けず、propose_revisionのspeechも空文字列にして結果を待つ。ほかの本文JSONのactionでは、unrelatedを除いてspeechに自然な返事を入れる。採用の返事はコードが実行に成功してから再生する。まだ行っていない操作を別のactionのspeechで実行済みとは言わない。句本文はコードが付けるのでspeechに三行を再生成しない。acknowledge_meaningは納得への返事だけで、終了確認へ進めない。本人が話を続けている、訂正している、困っているだけなら、終了を勧めずその話に応じる。";
+const CONVERSATION_PROTOCOL: &str = "現在の会話プロトコル: 現在句・未採用案・直近対話・discussion_targetを読み、次の返答またはfunction callをあなたが選ぶ。実行方法と可能な処理は、今回提示されたtoolsと本文JSONのaction一覧に従う。今回許可されている一手だけを選ぶ。対象行・具体変更・終了はBERTの分類結果をコードが渡すので再判定しない。終了を自分で選んだりclose_after_actionを追加しない。未採用案があり採否が不明な終了希望にはaskで採用か破棄かを確認する。採否の意思が明確ならaccept_pendingまたはreject_pendingにその意思の原文根拠を付ける。コードは出力を受け取り、既知情報を補完して対象へ適用し、元句・版・保存結果を管理する。新しい対象を本人が指定するまではdiscussion_targetの行と語を保ち、話題が分かっているのに『どこを見たいか』を聞き直さない。意味・由来・連想は自由に話す。本人の指定語はそのまま編集へ渡し、句の品質や表現の形式を実行の前提にしない。本人から読み方や保存材料を尋ねられて手元の情報で答えられないときだけ、inspect_verseで参照できる。function callでは本文の返事を付けず、propose_revisionのspeechも空文字列にして結果を待つ。ほかの本文JSONのactionでは、unrelatedを除いてspeechに自然な返事を入れる。採用の返事はコードが実行に成功してから再生する。まだ行っていない操作を別のactionのspeechで実行済みとは言わない。句本文はコードが付けるのでspeechに三行を再生成しない。acknowledge_meaningは納得への返事だけで、終了確認へ進めない。本人が話を続けている、訂正している、困っているだけなら、終了を勧めずその話に応じる。";
+
+/// 行3種・具体変更3種・終了はBERTへ変更済み。旧判定へ戻さない。
+/// 共通受付の一回の分類を使い、行の相談と具体的な置換を混同しない。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ClassifiedWorkshop {
+    Line(usize),
+    Change(usize),
+    End,
+}
+
+impl ClassifiedWorkshop {
+    fn from_input(input: &bridge::Input) -> Option<Self> {
+        use crate::request_classifier::Label;
+        let classification = input.request_classification.as_ref()?;
+        if !classification.matches(input["text"].as_str()?, input["source"].as_str()?) {
+            return None;
+        }
+        match classification.prediction.label {
+            Label::SenryuLineUpper => Some(Self::Line(0)),
+            Label::SenryuLineMiddle => Some(Self::Line(1)),
+            Label::SenryuLineLower => Some(Self::Line(2)),
+            Label::SenryuChangeUpper => Some(Self::Change(0)),
+            Label::SenryuChangeMiddle => Some(Self::Change(1)),
+            Label::SenryuChangeLower => Some(Self::Change(2)),
+            Label::SenryuEnd => Some(Self::End),
+            // not_targetには文脈依存の採否や意味の質問も含まれる。
+            _ => None,
+        }
+    }
+
+    fn line(self) -> Option<usize> {
+        match self {
+            Self::Line(index) | Self::Change(index) => Some(index),
+            Self::End => None,
+        }
+    }
+
+    fn instruction(self, lines: &[HaikuLine]) -> String {
+        match self {
+            Self::Line(index) => format!(
+                "今回の対象は分類済みの{}や。対象行を再判定せず、この行について自然に返答してな。行の指定だけを修正依頼とは扱わへん。意味の質問、感想、新案の依頼は今回の相談内容に沿って返す。新案を求められた場合だけpropose_revisionを選ぶ。", lines[index].line_id),
+            Self::Change(index) => format!(
+                "今回の分類は{}の具体的な語句変更や。行と変更意思を再判定せず、stage_player_editには今回原文の旧語・新語・根拠だけを抜いてな。行IDと元句はコードが補完する。語句の範囲が決められへんときだけaskで不足を尋ねてな。", lines[index].line_id),
+            Self::End => "今回の相談終了は分類済みや。終了意思は再判定せんでええ。未採用案について、今回の発話で採用か破棄が指定されていればaccept_pendingかreject_pendingを選び、その意思の根拠を原文から抜いてな。採否が不明ならaskで採用か破棄かだけ確認する。終了だけで案を採用・破棄せんといてな。".into(),
+        }
+    }
+}
+
+/// 本文生成へ渡す一手。BERT対応範囲の旧分類actionは公開しない。
+fn allowed_workshop_actions(
+    phase: &str,
+    pending: bool,
+    candidate: bool,
+    stage: Stage,
+    classified: Option<ClassifiedWorkshop>,
+    has_target: bool,
+) -> Vec<&'static str> {
+    let mut allowed = workshop::allowed_actions(phase, pending, candidate);
+    if phase == "decide" {
+        allowed.extend(stage.actions(pending).iter().copied());
+    }
+    allowed.retain(|action| match *action {
+        "close_workshop" | "confirm_close" => false,
+        "stage_player_edit" => matches!(classified, Some(ClassifiedWorkshop::Change(_))),
+        "propose_revision" => has_target,
+        _ => true,
+    });
+    match classified {
+        Some(ClassifiedWorkshop::Change(_)) => {
+            allowed.retain(|a| matches!(*a, "stage_player_edit" | "ask"))
+        }
+        Some(ClassifiedWorkshop::End) => {
+            allowed.retain(|a| matches!(*a, "accept_pending" | "reject_pending" | "ask"))
+        }
+        _ => {}
+    }
+    allowed
+}
 
 impl Dialogue {
     /// 現在句のsnapshotから、返答と検証済みの行為候補を作る。
@@ -25,7 +103,7 @@ impl Dialogue {
     /// 取消・時間切れでも、ここで起動した辞書補助プロセスの終了処理を待ってから戻る。
     pub(super) async fn render_workshop(
         &self,
-        input: &Value,
+        input: &bridge::Input,
         cancel: &mut watch::Receiver<bool>,
         permit: &mut Option<tokio::sync::SemaphorePermit<'_>>,
     ) -> Result<Value> {
@@ -83,46 +161,49 @@ impl Dialogue {
 
     async fn workshop_body(
         &self,
-        input: &Value,
+        input: &bridge::Input,
         helper: &mut Helper,
         reply: &super::workshop_story::Reply,
     ) -> Result<Value> {
         let mut editing = crate::workshop_editing::Engine::default();
         let text = input["text"].as_str().context("workshop input text")?;
-        // 正本DBで答える一般知識を、句の相談・確認状態の消費より先に分ける。
-        let Output::KnowledgeRoute { query: knowledge } = editing
-            .run(
-                helper,
-                &json!({"op":"knowledge_route", "text":text,
+        let classified = ClassifiedWorkshop::from_input(input);
+        // 分類済みの川柳操作を知識語句で横取りしない。未分類の一般知識だけ先に分ける。
+        if classified.is_none() {
+            let Output::KnowledgeRoute { query: knowledge } = editing
+                .run(
+                    helper,
+                    &json!({"op":"knowledge_route", "text":text,
             "interpreted_text":input["interpreted_text"].as_str().unwrap_or(text),
             "workshop":input["workshop"]}),
-            )
-            .await?
-        else {
-            anyhow::bail!("unexpected knowledge route output");
-        };
-        if let Some(knowledge) = knowledge {
-            let prepared = crate::player_text::prepare(text);
-            let query = crate::knowledge::query::from_normalized(&prepared.normalized_text)
-                .context("workshop knowledge query missing from original input")?;
-            ensure!(knowledge == query, "workshop knowledge query mismatch");
-            let lookup = crate::knowledge::provider::lookup_async(
-                crate::knowledge::provider::Paths::from_helper(&self.config.helper)?,
-                query,
-            )
-            .await?;
-            let reply = crate::knowledge::render(&lookup);
-            let reading = helper
-                .exchange(json!({"op":"reading", "text":reply.text,
+                )
+                .await?
+            else {
+                anyhow::bail!("unexpected knowledge route output");
+            };
+            if let Some(knowledge) = knowledge {
+                let prepared = crate::player_text::prepare(text);
+                let query = crate::knowledge::query::from_normalized(&prepared.normalized_text)
+                    .context("workshop knowledge query missing from original input")?;
+                ensure!(knowledge == query, "workshop knowledge query mismatch");
+                let lookup = crate::knowledge::provider::lookup_async(
+                    crate::knowledge::provider::Paths::from_helper(&self.config.helper)?,
+                    query,
+                )
+                .await?;
+                let reply = crate::knowledge::render(&lookup);
+                let reading = helper
+                    .exchange(json!({"op":"reading", "text":reply.text,
                 "reading_engine":self.config.reading_engine,
                 "reading_corrections":self.reading_overlay().await?}))
-                .await?;
-            return Ok(
-                json!({"text":reply.text, "spoken_text":reading["spoken_text"],
+                    .await?;
+                return Ok(
+                    json!({"text":reply.text, "spoken_text":reading["spoken_text"],
                 "knowledge_status":reply.lookup_status, "references":reply.references,
                 "workshop_action":"knowledge", "workshop_id":input["workshop"]["workshop_id"],
                 "workshop_version":input["workshop"]["version"], "llm_reports":[]}),
-            );
+                );
+            }
         }
         // 一般知識の寄り道は確認・採否・時計を動かさない。本来の句入力だけ消費する。
         self.consume_workshop_input(input)?;
@@ -134,7 +215,28 @@ impl Dialogue {
         let lines = pending.as_ref().map_or(current.as_slice(), |p| &p.lines);
         let mut proposed = None;
         let mut discussion_target = crate::workshop_target::Target::from_view(view, lines);
-        // 候補と操作はモデル出力から受け取る。入力語形から先回りして選択肢を減らさない。
+        let classified_line = classified.and_then(ClassifiedWorkshop::line);
+        if let Some(index) = classified_line {
+            ensure!(lines.len() == 3, "invalid classified workshop lines");
+            discussion_target = Some(crate::workshop_target::Target {
+                line_index: index,
+                line_id: lines[index].line_id.clone(),
+                fragment: String::new(),
+            });
+            snapshot["discussion_target"] = serde_json::to_value(&discussion_target)?;
+        }
+        // 今回の原文A/Bを既存抽出で確定できる具体変更は、生成せず既存編集へ渡す。
+        let mut direct_step = if let Some(ClassifiedWorkshop::Change(index)) = classified {
+            crate::workshop_editing::verbatim_player_edit(&snapshot, text, index)?.map(|frame| {
+                json!({"action":"stage_player_edit", "purpose":"improve_wording",
+                    "speech":"", "evidence":frame["payload"]["evidence"], "checks":[],
+                    "analysis":{"line_proposal":frame["proposal"], "findings":[]},
+                    "close_after_action":false})
+            })
+        } else {
+            None
+        };
+        // 候補と未分類の操作は既存の会話へ渡す。分類済みの対象を再抽出しない。
         let mut conversation_candidate: Option<workshop_candidate::Draft> = None;
         snapshot["current_player_idea"] = serde_json::to_value(&conversation_candidate)?;
         let mut close_after = false;
@@ -148,30 +250,42 @@ impl Dialogue {
         let mut action: Option<String> = None;
         let mut speech = String::new();
         let stage: Stage = serde_json::from_value(view["followup"].clone())?;
+        if matches!(classified, Some(ClassifiedWorkshop::End)) && pending.is_none() {
+            action = Some("close_workshop".into());
+            steps.push(json!({"phase":"decide", "action":"close_workshop",
+                "transport":"modernbert", "outcome":"selected", "evidence":text,
+                "checks":[], "validation_codes":[]}));
+        }
         if action.is_none() {
-            // TODO(BERT): ここは川柳の意図分類をBERTへ移す場所。ユキが応答に不満を言っても、
-            // LLMの分類・再判定を増やして解決しない。Luna側の追加ラベルと採用モデルに接続する。
-            // 現行LLMの対象・置換語を受け取り、既知情報を補完して既存処理へ渡す。
-            // TODO(ModernBERT): ここに学習済みの「相談終了」「変更依頼」の分類結果を接続する。
-            // 終了は生成LLMへ再判定させず、原文・workshop・版・世代の検証後に既存の終了処理へ渡す。
-            // 変更依頼は下流の共通編集表示へ接続する。現行5分類のother_requestを終了や変更へ読み替えない。
             // 初手→必要時の実検査の返答まで。編集後の結果はコードで返し、再計画しない。
             let mut phase = "decide";
             for _ in 0..2 {
-                let mut allowed = workshop::allowed_actions(
+                let mut allowed = allowed_workshop_actions(
                     phase,
                     snapshot["pending"].is_object(),
                     snapshot["conversation_candidate"].is_object(),
+                    stage,
+                    classified,
+                    discussion_target.is_some(),
                 );
-                if phase == "decide" {
-                    allowed.extend(stage.actions(pending.is_some()).iter().copied());
-                }
+                let attempts = if matches!(
+                    classified,
+                    Some(ClassifiedWorkshop::Change(_) | ClassifiedWorkshop::End)
+                ) {
+                    1
+                } else {
+                    2
+                };
                 let mut frame = json!({"workshop":snapshot,"text":text,"phase":phase,
                     "interpreted_text":input["interpreted_text"].as_str().unwrap_or(text),
                     "observation":observation,"turn_steps":steps,"allowed_actions":allowed});
-                let mut selected = None;
+                let mut selected = direct_step.take();
+                let classified_edit = selected.is_some();
                 let mut selected_tool = None;
-                for attempt in 0..2 {
+                for attempt in 0..attempts {
+                    if selected.is_some() {
+                        break;
+                    }
                     if reply.interrupted() || self.workshop_combat_priority(input) {
                         return Ok(reply.result(input));
                     }
@@ -191,13 +305,23 @@ impl Dialogue {
                         "role":"user", "content":CONVERSATION_PROTOCOL}));
                     prepared["messages"].as_array_mut().unwrap().push(json!({"role":"user",
                         "content":"差し替え案への感想を相談するだけならrespond/askとline_proposalで返してな。指定語への変更依頼は、今回toolsにあるときだけstage_player_editのfunction callで渡す。確認のあと『うん、変えて』のように案を省略した返事は、stage_conversation_candidateが今回のaction一覧にある場合だけ、現在のconversation_candidateを選んでな。行為のevidenceは今回の返事、置換語は保持された一案から使う。以前の発話を今回のevidenceへコピーしないでな。"}));
+                    if let Some(classified) = classified {
+                        prepared["messages"]
+                            .as_array_mut()
+                            .unwrap()
+                            .push(json!({"role":"user",
+                            "content":classified.instruction(lines)}));
+                    }
                     // 一turnのnative toolは一件まで。結果後の返答では追加呼出しを止める。
                     let allow_tool_call = tool_messages.is_empty();
-                    let tool_definitions = tools::definitions(if allow_tool_call {
-                        &allowed
-                    } else {
-                        &["inspect", "stage_player_edit"]
-                    });
+                    let tool_definitions = tools::definitions_for_target(
+                        if allow_tool_call {
+                            &allowed
+                        } else {
+                            &["inspect", "stage_player_edit"]
+                        },
+                        classified_line,
+                    );
                     if allow_tool_call && !tool_definitions.is_empty() {
                         let mut instruction = String::from(
                             "function callは今回toolsにあるもの一件だけを呼べる。toolsにない操作は選ばず、respond/explain/askの本文JSONで相談を続けてな。本文JSONのactionでtoolを代用せんといてな。",
@@ -207,7 +331,11 @@ impl Dialogue {
                                 .push_str("本人から尋ねられた読み方・保存材料の参照はinspect_verseや。編集の前提確認には使わへん。");
                         }
                         if allowed.contains(&"stage_player_edit") {
-                            instruction.push_str("本人が今回、新しい語を指定してその語への変更を頼んだらstage_player_editを呼ぶ。置換語を指定せず新しい案を考えてほしい場合だけpropose_revisionの本文JSONや。expected_textは変更前の対象行全体。「AをBに変えて」ならtarget_fragmentはA、replacement_textはBだけで、変更後の行は作らない。evidenceも今回の原文から抜く。以前の案を選ぶだけの返事はstage_conversation_candidateや。");
+                            if classified_line.is_some() {
+                                instruction.push_str("stage_player_editの対象行と元句はコードが補完する。「AをBに変えて」ならtarget_fragmentはA、replacement_textはBだけで、変更後の行は作らない。evidenceも今回の原文から抜く。");
+                            } else {
+                                instruction.push_str("本人が今回、新しい語を指定してその語への変更を頼んだらstage_player_editを呼ぶ。置換語を指定せず新しい案を考えてほしい場合だけpropose_revisionの本文JSONや。expected_textは変更前の対象行全体。「AをBに変えて」ならtarget_fragmentはA、replacement_textはBだけで、変更後の行は作らない。evidenceも今回の原文から抜く。以前の案を選ぶだけの返事はstage_conversation_candidateや。");
+                            }
                         }
                         instruction.push_str("本文JSONは会話の返答と、本文JSONで使えるaction一覧の処理に使う。tool呼出し時は本文の返事を付けず結果を待つ。コードが対象へ差分を適用し、保存結果を返すで。");
                         let system = prepared["messages"][0]["content"].as_str().unwrap_or("");
@@ -287,7 +415,12 @@ impl Dialogue {
                         None
                     } else if let Some(message) = tool_message {
                         let decoded = if allow_tool_call {
-                            tools::Call::decode(message, &frame["workshop"], text)
+                            tools::Call::decode_for_target(
+                                message,
+                                &frame["workshop"],
+                                text,
+                                classified_line,
+                            )
                         } else {
                             Err(anyhow::anyhow!("additional_tool_call_not_allowed"))
                         };
@@ -319,7 +452,7 @@ impl Dialogue {
                     } else {
                         crate::planner::extract_object(&report.generated.text)
                     };
-                    let Some(payload) = payload.filter(|_| !truncated) else {
+                    let Some(mut payload) = payload.filter(|_| !truncated) else {
                         if reply.interrupted() || self.workshop_combat_priority(input) {
                             return Ok(reply.result(input));
                         }
@@ -352,6 +485,31 @@ impl Dialogue {
                         }
                         break;
                     }
+                    // 行概念はBERTへ変更済み。旧判定へ戻さない。文脈継続も保持済み対象を使う。
+                    if let Some(payload) = payload.as_object_mut() {
+                        payload.remove("line_reference");
+                    }
+                    if let Some(index) = discussion_target.as_ref().map(|target| target.line_index)
+                    {
+                        if payload["action"] == "propose_revision" {
+                            payload["findings"] = json!([{"line_index":index,
+                                "fragment":lines[index].reading_text, "problem":"other",
+                                "note":text, "confidence":1.0}]);
+                        }
+                    }
+                    if matches!(classified, Some(ClassifiedWorkshop::End))
+                        && matches!(
+                            payload["action"].as_str(),
+                            Some("accept_pending" | "reject_pending")
+                        )
+                    {
+                        payload["close_after_action"] = true.into();
+                        payload["close_evidence"] = text.into();
+                    } else {
+                        // pending採否は文脈から選べるが、終了を付けられるのはBERT Endだけ。
+                        payload["close_after_action"] = false.into();
+                        payload["close_evidence"] = "".into();
+                    }
                     if let Some(verified) = validation::feedback(&payload["feedback"], text) {
                         praise = json!({"action":"praise","findings":[],"evidence":verified["evidence"]});
                     }
@@ -382,21 +540,6 @@ impl Dialogue {
                         .as_str()
                         .unwrap_or("invalid_validation")
                         .into();
-                    // 時間経過で閉じるので対話を壊すような開発は不要。
-                    // 終了できない一手は本文だけを会話として使い、モデルへ差し戻さない。
-                    if payload["action"] == "close_workshop" && validation["step"].is_null() {
-                        // 不成立理由は診断ログだけへ残す。agent_stepsへ入れると
-                        // 後の相談文脈へ戻るため、再試行や会話材料には使わない。
-                        tracing::warn!(event="workshop_close_rejected",phase,attempt,
-                            reason=%reason,errors=%validation["contract_errors"]);
-                        action = Some("respond".into());
-                        speech = crate::reaction_leaf::sanitize::strip(
-                            payload["speech"].as_str().unwrap_or(""),
-                        )
-                        .into();
-                        reason = "close_skipped".into();
-                        break;
-                    }
                     if validation["contract_errors"]
                         .as_array()
                         .is_some_and(|e| !e.is_empty())
@@ -480,6 +623,15 @@ impl Dialogue {
                         if let Some(call) = &tool_call {
                             call.retain_verified_target(&mut step);
                         }
+                        if let Some(index) =
+                            discussion_target.as_ref().map(|target| target.line_index)
+                        {
+                            if let Some(findings) = step["analysis"]["findings"].as_array_mut() {
+                                for finding in findings {
+                                    finding["line_index"] = index.into();
+                                }
+                            }
+                        }
                         selected = Some(step);
                         selected_tool = tool_call;
                     } else if attempt == 0 {
@@ -502,17 +654,6 @@ impl Dialogue {
                 };
                 let a = step["action"].as_str().unwrap();
                 let tool_trace = selected_tool.as_ref().map(tools::Call::trace);
-                if let Some(target) = crate::workshop_target::Target::from_reference(
-                    &step["analysis"]["line_reference"],
-                    text,
-                    lines,
-                ) && discussion_target
-                    .as_ref()
-                    .is_none_or(|t| t.line_index != target.line_index)
-                {
-                    discussion_target = Some(target);
-                    snapshot["discussion_target"] = serde_json::to_value(&discussion_target)?;
-                }
                 let candidate = json!({"action":a,"purpose":step["purpose"],"findings":step["analysis"]["findings"]});
                 if step["analysis"]["feedback_allowed"] != false
                     && (feedback.is_null() || a == "propose_revision")
@@ -566,7 +707,7 @@ impl Dialogue {
                 }
 
                 steps.push(json!({"phase":phase,"action":a,"purpose":step["purpose"],
-                    "transport":if tool_trace.is_some() {"native_tool"} else {"content_json"},
+                    "transport":if classified_edit {"modernbert_verbatim"} else if tool_trace.is_some() {"native_tool"} else {"content_json"},
                     "tool_call":tool_trace,
                     "outcome":if a=="inspect" {"inspected"} else {"selected"},
                     "validation_codes":observation.get("validation_codes").cloned().unwrap_or(json!([])),
@@ -705,12 +846,21 @@ impl Dialogue {
                     }
                     action = Some(a.into());
                     speech = step["speech"].as_str().unwrap_or("").into();
-                    if a == "decline_resume" && pending.is_some() {
-                        action = Some("ask".into());
-                        speech = "未採用の案があるで。採用するか、元の句に戻すか教えてな。".into();
-                    }
                     break;
                 }
+            }
+        }
+        if action.is_none() {
+            match classified {
+                Some(ClassifiedWorkshop::End) => {
+                    action = Some("ask".into());
+                    speech = "未採用の案があるで。採用するか、元の句に戻すか教えてな。".into();
+                }
+                Some(ClassifiedWorkshop::Change(_)) => {
+                    action = Some("respond".into());
+                    speech = "その変更は反映できんかったわ。元の句はそのままやで。".into();
+                }
+                _ => {}
             }
         }
         let action = action.unwrap_or_else(|| "fallback".into());
@@ -718,7 +868,7 @@ impl Dialogue {
             && let Some(fixed_speech) = workshop_followup::speech(&action)
         {
             speech = fixed_speech.into();
-            if matches!(action.as_str(), "continue_workshop" | "resume_workshop")
+            if action == "continue_workshop"
                 && let Some(target) = crate::workshop_target::Target::from_view(view, lines)
             {
                 speech = format!("おけ、{}の話を続けよか。", target.label(lines));
@@ -868,7 +1018,7 @@ impl Dialogue {
             .pending
             .as_ref()
             .map_or(w.current_lines.as_slice(), |p| &p.lines);
-        // 現在対象の失効だけを処理する。新しい対象はモデルのline_referenceから受け取る。
+        // 現在対象の失効だけを処理する。新しい対象はBERTの分類結果から受け取る。
         crate::workshop_target::Target::observe(&mut w.discussion_target, "", lines);
         Some(
             json!({"workshop_id":w.hud_id,"emission":w.emission,"materials":w.materials,
@@ -876,7 +1026,7 @@ impl Dialogue {
             "current_lines":w.current_lines,"pending":w.pending,"version":w.version,
             "conversation_candidate":candidate,
             "discussion_target":w.discussion_target,
-            "provisional":w.provisional,"dialogue":w.dialogue,"shared_context":shared_context,"agent_steps":w.agent_steps,"followup":w.followup,"text":text}),
+            "dialogue":w.dialogue,"shared_context":shared_context,"agent_steps":w.agent_steps,"followup":w.followup,"text":text}),
         )
     }
 
@@ -970,10 +1120,99 @@ mod removed_check_tests {
             &Value::Null,
         );
         assert!(!allowed.contains(&"inspect"));
-        assert!(tools::definitions(&allowed).is_empty());
+        assert!(tools::definitions_for_target(&allowed, None).is_empty());
         assert!(allowed.contains(&"respond"));
         assert!(allowed.contains(&"show_current"));
         assert!(!CONVERSATION_PROTOCOL.contains("音数"));
         assert!(!frame.to_string().contains("inspect_verse"));
+    }
+}
+
+#[cfg(test)]
+mod bert_tests {
+    use super::*;
+    use crate::request_classifier::{Classification, LABEL_COUNT, Label, Prediction};
+
+    fn input(label: Label) -> bridge::Input {
+        let mut input: bridge::Input = json!({"text":"原文", "source":"typed"}).into();
+        input.request_classification = Some(Classification {
+            text: "原文".into(),
+            source: "typed".into(),
+            manifest_sha256: "fixture".into(),
+            prediction: Prediction {
+                label,
+                probabilities: [0.0; LABEL_COUNT],
+                token_count: 3,
+                inference_ms: 1.0,
+            },
+        });
+        input
+    }
+
+    #[test]
+    fn classifier_targets_are_not_inferred_from_raw_keywords_or_confidence() {
+        for (label, expected) in [
+            (Label::SenryuLineUpper, ClassifiedWorkshop::Line(0)),
+            (Label::SenryuLineMiddle, ClassifiedWorkshop::Line(1)),
+            (Label::SenryuLineLower, ClassifiedWorkshop::Line(2)),
+            (Label::SenryuChangeUpper, ClassifiedWorkshop::Change(0)),
+            (Label::SenryuChangeMiddle, ClassifiedWorkshop::Change(1)),
+            (Label::SenryuChangeLower, ClassifiedWorkshop::Change(2)),
+            (Label::SenryuEnd, ClassifiedWorkshop::End),
+        ] {
+            let mut classified = input(label);
+            assert_eq!(ClassifiedWorkshop::from_input(&classified), Some(expected));
+            classified["source"] = "voice".into();
+            assert_eq!(ClassifiedWorkshop::from_input(&classified), None);
+        }
+        let mut unknown = input(Label::NotTarget);
+        unknown["text"] = "上五を変えて、終了".into();
+        assert_eq!(ClassifiedWorkshop::from_input(&unknown), None);
+    }
+
+    #[test]
+    fn contextual_conversation_cannot_fall_back_to_line_change_or_end_classification() {
+        for stage in [Stage::Discussion, Stage::CloseConfirmation] {
+            let allowed = allowed_workshop_actions("decide", false, true, stage, None, false);
+            for forbidden in [
+                "close_workshop",
+                "confirm_close",
+                "decline_resume",
+                "stage_player_edit",
+                "propose_revision",
+            ] {
+                assert!(!allowed.contains(&forbidden), "{forbidden}");
+            }
+            assert!(allowed.contains(&"respond"));
+            assert!(allowed.contains(&"stage_conversation_candidate"));
+        }
+        let line = allowed_workshop_actions(
+            "decide",
+            false,
+            false,
+            Stage::Discussion,
+            Some(ClassifiedWorkshop::Line(1)),
+            true,
+        );
+        assert!(line.contains(&"propose_revision") && line.contains(&"explain"));
+        assert!(!line.contains(&"stage_player_edit"));
+        let change = allowed_workshop_actions(
+            "decide",
+            false,
+            false,
+            Stage::Discussion,
+            Some(ClassifiedWorkshop::Change(1)),
+            true,
+        );
+        assert_eq!(change, vec!["ask", "stage_player_edit"]);
+        let end = allowed_workshop_actions(
+            "decide",
+            true,
+            false,
+            Stage::Discussion,
+            Some(ClassifiedWorkshop::End),
+            false,
+        );
+        assert_eq!(end, vec!["ask", "accept_pending", "reject_pending"]);
     }
 }
