@@ -132,6 +132,25 @@ def _request() -> CombatInputRequest:
 
 
 class PlatformAIRouterTests(unittest.TestCase):
+    def test_first_probe_runs_even_before_the_system_refresh_interval(self) -> None:
+        # monotonicはOS起動後の経過時間。初回確認と再確認の間隔を区別する。
+        for started_at in (0.0, 42.0):
+            with self.subTest(started_at=started_at):
+                router = PlatformStructuredAIRouter(
+                    Settings(platform_ai_provider="apple", platform_ai_refresh_sec=300)
+                )
+                provider = _Provider()
+                router._providers["apple"] = provider
+                try:
+                    with patch("dogido_server.platform_ai.time.monotonic", return_value=started_at), \
+                            patch.object(provider, "probe", wraps=provider.probe) as probe:
+                        self.assertIs(router._select_provider(), provider)
+                        self.assertIs(router._select_provider(), provider)
+                        probe.assert_called_once()
+                        self.assertEqual(router._last_probe_at, started_at)
+                finally:
+                    router.close()
+
     def test_invalid_action_contract_never_probes_generates_or_falls_back(self) -> None:
         router = PlatformStructuredAIRouter(Settings(platform_ai_provider="apple"))
         fallback = _Fallback()

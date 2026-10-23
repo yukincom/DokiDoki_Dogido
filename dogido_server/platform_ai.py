@@ -470,7 +470,7 @@ class PlatformStructuredAIRouter:
         self.settings = settings
         self._lock = threading.Lock()
         self._active: _StructuredProvider | None = None
-        self._last_probe_at = 0.0
+        self._last_probe_at: float | None = None
         self._last_probe: PlatformAIProbe | None = None
         self._failed_until: dict[str, float] = {}
         self._providers: dict[str, _StructuredProvider] = {
@@ -565,7 +565,8 @@ class PlatformStructuredAIRouter:
 
         now = time.monotonic()
         refresh = max(1.0, self.settings.platform_ai_refresh_sec)
-        if not force and now - self._last_probe_at < refresh:
+        # 未確認のNoneと時刻0を区別し、OS起動直後でも初回probeを実行する。
+        if not force and self._last_probe_at is not None and now - self._last_probe_at < refresh:
             if self._active is None:
                 retry_times = [value for value in self._failed_until.values() if value > 0.0]
                 if not retry_times or now < min(retry_times):
