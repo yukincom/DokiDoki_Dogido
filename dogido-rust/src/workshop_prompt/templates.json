@@ -21,14 +21,9 @@
         "literal": "さっき句の意味を説明した音声はもう再生済みやで。プレイヤーの返事が『なるほど』『そうなんや』みたいに説明への納得・相槌だけやったら、actionはacknowledge_meaning、purposeはunderstand_meaningにしてな。句への評価や褒め言葉、別の新しい質問、直してほしい依頼なんかとは、ちゃんと分けて考えてな。\n"
       }
     ],
-    "confirm_close": [
-      {
-        "literal": "終了はBERTの結果をコードが扱う。終了を再分類せず、相談を続けたい返事や新しい質問に自然に応じてな。\n"
-      }
-    ],
     "followup": [
       {
-        "literal": "acknowledge_meaning と continue_workshop は、action と自然な speech だけで返してええで。終了はBERTの結果をコードが扱う。\n"
+        "literal": "acknowledge_meaning は、action と自然な speech だけで返してええで。終了はBERTの結果をコードが扱う。\n"
       }
     ],
     "editing": [
@@ -56,24 +51,17 @@
       {
         "literal": "いま未採用の修正案がある状態やで。compareは元句と案の比較、accept_pendingは案の明示的な採用、reject_pendingは案の明示的な却下や。採用のpurposeはadopt_pending、却下はdiscard_pendingにしてな。『そうしましょう』『それでええよ』みたいな返事は、直前にこの未採用案について相談しとったのが確実なときだけ、この案の採用として扱ってな。別の話への返事や、曖昧な相槌を採用と受け取ったらあかんで。終了はBERTが分類し、コードが採否と同じ操作に付けるので、close_after_actionやclose_evidenceを自分で追加せんといてな。採否をどうするか分からんまま終了だけ頼まれたら、askで『この案はどうする？』って確かめてな。\n"
       }
-    ],
-    "after_validation": [
-      {
-        "literal": "検査結果が出た後も、その結果を参考にしながら同じ相談の会話を続けてな。句の本文や採用の案内はコードが自動で付けるから、speechの中には入れんといてな。頼まれてへん別の句や表記、勝手な別案を付け足したらあかんで。案がproposed（合格）なら、元の句との差分を説明したり比較したりしてええよ。rejected（不合格）やった場合でも、同じ対象と案をキープして説明や相談を続け、本当に必要な確認があるときだけ聞いてな。\n"
-      }
     ]
   },
   "extra_order": [
     "raw_semantic",
     "current_idea",
     "meaning_ack",
-    "confirm_close",
     "followup",
     "editing",
     "conversation_candidate",
     "propose_revision",
-    "pending",
-    "after_validation"
+    "pending"
   ],
   "main": [
     {
@@ -156,6 +144,5 @@
     {
       "literal": "選んだfunction callまたは本文JSONのactionに必要な入力と、今回の原文evidenceを揃えてな。"
     }
-  ],
-  "canonical_sha256": "6ab3b16b315d546916d40e8e9ec676f58840d705a9af083d6255c180e2a3eb6f"
+  ]
 }

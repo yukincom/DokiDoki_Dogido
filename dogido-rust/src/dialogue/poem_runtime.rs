@@ -39,8 +39,8 @@ impl Dialogue {
         {
             return Ok(reply("no_original", "まだ保存する元の句がないわ。"));
         }
-        // Only the dictionary bridge supplies canonical readings. An unresolved
-        // legacy archive payload remains text; it never invents three new lines.
+        // 確定読みは辞書で取得した値だけを使う。本人の明示保存では
+        // 一行の原文もそのまま保持し、未指定の三行や読みを補作しない。
         let lines: Vec<HaikuLine> = if let Input::Revision { text, source } = &request {
             let mut helper = Helper::start(
                 &self.config.python,

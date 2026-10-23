@@ -163,9 +163,8 @@ fn heard_pet() -> Value {
 fn individual_snapshot(event: &GameEvent) -> Snapshot {
     let mut memory = crate::chat_observation::ChatObservationMemory::default();
     memory
-        .observe(event, &Default::default(), &labels())
-        .unwrap();
-    memory.snapshot(event, &labels()).unwrap()
+        .observe(event, &Default::default(), &labels());
+    memory.snapshot(event, &labels())
 }
 
 #[test]
@@ -176,17 +175,15 @@ fn named_sound_uses_latest_name_normalized_longest_match_and_actual_sound_kind()
     );
     let mut memory = crate::chat_observation::ChatObservationMemory::default();
     memory
-        .observe(&original, &Default::default(), &labels())
-        .unwrap();
+        .observe(&original, &Default::default(), &labels());
     let renamed = individual_event(
         "2026-09-30T01:00:01Z",
         json!({"passive_mobs":[
         {"type":"cat","identity":{"entity_id":"cat-1","custom_name":"シロ","tamed":true}}]}),
     );
     memory
-        .observe(&renamed, &Default::default(), &labels())
-        .unwrap();
-    let snap = memory.snapshot(&renamed, &labels()).unwrap();
+        .observe(&renamed, &Default::default(), &labels());
+    let snap = memory.snapshot(&renamed, &labels());
     let answer = individuals::hearing(&snap, "シロの声？");
     assert!(answer.summary.contains("シロの声") && !answer.summary.contains("クロちゃん"));
     let removed = individual_event(
@@ -195,9 +192,8 @@ fn named_sound_uses_latest_name_normalized_longest_match_and_actual_sound_kind()
         {"type":"cat","identity":{"entity_id":"cat-1","tamed":true}}]}),
     );
     memory
-        .observe(&removed, &Default::default(), &labels())
-        .unwrap();
-    let snap = memory.snapshot(&removed, &labels()).unwrap();
+        .observe(&removed, &Default::default(), &labels());
+    let snap = memory.snapshot(&removed, &labels());
     assert!(
         !individuals::hearing(&snap, "何の音？")
             .summary
@@ -292,12 +288,10 @@ fn retained_companion_name_never_restores_current_presence() {
     let gone = individual_event("2026-10-06T02:00:01Z", json!({}));
     let mut memory = crate::chat_observation::ChatObservationMemory::default();
     memory
-        .observe(&named, &Default::default(), &labels())
-        .unwrap();
+        .observe(&named, &Default::default(), &labels());
     memory
-        .observe(&gone, &Default::default(), &labels())
-        .unwrap();
-    let snapshot = memory.snapshot(&gone, &labels()).unwrap();
+        .observe(&gone, &Default::default(), &labels());
+    let snapshot = memory.snapshot(&gone, &labels());
     assert!(!snapshot.named_mobs[0].current);
     assert!(individuals::focus(&gone, &snapshot, &Context::default(), "クロちゃんは？").is_none());
     assert!(individuals::current_observations(&snapshot, "クロちゃんは？").is_empty());

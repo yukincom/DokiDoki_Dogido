@@ -135,7 +135,7 @@ fn canonical_corpus_preserves_structural_and_execution_boundaries() {
         assert_eq!(frame["payload"], case["payload"]);
     }
     assert!(accepted > 100 && structural_rejections > 100);
-    assert_eq!(array(&FIXTURES["cases"]).len(), 3330);
+    assert_eq!(array(&FIXTURES["cases"]).len(), 2819);
 }
 
 fn conversation(input: &str, speech: &str, action: &str) -> (Value, Value) {
@@ -317,7 +317,6 @@ fn one_character_acknowledgement_does_not_require_operation_evidence() {
     assert_eq!(result["reason"], "accepted");
     crate::workshop_followup::validate(
         &result["step"],
-        "ん",
         crate::workshop_followup::Stage::MeaningExplained,
         false,
     )

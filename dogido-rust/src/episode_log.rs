@@ -1,5 +1,5 @@
 //! Best-effort evaluation records, never read by memory, prompts or decisions.
-use crate::events::{EventTime, GameEvent};
+use crate::events::GameEvent;
 use chrono::{SecondsFormat, Timelike};
 use serde_json::{Value, json};
 use std::{
@@ -15,23 +15,14 @@ use std::{
 };
 pub const SCHEMA_VERSION: u64 = 5;
 fn observed_at(event: &GameEvent) -> String {
-    match &event.observed_at {
-        EventTime::Aware(time) => time.to_rfc3339_opts(
-            if time.nanosecond() == 0 {
-                SecondsFormat::Secs
-            } else {
-                SecondsFormat::Micros
-            },
-            false,
-        ),
-        EventTime::Naive(time) => time
-            .format(if time.nanosecond() == 0 {
-                "%Y-%m-%dT%H:%M:%S"
-            } else {
-                "%Y-%m-%dT%H:%M:%S%.6f"
-            })
-            .to_string(),
-    }
+    event.observed_at.to_rfc3339_opts(
+        if event.observed_at.nanosecond() == 0 {
+            SecondsFormat::Secs
+        } else {
+            SecondsFormat::Micros
+        },
+        false,
+    )
 }
 pub struct Record {
     pub event: GameEvent,
@@ -122,13 +113,6 @@ pub fn observation(event: &GameEvent) -> Value {
 impl Record {
     pub fn payload(&self) -> Value {
         let e = json!(self.event);
-        let raw = self
-            .event
-            .meta
-            .user_text
-            .as_deref()
-            .map(str::trim)
-            .filter(|s| !s.is_empty());
         let actions = !self.actions.is_empty();
         let commands = !self.adapter_commands.is_empty();
         let results = !self.command_results.is_empty();
@@ -137,7 +121,7 @@ impl Record {
             "recorded_at":self.recorded_at,"session_id":self.session_id,"event_id":self.event_id,
             "trigger":{"input_schema_version":e["schema_version"],"game":e["game"],"adapter":e["adapter"],"event_name":e["event"]["name"],
                 "source_kind":e["event"]["source_kind"],"priority_hint":e["event"]["priority_hint"],"certainty":e["event"]["certainty"],
-                "sequence":e["sequence"],"observed_at":observed_at(&self.event),"player_input":raw.map(|text|json!({"raw":text,"interpreted":null}))},
+                "sequence":e["sequence"],"observed_at":observed_at(&self.event)},
             "observation":observation(&self.event),"state_before":self.state_before,
             "decision":{"source":"state_machine_and_service_policy","kind":if actions||commands{"emit_actions"}else if results{"observe_adapter_result"}else{"no_action"},
                 "mode_after":self.mode_after,"mode_changed":self.state_before["mode"]!=self.mode_after,"combat_active":self.combat_active,"haiku_emitted":false,"layers":layers},

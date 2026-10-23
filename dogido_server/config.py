@@ -1,7 +1,7 @@
+"""Rust起動用の設定を解決する。接続・生成・音声処理の実行はRustが担当する。"""
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
@@ -11,8 +11,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from dogido_server.runtime_settings import COMBAT_DEFAULTS, SERVER_DEFAULTS, DEFAULTS, warn_retired_settings
 
-LLM_PROVIDER = Literal["local", "openai", "openrouter", "claude", "grok", "gemini", "custom"]
-LLM_BACKEND = Literal["mlx", "openai_compatible", "chat_completions", "noop"]
+LLM_BACKEND = Literal["chat_completions", "noop"]
 HAIKU_GENERATION_STRATEGY = Literal[
     "whole_poem",
     "three_slot",
@@ -20,47 +19,12 @@ HAIKU_GENERATION_STRATEGY = Literal[
     "two_plus_one",
 ]
 
-PROVIDER_DEFAULT_BASE_URLS = {
-    "local": "http://127.0.0.1:8080/v1",
-    "openai": "https://api.openai.com/v1",
-    "openrouter": "https://openrouter.ai/api/v1",
-    "claude": "https://api.anthropic.com/v1",
-    "grok": "https://api.x.ai/v1",
-    "gemini": "https://generativelanguage.googleapis.com/v1beta",
-    "custom": None,
-}
-
-PROVIDER_API_FAMILIES = {
-    "local": "chat_completions",
-    "openai": "chat_completions",
-    "openrouter": "chat_completions",
-    "claude": "anthropic_messages",
-    "grok": "chat_completions",
-    "gemini": "gemini_generate_content",
-    "custom": "chat_completions",
-}
-
 RUNTIME_PROFILE_ENV = "DOGIDO_ENV_PROFILE"
 RUNTIME_PROFILE_STANDALONE = "standalone"
 RUNTIME_PROFILE_SHARED = "shared"
 SHARED_PROFILE_ENV_FILE = Path(".env.shared")
 SHARED_LLM_BASE_URL = "http://127.0.0.1:8080/v1"
 SHARED_LLM_MODEL = "default_model"
-
-
-@dataclass(frozen=True, slots=True)
-class LLMRouteSignature:
-    backend: str
-    provider: str
-    mlx_model_id: str | None
-    base_url: str | None
-    model: str | None
-    api_key: str | None
-    timeout_sec: float
-    max_tokens: int
-    anthropic_version: str
-    http_referer: str | None
-    application_name: str | None
 
 
 class Settings(BaseSettings):
@@ -99,9 +63,8 @@ class Settings(BaseSettings):
     conversation_suspended_player_turns: int = Field(default=COMBAT_DEFAULTS["conversation_suspended_player_turns"], ge=1, le=50)
     conversation_post_danger_player_turns: int = Field(default=COMBAT_DEFAULTS["conversation_post_danger_player_turns"], ge=0, le=20)
     llm_enabled: bool = True
-    llm_backend: LLM_BACKEND = "mlx"
-    llm_provider: LLM_PROVIDER = "local"
-    tts_backend: Literal["voicevox", "say", "noop"] = "voicevox"
+    llm_backend: LLM_BACKEND = "chat_completions"
+    tts_backend: Literal["voicevox", "noop"] = "voicevox"
     cue_audio_dir: Path | None = Path("cue_voice")
 
     voicevox_url: str = "http://127.0.0.1:50021"
@@ -155,39 +118,25 @@ class Settings(BaseSettings):
     # whisper.cppは値が高いほど無音棄却が緩くなるため、1.0で実質無効化する。
     voice_no_speech_retry_thold: float | None = Field(default=1.0, ge=0.0, le=1.0)
 
-    mlx_model_id: str | None = None
     llm_base_url: str | None = None
     llm_model: str | None = None
     llm_api_key: str | None = None
-    llm_http_referer: str | None = None
-    llm_application_name: str | None = None
-    llm_anthropic_version: str = "2023-06-01"
     llm_timeout_sec: float = 20.0
     llm_max_tokens: int = 72
 
     # 意図は共通BERT、戦闘からの再開・継続は敵が警戒範囲から消えた現在状態で判断する。
     # 意図分類のBERT移行は完了。旧OSAI・chat分類fallbackの設定と経路は撤去済みで、復活させない。
     llm_chat_backend: LLM_BACKEND | None = None
-    llm_chat_provider: LLM_PROVIDER | None = None
-    llm_chat_mlx_model_id: str | None = None
     llm_chat_base_url: str | None = None
     llm_chat_model: str | None = None
     llm_chat_api_key: str | None = None
-    llm_chat_http_referer: str | None = None
-    llm_chat_application_name: str | None = None
-    llm_chat_anthropic_version: str | None = None
     llm_chat_timeout_sec: float | None = None
     llm_chat_max_tokens: int | None = None
 
     llm_haiku_backend: LLM_BACKEND | None = None
-    llm_haiku_provider: LLM_PROVIDER | None = None
-    llm_haiku_mlx_model_id: str | None = None
     llm_haiku_base_url: str | None = None
     llm_haiku_model: str | None = None
     llm_haiku_api_key: str | None = None
-    llm_haiku_http_referer: str | None = None
-    llm_haiku_application_name: str | None = None
-    llm_haiku_anthropic_version: str | None = None
     llm_haiku_timeout_sec: float | None = None
     llm_haiku_max_tokens: int | None = None
 
@@ -256,9 +205,8 @@ class Settings(BaseSettings):
     # 解決済みの匂いは同じ優勢状態で一度だけ知らせ、再侵入・勝者変更にも
     # この全体クールダウンを掛ける。
     smell_comment_cooldown_ms: int = COMBAT_DEFAULTS["smell_comment_cooldown_ms"]
-    # 話しかけたあと、自発発話（バイオーム・川柳・友好/中立 ambient など）を少し黙る時間。
-    # 旧 120s だと「たまに話しただけ」でも友好モブ反応がほぼ死んでいた。
-    # ambient 専用の短い mute は廃止し、この秒数に統一（プレイヤー入力優先）。
+    # 話しかけた直後に自発発話を控える時間。
+    # 雑談foreground中の待機時間とは別に、環境側が現在入力との間隔を確認する。
     player_input_priority_cooldown_ms: int = COMBAT_DEFAULTS["player_input_priority_cooldown_ms"]
     damaging_light_warning_cooldown_ms: int = COMBAT_DEFAULTS["damaging_light_warning_cooldown_ms"]
     magma_block_comment_cooldown_ms: int = COMBAT_DEFAULTS["magma_block_comment_cooldown_ms"]
@@ -290,7 +238,6 @@ class Settings(BaseSettings):
     haiku_interval_ms: int = 600000
     haiku_quiet_time_ms: int = 30000
     haiku_structured_max_tokens: int = 192
-    # 合否・材料番号・不合格理由を最後まで返す検査専用の上限。
     # 4方式は一つずつ固定して比較する。材料からの自動選択はまだ行わない。
     haiku_generation_strategy: HAIKU_GENERATION_STRATEGY = "three_slot"
     haiku_max_regeneration_rounds: int = Field(default=6, ge=0, le=8)
@@ -322,112 +269,22 @@ class Settings(BaseSettings):
             return float(self.voicevox_speed_scale_battle)
         return float(self.voicevox_speed_scale)
 
-    @property
-    def llm_uses_remote_api(self) -> bool:
-        return self.llm_effective_backend in {
-            "chat_completions",
-            "anthropic_messages",
-            "gemini_generate_content",
-        }
-
-    @property
-    def llm_uses_chat_completions(self) -> bool:
-        return self.llm_uses_remote_api and self.llm_api_family == "chat_completions"
-
-    @property
-    def llm_api_family(self) -> str | None:
-        resolved_backend = self._resolve_llm_backend(self.llm_backend, self.llm_provider)
-        if resolved_backend not in {"openai_compatible", "chat_completions"}:
-            return None
-        return PROVIDER_API_FAMILIES.get(self.llm_provider, "chat_completions")
-
-    @property
-    def llm_effective_backend(self) -> str:
-        if self.llm_backend == "noop":
-            return "noop"
-        resolved_backend = self._resolve_llm_backend(self.llm_backend, self.llm_provider)
-        if resolved_backend in {"openai_compatible", "chat_completions"}:
-            return self.llm_api_family or "chat_completions"
-        return resolved_backend
-
-    @property
-    def llm_resolved_base_url(self) -> str | None:
-        if not self.llm_uses_remote_api:
-            return self.llm_base_url
-        if self.llm_base_url:
-            return self.llm_base_url
-        return PROVIDER_DEFAULT_BASE_URLS.get(self.llm_provider)
-
-    def llm_request_headers(self) -> dict[str, str]:
-        headers: dict[str, str] = {}
-        if self.llm_provider == "claude":
-            if self.llm_api_key:
-                headers["x-api-key"] = self.llm_api_key
-            headers["anthropic-version"] = self.llm_anthropic_version
-            return headers
-        if self.llm_provider == "gemini":
-            if self.llm_api_key:
-                headers["x-goog-api-key"] = self.llm_api_key
-            return headers
-        if self.llm_api_key:
-            headers["Authorization"] = f"Bearer {self.llm_api_key}"
-        if self.llm_provider == "openrouter":
-            if self.llm_http_referer:
-                headers["HTTP-Referer"] = self.llm_http_referer
-            if self.llm_application_name:
-                headers["X-Title"] = self.llm_application_name
-        return headers
-
     def llm_route_settings(self, route: Literal["chat", "haiku"]) -> Settings:
-        provider = self._llm_route_value(route, "provider", self.llm_provider)
-        backend = self._resolve_llm_backend(
-            self._llm_route_value(route, "backend", self.llm_backend),
-            provider,
-        )
+        """指定routeの接続値を共通設定へ重ねる。未指定だけを継承し、入力は変更しない。"""
         return self.model_copy(
             update={
-                "llm_backend": backend,
-                "llm_provider": provider,
-                "mlx_model_id": self._llm_route_value(route, "mlx_model_id", self.mlx_model_id),
+                "llm_backend": self._llm_route_value(route, "backend", self.llm_backend),
                 "llm_base_url": self._llm_route_value(route, "base_url", self.llm_base_url),
                 "llm_model": self._llm_route_value(route, "model", self.llm_model),
                 "llm_api_key": self._llm_route_value(route, "api_key", self.llm_api_key),
-                "llm_http_referer": self._llm_route_value(route, "http_referer", self.llm_http_referer),
-                "llm_application_name": self._llm_route_value(route, "application_name", self.llm_application_name),
-                "llm_anthropic_version": self._llm_route_value(route, "anthropic_version", self.llm_anthropic_version),
                 "llm_timeout_sec": self._llm_route_value(route, "timeout_sec", self.llm_timeout_sec),
                 "llm_max_tokens": self._llm_route_value(route, "max_tokens", self.llm_max_tokens),
             }
         )
 
-    def llm_route_signature(self, route: Literal["chat", "haiku"]) -> LLMRouteSignature:
-        route_settings = self.llm_route_settings(route)
-        return LLMRouteSignature(
-            backend=route_settings.llm_backend,
-            provider=route_settings.llm_provider,
-            mlx_model_id=route_settings.mlx_model_id,
-            base_url=route_settings.llm_resolved_base_url,
-            model=route_settings.llm_model,
-            api_key=route_settings.llm_api_key,
-            timeout_sec=route_settings.llm_timeout_sec,
-            max_tokens=route_settings.llm_max_tokens,
-            anthropic_version=route_settings.llm_anthropic_version,
-            http_referer=route_settings.llm_http_referer,
-            application_name=route_settings.llm_application_name,
-        )
-
     def _llm_route_value(self, route: Literal["chat", "haiku"], name: str, default: object) -> object:
         route_value = getattr(self, f"llm_{route}_{name}")
         return default if route_value is None else route_value
-
-    def _resolve_llm_backend(self, backend: object, provider: object) -> str:
-        normalized_backend = str(backend or "noop")
-        normalized_provider = str(provider or "local")
-        if normalized_backend == "noop":
-            return "noop"
-        if normalized_backend == "mlx" and normalized_provider != "local":
-            return "chat_completions"
-        return normalized_backend
 
 
 def _runtime_profile() -> str:
@@ -449,11 +306,9 @@ def _validate_shared_profile(settings: Settings) -> None:
     for route in ("chat", "haiku"):
         route_settings = settings.llm_route_settings(route)
         prefix = f"DOGIDO_LLM_{route.upper()}"
-        if route_settings.llm_provider != "local":
-            errors.append(f"{prefix}_PROVIDER must resolve to local")
-        if route_settings.llm_effective_backend != "chat_completions":
+        if route_settings.llm_backend != "chat_completions":
             errors.append(f"{prefix}_BACKEND must resolve to chat_completions")
-        resolved_base_url = (route_settings.llm_resolved_base_url or "").rstrip("/")
+        resolved_base_url = (route_settings.llm_base_url or SHARED_LLM_BASE_URL).rstrip("/")
         if resolved_base_url != SHARED_LLM_BASE_URL:
             errors.append(f"{prefix}_BASE_URL must resolve to {SHARED_LLM_BASE_URL}")
         if route_settings.llm_model != SHARED_LLM_MODEL:

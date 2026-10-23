@@ -19,8 +19,8 @@ pub enum Input {
     SaveLast,
 }
 
-/// Keep the explicit legacy archive form (including a single unsegmented line),
-/// but never silently truncate a fourth line. Natural requests need three lines.
+/// 「川柳保存:」等の明示コマンドは原文一行から三行を保存する。四行目を切り捨てない。
+/// 自然な全文修正依頼の三行検証は別の入口が担当する。
 pub fn payload(raw: &str) -> Option<String> {
     let text = raw.replace('　', " ");
     let text = text.trim();

@@ -124,11 +124,11 @@ def main():
             sid = register(); send(sid, hotbar=bar())
             before = calls(); got = say(sid, text)
             command = got["assist"]["command"]
-            send(sid, hotbar=bar(), meta={"user_text": "静かにして"})
+            say(sid, "静かにして", "text")
             assert send(sid, hotbar=bar())["commands"] == [command]
             assert calls() == before
             close(sid)
-            passed.append("piggyback_input_does_not_reclassify_or_cancel_issued_command")
+            passed.append("quiet_input_does_not_reclassify_or_cancel_issued_command")
 
             sid = register(); send(sid, hotbar=bar()); before = calls()
             got = say(sid, "ダイヤモンドの剣の耐久値は？")

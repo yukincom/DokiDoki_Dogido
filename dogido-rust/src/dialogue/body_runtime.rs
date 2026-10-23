@@ -3,7 +3,7 @@
 use super::{Dialogue, Session};
 use crate::{
     conversation_observation::Context,
-    events::{EventTime, GameEvent},
+    events::GameEvent,
 };
 use std::time::Instant;
 
@@ -21,14 +21,9 @@ impl Dialogue {
     }
 }
 pub(super) fn observe(s: &mut Session, event: &GameEvent) {
-    let transport_age = match &event.observed_at {
-        EventTime::Aware(at) => {
-            let age = (chrono::Utc::now() - at.with_timezone(&chrono::Utc)).num_milliseconds();
-            // 時計が少し進んだclientは0msとして扱い、1秒以上の未来時刻は現在値にしない。
-            (age >= -1000).then_some(age.max(0) as u64)
-        }
-        _ => None,
-    };
+    let age = (chrono::Utc::now() - event.observed_at.with_timezone(&chrono::Utc)).num_milliseconds();
+    // 時計が少し進んだclientは0msとして扱い、1秒以上の未来時刻は現在値にしない。
+    let transport_age = (age >= -1000).then_some(age.max(0) as u64);
     s.body_observation.observe(
         event.body_observation.as_ref(),
         s.player_uuid.as_deref(),

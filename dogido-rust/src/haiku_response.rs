@@ -4,9 +4,12 @@
 //! acceptedはobjectを取得できたという意味。句・判定・根拠の採否は後続のドメイン検査が決める。
 //! 生成再試行は呼び手が所有し、ここでは欠けた根拠の補完やschemaの修復を行わない。
 //! 非有限数・対にならないUnicode surrogate・過度な深さはserde_jsonの制限に従って棄却する。
-use crate::{text_format::strip_code_fence, types::GeneratedText};
+use crate::{
+    text_format::{extract_object, strip_code_fence},
+    types::GeneratedText,
+};
 use anyhow::{Result, ensure};
-use serde_json::{Map, Value};
+use serde_json::Value;
 
 const STATUS: &str = "__dogido_status";
 const KINDS: &[&str] = &[
@@ -35,8 +38,8 @@ pub fn parse(kind: &str, generated: &GeneratedText, fallback: &Value) -> Result<
         completion_tokens = ?generated.completion_tokens,
         prompt_tokens = ?generated.prompt_tokens,
     );
-    let payload = extract_object(&generated.text, true);
-    if let Some(mut object) = payload {
+    let payload = extract_object(&strip_code_fence(&generated.text));
+    if let Some(Value::Object(mut object)) = payload {
         object.insert(STATUS.into(), "accepted".into());
         tracing::warn!(
             event = "llm_structured",
@@ -63,74 +66,6 @@ pub fn parse(kind: &str, generated: &GeneratedText, fallback: &Value) -> Result<
         reason = status
     );
     Ok(Value::Object(object))
-}
-
-pub(crate) fn extract_object(text: &str, allow_nested: bool) -> Option<Map<String, Value>> {
-    let normalized = strip_code_fence(text);
-    if let Ok(Value::Object(object)) = serde_json::from_str(&normalized) {
-        return Some(object);
-    }
-    if allow_nested {
-        for (index, _) in normalized.match_indices('{') {
-            if let Some((Value::Object(object), _)) = raw_value(&normalized[index..]) {
-                return Some(object);
-            }
-        }
-    }
-    None
-}
-
-fn raw_value(text: &str) -> Option<(Value, usize)> {
-    // 途中で切れた返答から値の有効な先頭部分を回収する。trueXXXならtrue、1eなら1まで。
-    // StreamDeserializerは後続の区切りも要求するため、literalと数値は先に長さを確定する。
-    for (token, value) in [
-        ("true", Value::Bool(true)),
-        ("false", Value::Bool(false)),
-        ("null", Value::Null),
-    ] {
-        if text.starts_with(token) {
-            return Some((value, token.len()));
-        }
-    }
-    if let Some(end) = number_end(text.as_bytes()) {
-        return Some((serde_json::from_str(&text[..end]).ok()?, end));
-    }
-    let mut decoder = serde_json::Deserializer::from_str(text).into_iter::<Value>();
-    let value = decoder.next()?.ok()?;
-    Some((value, decoder.byte_offset()))
-}
-
-fn number_end(bytes: &[u8]) -> Option<usize> {
-    let mut end = usize::from(bytes.first() == Some(&b'-'));
-    match bytes.get(end)? {
-        b'0' => end += 1,
-        b'1'..=b'9' => {
-            end += 1;
-            while bytes.get(end).is_some_and(u8::is_ascii_digit) {
-                end += 1;
-            }
-        }
-        _ => return None,
-    }
-    if bytes.get(end) == Some(&b'.') && bytes.get(end + 1).is_some_and(u8::is_ascii_digit) {
-        end += 2;
-        while bytes.get(end).is_some_and(u8::is_ascii_digit) {
-            end += 1;
-        }
-    }
-    if matches!(bytes.get(end), Some(b'e' | b'E')) {
-        let mut next = end + 1;
-        if matches!(bytes.get(next), Some(b'+' | b'-')) {
-            next += 1;
-        }
-        if bytes.get(next).is_some_and(u8::is_ascii_digit) {
-            end = next + 1;
-            while bytes.get(end).is_some_and(u8::is_ascii_digit) {
-                end += 1;
-            }
-        }
-    }
-    Some(end)
 }
 
 #[cfg(test)]

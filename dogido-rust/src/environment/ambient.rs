@@ -152,13 +152,6 @@ impl Ambient {
             }
             self.dimension = Some(dimension);
         }
-        if e.meta
-            .user_text
-            .as_deref()
-            .is_some_and(|t| !t.trim().is_empty())
-        {
-            self.note_player_input(now);
-        }
         // Missing fields in partial audio/mob events are not absence observations.
         if complete || e.smell_observation.is_some() {
             self.smell.update(e);

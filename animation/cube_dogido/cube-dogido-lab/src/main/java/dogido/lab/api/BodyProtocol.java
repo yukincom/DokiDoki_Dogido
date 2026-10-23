@@ -92,25 +92,11 @@ public final class BodyProtocol {
     /** 保存しない安心度0..100と同tickのowner実測。距離はblock、可視性は身体の眼を基準とする。HPとは独立。 */
     public record Reassurance(double value, double ownerDistance, boolean ownerVisible, boolean faceVisible, boolean ownerWorking) {}
     /** 現在の身体側制御状態。観測した値であり、adapterから自律移動を有効化しない。 */
-    public record ControlObservation(boolean enabled, Mode mode, double followDistance, double warpDistance, Reassurance reassurance) {
-        /** 旧fixtureの未取得値。近くに見える、顔が見えるという回復根拠を補わない。 */
-        public ControlObservation(boolean enabled, Mode mode, double followDistance, double warpDistance) {
-            this(enabled,mode,followDistance,warpDistance,new Reassurance(50,0,false,false,false));
-        }
-    }
+    public record ControlObservation(boolean enabled, Mode mode, double followDistance, double warpDistance, Reassurance reassurance) {}
 
-    /** position is null when the body is not loaded, never a synthetic origin position. */
+    /** 身体が未ロードならpositionとcontrolはnull。未取得の座標・制御・安心度を補完しない。 */
     public record Snapshot(int version, Presence presence, Context context, String ownerDimension, long serverTick,
             long snapshotRevision, Position position, float yaw, Activity activity, String reason,
             long appliedStateRevision, StateResult stateResult, ActionResult actionResult, Sensors sensors,
-            Vitals vitals, FoodObservation food, PoseObservation pose, VisionObservation vision, HearingObservation hearing, ControlObservation control) {
-        /** 制御情報がない取得不能snapshotと既存fixture用。nullを移動許可へ読み替えない。 */
-        public Snapshot(int version, Presence presence, Context context, String ownerDimension, long serverTick,
-                long snapshotRevision, Position position, float yaw, Activity activity, String reason,
-                long appliedStateRevision, StateResult stateResult, ActionResult actionResult, Sensors sensors,
-                Vitals vitals, FoodObservation food, PoseObservation pose, VisionObservation vision, HearingObservation hearing) {
-            this(version,presence,context,ownerDimension,serverTick,snapshotRevision,position,yaw,activity,reason,
-                appliedStateRevision,stateResult,actionResult,sensors,vitals,food,pose,vision,hearing,null);
-        }
-    }
+            Vitals vitals, FoodObservation food, PoseObservation pose, VisionObservation vision, HearingObservation hearing, ControlObservation control) {}
 }

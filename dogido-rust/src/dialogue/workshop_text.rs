@@ -239,7 +239,7 @@ impl Dialogue {
                     if report["kind"] == "haiku_workshop_agent_step"
                         && let Some(payload) = report["generated"]["text"]
                             .as_str()
-                            .and_then(crate::planner::extract_object)
+                            .and_then(crate::text_format::extract_object)
                         && let Some(candidate) = crate::workshop_candidate::Candidate::from_model(
                             &payload,
                             &w.current_lines,

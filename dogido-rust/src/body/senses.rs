@@ -66,7 +66,7 @@ pub(crate) struct Origin {
     pub age_ms: u64,
     pub body: Value,
     pub player_safety: events::WorldState,
-    pub player_observed_at: events::EventTime,
+    pub player_observed_at: chrono::DateTime<chrono::FixedOffset>,
 }
 impl Senses {
     /// モデルへは採取の状態と根拠だけを渡す。感覚本文は共通observationsで一回だけ投影する。

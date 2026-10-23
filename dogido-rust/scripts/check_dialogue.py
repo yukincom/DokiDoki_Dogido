@@ -105,18 +105,6 @@ def dependencies():
                               else controls.get("structured", {}).get(incoming["max_tokens"]))
                 if structured is not None:
                     text = json.dumps(structured, ensure_ascii=False)
-                elif incoming["max_tokens"] == 640:
-                    # 現行prompt中のcurrentだけを読む。テストが入力にないevidenceを作らない。
-                    decoder = json.JSONDecoder()
-                    current = None
-                    for m in incoming["messages"]:
-                        for match in re.finditer(r'\{\s*"turn_id"\s*:\s*"current"', m["content"]):
-                            candidate, _ = decoder.raw_decode(m["content"][match.start():])
-                            if "text" in candidate: current = candidate
-                    assert current, incoming
-                    text = json.dumps({"action": "continue_conversation", "focus": "会話を続ける",
-                        "entity_query": "", "evidence": [{"turn_id": "current", "quote": current["text"]}],
-                        "confidence": .95}, ensure_ascii=False)
                 else:
                     text = controls["leaf"]
                     if any('"action":"silent"' in m["content"] for m in incoming["messages"] if m["role"] == "system"):
@@ -403,6 +391,15 @@ def main():
             wait_for(lambda: row(base, newest, {"completed"}))
             passed.append("duplicate_input_and_superseded_generation")
             control["delay"] = 0
+            # BERTの剣依頼も現在観測を受けてから既存assistへ進む。能力不足だけを検査する。
+            request(base, "/api/v1/game-events", {
+                "schema_version": "2026-05-24", "adapter": "fixture", "sequence": 1,
+                "observed_at": datetime.now(timezone.utc).isoformat(),
+                "event": {"name": "status_snapshot", "source_kind": "system",
+                          "priority_hint": "background", "certainty": "high"},
+                "player": {"name": "試験"},
+                "world": {"sky_visible": True, "ceiling_height": 20,
+                          "local_light": 15, "time_phase": "day"}}, sid=sid)
             before = len([r for r in seen if r["path"] == "/v1/chat/completions"])
             accepted = request(base, "/api/v1/player-input", {"session_id":sid, "source":"voice", "text":"剣に持ち替えて"})
             routed = resolve_input_response(base, accepted)

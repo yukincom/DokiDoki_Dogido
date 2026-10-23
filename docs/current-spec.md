@@ -9,7 +9,7 @@
 - 最初の支援アクション（剣への持ち替え）: 2026-08-16（コード・自動テスト・Minecraft実機確認済み）
 - 閉じたスメルバトル: 2026-09-11（コード・自動テスト済み、実Minecraft未確認）
 - 川柳workshopの検証付き共同編集agent: 2026-09-12（コード・自動テストとローカルQwen独立step確認済み、実Minecraft／TTS／editor E2E未確認）
-- 本体の同意済み専用Chrome検索: 2026-09-12（コード・自動テスト・利用前提の非起動確認済み、統合後の実Minecraft／TTS／Chrome E2Eは別途確認。Minecraft自動ポーズと川柳カウント停止は2026-09-14にユーザー確認済み）
+- 旧learn・専用Chrome検索の撤去: 2026-10-21。現在は詩の基礎資料とMinecraft資料を扱い、専用の国語学習・Web調査は行わない（[対象範囲](2026-10-21-generation-and-knowledge-scope.md)）
 
 - 本体の実行時正本: Rust。旧Python本体・比較oracleの運用は終了。Pythonは設定・UniDic token・音声機器／AEC・ModernBERT推論の補助として残す。OS AI接続は撤去済み。残存モジュールと資料は [Rust本体の補助一覧](../dogido-rust/README.md#残すpython補助と資料) を正とし、読みの判定・整形を旧Pythonへ戻さない。
 
@@ -45,24 +45,24 @@
 
 ```text
 Minecraft Java Edition
-  <-> Minecraft client adapter (Fabric client mod: 観測 / 選択slot変更)
+  <-> Minecraft client adapter (Fabric client mod: 観測 / 限定操作 / 表示)
        -- game events --> dogido-rust (Rust / Axum)
+       -- player input --> 共通BERT分類 / 既存入力受付
        <-- typed assist command --
      -> event normalizer
      -> state machine
      -> Rustのコードによる発話優先・採否検証
      -> LLM response generator（必要なときだけ）
-     -> optional visible Chrome research（国語・語句の同意済み調査だけ）
      -> episode decision log（評価用。会話・川柳記憶とは分離）
      -> audio router
-  -> PC 音声 (VOICEVOX / say / afplay)
+  -> PC 音声 (VOICEVOX / afplay)
 ```
 
 ### 起動と資料の境界
 
 - 一般起動は `launch_dialogue.py --settings-dir .` と `--voice`、または `scripts/start_dogido.command server|voice` でRustを起動する。`dogido-rust/start_dialogue.command` / `start_voice.command` も同じ設定のbindポート（既定5055）と `memory_dir` を使い、入口ごとの上書きはしない。Fabricの接続先も同じポートへ揃える。テキスト相談室は同じ記憶保存先を参照する。
 - `memory_dir` は共通設定へ集約する。引き継ぐ保存先を設定へ明示し、起動時に記憶を自動移動・上書きしない。
-- `dogido_server/language_dialogue/source_cards.json` と `reference/` はRustが読む現役資料。Python本体の終了と一緒に削除しない。
+- `reference/` の詩の基礎資料とMinecraft資料はRustが読む現役資料。旧learnの資料カード・一般文法・漢字・語彙資料は撤去済み。残す範囲は [生成・知識仕様](2026-10-21-generation-and-knowledge-scope.md) を参照する。
 - 共有プロンプトと状況文は人が編集する正本からRustへ取り込む。ラボの比較候補を自動反映しない。
 - 戦闘・環境とHTTPの既定値は `dogido_server/runtime_defaults.json` 一つをRustとPython起動補助で共有する。`.env` の上書きは明示的にRustへ渡し、廃止した設定は名前だけを通知する。VADの実行ファイル指定は音声起動経路で有効。
 - 本体稼働時のAPI `phase` は `dialogue`、会話を開始しない接続試験は `connection_only`。`/dogido` の画面資産はRustが所有する。
@@ -93,10 +93,10 @@ Minecraft Java Edition
 - 発話優先度を判定する
 - 緊急音声と通常会話を分離する
 - 必要なときだけ LLM を呼ぶ
-- 国語・語句の問いは有界workerへ渡し、利用前提が揃うMacでは同意と案内音声の実再生完了後だけ専用Chromeを一度開く。Web本文・URLは本体へ持ち帰らず、復帰時の調査話題一件だけを短期文脈にする
-- 自然な川柳相談では、現在句・未採用案・直近対話を読む有界agentが説明／質問／検査／提案／比較から次手を選ぶ。読み・音数・出典と修正結果はコードで検査し、各実結果後の再判断を一度、全体を最大3 stepに閉じる。正本・CAS・採否・保存・戦闘中断はコードが所有し、局所編集・採否・終了は音声認識原文にも行為を示す根拠がある場合だけ実行する
+- 詩の基礎知識とMinecraft資料の質問は既存の正本DBを参照する。資料照会中は `knowledge` foregroundで発句時計を休止する。対象外の一般文法・漢字・語学の問いは通常会話へ渡す。旧learn worker・専用Chrome・Web foregroundは撤去済み。
+- 川柳の行指定・具体変更・終了は共通BERTで分類する。自然な返答・説明・比較・新案は会話モデルが担当し、本人から読み方・保存材料を尋ねられたときだけ既存toolを参照して一度返答を続ける。川柳WSの音数計測・品質判定・編集後の返答再生成は行わない。対象・原文語句・現在句・版・採否・保存・戦闘中断はコードが所有する（[相談仕様](rust-workshop-validation.md)）。
 - 非重複イベントごとの判断と最終アクションを評価用 JSONL へbest-effortで記録する
-- 明示的な剣持ち替え要求を限定抽出し、capability・hotbarをコード検証して型付きcommandを返す
+- 共通BERTで分類した剣・乗用動物・身体の依頼について、現在観測とcapability・対象・期限等をコードで照合して型付きcommandを返す
 - command発行とadapter実結果をcommand IDで同じ評価JSONLへ相関記録する
 
 #### 音声出力（現行: PC / 将来: M5Stack）
@@ -180,7 +180,7 @@ Minecraft Java Edition
 - 入力は他の依頼と同じ共通BERTで一度分類する。分類不能時に旧語句判定やLLM限定抽出へ戻さない
 - 分類された意図を受け、実行可否、slot選択、期限・重複・期待item検証をコードで行う
 - ドギドからの自動持ち替えはしない。意図分類は共通BERTで行い、現在hotbarと実行条件はコードで照合する。OS AIは撤去済み
-- 救助、馬、ActionBudget、安全地点は未実装
+- 乗用動物14種の呼び戻しは現在候補と所有者・装備・安全な着地点を照合して実行する。身体の呼び出し・視線も既存commandと結果ACKへ接続済み。救助や汎用ActionBudgetは対象外（[乗用動物](2026-10-11-horse-recall.md)・[23分類の接続](2026-10-23-modernbert-23class-integration.md)）。
 
 ### ワールド状態
 
@@ -249,22 +249,20 @@ Minecraft Java Edition
 
 ### 匂い（閉じたスメルバトル）
 
-- Fabric adapterが実近接源、hotbar 9slot、現在バイオーム、温度、天候をコードで競わせ、解決済みの `smell_observation` 一件だけをserverへ渡す
-- ゾンビ／腐った肉、実状態のあるコンポスター・醸造台・焚き火調理、沼、指定食品・イカ墨・花を対象にし、同種は合算しない。実IDがない硫黄ブロック・金のタンポポは保留
-- activeな雨・雪・雷と水中は `suppressed`。晴れた寒冷地はhard offでなく温度減衰し、雨から晴れた後180秒は草木・土を `雨上がりの匂い` に統合する
-- 対応済みで候補なしは明示的な `status=none`。field自体がない観測未提供とは区別する
-- serverは同じ勝者を2観測で安定化し、同状態一度＋全体2分クールダウン。Rust本体では環境対話モデルが発話／無言を選び、明示質問はコード固定で答える
-- 外部源の単独勝者だけ勝者の実方角を丸めた粗い方向を送る。正確な位置・距離・個数・entity IDは送らない。動く源も現在方角へ更新し、未知の方向を補わない
-- 匂い単独では戦闘状態、panic／alert、川柳workshopの戦闘中断へ入れない。現在の匂いへの問いはコード固定で即答し、通常雑談モデルへ観測を渡さない。通常生成の嗅覚断言も棄却する
+- Fabricが実近接源、hotbar、バイオーム、天候を照合し、`smell_policy_v2` の `none / present / suppressed` と `components` を送る。旧flat形・旧basisは受け付けない。
+- 同種は加算せず、ゾンビ系は1差・その他は4差から弱い異種を隠す。残った各種類の強度を、1は仄か・8は強烈としてモデルへ渡す。コンポスターの基礎値は3。
+- activeな雨・雪・雷と水中は `suppressed`。雨上がりは通常成分とは別の一度の気づき候補で、180秒は候補期限。反応の出力完了または沈黙確定後は通常へ戻り、通常臭を消さない。
+- 匂いの方位計算・保持・送受信は撤去済み。方向・位置・距離・個数・entity IDは渡さない。
+- 匂い単独では戦闘modeや川柳の戦闘中断へ入れない。現在の匂いへの問いは各成分の強さを反映したコード固定文で答える。通常雑談と環境対話へも解決済みの観測を渡し、通常対話の嗅覚断言を生成後に棄却しない。
 
 計算、対象ID、温度帯、雨上がりの正本は[スメルバトル仕様](smell-policy.md)。
 
-### 通常雑談の一回再考
+### 通常雑談の一回生成
 
-- `player_chat` は自然な自己言及・謝罪・方言・比喩を禁止語の部分一致だけで棄却しない
-- 空出力・役割ラベル・英語説明・生成崩れ、または危険助言・未観測名・現在嗅覚の補作・突き放し・現在方針との衝突に落ちた候補だけ、同じモデルへ候補と理由を返して最大1回言い直させる
-- 二案目も同じコード検査へ通し、再不合格なら固定fallback。棄却案は会話履歴・状態・記憶へ入れない
-- 発話だけの有界な再考であり、世界操作や保存を含む汎用ReActにはしない
+- `player_chat` は今回入力・現在観測・確定済み短期履歴から、話題選択と返答を一回で生成する。前段planner・生成後の意味や観測整合の再審査は行わない。
+- JSON末尾と単純な型違いをコード補完し、空・文字化け・明らかな反復・補完不能な外形だけを発話なしにする。日本語・方言・名前・嗅覚・内容整合を採否の条件にしない。
+- 再生成と定型fallbackは行わない。不成立・生成通信失敗は「難しい話だったので、ドギドは沈黙を選んだ」を短期の出来事に残す。壊れた本文を履歴へ入れず、この出来事を再生済み発話や川柳材料に数えない。
+- 現在観測、一般知識、プレイヤーの報告、assistant履歴を分けて渡す。世界操作・保存・戦況判断はコードが所有する。
 
 ## 6. 暗さと危険度の判定
 
@@ -318,9 +316,9 @@ Minecraft Java Edition
 - 松明を促す判断は、単なる照度より湧きリスクを優先する
 - 反応は単発コールアウトにせず、`dark_push` / shelter などの内部状態で連続的に扱う
 - inventory snapshot の照明器具増加は、クラフトや設置の成功とは断定しない。前回より所持数が増えた観測としてだけ扱う
-- 照明器具増加への通常コメントは、有界 `light_source_comment_plan` が `stay_silent / acknowledge_supply_gain / relief_after_darkness` から一件だけ選ぶ。発話・暗所状態解除・操作はplannerへ渡さない
+- 照明器具増加への通常コメントは、`light_source_comment_plan` が反応選択と本文を一回で生成する。暗所状態の解除・操作は現在観測に基づきコードが決める
 - 半スタック以上の照明を持ち、既存の暗所警告条件にも当たらない場面と、同種コメント後5分以内はコードで無言にする。現在も危険な暗さならコメントせず、既存の警告を優先する
-- 最終発話には正確な所持数・増加数を渡さず、クラフト・設置・拾得を補作した文もコードで棄却する
+- モデルへ正確な所持数・増加数を渡さない。不正出力・生成失敗は無言で終え、再試行や別の発話leafを呼ばない
 - emergency shelter の形状（低い天井・四方の壁）と、入場安堵を話す条件は分ける
   - 入場安堵は夜（`time_phase=night` または hostile spawn 開始 tick 以降）のみ
   - 設定済みリスポーン地点の近くにベッドがある場所は拠点として扱い、emergency shelter から除外
@@ -459,7 +457,7 @@ Minecraft Java Edition
 
 ## 14. 受信 API
 
-adapter から `dogido-server` へ送る endpoint の正本は [受信 API 仕様](adapter-api.md) を参照する。
+adapterから本体へのendpointは [受信API仕様](adapter-api.md) を参照する。観測イベントと本人の入力は分け、音声・テキストは `POST /api/v1/player-input` へ送る。イベントの `meta.user_text` を入力経路として使わない。
 
 ## 15. 抽象化方針
 
@@ -503,8 +501,8 @@ adapter から `dogido-server` へ送る endpoint の正本は [受信 API 仕�
 5. audio cue 一覧と優先度を定義する（PC 再生まで）
 6. 発話あり／なしの決定を schema version 付き episode JSONL へ記録する
 7. 最初の限定支援 `select_sword` をhotbar実測・typed command・Fabric再検証・実結果ログまで接続する（実機確認済み）
-8. 川柳workshopを一つの有界共同編集stepへ統合し、読み／音数／出典・editor validation後の再判断、否定等を除外した明示採用＋CAS保存、採否＋終了のtransaction、同ターンの通常雑談handoff、実行step・検証結果・発話根拠の改善JSONLを実装する（実機未確認）
-9. 本体の限定国語対話へ、専用Chromeの利用前提確認、Web同意、案内音声の実再生完了、一度だけの非同期検索、Web foreground、明示復帰、調査話題一件だけの短期受け渡しを接続する（統合後の実Minecraft／TTS／Chrome E2Eは別途確認。Minecraft自動ポーズと川柳カウント停止は2026-09-14にユーザー確認済み）
+8. 川柳workshopの自然な返答と新案生成、原文の本人編集、未採用案の採否、CAS保存、戦闘中断と現在観測に基づく復帰を接続。行指定・具体変更・終了はBERT、元句・版・保存はコードが担当する（現在版の実機確認範囲は[接続記録](2026-10-23-modernbert-23class-integration.md)を参照）
+9. 詩の基礎資料とMinecraft資料を正本DBから照会し、`knowledge` foregroundと発句時計の休止へ接続。旧learnと専用Chrome調査は撤去済み
 
 ### 進行中 / 優先して磨く
 

@@ -158,7 +158,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         });
         this.eventCapture = new EventObservationCapture(this.playerObserver, this.worldObserver, this.smellObserver,
             this.ambientMobObserver, this.combatObserver, this.eventClient::nextSequence,
-            () -> this.tickCounter, () -> null, () -> this.bodyObservation, () -> this.bodyAutonomy);
+            () -> this.tickCounter, () -> this.bodyObservation, () -> this.bodyAutonomy);
         ClientTickEvents.END_CLIENT_TICK.register(this::onClientTick);
         ClientPlayerBlockBreakEvents.AFTER.register((world, player, pos, state) -> {
             this.worldObserver.rememberBlockBreak(state, this.tickCounter);

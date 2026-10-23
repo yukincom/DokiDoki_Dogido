@@ -27,7 +27,6 @@ DOGIDO_TTS_BACKEND=voicevox
 DOGIDO_VOICEVOX_URL=http://127.0.0.1:50021
 DOGIDO_VOICEVOX_SPEAKER=21
 DOGIDO_TTS_READING_ENGINE=unidic
-DOGIDO_HAIKU_GROUNDING_MAX_TOKENS=512
 DOGIDO_VOICE_WHISPER_CLI=.dogido_tools/whisper/bin/whisper-cli
 DOGIDO_VOICE_WHISPER_MODEL=.dogido_tools/models/ggml-kotoba-whisper-v2.0-q5_0.bin
 DOGIDO_VOICE_VAD_CLI=.dogido_tools/whisper/bin/whisper-vad-speech-segments

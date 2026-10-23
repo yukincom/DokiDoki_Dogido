@@ -453,6 +453,7 @@ fn rain_water_fire_order_metadata_and_count_suffix() {
         v["world"] =
             json!({"time_phase":"day","sky_visible":true,"weather":"rain","biome":"plains"});
         v["visual_threats"][1]["in_water"] = true.into();
+        v["visual_threats"][1]["environment"] = json!({"touching_water":true});
     });
     observe(&mut p, &e, 0);
     assert_eq!(p.daylight_rain(&e, 0, &s).unwrap().kind, "daylight_rain");

@@ -25,7 +25,7 @@ class BodyObservationJsonTest {
         return new Snapshot(BodyProtocol.VERSION,presence,new Context(OWNER,
             UUID.fromString("22222222-2222-4222-8222-222222222222"),UUID.fromString("33333333-3333-4333-8333-333333333333"),WORLD),
             WORLD,100,200,position,yaw,Activity.HOLDING,"test",0,null,null,Sensors.BODY_VISION_AND_HEARING,null,null,
-            pose,vision,new HearingObservation(ObservationStatus.OBSERVED,100,java.util.List.of(),false),new ControlObservation(false,Mode.HOLD,16,24));
+            pose,vision,new HearingObservation(ObservationStatus.OBSERVED,100,java.util.List.of(),false),new ControlObservation(false,Mode.HOLD,16,24,new Reassurance(50,0,false,false,false)));
     }
     @Test void poseWireMatchesRustFixtureAndLeavesUncollectedSensesUnavailable() throws Exception {
         var actual = BodyObservationJson.observed(snapshot(Presence.PRESENT,new Position(10,64,20),360),25,OWNER,WORLD);

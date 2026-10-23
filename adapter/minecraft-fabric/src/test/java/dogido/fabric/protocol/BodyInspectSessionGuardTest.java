@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class BodyInspectSessionGuardTest {
     static DogidoEventClient client() throws Exception {
         var client=new DogidoEventClient(org.slf4j.LoggerFactory.getLogger("body-session-test"),
-            new DogidoEventClient.ConnectionSettings(true,"http://127.0.0.1:1",""),command -> {},(command,ref) -> {},() -> false);
+            new DogidoEventClient.ConnectionSettings(true,"http://127.0.0.1:1",""),command -> {},(command,ref) -> {},() -> false,null,null,null,null,null);
         var field=DogidoEventClient.class.getDeclaredField("sessionId"); field.setAccessible(true); field.set(client,"session");
         return client;
     }
@@ -26,7 +26,7 @@ class BodyInspectSessionGuardTest {
             new BodyInspectProtocol.Target("e:"+entity,"entity","minecraft:cow","Cow",new BodyInspectProtocol.Point(8,64,0),entity));
     }
     static BodyConnection.MoveRequest request(BodyInspectProtocol.Command command) {
-        return new BodyConnection.MoveRequest(command.context(),101,command.commandId(),100,100,new BodyInspectProtocol.Point(6,64,0));
+        return new BodyConnection.MoveRequest(command.context(),101,command.commandId(),100,100,new BodyInspectProtocol.Point(6,64,0),BodyInspectProtocol.Purpose.INSPECT);
     }
     @Test void staleSessionAndExpiredCommandNeverReachTheBodyQueue() throws Exception {
         var client=client(); var ref=client.currentSession(); var calls=new AtomicInteger();
@@ -54,7 +54,7 @@ class BodyInspectSessionGuardTest {
     }
     @Test void mismatchedActionIdentityNeverReachesTheBodyQueue() throws Exception {
         var client=client(); var command=command(Instant.now()); var request=request(command); var calls=new AtomicInteger();
-        var mismatch=new BodyConnection.MoveRequest(request.context(),request.sequence(),UUID.randomUUID(),request.observedServerTick(),request.validForTicks(),request.destination());
+        var mismatch=new BodyConnection.MoveRequest(request.context(),request.sequence(),UUID.randomUUID(),request.observedServerTick(),request.validForTicks(),request.destination(),request.purpose());
         assertEquals("invalid_action",client.submitBodyInspect(client.currentSession(),command,mismatch,move -> { calls.incrementAndGet(); return "queued"; }));
         assertEquals(0,calls.get());
     }

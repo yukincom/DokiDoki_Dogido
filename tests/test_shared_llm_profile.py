@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from dogido_server.config import get_settings
+from dogido_server.config import Settings, get_settings
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -29,7 +29,7 @@ def _clear_runtime_llm_environment(monkeypatch: pytest.MonkeyPatch) -> None:
             monkeypatch.delenv(key, raising=False)
 
 
-def test_standalone_profile_keeps_existing_dotenv_behavior(
+def test_standalone_profile_reads_local_endpoint_settings(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -37,17 +37,18 @@ def test_standalone_profile_keeps_existing_dotenv_behavior(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("DOGIDO_ENV_PROFILE", "standalone")
     (tmp_path / ".env").write_text(
-        "DOGIDO_LLM_BACKEND=mlx\n"
-        "DOGIDO_LLM_PROVIDER=local\n"
-        "DOGIDO_MLX_MODEL_ID=synthetic-standalone-model\n"
+        "DOGIDO_LLM_BACKEND=chat_completions\n"
+        "DOGIDO_LLM_BASE_URL=http://127.0.0.1:8090/v1\n"
+        "DOGIDO_LLM_MODEL=synthetic-standalone-model\n"
         "DOGIDO_LLM_MAX_TOKENS=87\n",
         encoding="utf-8",
     )
 
     settings = get_settings()
 
-    assert settings.llm_backend == "mlx"
-    assert settings.mlx_model_id == "synthetic-standalone-model"
+    assert settings.llm_backend == "chat_completions"
+    assert settings.llm_base_url == "http://127.0.0.1:8090/v1"
+    assert settings.llm_model == "synthetic-standalone-model"
     assert settings.llm_max_tokens == 87
     assert not any(name.startswith("platform_ai_") for name in type(settings).model_fields)
 
@@ -60,14 +61,14 @@ def test_shared_profile_overlays_and_validates_both_routes(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("DOGIDO_ENV_PROFILE", "shared")
     (tmp_path / ".env").write_text(
-        "DOGIDO_LLM_BACKEND=mlx\n"
-        "DOGIDO_LLM_PROVIDER=local\n"
-        "DOGIDO_MLX_MODEL_ID=synthetic-standalone-model\n"
-        "DOGIDO_LLM_CHAT_PROVIDER=openai\n"
-        "DOGIDO_LLM_CHAT_MODEL=synthetic-old-chat-model\n"
+        "DOGIDO_LLM_BACKEND=chat_completions\n"
+        "DOGIDO_LLM_BASE_URL=http://127.0.0.1:8090/v1\n"
+        "DOGIDO_LLM_MODEL=synthetic-standalone-model\n"
+        "DOGIDO_LLM_CHAT_BASE_URL=http://127.0.0.1:8091/v1\n"
+        "DOGIDO_LLM_CHAT_MODEL=synthetic-chat-model\n"
         "DOGIDO_LLM_CHAT_MAX_TOKENS=321\n"
-        "DOGIDO_LLM_HAIKU_PROVIDER=claude\n"
-        "DOGIDO_LLM_HAIKU_MODEL=synthetic-old-haiku-model\n"
+        "DOGIDO_LLM_HAIKU_BASE_URL=http://127.0.0.1:8092/v1\n"
+        "DOGIDO_LLM_HAIKU_MODEL=synthetic-haiku-model\n"
         "DOGIDO_LLM_HAIKU_MAX_TOKENS=193\n"
         "DOGIDO_LLM_TIMEOUT_SEC=23\n",
         encoding="utf-8",
@@ -81,12 +82,10 @@ def test_shared_profile_overlays_and_validates_both_routes(
 
     assert settings.llm_timeout_sec == 23
     assert not any(name.startswith("platform_ai_") for name in type(settings).model_fields)
-    assert settings.mlx_model_id == "synthetic-standalone-model"
     for route, expected_max_tokens in (("chat", 321), ("haiku", 193)):
         route_settings = settings.llm_route_settings(route)
-        assert route_settings.llm_effective_backend == "chat_completions"
-        assert route_settings.llm_provider == "local"
-        assert route_settings.llm_resolved_base_url == "http://127.0.0.1:8080/v1"
+        assert route_settings.llm_backend == "chat_completions"
+        assert route_settings.llm_base_url == "http://127.0.0.1:8080/v1"
         assert route_settings.llm_model == "default_model"
         assert route_settings.llm_api_key == ""
         assert route_settings.llm_max_tokens == expected_max_tokens
@@ -99,7 +98,7 @@ def test_shared_profile_fails_closed_when_overlay_is_missing_or_invalid(
     _clear_runtime_llm_environment(monkeypatch)
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("DOGIDO_ENV_PROFILE", "shared")
-    (tmp_path / ".env").write_text("DOGIDO_LLM_BACKEND=mlx\n", encoding="utf-8")
+    (tmp_path / ".env").write_text("DOGIDO_LLM_BACKEND=chat_completions\n", encoding="utf-8")
 
     with pytest.raises(RuntimeError, match=r"requires .*\.env\.shared"):
         get_settings()
@@ -113,3 +112,11 @@ def test_shared_profile_fails_closed_when_overlay_is_missing_or_invalid(
 
     with pytest.raises(RuntimeError, match="DOGIDO_LLM_HAIKU_MODEL"):
         get_settings()
+
+
+@pytest.mark.parametrize("field", ["llm_backend", "llm_chat_backend", "llm_haiku_backend"])
+@pytest.mark.parametrize("backend", ["mlx", "openai_compatible"])
+def test_removed_backends_cannot_select_another_implementation(field, backend):
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, **{field: backend})

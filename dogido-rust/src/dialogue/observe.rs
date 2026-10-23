@@ -1,9 +1,9 @@
-//! ゲームイベントから観測・戦況・環境を更新し、保留処理と必要なplayer入力を順に進める。
+//! ゲームイベントから観測・戦況・環境を更新し、保留中の配送と発句を進める。
 //! jobs → dataの順でロックし、新規イベントだけを判断へ渡す。操作の実行結果は重複受信時も照合する。
 //! ロック解放後に入力配送・発句再開・評価記録を進め、受理結果と配送予定の命令を返す。
 use super::{
     Dialogue, chat_context, complete_observation, environment_runtime, episode_runtime, id,
-    recent_observation, warnings, workshop_focus, workshop_record,
+    recent_observation, warnings, workshop_focus,
 };
 use crate::{
     events::{EventName, GameEvent, SourceKind},
@@ -13,18 +13,15 @@ use serde_json::{Value, json};
 use std::{sync::Arc, time::Instant};
 
 impl Dialogue {
-    /// 一件の観測を鮮度・重複と照合し、戦闘・環境の判断から入力配送までを処理する。
-    /// privateは入口で確定した記録制限で、同じイベントから受理する入力にも引き継ぐ。
+    /// 一件の観測を鮮度・重複と照合し、戦闘・環境の判断と保留中の配送を進める。
     pub(super) fn observe_inner(
         self: &Arc<Self>,
         session_id: &str,
         mut event: GameEvent,
         key: Option<&str>,
-        private: bool,
     ) -> Value {
         let sequence = event.sequence;
         let recent = recent_observation(&event);
-        let text = event.meta.user_text.clone().unwrap_or_default();
         // submitと同じjobs → dataの順で、停止判定からjob登録までを保護する。
         // shutdownはdataで停止を確定して解放した後、jobsを回収するため、
         // 受理されたjobは回収対象に入り、停止後の新規受付はここで断られる。
@@ -121,8 +118,6 @@ impl Dialogue {
         }
         let episode_before = (!duplicate && self.episodes.is_some())
             .then(|| episode_runtime::Before::capture(&d, session_id));
-        let mut input_handled = false;
-        let mut input_generation = None;
         if !duplicate {
             let now = self.clock.elapsed().as_millis() as u64;
             let complete = complete_observation(&event);
@@ -193,23 +188,6 @@ impl Dialogue {
             {
                 Self::cancel_haiku(&mut d, session_id, "current_threat");
             }
-            if recent && !text.trim().is_empty() {
-                Self::cancel_combat_input(&mut d, session_id);
-                Self::cancel_haiku(&mut d, session_id, "new_player_input");
-                Self::cancel_assist(&mut d, session_id);
-                Self::cancel_light(&mut d, session_id);
-                let s = d.sessions.get_mut(session_id).unwrap();
-                super::body_interest_runtime::cancel(s);
-                s.body_requests.cancel();
-                s.input_generation = s.input_generation.wrapping_add(1);
-                input_generation = Some(s.input_generation);
-                s.record_private_generation = Some((s.input_generation, private));
-                s.last_player_input = Some(now);
-                s.ambient.note_player_input(now);
-            }
-            if input_generation.is_some() {
-                Self::cancel_request_classification(&mut d, session_id);
-            }
             self.tick_workshop(&mut d, session_id);
             self.tick_foreground(&mut d, session_id);
             if recent {
@@ -220,11 +198,8 @@ impl Dialogue {
             if recent {
                 let s = d.sessions.get_mut(session_id).unwrap();
                 let busy = s.warning.is_some() || s.pending_warning.is_some() || jobs.len() >= 16;
-                let workshop_event = (!text.trim().is_empty()
-                    && (workshop_focus::quiet(s) || self.config.request_classifier.enabled()))
-                .then(|| event.without_player_input());
                 let decision = s.combat.observe(
-                    workshop_event.as_ref().unwrap_or(&event),
+                    &event,
                     now,
                     complete,
                     busy,
@@ -233,14 +208,11 @@ impl Dialogue {
                 );
                 let names = s.combat.take_name_updates();
                 let senses = super::body_runtime::event(s, &event);
-                if let Err(error) = s.chat_observation.observe_body(
+                s.chat_observation.observe_body(
                     &senses,
-                    &event,
                     &names,
                     &chat_context::CatalogLabels,
-                ) {
-                    tracing::warn!(event="chat_observation_rejected", session_id, %error);
-                }
+                );
                 let conversation_threat = warnings::interruption_reason(&event).is_some()
                     && !workshop_focus::owns_input(s);
                 if event.event.name == EventName::PlayerDied
@@ -260,7 +232,6 @@ impl Dialogue {
                     s.history.begin_danger();
                     s.foreground.start_combat();
                 }
-                input_handled = decision.input_handled;
                 let combat_priority = if decision
                     .actions
                     .iter()
@@ -288,7 +259,7 @@ impl Dialogue {
                     session_id,
                     decision,
                     super::combat_runtime::DecisionContext {
-                        input: input_handled.then_some(text.as_str()),
+                        input: None,
                         reason: warnings::interruption_reason(&event),
                         combat_priority: recent
                             && (workshop_focus::hostile(&event)
@@ -307,19 +278,16 @@ impl Dialogue {
             } else {
                 let s = d.sessions.get_mut(session_id).unwrap();
                 let senses = super::body_runtime::event(s, &event);
-                if let Err(error) = s.chat_observation.observe_body(
+                s.chat_observation.observe_body(
                     &senses,
-                    &event,
                     &Default::default(),
                     &chat_context::CatalogLabels,
-                ) {
-                    tracing::warn!(event="chat_observation_rejected", session_id, %error);
-                }
+                );
             }
             self.resolve_vocalization(d.sessions.get_mut(session_id).unwrap(), Some(&event));
             self.start_pending(&mut d, &mut jobs, session_id);
             self.tick_workshop(&mut d, session_id);
-            if recent && complete && text.trim().is_empty() {
+            if recent && complete {
                 self.start_workshop_recovery(&mut d, &mut jobs, session_id);
             }
             d.revision += 1;
@@ -353,46 +321,21 @@ impl Dialogue {
         if let Some(feedback) = results.feedback.clone().or(horse_feedback) {
             self.queue_fixed_reply(&mut d, &mut jobs, session_id, feedback, None);
         }
-        let mut episode_snapshot = episode_before.map(|mut before| {
+        let episode_snapshot = episode_before.map(|mut before| {
             let actions = before.actions(&d, session_id);
             let s = &d.sessions[session_id];
             (before, json!(s.mode), s.foreground.combat_active, actions)
         });
         drop(d);
         drop(jobs);
-        if !duplicate && recent && complete_observation(&event) && text.trim().is_empty() {
+        if !duplicate && recent && complete_observation(&event) {
             self.resume_reply_input(session_id);
         }
-        if !duplicate
-            && recent
-            && event.event.name == EventName::StatusSnapshot
-            && text.trim().is_empty()
-        {
+        if !duplicate && recent && event.event.name == EventName::StatusSnapshot {
             self.try_start_haiku(session_id, false);
         }
-        let input = if input_handled {
-            json!({"accepted":true,"reason":"combat_input"})
-        } else if !duplicate && !text.trim().is_empty() {
-            self.submit_recorded(
-                Some(session_id),
-                &text,
-                "text",
-                false,
-                input_generation.map(|g| (g, None)),
-                false,
-                workshop_record::Admission {
-                    forwarded: false,
-                    private,
-                },
-            )
-        } else {
-            Value::Null
-        };
         let commands = {
             let mut d = self.data.lock().unwrap();
-            if let Some((before, _, _, actions)) = episode_snapshot.as_mut() {
-                actions.extend(before.input_actions(&d, session_id, &text));
-            }
             d.sessions
                 .get_mut(session_id)
                 .map(|s| {
@@ -451,6 +394,6 @@ impl Dialogue {
             });
         }
         json!({"accepted":true,"event_id":event_id,"session_id":session_id,"sequence":sequence,"deduplicated":duplicate,
-            "state":null,"outputs":null,"commands":commands,"body_request_generation":body_request_generation,"acknowledged_command_ids":results.acknowledged_ids,"server_time":recorded_at,"phase":"dialogue","player_input":input,"_workshop_direct_input":input_handled})
+            "state":null,"outputs":null,"commands":commands,"body_request_generation":body_request_generation,"acknowledged_command_ids":results.acknowledged_ids,"server_time":recorded_at,"phase":"dialogue"})
     }
 }

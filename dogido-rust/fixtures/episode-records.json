@@ -120,7 +120,6 @@
         "call_name": null,
         "debug": false,
         "death_cause": null,
-        "user_text": null,
         "advancements": []
       },
       "command_results": []
@@ -140,8 +139,7 @@
         "priority_hint": "background",
         "certainty": "high",
         "sequence": 5,
-        "observed_at": "2026-09-29T03:00:00+09:00",
-        "player_input": null
+        "observed_at": "2026-09-29T03:00:00+09:00"
       },
       "observation": {
         "player": {
@@ -383,7 +381,6 @@
         "call_name": null,
         "debug": false,
         "death_cause": null,
-        "user_text": null,
         "advancements": []
       },
       "command_results": []
@@ -403,8 +400,7 @@
         "priority_hint": "background",
         "certainty": "high",
         "sequence": 5,
-        "observed_at": "2026-09-29T03:00:00+09:00",
-        "player_input": null
+        "observed_at": "2026-09-29T03:00:00+09:00"
       },
       "observation": {
         "player": {
@@ -665,7 +661,6 @@
         "call_name": null,
         "debug": false,
         "death_cause": null,
-        "user_text": null,
         "advancements": []
       },
       "command_results": []
@@ -685,8 +680,7 @@
         "priority_hint": "background",
         "certainty": "high",
         "sequence": 5,
-        "observed_at": "2026-09-29T03:00:00+09:00",
-        "player_input": null
+        "observed_at": "2026-09-29T03:00:00+09:00"
       },
       "observation": {
         "player": {
@@ -938,7 +932,6 @@
         "call_name": null,
         "debug": false,
         "death_cause": null,
-        "user_text": " こんにちは ",
         "advancements": []
       },
       "command_results": []
@@ -958,11 +951,7 @@
         "priority_hint": "background",
         "certainty": "high",
         "sequence": 5,
-        "observed_at": "2026-09-29T03:00:00+09:00",
-        "player_input": {
-          "raw": "こんにちは",
-          "interpreted": null
-        }
+        "observed_at": "2026-09-29T03:00:00+09:00"
       },
       "observation": {
         "player": {
@@ -1204,7 +1193,6 @@
         "call_name": null,
         "debug": false,
         "death_cause": null,
-        "user_text": " こんにちは ",
         "advancements": []
       },
       "command_results": []
@@ -1224,11 +1212,7 @@
         "priority_hint": "background",
         "certainty": "high",
         "sequence": 5,
-        "observed_at": "2026-09-29T03:00:00+09:00",
-        "player_input": {
-          "raw": "こんにちは",
-          "interpreted": null
-        }
+        "observed_at": "2026-09-29T03:00:00+09:00"
       },
       "observation": {
         "player": {
@@ -1489,7 +1473,6 @@
         "call_name": null,
         "debug": false,
         "death_cause": null,
-        "user_text": " こんにちは ",
         "advancements": []
       },
       "command_results": []
@@ -1509,11 +1492,7 @@
         "priority_hint": "background",
         "certainty": "high",
         "sequence": 5,
-        "observed_at": "2026-09-29T03:00:00+09:00",
-        "player_input": {
-          "raw": "こんにちは",
-          "interpreted": null
-        }
+        "observed_at": "2026-09-29T03:00:00+09:00"
       },
       "observation": {
         "player": {
@@ -1821,7 +1800,6 @@
         "call_name": null,
         "debug": false,
         "death_cause": null,
-        "user_text": null,
         "advancements": []
       },
       "command_results": []
@@ -1841,8 +1819,7 @@
         "priority_hint": "background",
         "certainty": "high",
         "sequence": 5,
-        "observed_at": "2026-09-29T03:00:00+09:00",
-        "player_input": null
+        "observed_at": "2026-09-29T03:00:00+09:00"
       },
       "observation": {
         "player": {
@@ -2211,7 +2188,6 @@
         "call_name": null,
         "debug": false,
         "death_cause": null,
-        "user_text": null,
         "advancements": []
       },
       "command_results": []
@@ -2231,8 +2207,7 @@
         "priority_hint": "background",
         "certainty": "high",
         "sequence": 5,
-        "observed_at": "2026-09-29T03:00:00+09:00",
-        "player_input": null
+        "observed_at": "2026-09-29T03:00:00+09:00"
       },
       "observation": {
         "player": {
@@ -2620,7 +2595,6 @@
         "call_name": null,
         "debug": false,
         "death_cause": null,
-        "user_text": null,
         "advancements": []
       },
       "command_results": []
@@ -2640,8 +2614,7 @@
         "priority_hint": "background",
         "certainty": "high",
         "sequence": 5,
-        "observed_at": "2026-09-29T03:00:00+09:00",
-        "player_input": null
+        "observed_at": "2026-09-29T03:00:00+09:00"
       },
       "observation": {
         "player": {
@@ -3000,7 +2973,6 @@
         "call_name": null,
         "debug": false,
         "death_cause": null,
-        "user_text": null,
         "advancements": []
       },
       "command_results": []
@@ -3020,8 +2992,7 @@
         "priority_hint": "background",
         "certainty": "high",
         "sequence": 5,
-        "observed_at": "2026-09-29T03:00:00+09:00",
-        "player_input": null
+        "observed_at": "2026-09-29T03:00:00+09:00"
       },
       "observation": {
         "player": {
@@ -3339,7 +3310,6 @@
         "call_name": null,
         "debug": false,
         "death_cause": null,
-        "user_text": null,
         "advancements": []
       },
       "command_results": []
@@ -3359,8 +3329,7 @@
         "priority_hint": "background",
         "certainty": "high",
         "sequence": 5,
-        "observed_at": "2026-09-29T03:00:00+09:00",
-        "player_input": null
+        "observed_at": "2026-09-29T03:00:00+09:00"
       },
       "observation": {
         "player": {
@@ -3697,7 +3666,6 @@
         "call_name": null,
         "debug": false,
         "death_cause": null,
-        "user_text": null,
         "advancements": []
       },
       "command_results": []
@@ -3717,8 +3685,7 @@
         "priority_hint": "background",
         "certainty": "high",
         "sequence": 5,
-        "observed_at": "2026-09-29T03:00:00+09:00",
-        "player_input": null
+        "observed_at": "2026-09-29T03:00:00+09:00"
       },
       "observation": {
         "player": {

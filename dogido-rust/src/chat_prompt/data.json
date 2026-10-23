@@ -14,13 +14,10 @@
     {"field": "digest_rules"},
     {"field": "combat_safety_rules"},
     {"field": "world_observation_rules"},
-    {"field": "grounding_rules"},
     {"field": "priority_rules"},
     {"text": "/no_think\n【材料】\n"},
     {"field": "history_block"},
     {"field": "digest_block"},
-    {"field": "grounding_block"},
-    {"field": "repair_block"},
     {"text": "プレイヤー:「"},
     {"field": "user_text"},
     {"text": "」\n呼び名: "},
@@ -57,14 +54,6 @@
     "【直近の出来事メモ】\n@@DOGIDO_digest@@\n"
   ],
   "world": "- このテストにはいまのMinecraft観測データが入ってへん。敵・場所・天気・持ち物・プレイヤーの動きを見たふりをせんと、相手の発言だけを根拠にして返してな\n",
-  "grounding_rules": {
-    "common": "- 会話plannerのactionとコードの照合結果を最優先してな。過去の会話履歴をコードの結果より強い根拠にしたらあかんで\n- プレイヤーからの目撃報告は『本人の報告』として受け止めて、自分も見た・確認したとは言うたらあかんで\n- 過去に見えたり聞こえたりしたことは『さっき見た／聞いた』と過去形で話してな。今もおる根拠にしたり、見失った理由を勝手にでっち上げたらあかんで\n",
-    "observed": "- 対象は今の観測で確認済みやで。照合できた呼び名だけを使ってな\n",
-    "not_observed": "- 対象は今の観測では確認できてへんで。『おらん』と決めつけんと、見えとる・近くにおる・すぐそこにおる等とも言うたらあかんで\n",
-    "unresolved": "- 対象がどれかハッキリ特定できてへん。名前やおるかおらんかを勝手に補作せんと、相手に聞き返してな\n"
-  },
-  "grounding_header": "【会話plannerとコード照合】\n",
-  "conversation_repair": "【本人による会話の訂正】\n@@DOGIDO_repair@@\n勘違いした点を素直に認めて、replacement_quoteの意味で会話を続けてな。訂正された古い解釈を繰り返さんと、ごめんって謝るだけで終わったらあかんで。相手が言い直した大事な言葉・行動・否定の向きをしっかり保って、別の言葉や理由へ勝手に言い換えたらあかんで。理由が言われてへんかったら、勝手に理由を推測して語ったらあかん。これは相手の意図の説明であって、実際のゲーム観測や操作依頼、セーブの証拠やないで。原文を書き換えた、ゲームを操作した、記憶に保存した、なんて言うたらあかんで。\n",
   "priority": {
     "header": "【今回だけの優先情報】\n",
     "return_home": {

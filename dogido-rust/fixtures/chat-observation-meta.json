@@ -1,6 +1,6 @@
 {
-  "traces": 434,
-  "steps": 1217,
+  "traces": 433,
+  "steps": 1214,
   "source_sha256": {
     "dogido_server/state_machine/machine.py": "9c98a74d62bcde4a42213a81548619a59447f1d147120d3de5417b9620a4afe2",
     "dogido_server/state_machine/mixins/narration.py": "516d84d5c125b20a969a3b337070f08d9be2e6e4feeb454c7db014bace90f115",
@@ -13,5 +13,8 @@
     "dogido_server/state_machine/constants.py": "161985a878a7ae48850877932400b655774af8dab588b90d28b5e4d98435531f",
     "dogido_server/entry_catalog.py": "9d47149445aa55f7ea7590ec8ce0bee615b64eeecf9ed7a5901a247865df37b5"
   },
-  "oracle": "persistent DogidoStateMachine.process; canonical service sequence admission; no model"
+  "oracle": "persistent DogidoStateMachine.process; canonical service sequence admission; no model",
+  "retired_cases": [
+    "time-offset-aware-False"
+  ]
 }

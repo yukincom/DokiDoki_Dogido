@@ -131,7 +131,7 @@ pub fn feedback_kind(step: &Value) -> Option<&'static str> {
         .filter_map(|f| f["problem"].as_str())
         .collect();
     Some(
-        if problems.contains("forced_compression") || problems.contains("meter") {
+        if problems.contains("forced_compression") {
             "forced_compress"
         } else if ["unreadable", "unnatural_japanese", "reading"]
             .iter()

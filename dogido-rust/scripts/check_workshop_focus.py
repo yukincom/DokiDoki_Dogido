@@ -75,11 +75,11 @@ def main():
         assert stored(sid) == original
         passed.append("smell_combat_and_assist_words_reach_workshop_without_fixed_reply")
         for text in ["ゾンビどこ？", "敵何体？", "夫婦の香りをくんくん匂うに変えませんか"]:
-            reply = resolve_input_response(base, send(sid, meta={"user_text": text})["player_input"])
+            reply = resolve_input_response(base, request(base, "/api/v1/player-input", {"session_id": sid, "text": text, "source": "text"}))
             assert reply["accepted"] and reply.get("reason") != "combat_input", reply
             result = wait_for(lambda: row(base, reply["turn_id"], {"completed"}))
             assert result["workshop_action"] == "explain" and calls[-1][0] == text, result
-        passed.append("game_event_text_is_not_silently_consumed_by_combat_queries")
+        passed.append("text_input_is_not_silently_consumed_by_combat_queries")
 
         entered, release = threading.Event(), threading.Event()
         def blocked(text, prompt, n):
@@ -153,7 +153,7 @@ def main():
         drive(send, sid, lambda: row(base, warning["turn_id"], {"completed"}))
         passed.append("started_hostile_warning_finishes_after_enemy_leaves")
 
-    for source in ["voice", "event"]:
+    for source in ["voice", "text"]:
         with fixture(combat_settings=SETTINGS) as f:
             base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder = f
             calls = install(control, lambda text, prompt, n: step(text))
@@ -162,10 +162,7 @@ def main():
             send(sid, event=event("combat_ended"), combat={"hostiles_within_scan_ground": 0})
             assert hud(sid)["state"] == "danger"
             text = "敵何体？"
-            if source == "voice":
-                reply = request(base, "/api/v1/player-input", {"session_id": sid, "text": text, "source": "voice"})
-            else:
-                reply = send(sid, meta={"user_text": text})["player_input"]
+            reply = request(base, "/api/v1/player-input", {"session_id": sid, "text": text, "source": source})
             assert reply.get("reason") in {"request_classification", "combat_workshop_input"} or reply.get("queued"), reply
             result = drive(send, sid, lambda: next((r for r in rows(sid) if r.get("player_input_text") == text and r["playback_status"] == "completed" and r.get("workshop_action") == "explain"), None))
             assert len(calls) == 1 and hud(sid)["state"] == "open", result

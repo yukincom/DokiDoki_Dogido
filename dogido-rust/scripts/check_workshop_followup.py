@@ -5,12 +5,11 @@ from check_dialogue import request, row, submit, wait_for
 from check_haiku_runtime import LINES
 from check_workshop_fixture import fixture
 from check_workshop_runtime import install, ready, session, step
-from check_workshop_edits import finish, revisions
+from check_workshop_edits import finish
 
 
-def followup(text, action, speech="うん、言葉の響きがつながったんやな。"):
-    return {"action": action, "purpose": {"acknowledge_meaning": "understand_meaning",
-        "confirm_close": "finish_workshop", "continue_workshop": "continue_discussion"}[action],
+def meaning_ack(text, speech="うん、言葉の響きがつながったんやな。"):
+    return {"action": "acknowledge_meaning", "purpose": "understand_meaning",
         "confidence": .95, "evidence": text, "speech": speech, "checks": []}
 
 
@@ -20,7 +19,7 @@ def main():
         def choose(text, prompt, n):
             if text == "なるほど":
                 assert "会話段階: meaning_explained" in prompt
-                return followup(text, "acknowledge_meaning")
+                return meaning_ack(text)
             if "説明" in text:
                 return step(text)
             return step(text, "respond", "うん、この句の話を続けよか。")
@@ -56,23 +55,6 @@ def main():
         assert hud(sid)["canonical_lines"] == LINES
         passed.append("combat_keeps_verse_and_clears_short_reply_stage")
 
-    from check_workshop_revision import wire
-    with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
-        sid = ready(base, send, rows)
-        wire(control, stored, sid)
-        finish(base, send, sid, "上五のさくらのはを別の表現に直して")
-        assert hud(sid)["pending_lines"]
-        def mistaken(text, prompt, n):
-            if n == 1:
-                return followup(text, "confirm_close", "ここで区切ろか。")
-            return step(text, "ask", "この案を使うか、まだ話すか聞かせてな。")
-        install(control, mistaken)
-        r = finish(base, send, sid, "それでいいよ")
-        assert r["workshop_action"] == "ask" and len(r["llm_reports"]) == 2, r
-        assert r["text"] == "この案を使うか、まだ話すか聞かせてな。"
-        assert hud(sid)["state"] == "open" and hud(sid)["pending_lines"]
-        assert hud(sid)["canonical_lines"] == LINES and not revisions(folder, sid)
-        passed.append("inapplicable_followup_replans_without_adopting_or_discarding_pending")
     print(json.dumps({"passed":passed,"count":len(passed)}, ensure_ascii=False, indent=2))
 
 

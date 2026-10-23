@@ -1,4 +1,4 @@
-//! プロンプト・カタログ用の値の文字列化、JSON整形、モデル返答のコード囲み除去。
+//! プロンプト・カタログ用の値の文字列化、JSON整形、モデル返答のコード囲み除去とobject抽出。
 //! Scalar text keeps None/True/False and unquoted strings. Containers retain
 //! their caller's established format; changing that also changes search terms.
 use serde::Serialize;
@@ -150,10 +150,56 @@ pub(crate) fn strip_code_fence(text: &str) -> String {
     text.into()
 }
 
+/// モデル返答の最初の完成JSON objectを返す。前置き・コード囲みは許容する。
+/// 本文の不足を補作せず、完成した外側objectを優先する。意味・操作・保存の採否は呼出側が担当する。
+pub(crate) fn extract_object(text: &str) -> Option<Value> {
+    let normalized = text.trim_matches(crate::compat::is_dogido_whitespace);
+    if let Ok(value) = serde_json::from_str::<Value>(normalized)
+        && value.is_object()
+    {
+        return Some(value);
+    }
+    for (index, _) in normalized.match_indices('{') {
+        if let Some(Ok(value)) = serde_json::Deserializer::from_str(&normalized[index..])
+            .into_iter::<Value>()
+            .next()
+            && value.is_object()
+        {
+            return Some(value);
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn completed_object_extraction_preserves_payload_and_does_not_invent_fields() {
+        for text in [
+            "\u{1c}{\"action\":\"stay\",\"target_id\":null}\u{1f}",
+            "前置き {\"action\":\"stay\",\"target_id\":null} 後書き",
+            "```json\n{\"action\":\"stay\",\"target_id\":null}\n```",
+        ] {
+            assert_eq!(
+                extract_object(text),
+                Some(json!({"action":"stay","target_id":null}))
+            );
+        }
+        assert_eq!(
+            extract_object(r#"{"outer":{"line":"本文"}}"#),
+            Some(json!({"outer":{"line":"本文"}}))
+        );
+        assert_eq!(
+            extract_object("```json\n{\"text\":\"前\u{2028}後\"}\n```"),
+            Some(json!({"text":"前\u{2028}後"}))
+        );
+        for text in ["", "本文だけ", "{", r#"{"action":"stay""#, "[]", "null"] {
+            assert!(extract_object(text).is_none(), "{text}");
+        }
+    }
 
     const FORMATS: [ContainerFormat; 3] = [
         ContainerFormat::CompactJson,

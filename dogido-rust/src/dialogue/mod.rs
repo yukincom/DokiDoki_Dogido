@@ -75,7 +75,7 @@ use tokio::sync::{Semaphore, watch};
 #[derive(Clone)]
 pub struct DialogueConfig {
     pub python: PathBuf,
-    /// UniDic token補助のパス。同じディレクトリのOS AI等のSDKアダプターもここを基準に探す。
+    /// UniDic token補助のパス。辞書tokenの取得だけを担当し、意図分類はBERTへ渡す。
     pub helper: PathBuf,
     pub model: String,
     pub base_url: String,
@@ -287,15 +287,10 @@ fn complete_observation(event: &GameEvent) -> bool {
     }
 }
 fn recent_observation(event: &GameEvent) -> bool {
-    match &event.observed_at {
-        crate::events::EventTime::Aware(at) => {
-            (chrono::Utc::now() - at.with_timezone(&chrono::Utc))
-                .num_milliseconds()
-                .abs()
-                <= 10_000
-        }
-        crate::events::EventTime::Naive(_) => false,
-    }
+    (chrono::Utc::now() - event.observed_at.with_timezone(&chrono::Utc))
+        .num_milliseconds()
+        .abs()
+        <= 10_000
 }
 fn observation_fresh(session: &Session) -> bool {
     session.preview
@@ -466,7 +461,7 @@ impl Dialogue {
             None
         }
     }
-    /// 一件のイベントを受理し、戦況・環境・発句と必要なplayer入力を処理する。
+    /// 一件のイベントを受理し、戦況・環境・発句と保留中の配送を進める。
     /// 戻り値は受理・判断・配送予定の結果。音声の実再生結果は各workerから後で届く。
     pub fn observe(
         self: &Arc<Self>,
@@ -475,38 +470,17 @@ impl Dialogue {
         key: Option<&str>,
     ) -> Value {
         let before = self.workshop_record_state(session_id);
-        let text = event.meta.user_text.clone().unwrap_or_default();
-        let private = false;
-        let mut result = self.observe_inner(session_id, event, key, private);
-        let direct_input = result
-            .as_object_mut()
-            .and_then(|r| r.remove("_workshop_direct_input"))
-            == Some(Value::Bool(true));
+        let result = self.observe_inner(session_id, event, key);
         let after = self.workshop_record_state(session_id);
-        if result["deduplicated"] != true {
-            if direct_input && !text.is_empty() {
-                self.record_workshop(
-                    session_id,
-                    "input_admission",
-                    &before,
-                    &after,
-                    &workshop_record::Input {
-                        raw: text.clone(),
-                        private,
-                        ..Default::default()
-                    },
-                    &result["player_input"],
-                );
-            } else if before != after {
-                self.record_workshop(
-                    session_id,
-                    "lifecycle",
-                    &before,
-                    &after,
-                    &workshop_record::Input::default(),
-                    &json!({"reason":"game_event"}),
-                );
-            }
+        if result["deduplicated"] != true && before != after {
+            self.record_workshop(
+                session_id,
+                "lifecycle",
+                &before,
+                &after,
+                &workshop_record::Input::default(),
+                &json!({"reason":"game_event"}),
+            );
         }
         result
     }

@@ -2,11 +2,11 @@
 
 **2026-10-23追記:** 本文のOS AI・端末AI接続と旧分類fallbackは当時の記録。現在は共通BERTで意図を分類し、戦闘からの再開・継続はRustが警戒解除を観測して決める。旧経路を復元せず、[現行仕様](2026-10-23-modernbert-23class-integration.md)を参照する。
 
-## 現在地（2026-10-03）
+## 現在地（2026-10-23）
 
-**旧Python本体・比較oracleの並走運用は終了。実行時正本はRustです。** 通常会話、戦闘・環境、川柳・共同編集・記憶、知識検索・限定国語、音声入力制御と配送をRustが所有します。Pythonは設定、UniDic token、Whisper設定、AEC、端末AI、Chrome/MCPの接続補助に残します。
+**旧Python本体・比較oracleの並走運用は終了。実行時正本はRustです。** 通常会話、戦闘・環境、川柳・共同編集・記憶、詩・Minecraftの知識検索、音声入力制御と配送をRustが所有します。Pythonは設定、UniDic token、Whisper設定、AEC、ModernBERTの推論補助に残します。OS AI・learn worker・専用Chrome/MCPは撤去済みです。
 
-現行のビルド・起動・確認は [Rust本体](../dogido-rust/README.md)、仕様は [現行仕様](current-spec.md) を参照してください。移植fixtureは回帰資産として残し、撤去したPython実装を再導入して再生成しません。`source_cards.json` と正本資料は現役のRust検索から使い続けます。残存Pythonと資料の一覧は [Rust本体の補助一覧](../dogido-rust/README.md#残すpython補助と資料) に集約します。旧 `tts_reading.py` は廃止し、辞書tokenは `tts_shared_tokens._reader = Unidic()`、読みの判定・整形はRustへ分離しました。開発用データ整備補助は `dev_tools/catalog_tools/` に置きます。
+現行のビルド・起動・確認は [Rust本体](../dogido-rust/README.md)、仕様は [現行仕様](current-spec.md) を参照してください。移植fixtureは回帰資産として残し、撤去したPython実装を再導入して再生成しません。詩の基礎資料とMinecraft資料は現役のRust検索から使い続けます。旧learnの資料カード・一般文法・漢字・語彙資料は撤去しました。残存Pythonと資料の一覧は [Rust本体の補助一覧](../dogido-rust/README.md#残すpython補助と資料) に集約します。旧 `tts_reading.py` は廃止し、辞書tokenは `tts_shared_tokens._reader = Unidic()`、読みの判定・整形はRustへ分離しました。開発用データ整備補助は `dev_tools/catalog_tools/` に置きます。
 
 2026-10-05に本体・マイクの起動設定を一本化しました。既存Rust起動ファイルも一般設定のポート（既定5055）と `memory_dir` を使い、テキスト相談室も同じ保存先を参照します。既存記録は移動せず、使う保存先を設定へ明示します。家庭用は準備済みRust本体を同梱します。実Minecraft・実マイク・実音声を重ねた一巡、家庭用の実機動作、Mac miniでの速度・メモリ測定は、コード移行・自動検証の完了とは分けて確認します。
 

@@ -112,9 +112,7 @@ pub(super) fn prepare_with_assets(
         ),
         ("context", context),
     ]);
-    let followup = ["acknowledge_meaning", "confirm_close", "continue_workshop"]
-        .iter()
-        .any(|a| allowed(a));
+    let followup = allowed("acknowledge_meaning");
     let conditions = [
         (
             "raw_semantic",
@@ -128,7 +126,6 @@ pub(super) fn prepare_with_assets(
                 .is_some_and(truth),
         ),
         ("meaning_ack", allowed("acknowledge_meaning")),
-        ("confirm_close", allowed("confirm_close")),
         ("followup", followup),
         ("editing", allowed("stage_player_edit")),
         (
@@ -143,7 +140,6 @@ pub(super) fn prepare_with_assets(
                 .as_ref()
                 .is_some_and(|s| !s.is_empty()),
         ),
-        ("after_validation", details.phase == "after_validation"),
     ];
     let mut extra = String::new();
     for (key, include) in conditions {

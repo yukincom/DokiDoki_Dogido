@@ -123,6 +123,6 @@ final class BodyManager {
             -1,null,null,Sensors.BODY_VISION_AND_HEARING,null,
             new FoodObservation(ObservationStatus.UNAVAILABLE,server.getTicks(),java.util.List.of(),false),null,
             BodyVision.unavailable(server.getTicks(),id == null ? "invalid_pose" : "area_unloaded"),
-            new HearingObservation(ObservationStatus.UNAVAILABLE,server.getTicks(),java.util.List.of(),false));
+            new HearingObservation(ObservationStatus.UNAVAILABLE,server.getTicks(),java.util.List.of(),false),null);
     }
 }

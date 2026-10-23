@@ -3,7 +3,7 @@
 use crate::body::contracts::Context;
 use crate::events::{
     AdapterCommandResult, AdapterCommandResultCommandType as Kind,
-    AdapterCommandResultStatus as Status, EventTime,
+    AdapterCommandResultStatus as Status,
 };
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
@@ -224,8 +224,8 @@ impl State {
             && r.filename.starts_with("dogido_")
             && r.capture_view.as_ref().is_some_and(|view| view.matches(&p.context))
             && r.captured_at >= p.issued && r.captured_at < p.issued + Duration::seconds(START_SECONDS)
-            && matches!(result.executed_at, EventTime::Aware(t)
-                if t >= r.captured_at && t <= now && t < p.issued + Duration::seconds(RESULT_SECONDS)));
+            && result.executed_at >= r.captured_at && result.executed_at <= now
+            && result.executed_at < p.issued + Duration::seconds(RESULT_SECONDS));
         if !valid {
             if p.received.is_some() { return (false, None); }
             self.finish(&result.command_id);

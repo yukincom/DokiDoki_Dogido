@@ -111,17 +111,20 @@ class EventJsonBuilderTest {
                 combat.addProperty("audio_count", emptyCombat ? 0 : AUDIO.size());
                 if (index == 5 || index == 6) builder.combatOutcomes(combat, index == 5 ? DETONATIONS : OUTCOMES);
                 else builder.combat(combat);
-                builder.meta(EventJsonBuilder.buildMeta(index == 4 ? "fixture death" : null, "fixture input"));
+                builder.meta(EventJsonBuilder.buildMeta(index == 4 ? "fixture death" : null));
                 assertEquals(row.get("expected"), builder.finish(), event + " detail=" + detail);
                 assertFalse(frame.copy().has("visible_villager_count"), "per-event augmentation must not alter the shared frame");
             }
         }
     }
 
-    @Test void absentOrBlankMetadataIsOmitted() {
-        assertFalse(EventJsonBuilder.buildMeta(null, null).has("death_cause"));
-        assertFalse(EventJsonBuilder.buildMeta(" ", " ").has("user_text"));
-        assertEquals("hello", EventJsonBuilder.buildMeta(null, "hello").get("user_text").getAsString());
+    @Test void metadataContainsAdapterFactsAndOnlyAnObservedDeathCause() {
+        var base = EventJsonBuilder.buildMeta(null);
+        assertEquals(java.util.Set.of("adapter_build", "profile_name", "debug"), base.keySet());
+        assertEquals(base, EventJsonBuilder.buildMeta(" "));
+        var death = EventJsonBuilder.buildMeta("fixture death");
+        assertEquals("fixture death", death.remove("death_cause").getAsString());
+        assertEquals(base, death);
     }
 
     @Test void noneAndSuppressedSmellsKeepAnExplicitEmptyComponentArray() {

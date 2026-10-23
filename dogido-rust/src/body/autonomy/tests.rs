@@ -2,7 +2,7 @@
 use super::{contracts::*, *};
 use crate::body::contracts::{Position, Sample};
 use crate::events::{
-    AdapterCommandResult, AdapterCommandResultCommandType, AdapterCommandResultStatus, EventTime,
+    AdapterCommandResult, AdapterCommandResultCommandType, AdapterCommandResultStatus,
 };
 use chrono::{DateTime, Duration as UtcDuration, Utc};
 use serde_json::{Value, json};
@@ -89,7 +89,7 @@ fn result(command: &Value) -> AdapterCommandResult {
         command_id: command["command_id"].as_str().unwrap().into(),
         command_type: AdapterCommandResultCommandType::InspectBodyTarget,
         status: AdapterCommandResultStatus::Succeeded,
-        executed_at: EventTime::Aware((utc() + UtcDuration::seconds(1)).fixed_offset()),
+        executed_at: (utc() + UtcDuration::seconds(1)).fixed_offset(),
         selected_slot: None,
         selected_item_id: None,
         detail_code: "arrived".into(),
@@ -690,7 +690,7 @@ fn command_retry_is_identical_and_stops_at_five_seconds_but_keeps_busy() {
 #[test]
 fn receipt_requires_command_type_context_time_and_arrival() {
     let at = Instant::now();
-    for change in 0..9 {
+    for change in 0..8 {
         let (mut state, p) = prepared(at);
         let command = inspect(&mut state, &p, at);
         let mut r = result(&command);
@@ -705,14 +705,13 @@ fn receipt_requires_command_type_context_time_and_arrival() {
             }
             4 => {
                 r.executed_at =
-                    EventTime::Aware((utc() - UtcDuration::milliseconds(1)).fixed_offset())
+                    (utc() - UtcDuration::milliseconds(1)).fixed_offset()
             }
             5 => {
-                r.executed_at = EventTime::Aware((utc() + UtcDuration::seconds(35)).fixed_offset())
+                r.executed_at = (utc() + UtcDuration::seconds(35)).fixed_offset()
             }
-            6 => r.executed_at = EventTime::Naive(utc().naive_utc()),
-            7 => r.detail_code = "accepted".into(),
-            _ => r.executed_at = EventTime::Aware((utc() + UtcDuration::seconds(2)).fixed_offset()),
+            6 => r.detail_code = "accepted".into(),
+            _ => r.executed_at = (utc() + UtcDuration::seconds(2)).fixed_offset(),
         }
         assert!(
             state

@@ -1,7 +1,7 @@
 use super::*;
 use crate::{chat_observation::SoundCandidate, mob_identity};
 
-pub(super) fn current_observations(snapshot: &Snapshot, user: &str) -> Vec<handoff::Observation> {
+pub(super) fn current_observations(snapshot: &Snapshot, user: &str) -> Vec<Observation> {
     let mentioned = mob_identity::mentioned(&snapshot.named_mobs, user);
     snapshot
         .named_mobs
@@ -14,7 +14,7 @@ pub(super) fn current_observations(snapshot: &Snapshot, user: &str) -> Vec<hando
                     || (mentioned.is_empty()
                         && mob_identity::species_mentioned(&row.mob_type, user)))
         })
-        .map(|row| handoff::Observation {
+        .map(|row| Observation {
             entity_id: format!("individual:{}", row.entity_id),
             label: row.custom_name.clone(),
         })
@@ -210,10 +210,7 @@ pub(super) fn focus(
 ) -> Option<Focused> {
     // The retained name table is capped independently of the current candidate scan.
     // Add missing current visual names only to this reply's read projection.
-    let now = match &event.observed_at {
-        crate::events::EventTime::Aware(at) => at.timestamp_micros(),
-        crate::events::EventTime::Naive(at) => at.and_utc().timestamp_micros(),
-    };
+    let now = event.observed_at.timestamp_micros();
     let (_, observed_names) = mob_identity::observed(event, now);
     let mut snapshot = snapshot.clone();
     for row in observed_names {

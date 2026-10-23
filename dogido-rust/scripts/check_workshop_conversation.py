@@ -39,8 +39,6 @@ def main():
                 return step(text, "ask", "この句の響き、まだ一言話してもええ？")
             if text == "下五の意味を教えて":
                 return step(text, speech="『あさのいろ』の明るさに、気持ちもほどける感じがするな。")
-            if "段階: after_validation" in prompt:
-                raise AssertionError("failed edit must not call the model again")
             if text.startswith("それを"):
                 replacement = "さくら" if "さくら" in text else "あさひかる"
                 p = edit(text, replacement=replacement, reference="")
@@ -96,8 +94,6 @@ def main():
     for replacement in ["さくらいろ", "さくら"]:
         with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
             def model(text, prompt, n):
-                if "段階: after_validation" in prompt:
-                    raise AssertionError("failed candidate must not call the model again")
                 if text == f"『さくらのは』を『{replacement}』にしたらどうかな":
                     return discuss_candidate(text, replacement)
                 if text == "さっきの案にして":
@@ -122,25 +118,21 @@ def main():
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         new_text = "上五ならあさひかるがいい。変更をお願い"
         attempts = 0
-        def missing_arguments_then_conversation(text, prompt, n):
+        def missing_arguments(text, prompt, n):
             nonlocal attempts
             if text == "『さくらのは』を『さくらいろ』にしたらどうかな":
                 return discuss_candidate(text, "さくらいろ")
             if text != new_text:
                 return step(text, "respond", "その響きもええな。")
             attempts += 1
-            if attempts == 1:
-                # BERT具体変更は今回の原文だけを限定抽出し、古い案の採用は提示しない。
-                assert '"conversation_candidate": {' not in prompt
+            assert attempts == 1, "invalid extraction must not trigger another model call"
+            # BERT具体変更は今回の原文だけを限定抽出し、古い案の採用は提示しない。
+            assert '"conversation_candidate": {' not in prompt
             p = edit(text, replacement="あさひかる", reference="上五")
-            if attempts == 1:
-                del p["confidence"]
-                del p["evidence"]
-            else:
-                assert "invalid_tool_arguments" in prompt
-                return step(text, "ask", "上五を『あさひかる』に変えるんやな？")
+            del p["confidence"]
+            del p["evidence"]
             return p
-        install(control, missing_arguments_then_conversation)
+        install(control, missing_arguments)
         sid = ready(base, send, rows)
         finish(base, send, sid, "『さくらのは』を『さくらいろ』にしたらどうかな")
         assert hud(sid)["canonical_lines"] == LINES

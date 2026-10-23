@@ -1,28 +1,25 @@
-/* Visual prototype. Catalog player notes use browser-only storage; no server/game actions. */
+/* 本体の本棚データを表示し、メモと句の変更を画面内に保持する。保存はlive-libraryの既存HTTP処理が所有する。 */
 'use strict';
-const M=window.DogidoLibrary, catalog=window.DOGIDO_CATALOG_SAMPLE;
+const M=window.DogidoLibrary, catalog=window.DOGIDO_BOOTSTRAP.catalog;
 const $=id=>document.getElementById(id);
 const defaultCatalogEntry=catalog.find(e=>e.category==='mob'&&(e.catalogId||e.id)==='creeper')?.id??catalog[0]?.id??null;
 const state={book:'catalog',catalogPane:'entry',category:'all',selected:defaultCatalogEntry,listOpen:false,query:'',biome:'all',timeOfDay:'all',period:'all',poemSection:'all',favorites:new Set(),source:'base',photo:'landscape'};
 const playerNotes=M.createPlayerNotes(M.poems);
 const selectedPoems=M.createPoemSelection(M.poems);
-const liveDrafts=new Map(Object.entries(window.DOGIDO_BOOTSTRAP?.player.catalog||{}).map(([key,value])=>[key,JSON.stringify(value)]));
-const catalogNotes=window.DogidoCatalogPlayerNotes.create(catalog.map(e=>e.catalogId?{...e,id:e.catalogId}:e),window.DOGIDO_BOOTSTRAP?{
+const liveDrafts=new Map(Object.entries(window.DOGIDO_BOOTSTRAP.player.catalog).map(([key,value])=>[key,JSON.stringify(value)]));
+const catalogNotes=window.DogidoCatalogPlayerNotes.create(catalog.map(e=>e.catalogId?{...e,id:e.catalogId}:e),{
   getItem:key=>liveDrafts.get(key.slice(window.DogidoCatalogPlayerNotes.PREFIX.length))??null,
   setItem:(key,value)=>liveDrafts.set(key.slice(window.DogidoCatalogPlayerNotes.PREFIX.length),value)
-}:{
-  getItem:key=>window.localStorage.getItem(key),
-  setItem:(key,value)=>window.localStorage.setItem(key,value)
 });
-if(window.DOGIDO_BOOTSTRAP)for(const [id,value] of Object.entries(window.DOGIDO_BOOTSTRAP.player.poems)){
+for(const [id,value] of Object.entries(window.DOGIDO_BOOTSTRAP.player.poems)){
   playerNotes.set(id,value.note);if(value.favorite)state.favorites.add(id);
 }
 const catalogNoteId=e=>e.catalogId?e.id:`${e.category}:${e.id}`;
-function catalogStorageMessage(e){return catalogNotes.get(catalogNoteId(e)).saved?'このブラウザーに自動保存します。ゲームのドギドにはまだ未接続です。':'ブラウザーに保存できません。入力はこの画面を開いている間だけ残ります。';}
+function catalogStorageMessage(){return '編集後は「変更を保存」を押してください。';}
 function renderCatalogNotes(e){
   const data=catalogNotes.get(catalogNoteId(e)),full=data.keys.length>=10;
-  return `<section class="catalog-player-notes" aria-label="ドギドに覚えておいてほしいこと"><p>ドギドに覚えておいてほしいことを記入してください。</p><form id="catalog-key-form"><label for="catalog-key-new">ポエティックキー</label><div class="catalog-key-row"><input id="catalog-key-new" value="${esc(catalogNotes.getDraft(catalogNoteId(e)))}" aria-describedby="catalog-key-help" ${full?'disabled':''}><button type="submit" ${full?'disabled':''}>追加</button></div></form><ul class="catalog-key-list">${data.keys.map((key,i)=>`<li class="catalog-key-row"><input aria-label="ポエティックキー ${i+1}" data-edit-key="${i}" value="${esc(key)}"><button type="button" data-delete-key="${i}" aria-label="ポエティックキー ${i+1} を削除">削除</button></li>`).join('')}</ul><p class="key-help" id="catalog-key-help">10個まで追加できます（${data.keys.length} / 10）</p>
-  <section class="catalog-reading" aria-label="読み訂正"><h3>読み訂正</h3><form id="catalog-reading-form"><div class="catalog-key-row catalog-reading-row"><label>漢字<input id="catalog-reading-word" placeholder="例：草地" required></label><span aria-hidden="true">→</span><label>読み仮名<input id="catalog-reading-new" placeholder="例：くさち" required></label><button type="submit" aria-label="読み訂正を追加">追加</button></div></form><ul class="catalog-key-list">${data.readings.map((r,i)=>`<li class="catalog-key-row catalog-reading-row"><input aria-label="読み訂正 ${i+1} の漢字" data-edit-reading="${i}" data-reading-field="word" value="${esc(r.word)}" placeholder="漢字"><span aria-hidden="true">→</span><input aria-label="読み訂正 ${i+1} の読み仮名" data-edit-reading="${i}" data-reading-field="reading" value="${esc(r.reading)}"><button type="button" data-delete-reading="${i}" aria-label="読み訂正 ${i+1} を削除">削除</button></li>`).join('')}</ul><p id="catalog-reading-feedback" role="status"></p></section>
+  return `<section class="catalog-player-notes" aria-label="個人メモ"><p>この項目の個人メモです。読み訂正だけが次の読み上げに反映されます。</p><form id="catalog-key-form"><label for="catalog-key-new">ことばのメモ</label><div class="catalog-key-row"><input id="catalog-key-new" value="${esc(catalogNotes.getDraft(catalogNoteId(e)))}" aria-describedby="catalog-key-help" ${full?'disabled':''}><button type="submit" ${full?'disabled':''}>追加</button></div></form><ul class="catalog-key-list">${data.keys.map((key,i)=>`<li class="catalog-key-row"><input aria-label="ことばのメモ ${i+1}" data-edit-key="${i}" value="${esc(key)}"><button type="button" data-delete-key="${i}" aria-label="ことばのメモ ${i+1} を削除">削除</button></li>`).join('')}</ul><p class="key-help" id="catalog-key-help">10個まで追加できます（${data.keys.length} / 10）</p>
+  <section class="catalog-reading" aria-label="読み訂正"></section>
   <p class="storage-status" id="catalog-storage-status" role="status">${esc(catalogStorageMessage(e))}</p><p id="catalog-key-feedback" role="status"></p></section>`;
 }
 const indexPanel=document.querySelector('.index-page');
@@ -103,7 +100,7 @@ function renderNavigation(){
   document.querySelector('.desk').classList.toggle('list-open',state.listOpen);
   const selectedCategory=document.querySelector(isCatalog?`[data-category="${state.category}"]`:`[data-poem-group="${state.poemSection}"]`);
   selectedCategory.after(indexPanel);
-  $('filters').hidden=isCatalog;$('index-title').textContent=isCatalog?(state.category==='all'?'すべての項目':M.categories[state.category]):poemSections[state.poemSection];$('index-kicker').textContent=isCatalog?'目 録':'句 の 一 覧';$('index-foot').textContent=isCatalog?'既存カタログから抜粋 / 閲覧専用':'4句の仮データ / 保存記録とは未接続';
+  $('filters').hidden=isCatalog;$('index-title').textContent=isCatalog?(state.category==='all'?'すべての項目':M.categories[state.category]):poemSections[state.poemSection];$('index-kicker').textContent=isCatalog?'目 録':'句 の 一 覧';$('index-foot').textContent=isCatalog?'本体と共通のカタログ':'本体に保存された句';
   $('search').placeholder=isCatalog?'名前・読み・説明で探す':'句・場所・ことばで探す';$('search').setAttribute('aria-label',isCatalog?'名前・読み・説明で検索':'句・場所・ことばで検索');$('search').value=state.query;
   for(const key of ['biome','period','timeOfDay'])$(key).value=state[key];
 }
@@ -156,16 +153,11 @@ function switchBook(book,selected){
     document.querySelectorAll('[data-book]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.book==='photos')));
     document.dispatchEvent(new Event('dogido-album-opened'));return;
   }
-  state.book=book;state.catalogPane='entry';state.listOpen=false;state.query='';state.category='all';state.biome='all';state.timeOfDay='all';state.period='all';state.poemSection='all';state.source='base';state.selected=selected||(book==='catalog'?defaultCatalogEntry:'demo-1');history.replaceState(null,'',book==='poems'?'#poems':'#catalog');renderNavigation();renderList();
+  state.book=book;state.catalogPane='entry';state.listOpen=false;state.query='';state.category='all';state.biome='all';state.timeOfDay='all';state.period='all';state.poemSection='all';state.source='base';state.selected=selected||(book==='catalog'?defaultCatalogEntry:M.poems[0]?.id??null);history.replaceState(null,'',book==='poems'?'#poems':'#catalog');renderNavigation();renderList();
 }
 function clear(){state.query='';state.category='all';state.biome='all';state.timeOfDay='all';state.period='all';renderNavigation();renderList();}
 document.addEventListener('click',event=>{
   const b=event.target.closest('button');if(!b)return;
-  if(b.dataset.deleteReading!==undefined&&state.book==='catalog'){
-    const i=Number(b.dataset.deleteReading);catalogNotes.removeReading(catalogNoteId(current()),i);renderDetail();
-    const remaining=catalogNotes.get(catalogNoteId(current())).readings.length;
-    (document.querySelector(`[data-delete-reading="${Math.min(i,remaining-1)}"]`)||$('catalog-reading-word')).focus({preventScroll:true});return;
-  }
   if(b.dataset.deleteKey!==undefined&&state.book==='catalog'){
     const i=Number(b.dataset.deleteKey);catalogNotes.remove(catalogNoteId(current()),i);renderDetail();
     const remaining=catalogNotes.get(catalogNoteId(current())).keys.length;
@@ -187,22 +179,16 @@ $('search').addEventListener('input',()=>{state.query=$('search').value;renderLi
 document.addEventListener('input',event=>{
   if(event.target.id==='catalog-key-new'&&state.book==='catalog')catalogNotes.setDraft(catalogNoteId(current()),event.target.value);
   if(event.target.id==='player-note'&&state.book==='poems')playerNotes.set(state.selected,event.target.value);
-  if(state.book==='catalog'&&(event.target.dataset.editReading!==undefined||event.target.dataset.editKey!==undefined)){
+  if(state.book==='catalog'&&event.target.dataset.editKey!==undefined){
     const e=current(),key=catalogNoteId(e);
-    if(event.target.dataset.editReading!==undefined)catalogNotes.editReading(key,Number(event.target.dataset.editReading),event.target.dataset.readingField,event.target.value);
-    else catalogNotes.edit(key,Number(event.target.dataset.editKey),event.target.value);
+    catalogNotes.edit(key,Number(event.target.dataset.editKey),event.target.value);
     $('catalog-storage-status').textContent=catalogStorageMessage(e);
   }
 });
 document.addEventListener('submit',event=>{
-  if(event.target.id==='catalog-reading-form'){
-    event.preventDefault();const word=$('catalog-reading-word'),reading=$('catalog-reading-new');
-    if(!catalogNotes.addReading(catalogNoteId(current()),word.value,reading.value)){$('catalog-reading-feedback').textContent='漢字と読み仮名の両方を入力してください。';(!word.value.trim()?word:reading).focus();return;}
-    renderDetail();$('catalog-reading-word').focus({preventScroll:true});return;
-  }
   if(event.target.id!=='catalog-key-form')return;
   event.preventDefault();const input=$('catalog-key-new');
-  if(!catalogNotes.add(catalogNoteId(current()),input.value)){$('catalog-key-feedback').textContent='ポエティックキーを入力してください。';input.focus();return;}
+  if(!catalogNotes.add(catalogNoteId(current()),input.value)){$('catalog-key-feedback').textContent='ことばのメモを入力してください。';input.focus();return;}
   renderDetail();
   ($('catalog-key-new').disabled?document.querySelector('[data-reading-add] input'):$('catalog-key-new'))?.focus({preventScroll:true});
 });

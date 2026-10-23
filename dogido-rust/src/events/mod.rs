@@ -10,7 +10,6 @@ pub use models::*;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use std::ops::Deref;
-pub use wire::EventTime;
 
 pub(crate) trait Validate {
     fn validate(&self) -> Result<(), String>;
@@ -72,7 +71,7 @@ impl GameEvent {
         data.companion_candidates.clear();
         // 時刻を現在へ揃え、実際の音の経過時間には身体snapshotの年齢も加える。
         // 同じ音の再送で「今聞いた」へ若返らせない。
-        data.observed_at = EventTime::Aware(chrono::Utc::now().fixed_offset());
+        data.observed_at = chrono::Utc::now().fixed_offset();
         let age = origin.age_ms.min(i64::MAX as u64) as i64;
         for sound in &mut data.auditory_threats {
             sound.heard_ago_ms = Some(sound.heard_ago_ms.unwrap_or(0).saturating_add(age));
@@ -143,13 +142,6 @@ impl GameEvent {
         Self(data, self.1.clone(), self.2.clone())
     }
 
-    /// Keep world observations while another conversation owner handles this input.
-    pub(crate) fn without_player_input(&self) -> Self {
-        let mut data = self.0.clone();
-        data.meta.user_text = None;
-        Self(data, self.1.clone(), self.2.clone())
-    }
-
     /// 元JSONの所持品順を取り出し、型変換と再帰的検証に成功した場合だけGameEventを返す。
     /// 不正な入力は理由文字列で拒否し、未検査のEventDataを通常の観測処理へ渡さない。
     pub fn parse(value: Value) -> Result<Self, String> {
@@ -181,3 +173,6 @@ pub struct BatchEvents {
     #[serde(default)]
     pub events: Vec<GameEvent>,
 }
+
+#[cfg(test)]
+mod tests;

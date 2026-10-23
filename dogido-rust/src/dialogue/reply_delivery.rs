@@ -45,8 +45,6 @@ impl Dialogue {
                     && !w.combat_paused()
                     && (result["workshop_action"] != "knowledge"
                         || result["workshop_version"] == w.version)
-                    && (!matches!(result["workshop_action"].as_str(), Some("confirm_close"))
-                        || w.pending.is_none() && result["workshop_version"] == w.version)
                     && (w.is_open()
                         || (row["workshop_fixed_close"] == true
                             || row["workshop_closed_by_turn"] == true

@@ -201,12 +201,11 @@
         "items": {
           "enum": [
             "reading",
-            "meter",
             "source"
           ],
           "type": "string"
         },
-        "maxItems": 3,
+        "maxItems": 2,
         "title": "Checks",
         "type": "array"
       },
@@ -287,9 +286,7 @@
     }
   },
   "followups": [
-    "acknowledge_meaning",
-    "confirm_close",
-    "continue_workshop"
+    "acknowledge_meaning"
   ],
   "actions": [
     "accept_pending",
@@ -320,7 +317,6 @@
   ],
   "problems": [
     "forced_compression",
-    "meter",
     "off_scene",
     "other",
     "preference",

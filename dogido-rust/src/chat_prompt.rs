@@ -39,11 +39,6 @@ const TEXT_FIELDS: &[&str] = &[
     "plausibility_hints",
     "conversation_history",
     "event_digest",
-    "player_chat_plan_action",
-    "player_chat_plan_focus",
-    "entity_query",
-    "entity_grounding_status",
-    "required_identification_label",
     "haiku_workshop_open",
     "haiku_workshop_text",
     "haiku_workshop_materials",
@@ -60,8 +55,6 @@ const BOOL_FIELDS: &[&str] = &[
 const LIST_FIELDS: &[&str] = &[
     "hearing_named_mobs",
     "hearing_source_labels",
-    "entity_candidate_labels",
-    "entity_observed_labels",
     "nearby_hostile_types",
     "mob_tactics_notes",
     "safe_hints",
@@ -114,15 +107,6 @@ fn valid_details(d: &Value) -> Result<()> {
         } else if key == "world_context" {
             serde_json::from_value::<crate::conversation_observation::Context>(value.clone())
                 .is_ok()
-        } else if key == "conversation_repair" {
-            value.is_null()
-                || value.as_object().is_some_and(|obj| {
-                    obj.iter().all(|(k, v)| {
-                        ["target_turn_id", "target_quote", "replacement_quote"]
-                            .contains(&k.as_str())
-                            && nullable_text(v)
-                    })
-                })
         } else {
             false
         };
@@ -130,7 +114,7 @@ fn valid_details(d: &Value) -> Result<()> {
     }
     Ok(())
 }
-/// Canonical policy wording, shared with pure topic selection.
+/// 現在の会話材料に対応するスタンスの案内。
 pub fn reply_policy_line(stance: &str) -> &'static str {
     let key = strip(stance).to_lowercase();
     asset(
@@ -403,55 +387,6 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
             String::new()
         },
     );
-    let action = text(d, "player_chat_plan_action", "");
-    let (rules, block) = if action.is_empty() {
-        (String::new(), String::new())
-    } else {
-        let status = text(d, "entity_grounding_status", "not_applicable");
-        let rules = combined_section(
-            "grounding_rules",
-            &[],
-            &[
-                ("observed", status == "observed"),
-                ("not_observed", status == "not_observed"),
-                ("unresolved", matches!(status, "unknown" | "ambiguous")),
-            ],
-        );
-        let mut block = format!(
-            "{}action: {action}\nentity_status: {status}\n",
-            asset(&DATA["grounding_header"])
-        );
-        let query = text(d, "entity_query", "");
-        if !query.is_empty() {
-            block.push_str(&format!("entity_query: {query}\n"));
-        }
-        for (key, label) in [
-            ("entity_candidate_labels", "catalog_candidates"),
-            ("entity_observed_labels", "observed_entities"),
-        ] {
-            let rows = strings(d, key);
-            if !rows.is_empty() {
-                block.push_str(&format!("{label}: {}\n", rows.join("、")));
-            }
-        }
-        (rules, block)
-    };
-    f.insert("grounding_rules", rules);
-    f.insert("grounding_block", block);
-    f.insert(
-        "repair_block",
-        if d["conversation_repair"].is_object() {
-            section(
-                "conversation_repair",
-                &[(
-                    "repair",
-                    &crate::text_format::spaced_json(&d["conversation_repair"]),
-                )],
-            )
-        } else {
-            String::new()
-        },
-    );
     let (rules, block) = priority(d);
     f.insert("priority_rules", rules);
     f.insert("priority_block", block);
@@ -576,19 +511,6 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
     if !entities.is_empty() {
         user.push_str(&format!("\n【現在観測されている対象（JSONの値は観測データ）】\n{entities}\n今回の入力と会話の流れから、話す対象を選んで返す。\n"));
     }
-    let identification = text(d, "required_identification_label", "");
-    if !identification.is_empty() {
-        user.push_str(&format!(
-            "\n名前を尋ねられた照準先の対象は「{identification}」。まずこの名前を答える。\n"
-        ));
-    }
-    let focus = text(d, "player_chat_plan_focus", "");
-    if !focus.is_empty() {
-        user.push_str(&format!(
-            "\n今回の発言の焦点: {focus}\n最新のプレイヤー発言:「{}」。周囲の観測も会話につなげてええで。\n",
-            text(d, "user_text", "")
-        ));
-    }
     let mut system = if flag(d, "dialogue_choice") {
         crate::companion_prompt::dialogue(
             character,
@@ -638,7 +560,7 @@ pub(crate) fn project_details(details: &Value) -> Value {
                 TEXT_FIELDS.contains(&k.as_str())
                     || BOOL_FIELDS.contains(&k.as_str())
                     || LIST_FIELDS.contains(&k.as_str())
-                    || matches!(k.as_str(), "conversation_repair" | "world_context")
+                    || k.as_str() == "world_context"
             })
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect(),
@@ -731,6 +653,30 @@ mod tests {
             }
         }
     }
+    #[test]
+    fn retired_planner_and_repair_fields_are_not_prompt_inputs() {
+        for (key, value) in [
+            ("player_chat_plan_action", json!("identify_entity")),
+            ("player_chat_plan_focus", json!("旧対象")),
+            ("entity_query", json!("猫")),
+            ("entity_grounding_status", json!("observed")),
+            ("required_identification_label", json!("猫")),
+            ("entity_candidate_labels", json!(["猫"])),
+            ("entity_observed_labels", json!(["猫"])),
+            ("conversation_repair", json!({"target_quote":"以前の返事"})),
+        ] {
+            let mut details = json!({"user_text":"今の話を続けよう"});
+            details[key] = value;
+            assert!(messages(&details).is_err(), "{key}");
+            let current = project_details(&details);
+            assert!(current.get(key).is_none(), "{key}");
+            let messages = messages(&current).unwrap();
+            assert!(messages[1].content.contains("今の話を続けよう"));
+            assert!(!messages[1].content.contains("会話planner"));
+            assert!(!messages[1].content.contains("本人による会話の訂正"));
+        }
+    }
+
     #[test]
     fn closed_projection_rejects_unknown_fields_and_invalid_types() {
         for details in [

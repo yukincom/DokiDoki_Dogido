@@ -82,7 +82,7 @@ DOGIDO_MEMORY_DIR=.dogido_memory/rust-migration
 |---|---|
 | セッション・配線・取消 | `src/dialogue/` |
 | 戦闘・環境 | `src/combat/` · `src/environment/` |
-| 通常会話・観測照合 | `src/planner/` · `src/chat_*` · `src/conversation_observation.rs` |
+| 通常会話・共通観測 | `src/chat_*` · `src/conversation_observation.rs` |
 | 川柳・共同編集・記憶 | `src/haiku/` · `src/workshop_*` · `src/haiku_memory.rs` |
 | 詩・Minecraftの知識 | `src/knowledge/` |
 | 音声入力・配送 | `src/voice/` · `src/dialogue/audio.rs` |

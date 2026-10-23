@@ -109,7 +109,7 @@ async fn body(
         return Ok(json!({"op":"result","unsupported":"unexpected_route","llm_reports":[]}));
     }
     if context.wants_quiet {
-        return Ok(json!({"op":"result","text":"","repair":null,"llm_reports":[]}));
+        return Ok(json!({"op":"result","text":"","llm_reports":[]}));
     }
     if let Some(query) = context.knowledge_query.clone() {
         if input["workshop_fallback"] == true {

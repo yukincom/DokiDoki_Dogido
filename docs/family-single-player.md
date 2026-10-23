@@ -65,8 +65,8 @@ Minecraft/Fabric自身のログは対象外。
 作成器の入力は `--help` で確認できる。入力の本体は実プレイに使っているメインの作業ツリーを指定する。
 出力は未使用のフォルダに限定し、既存セットを上書きしない。
 
-- Apple Silicon用のビルド済みRust本体、設定・辞書・端末AI・Chrome・AECのPython補助、
-  現行カタログ、国語資料とsource_cards、必要な既定値JSON、出典・ライセンス、定型音声、
+- Apple Silicon用のビルド済みRust本体、設定・辞書・AEC・ModernBERTのPython補助、
+  現行カタログ、詩の基礎資料とMinecraft資料、必要な既定値JSON、出典・ライセンス、定型音声、
   2D UIを含むビルド済みFabric MODを同梱する。Rustコンパイラは受取先へ導入しない。
 - 旧Python本体のあるsourceからの作成は拒否する。削除済みの本体を再梱包しない。
 - 作成元ではCargoのrelease依存情報で本体の更新を確認する。共有設定JSONも必須部品として同梱し、欠けたセットを接続更新で補ったことにはしない。

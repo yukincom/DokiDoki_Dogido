@@ -1,7 +1,7 @@
 //! 音声入口の叫声・STT文脈。叫声は診断へだけ記録し、会話や句の操作へ流さない。
 use super::{Data, Dialogue, Session, observation_fresh};
 use crate::{
-    events::{EventTime, GameEvent},
+    events::GameEvent,
     vocalization,
 };
 use chrono::{DateTime, Utc};
@@ -23,8 +23,7 @@ impl Pending {
         event
             .filter(|e| {
                 self.received.elapsed() <= Duration::from_secs(5)
-                    && matches!(&e.observed_at, EventTime::Aware(at)
-                    if (at.with_timezone(&Utc) - self.at).num_milliseconds().abs() <= 5000)
+                    && (e.observed_at.with_timezone(&Utc) - self.at).num_milliseconds().abs() <= 5000
             })
             .map_or(vocalization::UNKNOWN, vocalization::observed_note)
     }

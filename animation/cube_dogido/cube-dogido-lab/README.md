@@ -25,7 +25,7 @@ Minecraft Java 1.21.11 / Fabricで動く3Dドギドの身体です。浮遊す�
 /dogidobody call
 ```
 
-登録済みの身体が未ロードなら増やさず、読み込みを待ちます。近くに未所有の身体が複数ある場合は、従来の`/dogidobody bind @e[type=dogido_experiment:dogido,sort=nearest,limit=1]`で対象を明示します。音声の自動呼び寄せは分類器の新ラベル接続待ちです。
+登録済みの身体が未ロードなら増やさず、読み込みを待ちます。近くに未所有の身体が複数ある場合は、従来の`/dogidobody bind @e[type=dogido_experiment:dogido,sort=nearest,limit=1]`で対象を明示します。音声・文字での明示的な呼び寄せは、共通BERTの`dogido_recall`分類から同じ呼び寄せ処理へ接続します。
 
 ## 身体のルール
 

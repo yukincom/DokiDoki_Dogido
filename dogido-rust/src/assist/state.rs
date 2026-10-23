@@ -2,7 +2,7 @@
 //! 対象選択は各支援ドメインへ渡し、剣と馬の実行結果・案内を発行時の種類で分ける。
 use super::{SELECT_HOTBAR_CAPABILITY, horse_recall, selection::*};
 use crate::events::{
-    AdapterCommandResult, AdapterCommandResultCommandType, AdapterCommandResultStatus, EventTime,
+    AdapterCommandResult, AdapterCommandResultCommandType, AdapterCommandResultStatus,
     GameEvent,
 };
 use chrono::{DateTime, Duration, Utc};
@@ -243,12 +243,8 @@ impl AssistState {
                     result.status = AdapterCommandResultStatus::Failed;
                     result.detail_code = "result_type_mismatch".into();
                 } else if result.status == AdapterCommandResultStatus::Succeeded {
-                    let in_time = match result.executed_at {
-                        EventTime::Aware(time) => {
-                            time >= command.issued_at && time < command.expires_at
-                        }
-                        EventTime::Naive(_) => false,
-                    };
+                    let in_time = result.executed_at >= command.issued_at
+                        && result.executed_at < command.expires_at;
                     if !in_time {
                         result.status = AdapterCommandResultStatus::Failed;
                         result.detail_code = "result_outside_validity_window".into();
@@ -326,7 +322,7 @@ impl AssistState {
                     command_id: id,
                     command_type: AdapterCommandResultCommandType::SelectHotbar,
                     status: AdapterCommandResultStatus::Expired,
-                    executed_at: EventTime::Aware(now.fixed_offset()),
+                    executed_at: now.fixed_offset(),
                     selected_slot: None,
                     selected_item_id: None,
                     detail_code: "server_result_timeout".into(),

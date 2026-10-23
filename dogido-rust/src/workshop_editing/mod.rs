@@ -151,14 +151,6 @@ impl Engine {
         let view = &frame["workshop"];
         let snapshot = Snapshot::from_view(view)?;
         match text(&frame["op"]) {
-            "explicit_discussion" => {
-                let candidate = if parse::explicit_discussion(input) {
-                    self.discussion(frame, &snapshot, &Value::Null)?
-                } else {
-                    None
-                };
-                Ok(Output::DiscussionCandidate { candidate })
-            }
             "discussion_candidate" => Ok(Output::DiscussionCandidate {
                 candidate: self.discussion(frame, &snapshot, &frame["proposal"])?,
             }),

@@ -1,9 +1,9 @@
 //! 既知fieldのJSON値をRustの数値・真偽値・時刻へ変換する通信入力層。
-//! 既存adapterと保存済みfixtureの入力互換を保つため、数値文字列や0/1などの許容形を明示する。
-//! Pythonを呼び出す処理ではなく、旧受信契約で許されていた変換をここで完結させる。
+//! 数値・真偽値の許容形と、Fabricが送るoffset付き日時の受信形式を明示する。
+//! 日時はT区切り・offset必須で受け、単位やタイムゾーンを推定して補わない。
 //! 値域とfield間の整合はmodels/semanticに任せ、extraに保持する未知fieldは変換しない。
-use chrono::{DateTime, FixedOffset, NaiveDate, NaiveDateTime, SecondsFormat, Utc};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use chrono::{DateTime, FixedOffset, SecondsFormat};
+use serde::{Deserialize, Deserializer, Serializer};
 use serde_json::Value;
 use std::collections::BTreeMap;
 
@@ -114,63 +114,23 @@ impl<T: FromWire> FromWire for BTreeMap<String, T> {
     }
 }
 
-/// イベント・操作結果の時刻。UTC offset付きと、タイムゾーンなしを区別して保持する。
-/// FabricのISO offset時刻に加え、既存入力との互換用にnaive日付時刻とUnix timestampを受ける。
-/// naive値へタイムゾーンを補作せず、ゲーム状態での時計変換は消費側へ渡す。
-#[derive(Clone, Debug)]
-pub enum EventTime {
-    Aware(DateTime<FixedOffset>),
-    Naive(NaiveDateTime),
-}
-impl EventTime {
-    /// ISO時刻、naive日時、日付のみの順に読み、残りはUnix timestampとして解釈する。
-    /// 数値は絶対値200億を超えるとミリ秒、それ以下は秒とする既存契約を維持する。
-    fn parse(value: Value) -> Result<Self, String> {
-        if let Value::String(raw) = &value {
-            let text = raw.replacen(' ', "T", 1);
-            if let Ok(date) = DateTime::parse_from_rfc3339(&text) {
-                return Ok(Self::Aware(date));
-            }
-            if let Ok(date) = NaiveDateTime::parse_from_str(&text, "%Y-%m-%dT%H:%M:%S%.f") {
-                return Ok(Self::Naive(date));
-            }
-            if let Ok(date) = NaiveDate::parse_from_str(&text, "%Y-%m-%d") {
-                return Ok(Self::Naive(date.and_hms_opt(0, 0, 0).unwrap()));
-            }
-        }
-        // boolはtimestampとして受けない。
-        if value.is_boolean() {
-            return Err("expected a datetime".into());
-        }
-        let timestamp =
-            f64::from_wire(value).map_err(|_| "expected an ISO 8601 datetime or timestamp")?;
-        let seconds = if timestamp.abs() > 20_000_000_000.0 {
-            timestamp / 1000.0
-        } else {
-            timestamp
-        };
-        // 入力の小数秒をマイクロ秒へ丸め、i64の表現範囲を確認してからchronoへ渡す。
-        let micros = (seconds * 1_000_000.0).round();
-        if micros < i64::MIN as f64 || micros >= -(i64::MIN as f64) {
-            return Err("datetime out of range".into());
-        }
-        DateTime::<Utc>::from_timestamp_micros(micros as i64)
-            .map(|date| Self::Aware(date.fixed_offset()))
-            .ok_or_else(|| "datetime out of range".into())
+/// Fabricの観測・操作結果のoffset付き日時を受け取る。欠けた時差やUnix時刻の単位は推定しない。
+pub fn deserialize_datetime<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<DateTime<FixedOffset>, D::Error> {
+    let text = String::deserialize(deserializer)?;
+    if text.as_bytes().get(10) != Some(&b'T') {
+        return Err(serde::de::Error::custom(
+            "expected a T-separated datetime with an offset",
+        ));
     }
+    DateTime::parse_from_rfc3339(&text).map_err(serde::de::Error::custom)
 }
-impl<'de> Deserialize<'de> for EventTime {
-    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-        Self::parse(Value::deserialize(d)?).map_err(serde::de::Error::custom)
-    }
-}
-// 保存済みfixtureとの表記互換のため小数秒は6桁。naive/offset付きの区別も出力へ残す。
-impl Serialize for EventTime {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let text = match self {
-            Self::Aware(time) => time.to_rfc3339_opts(SecondsFormat::Micros, true),
-            Self::Naive(time) => time.format("%Y-%m-%dT%H:%M:%S%.6f").to_string(),
-        };
-        serializer.serialize_str(&text)
-    }
+
+/// 観測の出力表記を小数秒6桁に揃える。入力されたoffsetは保持し、UTCだけZで出す。
+pub fn serialize_datetime<S: Serializer>(
+    time: &DateTime<FixedOffset>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    serializer.serialize_str(&time.to_rfc3339_opts(SecondsFormat::Micros, true))
 }

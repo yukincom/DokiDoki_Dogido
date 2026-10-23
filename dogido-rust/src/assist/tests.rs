@@ -246,18 +246,7 @@ fn classified_commands_and_result_ownership_remain_per_session() {
 }
 
 #[test]
-fn naive_result_time_fails_closed_and_policy_never_issues() {
-    let mut s = state();
-    let c = dispatch(s.submit_classified(&sword("剣"), &event(), now(), false))
-        .command
-        .unwrap();
-    let mut r = result(&c, now(), "succeeded", c.slot);
-    r.executed_at = crate::events::EventTime::Naive(now().naive_utc());
-    let out = s.observe_results(&[r], now(), false);
-    assert_eq!(
-        out.observed[0].result.detail_code,
-        "result_outside_validity_window"
-    );
+fn deny_and_confirm_policy_never_issue_commands() {
     for policy in [RiskPolicy::Deny, RiskPolicy::Confirm] {
         let mut s = state();
         s.set_policy(policy);

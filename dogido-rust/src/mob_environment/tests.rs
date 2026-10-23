@@ -42,7 +42,7 @@ fn individuals_of_the_same_species_keep_different_medium_and_rain_measurements()
 }
 
 #[test]
-fn missing_legacy_and_heard_only_states_never_invent_land_or_dryness() {
+fn missing_environment_is_not_filled_from_combat_flags_or_heard_only_states() {
     let event = frame(
         json!({"visual_threats":[{"type":"zombie"},{"type":"skeleton","in_water":true},
             {"type":"zombie","in_water":true,"on_fire":true,"environment":{}}],
@@ -51,9 +51,10 @@ fn missing_legacy_and_heard_only_states_never_invent_land_or_dryness() {
         "look_target":{"kind":"block","name":"salmon","environment":{"touching_water":false}}}),
     );
     let rows = project(&event);
-    assert_eq!(rows.as_array().unwrap().len(), 1);
-    assert_eq!(rows[0]["catalog_id"], "skeleton");
-    assert_eq!(rows[0]["environment"], json!({"touching_water":true}));
+    assert_eq!(rows, json!([]));
+    for threat in &event.visual_threats {
+        assert!(visual(threat).is_none());
+    }
     let event =
         frame(json!({"passive_mobs":[{"type":"salmon","environment":{"touching_water":false}}]}));
     assert_eq!(

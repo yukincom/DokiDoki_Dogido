@@ -4,7 +4,8 @@
 //! 「配列が空であること」を「ゲーム世界全体に存在しないこと」と即断するかどうかはこの型定義層では判定せず、利用側（各ドメインエンジン）がイベント種別と観測の鮮度に基づいて判断する。
 //! 大半の型は `extra` フィールドに未知のキーを許容・保持するが、匂い関連の型は厳密に閉じた契約として未知キーを明示的に拒否する。
 //! 本定義を変更する際は、Fabric側の `DogidoClientAdapter` / `DogidoCommandProtocol`、ドキュメント `docs/event-schema.md`、およびテスト検証コードを同期して整合性を維持すること。
-use super::{EventTime, Validate, ensure, wire};
+use super::{Validate, ensure, wire};
+use chrono::{DateTime, FixedOffset};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -415,7 +416,11 @@ pub struct AdapterCommandResult {
     pub command_type: AdapterCommandResultCommandType,
     pub status: AdapterCommandResultStatus,
     /// Fabricが成功・拒否・失敗・期限切れの結果を作った時刻。
-    pub executed_at: EventTime,
+    #[serde(
+        deserialize_with = "wire::deserialize_datetime",
+        serialize_with = "wire::serialize_datetime"
+    )]
+    pub executed_at: DateTime<FixedOffset>,
     /// 結果時点で確認できた選択slot（0〜8）。確認できない場合は省略またはnull。
     #[serde(default)]
     #[serde(deserialize_with = "wire::deserialize")]
@@ -730,8 +735,7 @@ pub struct LookTarget {
     #[serde(flatten)]
     pub extra: BTreeMap<String, Value>,
 }
-/// buildMetaが観測へ添えるadapter情報・死亡理由・ゲーム内入力。
-/// user_textは保留中のチャットを一度取り出した値で、世界の観測事実とは分けて処理する。
+/// buildMetaが観測へ添えるadapter情報と死亡理由。プレイヤー入力は専用の受付へ送る。
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MetaState {
     #[serde(default)]
@@ -746,9 +750,6 @@ pub struct MetaState {
     /// player_diedなどで添える、取得できた死亡理由。省略時に原因を推定しない。
     #[serde(default)]
     pub death_cause: Option<String>,
-    /// ゲーム内チャット／コマンドから一度だけ取り出す入力。省略は今回の入力なし。
-    #[serde(default)]
-    pub user_text: Option<String>,
     /// 進捗ID用の受信欄。現FabricのbuildMetaは送らず、既定は空配列。
     #[serde(default)]
     pub advancements: Vec<String>,
@@ -1353,7 +1354,11 @@ pub struct EventData {
     pub game: String,
     pub adapter: String,
     /// FabricのbaseEnvelopeが付けた観測時刻。サーバー受信時刻や再生完了時刻とは別。
-    pub observed_at: EventTime,
+    #[serde(
+        deserialize_with = "wire::deserialize_datetime",
+        serialize_with = "wire::serialize_datetime"
+    )]
+    pub observed_at: DateTime<FixedOffset>,
     /// adapterのnextSequenceによる通し番号。Noneは番号なしで、重複・順序の台帳はsession側が持つ。
     #[serde(default)]
     #[serde(deserialize_with = "wire::deserialize")]

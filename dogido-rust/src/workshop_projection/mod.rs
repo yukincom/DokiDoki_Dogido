@@ -55,7 +55,6 @@ pub struct Snapshot {
     pub last_findings: Vec<Value>,
     pub last_repair_feedback: Value,
     pub awaiting_meaning_ack: bool,
-    pub awaiting_close_confirmation: bool,
 }
 impl Snapshot {
     /// 検証済みのruntime viewから、移植時のfixtureと同じ相談用snapshotを構築する。
@@ -103,7 +102,6 @@ impl Snapshot {
             last_findings: vec![],
             last_repair_feedback: json!({}),
             awaiting_meaning_ack: view["followup"] == "meaning_explained",
-            awaiting_close_confirmation: view["followup"] == "close_confirmation",
         })
     }
     fn has_pending(&self) -> bool {
@@ -236,7 +234,6 @@ pub fn workshop_context_details(workshop: &Snapshot) -> Value {
 }
 fn allowed_actions(workshop: &Snapshot, phase: &str) -> Vec<String> {
     let actions = match phase {
-        "after_validation" => vec!["respond", "explain", "ask", "compare", "show_current"],
         "after_inspection" => vec![
             "respond",
             "explain",
@@ -246,7 +243,7 @@ fn allowed_actions(workshop: &Snapshot, phase: &str) -> Vec<String> {
             "show_current",
             "stage_player_edit",
         ],
-        _ => vec![
+        "decide" => vec![
             "respond",
             "explain",
             "ask",
@@ -258,10 +255,11 @@ fn allowed_actions(workshop: &Snapshot, phase: &str) -> Vec<String> {
             "close_workshop",
             "unrelated",
         ],
+        _ => return vec![],
     };
     let mut actions = actions.into_iter().collect::<BTreeSet<_>>();
     if workshop.has_pending() {
-        if !matches!(phase, "after_validation" | "after_inspection") {
+        if phase == "decide" {
             actions.extend(["accept_pending", "reject_pending"]);
         }
     } else {
@@ -280,9 +278,7 @@ pub fn build_workshop_agent_details(
     observation: &Value,
     turn_steps: &[Value],
 ) -> Value {
-    let stage = if workshop.awaiting_close_confirmation {
-        "close_confirmation"
-    } else if workshop.awaiting_meaning_ack {
+    let stage = if workshop.awaiting_meaning_ack {
         "meaning_explained"
     } else if workshop.has_pending() {
         "pending_review"
@@ -300,8 +296,7 @@ pub fn build_workshop_agent_details(
         "player_text":strip(player),"original_player_text":strip(original.unwrap_or(player)),"workshop_context":context,"tool_observation":observation,
         "turn_steps":steps,"allowed_actions":allowed_actions(workshop,phase),"allowed_purposes":RULES["purposes"],"allowed_checks":["reading","source"],"allowed_problem_types":RULES["problems"],"line_concepts":RULES["concepts"]})
 }
-/// Only the details portion of prepare_details. Fixed edit extraction remains a
-/// separate operation until its neutral-reading and local-edit port is complete.
+/// 現在句・原文・許可された一手を会話用材料へまとめる。編集・保存は呼出元が担当する。
 pub fn details_for(frame: &Value) -> Result<Value> {
     let view = &frame["workshop"];
     let workshop = Snapshot::from_view(view)?;

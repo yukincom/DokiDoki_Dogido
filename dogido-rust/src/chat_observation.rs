@@ -1,8 +1,8 @@
-//! Read-only conversation memory. Observe accepted events once; reading never renews memory.
-//! Current observations, recent memories, and permission to say a name are separate types.
-//! Event timestamps own these ages; a monotonic playback clock must not be substituted.
+//! 受理済み観測を一度だけ記録し、会話用の現在観測・短期記憶・名前の根拠を分けて返す。
+//! 記憶の年齢は受信境界で検証したoffset付き観測時刻から計算し、再生時計へ置き換えない。
+//! 状態更新はobserveが担当し、snapshotの読み取りでは記憶を更新・延長しない。
 use crate::events::{
-    Direction, DistanceBand, EventName, EventTime, GameEvent, HorizontalDirection,
+    Direction, DistanceBand, EventName, GameEvent, HorizontalDirection,
 };
 use serde::{Deserialize, Serialize};
 mod sound;
@@ -142,18 +142,9 @@ pub struct Snapshot {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub named_mobs: Vec<crate::mob_identity::NamedMob>,
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct MixedTimeDomains;
-impl std::fmt::Display for MixedTimeDomains {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("cannot mix offset-aware and offset-naive observation times")
-    }
-}
-impl std::error::Error for MixedTimeDomains {}
 #[derive(Clone, Debug)]
 pub struct ChatObservationMemory {
     settings: Settings,
-    time_aware: Option<bool>,
     current_dimension: Option<String>,
     dimension_changed_at: Option<i64>,
     visual: Vec<VisualMemo>,
@@ -176,7 +167,6 @@ impl ChatObservationMemory {
     pub fn new(settings: Settings) -> Self {
         Self {
             settings,
-            time_aware: None,
             current_dimension: None,
             dimension_changed_at: None,
             visual: vec![],
@@ -193,11 +183,9 @@ impl ChatObservationMemory {
     pub(crate) fn observe_body(
         &mut self,
         senses: &GameEvent,
-        raw: &GameEvent,
         outcomes: &NameOutcomeUpdate,
         labels: &impl Labels,
-    ) -> Result<(), MixedTimeDomains> {
-        self.time(raw)?;
+    ) {
         let origin = senses.body_origin().expect("accepted body sensory view");
         if !origin.available || self.body_context != origin.context {
             self.clear_senses();
@@ -224,7 +212,7 @@ impl ChatObservationMemory {
         &self,
         senses: &GameEvent,
         labels: &impl Labels,
-    ) -> Result<Snapshot, MixedTimeDomains> {
+    ) -> Snapshot {
         let origin = senses.body_origin().expect("accepted body sensory view");
         if !origin.available || self.body_context != origin.context {
             let mut scoped = self.clone();
@@ -234,34 +222,18 @@ impl ChatObservationMemory {
             self.snapshot(senses, labels)
         }
     }
-    fn time(&self, event: &GameEvent) -> Result<(i64, bool), MixedTimeDomains> {
-        let (us, aware) = match &event.observed_at {
-            EventTime::Aware(t) => (t.timestamp_micros(), true),
-            EventTime::Naive(t) => (t.and_utc().timestamp_micros(), false),
-        };
-        if self.time_aware.is_some_and(|previous| previous != aware) {
-            Err(MixedTimeDomains)
-        } else {
-            Ok((us, aware))
-        }
-    }
-    /// Call after admission/deduplication, once for full AND partial sound events.
-    /// Passing a partial event does not synthesize a full snapshot or clear old memos.
-    /// Outcome names must belong to this accepted event, after dimension handling.
+    /// 受理・重複排除・次元変更の処理後、全観測と部分音イベントのそれぞれを一度だけ記録する。
+    /// outcomesは同じ受理済みイベントの戦闘結果。部分イベントから全体観測を補作せず、古いメモも消去しない。
     pub fn observe(
         &mut self,
         event: &GameEvent,
         outcomes: &NameOutcomeUpdate,
         labels: &impl Labels,
-    ) -> Result<(), MixedTimeDomains> {
-        let (now, aware) = self.time(event)?;
-        self.time_aware = Some(aware);
+    ) {
+        let now = event.observed_at.timestamp_micros();
         let player_now = event
             .body_origin()
-            .map(|origin| match &origin.player_observed_at {
-                EventTime::Aware(at) => at.timestamp_micros(),
-                EventTime::Naive(at) => at.and_utc().timestamp_micros(),
-            })
+            .map(|origin| origin.player_observed_at.timestamp_micros())
             .unwrap_or(now);
         let seen_at = now.saturating_sub(
             event
@@ -420,7 +392,6 @@ impl ChatObservationMemory {
                 )
             });
         }
-        Ok(())
     }
     fn update_home(&mut self, event: &GameEvent, now: i64) {
         let Some(distance) = event.player_safety_world().respawn_distance.filter(|_| {
@@ -485,14 +456,14 @@ impl ChatObservationMemory {
             HomeProgress::Unknown
         }
     }
-    /// Projects at event.observed_at without changing/pruning/renewing any state.
-    /// Current means this supplied frame, not the most recent complete world frame.
+    /// event.observed_at時点の表示用観測を返す。記憶の更新・削除・期限延長は行わない。
+    /// 「現在」は渡されたframeを指し、直前の全体観測から欠損項目を補わない。
     pub fn snapshot(
         &self,
         event: &GameEvent,
         labels: &impl Labels,
-    ) -> Result<Snapshot, MixedTimeDomains> {
-        let (now, _) = self.time(event)?;
+    ) -> Snapshot {
+        let now = event.observed_at.timestamp_micros();
         let sounds = sounds(event, labels);
         let (_, observed_names) = crate::mob_identity::observed(event, now);
         let individuals = crate::mob_identity::merge_names(
@@ -721,7 +692,7 @@ impl ChatObservationMemory {
             ));
             seen.push(key);
         }
-        Ok(Snapshot {
+        Snapshot {
             current,
             recent: RecentObservation {
                 visual_memos: visual,
@@ -743,7 +714,7 @@ impl ChatObservationMemory {
                 samples: self.home.clone(),
             },
             named_mobs: individuals,
-        })
+        }
     }
 }
 fn strip(s: &str) -> &str {

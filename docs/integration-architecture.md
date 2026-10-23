@@ -1,6 +1,6 @@
 # 連携構成
 
-本体の実行時正本はRustです。旧Python本体の運用は終了し、Pythonには設定・辞書・外部SDKや音声機器の接続補助を残します。起動方法は [Rust本体の案内](../dogido-rust/README.md)、移植時の経緯は [Rust移行記録](rust-migration-plan.md) を参照してください。
+本体の実行時正本はRustです。旧Python本体の運用は終了し、Pythonには設定・辞書・ModernBERT推論や音声機器の接続補助を残します。起動方法は [Rust本体の案内](../dogido-rust/README.md)、移植時の経緯は [Rust移行記録](rust-migration-plan.md) を参照してください。
 
 ## 現行構成
 
@@ -8,6 +8,7 @@
 Minecraft Java Edition
   <-> FabricクライアントMod
        -- 実観測のイベント --> dogido-rust (Rust / Axum)
+       -- 本人のテキスト入力 --> 共通BERT分類 / 既存入力受付
        <-- 検証済みのtyped command --
             -> 戦闘・環境・会話所有権の判断
             -> 必要なときだけLLMへ生成・限定抽出
@@ -26,13 +27,14 @@ Minecraft Java Edition
 
 | 部分 | 所有する処理 |
 |---|---|
-| Fabric | プレイヤー本人・実視認・実音・周辺環境の観測。許可されたslot変更の最終検証と実行 |
+| Fabric / 身体Mod | プレイヤー本人・実視認・実音・周辺環境の観測。剣・乗用動物・身体の限定commandを最終検証して実行し、結果を返す |
 | Rust本体 | 状態、優先順位、会話・川柳、生成結果の採否、保存、表示、音声入力と配送、取消・停止 |
-| Python補助 | 設定解決、UniDic token、Whisper設定、AEC、端末AI、Chrome/MCPのSDK接続 |
-| LLM | 言い回し、workshopの有界な次手選択、原文根拠を伴う限定抽出 |
+| Python補助 | 設定解決、UniDic token、Whisper設定、AEC、ModernBERTの推論 |
+| BERT | 現在発話の23分類。分類結果を原文・入力元・入力世代へ結び付ける |
+| LLM | 言い回し、workshopの返答・説明・新案生成、原文語句の限定抽出 |
 | 既存計算エンジン | MLX、VOICEVOX、Whisper、VAD、AECの計算。Rust化のために再実装しない |
 
-通常会話・知識検索・workshopの状態と保存判断をPython補助やLLMへ戻しません。端末AIは戦闘中断中の小分類、Chromeは同意と案内音声の実再生完了後の一度の検索に限定します。
+通常会話・知識検索・workshopの状態と保存判断をPython補助やLLMへ戻しません。OS AIと旧分類fallback、learn worker、専用Chrome/MCPは撤去済みです。戦闘からの再開は敵の現在観測と警戒解除をRustが確認して決めます。
 
 残存モジュールと共有資料は [Rust本体の補助一覧](../dogido-rust/README.md#残すpython補助と資料) を参照してください。旧 `dogido_server/tts_reading.py` は廃止し、`tts_shared_tokens.py` がUniDic tokenを取得します。読みの判定・整形はRustが行います。データ整備用補助は `dev_tools/catalog_tools/` に分離します。
 
@@ -40,14 +42,16 @@ Minecraft Java Edition
 
 Fabricは主に `status_snapshot` と、その間に起きた敵接近・実音・死亡・戦闘終了などのイベントを送ります。暗所・時間帯・所持品等はsnapshotの実測値を使います。実際の送信形は [イベント仕様](event-schema.md)、HTTPとtyped commandの往復は [API仕様](adapter-api.md) が正本です。
 
+観測イベントに本人の発言を同梱せず、音声・テキストは `POST /api/v1/player-input` へ送ります。
+
 現在観測、一般的なカタログ知識、プレイヤーの報告、再生済み会話は別の根拠として扱います。APIの読み取りから判断・保存・世界操作を行いません。
 
 ## 資料と開発ツール
 
-`source_cards.json`、国語・詩形資料、Minecraft技術資料、カタログは現役の読み取り資料です。旧Python本体と一括して撤去しません。`dev_tools` のラボ候補と複合構造物試作は本体とは別に置き、接続状態は各READMEへ記します。
+詩の基礎資料、Minecraft技術資料、カタログは現役の読み取り資料です。旧learnの資料カード・一般文法・漢字・語彙データは撤去しました。[残す資料の範囲](2026-10-21-generation-and-knowledge-scope.md)を正とします。`dev_tools` のラボ候補と複合構造物試作は本体とは別に置き、接続状態は各READMEへ記します。
 
 ## 将来の連携
 
 M5Stack等の出力機器とLINE・Discord等の外部メッセージは将来枠です。`mindcraft` は観測設計の参考であり、汎用の自律botやゲーム操作エージェントを導入する計画ではありません。
 
-実Minecraft・マイク・スピーカー・Chromeを重ねた確認と、別マシンでの速度・メモリ測定は、自動テスト・模擬通信の結果と区別します。
+実Minecraft・マイク・スピーカーを重ねた確認と、別マシンでの速度・メモリ測定は、自動テスト・模擬通信の結果と区別します。

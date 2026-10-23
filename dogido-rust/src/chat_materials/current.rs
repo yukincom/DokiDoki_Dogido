@@ -62,7 +62,7 @@ pub(super) fn observed(
     event: &GameEvent,
     ids: &[String],
     structure: Option<&str>,
-) -> Vec<handoff::Observation> {
+) -> Vec<Observation> {
     let mut candidates = ids.to_vec();
     if let Some(vehicle) = &event.player.vehicle
         && event.body_origin().is_none()
@@ -93,7 +93,7 @@ pub(super) fn observed(
                 .filter(|v| chat_catalog::truth(v))
                 .map(|value| text_format::value_text(value, QuotedRepr))
                 .unwrap_or_else(|| id.clone());
-            handoff::Observation {
+            Observation {
                 entity_id: id,
                 label: chat_catalog::strip(&label).into(),
             }

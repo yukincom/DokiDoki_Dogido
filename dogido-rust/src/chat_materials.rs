@@ -9,12 +9,18 @@ use crate::{
     chat_observation::{Labels, Snapshot},
     chat_prompt,
     events::GameEvent,
-    planner::handoff,
     types::GenerationRequest,
 };
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+
+/// 現在の実観測に含まれる種類・個体のIDと呼称。履歴やモデル判断はここへ混ぜない。
+#[derive(Debug, Clone, Serialize)]
+struct Observation {
+    entity_id: String,
+    label: String,
+}
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]

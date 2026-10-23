@@ -2,7 +2,7 @@
 //! dataのmutex下で現在性とworkshopの対象を照合し、再生完了またはテキスト表示確認後に履歴を確定する。
 //! 状態反映後にロックを解放してworkshop記録を渡し、現在のturnへ反映できたかを返す。
 use super::{Dialogue, knowledge_display, workshop_record};
-use crate::{planner::repair::Repair, playback::Status as PlaybackStatus};
+use crate::playback::Status as PlaybackStatus;
 use serde_json::Value;
 use std::time::Instant;
 
@@ -60,13 +60,6 @@ impl Dialogue {
                             r["workshop_action"] != "close_workshop"
                                 || r["workshop_version"] == w.version
                         })
-                        && (result.is_none_or(|r| {
-                            !matches!(
-                                r["workshop_action"].as_str(),
-                                Some("confirm_close")
-                            )
-                        }) || (w.pending.is_none()
-                            && result.is_some_and(|r| r["workshop_version"] == w.version)))
                         && (w.is_open()
                             || ((fixed_close
                                 || closed_by_turn
@@ -91,7 +84,7 @@ impl Dialogue {
                     && workshop_id.is_some()
                     && matches!(
                         result["workshop_action"].as_str(),
-                        Some("close_workshop" | "confirm_close")
+                        Some("close_workshop")
                     )
                 {
                     // This validated queued transition closes the pin below.
@@ -264,25 +257,15 @@ impl Dialogue {
                                 w.agent_steps.pop_front();
                             }
                         }
-                        if result["workshop_action"] == "close_workshop"
-                            || result["workshop_action"] == "confirm_close"
-                        {
+                        if result["workshop_action"] == "close_workshop" {
                             // 原文の終了意思と同じworkshop・版・処理世代の検証後だけ
                             // 未採用案を外す。現在句と保存済みrevisionは書き換えない。
-                            if result["workshop_action"] == "close_workshop"
-                                && w.pending.take().is_some()
-                            {
+                            if w.pending.take().is_some() {
                                 w.version += 1;
                             }
                             w.close("explicit_close");
                         }
                     }
-                }
-                if status == PlaybackStatus::Queued
-                    && !workshop_reply
-                    && let Ok(repair) = serde_json::from_value::<Repair>(result["repair"].clone())
-                {
-                    s.history.annotate(turn, &repair);
                 }
             }
         }

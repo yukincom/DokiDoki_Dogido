@@ -82,16 +82,14 @@ public final class EventJsonBuilder {
         return root;
     }
 
-    public static JsonObject buildMeta(String deathCause, String userText) {
+    /** 観測にadapter情報と取得済みの死亡理由を添える。プレイヤー入力は専用HTTP受付へ送る。 */
+    public static JsonObject buildMeta(String deathCause) {
         JsonObject json = new JsonObject();
         json.addProperty("adapter_build", DogidoBuildInfo.ADAPTER_BUILD);
         json.addProperty("profile_name", DogidoBuildInfo.PROFILE_NAME);
         json.addProperty("debug", false);
         if (deathCause != null && !deathCause.isBlank()) {
             json.addProperty("death_cause", deathCause);
-        }
-        if (userText != null && !userText.isBlank()) {
-            json.addProperty("user_text", userText);
         }
         return json;
     }

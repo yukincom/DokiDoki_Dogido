@@ -36,7 +36,6 @@ fn snapshot(d: &Dialogue, e: &GameEvent) -> Snapshot {
     d.data.lock().unwrap().sessions["s"]
         .chat_observation
         .snapshot(e, &CatalogLabels)
-        .unwrap()
 }
 fn kill(id: &str, mob: &str) -> Value {
     json!({"entity_id":id,"type":mob,"outcome":"player_kill","evidence":"server_death_event"})
@@ -255,7 +254,7 @@ async fn engine_confirmed_outcome_is_consumed_once_without_replay_ttl_extension(
     drop(permit);
 }
 #[tokio::test]
-async fn capture_freezes_history_repair_digest_and_survives_epoch_changes_without_writes() {
+async fn capture_freezes_history_and_digest_and_survives_epoch_changes_without_writes() {
     let d = server(json!({}));
     let permit = d.serial.acquire().await.unwrap();
     let e = event(chrono::Utc::now(), 1, "status_snapshot", json!({}));
@@ -266,17 +265,6 @@ async fn capture_freezes_history_repair_digest_and_survives_epoch_changes_withou
         s.history.push("old", "user", "ヤギがいるよ");
         s.history.push("old", "assistant", "せやったな。");
         s.history.push("repair", "user", "違うよ");
-        s.history.annotate(
-            "repair",
-            &crate::planner::repair::Repair {
-                action: crate::planner::Action::ClarifyRepair,
-                target_turn_id: "old".into(),
-                target_quote: "ヤギ".into(),
-                signal_quote: "違う".into(),
-                replacement_quote: String::new(),
-                current_text: "違うよ".into(),
-            },
-        );
         s.history.push("repair", "assistant", "どんな意味やった？");
         let history = CompletedHistory {
             conversation_history: s.history.lines(),
@@ -302,15 +290,27 @@ async fn capture_freezes_history_repair_digest_and_survives_epoch_changes_withou
             .len(),
         4
     );
-    let pending = crate::planner::repair::pending(&native.context.history.conversation_turns);
-    assert_eq!(pending["repair_action"], "clarify_repair");
-    assert_eq!(pending["repair_target_quote"], "ヤギ");
     assert!(
         native
             .context
             .history
             .conversation_history
-            .contains("会話の修復待ち")
+            .contains("違うよ")
+    );
+    assert!(
+        native
+            .context
+            .history
+            .conversation_history
+            .contains("どんな意味やった？")
+    );
+    assert!(
+        native
+            .context
+            .history
+            .conversation_turns
+            .iter()
+            .all(|row| row.get("repair_action").is_none())
     );
     let _: Native = serde_json::from_value(frozen).unwrap();
     d.shutdown().await;
@@ -346,16 +346,13 @@ async fn non_status_structure_player_name_and_time_domain_boundaries_are_explici
         assert_eq!(s.haiku_context.inventory_order, ["second"]);
         assert_eq!(s.haiku_context.player_name, "ゲーム名");
     }
-    // Naive timestamps cannot be treated as UTC or mix into aware memory.
+    // offsetがない観測は受信時に拒否し、観測記憶へ渡さない。
     let before = json!(snapshot(&d, &non_status));
     let mut naive = json!(non_status);
     naive["sequence"] = 3.into();
     naive["observed_at"] = "2026-09-29T00:00:00".into();
     naive["passive_mobs"] = json!([{"type":"cat"}]);
-    assert_eq!(
-        d.observe("s", GameEvent::parse(naive).unwrap(), None)["accepted"],
-        true
-    );
+    assert!(GameEvent::parse(naive).is_err());
     assert_eq!(json!(snapshot(&d, &non_status)), before);
     let changed = event(
         at + chrono::Duration::milliseconds(200),
@@ -411,4 +408,13 @@ fn workshop_speech_fields_match_canonical_projection_and_pending_reading() {
     }
     assert_eq!(count, 136);
     assert!(workshop_details(&json!({})).is_err());
+}
+
+#[test]
+fn workshop_projection_does_not_restore_missing_emission_materials() {
+    let row: Value = serde_json::from_str(include_str!("../../../fixtures/session-context-workshop.jsonl").lines().nth(1).unwrap()).unwrap();
+    let mut view = row["view"].clone();
+    assert!(view["emission"]["interpretation"].is_string());
+    view["materials"] = json!({});
+    assert_eq!(workshop_details(&view).unwrap().haiku_workshop_materials, "");
 }

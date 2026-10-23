@@ -10,8 +10,8 @@ pub fn allowed_actions(
     pending: bool,
     conversation_candidate: bool,
 ) -> Vec<&'static str> {
-    if phase == "after_validation" {
-        return vec!["respond", "explain", "ask", "compare", "show_current"];
+    if !matches!(phase, "decide" | "after_inspection") {
+        return vec![];
     }
     let mut actions = vec![
         "respond",
@@ -237,7 +237,7 @@ mod inspection_tests {
     #[test]
     fn references_never_emit_mora_counts_targets_or_quality_results() {
         for text in ["ひ", "ひのあかり", "ひのあかりがながくつづく"] {
-            let result = inspect_text(text, &["reading".into(), "meter".into()], None, Some(0));
+            let result = inspect_text(text, &["reading".into()], None, Some(0));
             assert_eq!(result["lines"][0]["reading_text"], text);
             assert_eq!(result["checks"], json!(["reading"]));
             for key in [

@@ -6,7 +6,7 @@ mod validation;
 
 use crate::{
     llm::RigLlm,
-    planner::extract_object,
+    text_format::extract_object,
     text_format::spaced_json,
     types::{ChatMessage, GenerationReport, GenerationRequest, Role},
 };

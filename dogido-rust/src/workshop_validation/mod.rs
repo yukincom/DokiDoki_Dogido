@@ -85,20 +85,6 @@ pub(super) fn validate(frame: &Value, details: &Value) -> Result<Value> {
     if conversation::handles(action) {
         return Ok(conversation::validate(raw, details));
     }
-    if raw.is_object() && strings(&ASSETS["followups"]).contains(action) {
-        if !strings(&details["allowed_actions"]).contains(action) {
-            return Ok(reject("action_not_allowed"));
-        }
-        let safe = action != "confirm_close"
-            || raw["evidence"].as_str().is_some_and(|e| {
-                workshop_input_guard::state_change_safe("close_workshop", source, e)
-            });
-        return Ok(if safe {
-            json!({"contract_errors":[],"step":raw,"reason":"accepted"})
-        } else {
-            reject("unsafe_followup_evidence")
-        });
-    }
     let mut payload = raw.clone();
     if let Some(object) = raw.as_object() {
         payload = ASSETS["inactive"].clone();
@@ -232,7 +218,7 @@ fn finalize(payload: &Value, d: &Value) -> Value {
     if checks.len() != checks.iter().collect::<BTreeSet<_>>().len()
         || checks
             .iter()
-            .any(|s| !matches!(*s, "reading" | "meter" | "source"))
+            .any(|s| !matches!(*s, "reading" | "source"))
     {
         return reject("invalid_checks");
     }
@@ -249,7 +235,7 @@ fn finalize(payload: &Value, d: &Value) -> Value {
         return reject("invalid_speech");
     }
     // Prose does not execute an action. The model chooses wording and whether a
-    // recorded reading/meter/source inspection is useful; code validates only
+    // recorded reading/source inspection is useful; code validates only
     // the selected operation and its concrete inputs.
     if action == "propose_revision"
         && array(&analysis["findings"]).is_empty()

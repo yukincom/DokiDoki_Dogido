@@ -3,7 +3,7 @@ use super::*;
 fn canonical_context_details_and_revision_goldens() {
     let data: Value = serde_json::from_str(include_str!("fixtures.json")).unwrap();
     let rows = data["projection"].as_array().unwrap();
-    assert!(rows.len() > 400);
+    assert_eq!(rows.len(), 216);
     for (i, row) in rows.iter().enumerate() {
         let before = row["input"].clone();
         let output = match row["op"].as_str().unwrap() {
@@ -81,7 +81,7 @@ fn pending_allows_explicit_close_only_during_the_decision_phase() {
         .find(|row| row["op"] == "details" && row["input"]["workshop"]["pending"].is_object())
         .unwrap();
     let mut input = case["input"].clone();
-    for phase in ["decide", "after_inspection", "after_validation"] {
+    for phase in ["decide", "after_inspection"] {
         input["phase"] = phase.into();
         input["allowed_actions"] = json!(crate::workshop::allowed_actions(phase, true, false));
         let before = input.clone();

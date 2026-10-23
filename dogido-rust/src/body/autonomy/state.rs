@@ -4,7 +4,7 @@ use super::contracts::{
     Activity, Candidate, CandidateKind, Mode, Observation, Observed, Reassurance, distance_squared, short_text,
 };
 use crate::body::contracts::{Context, Sample};
-use crate::events::{AdapterCommandResult, AdapterCommandResultStatus, EventTime};
+use crate::events::{AdapterCommandResult, AdapterCommandResultStatus};
 use anyhow::{Result, anyhow, ensure};
 use chrono::{DateTime, Duration as UtcDuration, Utc};
 use serde::{Deserialize, Serialize};
@@ -386,7 +386,7 @@ impl State {
             "body_autonomy_context_changed"
         );
         ensure!(output.len() <= 8192, "body_autonomy_choice_too_large");
-        let value = crate::planner::extract_object(output)
+        let value = crate::text_format::extract_object(output)
             .ok_or_else(|| anyhow!("body_autonomy_choice_object"))?;
         // target_idはstayでも明示nullが必要。Optionの省略を許すserde既定とは分けて確認する。
         ensure!(
@@ -533,9 +533,7 @@ impl State {
             {
                 continue;
             }
-            let EventTime::Aware(executed) = result.executed_at else {
-                continue;
-            };
+            let executed = result.executed_at;
             if executed < pending.utc
                 || executed >= pending.utc + UtcDuration::seconds(35)
                 || executed > utc

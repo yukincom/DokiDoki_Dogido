@@ -1,7 +1,6 @@
 //! 通常会話の短期履歴と、戦闘前の会話の一時退避を管理する。
 //! 永続保存や再生判定は行わず、assistantを加える時機は呼出側が配送結果から決める。
 //! 沈黙とコード由来の出来事はeventとして残し、発話済みのassistantや川柳用の会話対には数えない。
-use crate::planner::repair::{self, Repair};
 use serde_json::{Value, json};
 use std::collections::VecDeque;
 
@@ -12,8 +11,6 @@ pub struct History {
     danger_active: bool,
     post_danger_turns: u64,
     counted_player_turns: Vec<String>,
-    // 入力前に生成器へ渡した履歴。今回の訂正対象照合だけに使い、次のpromptへ戻さない。
-    repair_context: Option<(String, Vec<Value>)>,
     situations: VecDeque<&'static str>,
 }
 fn clip(text: &str) -> String {
@@ -82,13 +79,6 @@ impl History {
                 .retain(|r| !(r["role"] == "user" && r["turn_id"] == turn));
             self.danger_retained
                 .retain(|r| !(r["role"] == "user" && r["turn_id"] == turn));
-            if self
-                .repair_context
-                .as_ref()
-                .is_some_and(|(id, _)| id == turn)
-            {
-                self.repair_context = None;
-            }
         }
     }
     /// 呼出側が配送を確定したuser/assistantの対を返す。未回答・取消入力や沈黙は対にしない。
@@ -175,9 +165,6 @@ impl History {
                 },
                 row["text"].as_str().unwrap_or("")
             ));
-            if row.get("repair_action").is_some() {
-                lines.push(format!("  [{}]", repair::note(row)));
-            }
         }
         lines.join("\n")
     }
@@ -195,15 +182,6 @@ impl History {
         };
         if self.rows().iter().any(|r| r["turn_id"] == id) {
             return;
-        }
-        if role == "user" {
-            self.repair_context = Some((turn.into(), self.rows()));
-        } else if self
-            .repair_context
-            .as_ref()
-            .is_some_and(|(id, _)| id == turn)
-        {
-            self.repair_context = None;
         }
         if self.rows.len() == 10 {
             self.rows.pop_front();
@@ -268,43 +246,6 @@ impl History {
         self.rows
             .push_back(json!({"turn_id":id,"role":"event","reaction":"silent",
             "text":"ドギドは黙って受け止めた（沈黙を選択。発話なし）"}));
-        if self
-            .repair_context
-            .as_ref()
-            .is_some_and(|(id, _)| id == turn)
-        {
-            self.repair_context = None;
-        }
-    }
-    pub fn annotate(&mut self, turn: &str, repair: &Repair) {
-        let targets = self
-            .repair_context
-            .as_ref()
-            .filter(|(id, _)| id == turn)
-            .map_or_else(|| self.rows(), |(_, rows)| rows.clone());
-        if !targets.iter().any(|r| {
-            r["turn_id"] == repair.target_turn_id
-                && r["text"]
-                    .as_str()
-                    .is_some_and(|t| t.contains(&repair.target_quote))
-        }) {
-            return;
-        }
-        if let Some(row) = self.rows.iter_mut().find(|r| {
-            r["turn_id"] == turn && r["role"] == "user" && r["text"] == clip(&repair.current_text)
-        }) && row.get("repair_action").is_none()
-        {
-            row.as_object_mut()
-                .unwrap()
-                .extend(repair.prompt_fields().as_object().unwrap().clone());
-            if let Some(saved) = self
-                .danger_retained
-                .iter_mut()
-                .find(|r| r["turn_id"] == turn)
-            {
-                *saved = row.clone();
-            }
-        }
     }
 }
 
@@ -475,64 +416,6 @@ mod tests {
     }
 
     #[test]
-    fn correction_can_reference_retained_turn_without_rewriting_original() {
-        let mut h = seeded();
-        h.push("correction", "user", "違う、材料を集めたいだけ");
-        h.begin_danger();
-        let repair = Repair {
-            action: crate::planner::Action::RepairConversation,
-            target_turn_id: "old-1:reply".into(),
-            target_quote: "返事old-1".into(),
-            signal_quote: "違う".into(),
-            replacement_quote: "材料を集めたいだけ".into(),
-            current_text: "違う、材料を集めたいだけ".into(),
-        };
-        h.annotate("correction", &repair);
-        for i in 0..6 {
-            pair(&mut h, &format!("during-{i}"));
-        }
-        let rows = h.rows();
-        let corrected = rows.iter().find(|r| r["turn_id"] == "correction").unwrap();
-        assert_eq!(corrected["repair_target_turn_id"], "old-1:reply");
-        assert_eq!(corrected["text"], repair.current_text);
-        assert!(h.lines().contains(&repair::note(corrected)));
-        h.push("new-correction", "user", &repair.current_text);
-        h.annotate("new-correction", &repair);
-        assert_eq!(
-            h.rows.back().unwrap()["repair_target_turn_id"],
-            "old-1:reply"
-        );
-        assert_eq!(h.rows()[1]["text"], "話題old-1");
-    }
-
-    #[test]
-    fn last_retained_input_can_record_repair_but_next_input_cannot_reuse_expired_target() {
-        let mut h = seeded();
-        h.begin_danger();
-        h.end_danger(3);
-        pair(&mut h, "after-0");
-        pair(&mut h, "after-1");
-        let repair = Repair {
-            action: crate::planner::Action::RepairConversation,
-            target_turn_id: "old-0:reply".into(),
-            target_quote: "返事old-0".into(),
-            signal_quote: "違う".into(),
-            replacement_quote: "材料の話".into(),
-            current_text: "違う、材料の話".into(),
-        };
-        assert!(contains(&h, "old-0:reply"));
-        h.push("third", "user", &repair.current_text);
-        assert!(!contains(&h, "old-0:reply"));
-        h.annotate("third", &repair);
-        assert_eq!(
-            h.rows.back().unwrap()["repair_target_turn_id"],
-            "old-0:reply"
-        );
-        h.push("fourth", "user", &repair.current_text);
-        h.annotate("fourth", &repair);
-        assert!(h.rows.back().unwrap().get("repair_action").is_none());
-    }
-    #[test]
     fn chosen_silence_is_a_reaction_visible_next_turn_but_never_a_spoken_pair() {
         let mut h = History::default();
         h.push("a", "user", "今日は静かやな");
@@ -543,8 +426,7 @@ mod tests {
         assert_eq!(h.rows()[1]["role"], "event");
         assert!(h.lines().contains("黙って受け止めた"));
         assert!(h.completed_pairs().is_empty());
-        let normalized = crate::planner::prepare::normalize_history(&json!(h.rows()));
-        assert_eq!(normalized[1]["reaction"], "silent");
+        assert_eq!(h.rows()[1]["reaction"], "silent");
         h.push("rain", "assistant", "雨が降ってきたな。");
         assert!(h.lines().contains("雨が降ってきたな"));
         assert!(h.completed_pairs().is_empty());

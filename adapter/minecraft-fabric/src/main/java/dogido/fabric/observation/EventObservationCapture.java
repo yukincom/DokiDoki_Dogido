@@ -26,20 +26,13 @@ public final class EventObservationCapture {
     private final CombatObserver combatObserver;
     private final java.util.function.LongSupplier nextSequence;
     private final java.util.function.LongSupplier tickSource;
-    private final java.util.function.Supplier<String> userText;
     private final java.util.function.Supplier<JsonObject> bodyObservation;
     private final java.util.function.Supplier<JsonObject> bodyAutonomy;
 
     public EventObservationCapture(PlayerObserver playerObserver, WorldObserver worldObserver,
             SmellObserver smellObserver, AmbientMobObserver ambientMobObserver, CombatObserver combatObserver,
             java.util.function.LongSupplier nextSequence, java.util.function.LongSupplier tickSource,
-            java.util.function.Supplier<String> userText, java.util.function.Supplier<JsonObject> bodyObservation) {
-        this(playerObserver,worldObserver,smellObserver,ambientMobObserver,combatObserver,nextSequence,tickSource,userText,bodyObservation,() -> null);
-    }
-    public EventObservationCapture(PlayerObserver playerObserver, WorldObserver worldObserver,
-            SmellObserver smellObserver, AmbientMobObserver ambientMobObserver, CombatObserver combatObserver,
-            java.util.function.LongSupplier nextSequence, java.util.function.LongSupplier tickSource,
-            java.util.function.Supplier<String> userText, java.util.function.Supplier<JsonObject> bodyObservation,
+            java.util.function.Supplier<JsonObject> bodyObservation,
             java.util.function.Supplier<JsonObject> bodyAutonomy) {
         this.bodyAutonomy = bodyAutonomy;
         this.playerObserver = playerObserver;
@@ -49,7 +42,6 @@ public final class EventObservationCapture {
         this.combatObserver = combatObserver;
         this.nextSequence = nextSequence;
         this.tickSource = tickSource;
-        this.userText = userText;
         this.bodyObservation = bodyObservation;
     }
 
@@ -80,7 +72,7 @@ public final class EventObservationCapture {
         attachNearbyMaterials(root, player, world, nearbyResources);
         attachLookTarget(root, player, world);
         root.combat(this.combatObserver.buildCombat(player, world, threats, audioThreats));
-        root.meta(EventJsonBuilder.buildMeta(null, this.userText.get()));
+        root.meta(EventJsonBuilder.buildMeta(null));
         return root.finish();
     }
 
@@ -104,7 +96,7 @@ public final class EventObservationCapture {
         attachNearbyMaterials(root, player, world, nearbyResources);
         attachLookTarget(root, player, world);
         root.combat(this.combatObserver.buildCombat(player, world, threats, audioThreats));
-        root.meta(EventJsonBuilder.buildMeta(null, this.userText.get()));
+        root.meta(EventJsonBuilder.buildMeta(null));
         return root.finish();
     }
 
@@ -128,7 +120,7 @@ public final class EventObservationCapture {
         attachNearbyMaterials(root, player, world, nearbyResources);
         attachLookTarget(root, player, world);
         root.combat(this.combatObserver.buildCombat(player, world, threats, audioThreats));
-        root.meta(EventJsonBuilder.buildMeta(null, this.userText.get()));
+        root.meta(EventJsonBuilder.buildMeta(null));
         return root.finish();
     }
 
@@ -150,7 +142,7 @@ public final class EventObservationCapture {
         attachNearbyMaterials(root, player, world, nearbyResources);
         attachLookTarget(root, player, world);
         root.combat(this.combatObserver.buildCombat(player, world, List.of(), List.of()));
-        root.meta(EventJsonBuilder.buildMeta(null, this.userText.get()));
+        root.meta(EventJsonBuilder.buildMeta(null));
         return root.finish();
     }
 
@@ -174,7 +166,7 @@ public final class EventObservationCapture {
         attachNearbyMaterials(root, player, world, nearbyResources);
         attachLookTarget(root, player, world);
         root.combat(this.combatObserver.buildCombat(player, world, threats, audioThreats));
-        root.meta(EventJsonBuilder.buildMeta(this.playerObserver.resolveDeathCause(player), this.userText.get()));
+        root.meta(EventJsonBuilder.buildMeta(this.playerObserver.resolveDeathCause(player)));
         return root.finish();
     }
 
@@ -200,7 +192,7 @@ public final class EventObservationCapture {
         attachLookTarget(root, player, world);
         JsonObject combat = this.combatObserver.buildCombat(player, world, threats, audioThreats);
         root.combatOutcomes(combat, detonations);
-        root.meta(EventJsonBuilder.buildMeta(null, this.userText.get()));
+        root.meta(EventJsonBuilder.buildMeta(null));
         return root.finish();
     }
 
@@ -226,7 +218,7 @@ public final class EventObservationCapture {
         attachLookTarget(root, player, world);
         JsonObject combat = this.combatObserver.buildCombat(player, world, threats, audioThreats);
         root.combatOutcomes(combat, outcomes);
-        root.meta(EventJsonBuilder.buildMeta(null, this.userText.get()));
+        root.meta(EventJsonBuilder.buildMeta(null));
         return root.finish();
     }
 
@@ -248,7 +240,7 @@ public final class EventObservationCapture {
         attachNearbyMaterials(root, player, world, nearbyResources);
         attachLookTarget(root, player, world);
         root.combat(this.combatObserver.buildCombat(player, world, List.of(), List.of()));
-        root.meta(EventJsonBuilder.buildMeta(null, this.userText.get()));
+        root.meta(EventJsonBuilder.buildMeta(null));
         return root.finish();
     }
 

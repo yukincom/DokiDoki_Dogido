@@ -1,20 +1,10 @@
 #!/usr/bin/env python3
 """通常対話の一回生成・形式補完・沈黙履歴を、実HTTPと模擬LLM/音声で確認する。"""
-import argparse, json, re, tempfile, time
+import argparse, json, tempfile, time
 from pathlib import Path
 from check_dialogue import dependencies, running, register, request, submit, wait_for, row, snapshot
 ROOT=Path(__file__).resolve().parents[1]
 SILENCE='難しい話だったので、ドギドは沈黙を選んだ'
-
-def objects(incoming):
-    # 独立planner診断の既存利用者向け。通常対話はこの形式を要求しない。
-    out=[]; decoder=json.JSONDecoder()
-    for message in incoming['messages']:
-        for match in re.finditer(r'\{\s*"turn_id"\s*:',message['content']):
-            try: value,_=decoder.raw_decode(message['content'][match.start():])
-            except ValueError: continue
-            if value.get('role') in {'user','assistant'}:out.append(value)
-    return out
 
 def main():
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--binary',type=Path,required=True);args=p.parse_args()

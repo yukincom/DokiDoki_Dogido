@@ -95,7 +95,13 @@ def test_noop_models_do_not_contact_an_api_and_mixed_route_is_explicit(monkeypat
     assert "--no-llm" in args
     assert not json.loads(value(args, "--haiku-settings"))["llm_enabled"]
     with pytest.raises(ValueError, match="片方だけをnoop"):
-        launch.model_enabled(Settings(_env_file=None, llm_backend="mlx", llm_chat_backend="noop"))
+        launch.model_enabled(Settings(_env_file=None, llm_backend="chat_completions", llm_chat_backend="noop"))
+
+
+def test_removed_say_backend_cannot_silently_select_voicevox():
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, tts_backend="say")
 
 
 def test_configured_address_and_relative_memory_are_preserved(monkeypatch, tmp_path):

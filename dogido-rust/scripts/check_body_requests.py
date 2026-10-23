@@ -57,7 +57,7 @@ def main():
             sequence = 0
             requests_sent = []
 
-            def event(*, bound=True, results=(), text=None):
+            def event(*, bound=True, results=()):
                 nonlocal sequence
                 sequence += 1
                 value = {
@@ -72,8 +72,6 @@ def main():
                     "visual_threats": [], "auditory_threats": [],
                     "command_results": list(results),
                 }
-                if text is not None:
-                    value["meta"] = {"user_text": text}
                 if bound:
                     return attach_body(value)
                 value["body_observation"] = {
@@ -222,24 +220,26 @@ def main():
             passed.append("rejected_target_ack_never_claims_success")
 
             old_routed, old_command = issue(STALE_TARGET, "look_target")
-            # 同一event内の新原文が先に入力世代を進め、古い成功結果を取り消す。
-            response = send(results=[receipt(old_command)], text=NEW_RIGHT)
+            # 専用入力で世代を進めてから、古い操作の成功結果を受け取る。
+            new_input = request(base, "/api/v1/player-input", {"session_id": sid, "text": NEW_RIGHT, "source": "text"})
+            # 分類完了を待って新しい命令を取得し、古いACKと同じ応答でも配送を続ける。
+            routed, command = classified_command(new_input, NEW_RIGHT, "look_relative_right")
+            response = send(results=[receipt(old_command)])
             assert old_command["command_id"] in response["acknowledged_command_ids"], response
-            assert not body_commands(response), response
+            assert body_commands(response) == [command], response
             assert response["body_request_generation"] > old_command["input_generation"], response
             old = body_row(old_routed["turn_id"])
             assert old["body_request_status"] == "cancelled", old
             assert old["body_request_result"]["input_generation"] == old_command["input_generation"], old
             assert old["body_request_result"]["detail_code"] == "input_or_session_changed", old
             assert not feedback(STALE_TARGET), feedback(STALE_TARGET)
-            routed, command = classified_command(response["player_input"], NEW_RIGHT, "look_relative_right")
             assert command["input_generation"] == response["body_request_generation"], (command, response)
             assert command["command_id"] != old_command["command_id"]
             again = send(results=[receipt(old_command)])
             assert body_commands(again) == [command] and not feedback(STALE_TARGET), again
             assert body_row(old_routed["turn_id"])["body_request_status"] == "cancelled"
             accept_success(routed, command, NEW_RIGHT)
-            passed.append("new_event_input_cancels_old_ack_and_keeps_new_raw_generation")
+            passed.append("new_input_cancels_old_ack_and_keeps_new_raw_generation")
 
             classified_requests = [json.loads(line) for line in
                                    (classifier_dir / "requests.jsonl").read_text().splitlines()]

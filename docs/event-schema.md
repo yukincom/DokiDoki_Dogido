@@ -62,6 +62,8 @@
 
 ## 5. トップレベル項目
 
+`observed_at` と `command_results[].executed_at` は `T` 区切り・UTC offset付きのRFC 3339文字列で送る。`Z` と `+09:00` 等を受け付け、日付だけ・offsetなし・Unix秒／ミリ秒は受理しない。
+
 ### 必須
 
 - `schema_version`

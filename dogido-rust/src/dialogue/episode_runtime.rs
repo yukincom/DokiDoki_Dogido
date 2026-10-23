@@ -60,32 +60,6 @@ impl Before {
         );
         actions
     }
-    // submit_inner can select an immediate fixed answer (e.g. assist). Only that
-    // input's new queue row belongs here; unrelated asynchronous completions do not.
-    pub fn input_actions(&self, d: &Data, sid: &str, text: &str) -> Vec<Value> {
-        let mut actions = vec![];
-        for row in d.rows.iter().filter(|r| {
-            r["session_id"] == sid
-                && r["source"] == "player_input"
-                && r["player_input_text"] == text
-                && r["turn_id"]
-                    .as_str()
-                    .is_some_and(|id| !self.turns.contains(id))
-        }) {
-            for speech in row["combat_actions"].as_array().into_iter().flatten() {
-                project(
-                    &mut actions,
-                    speech,
-                    if row["category"] == "callout" {
-                        "callout"
-                    } else {
-                        "speech"
-                    },
-                );
-            }
-        }
-        actions
-    }
 }
 fn state(s: &Session) -> Value {
     json!({"mode":s.mode,"pending_haiku_after_preface":s.haiku.active.is_some(),

@@ -2,7 +2,7 @@
 //! 名前と依頼の解釈は会話側、共有ACK台帳はAssistState、実際の移動はFabricが担当する。
 use super::contracts::{Choice, Prepared, Snapshot};
 use crate::events::{
-    AdapterCommandResult, AdapterCommandResultCommandType, AdapterCommandResultStatus, EventTime,
+    AdapterCommandResult, AdapterCommandResultCommandType, AdapterCommandResultStatus,
 };
 use anyhow::{Result, ensure};
 use chrono::{DateTime, Duration, Utc};
@@ -81,10 +81,8 @@ impl Queue {
             result.status = AdapterCommandResultStatus::Expired;
             result.detail_code = "server_result_timeout".into();
         } else if result.status == AdapterCommandResultStatus::Succeeded {
-            let in_time = match result.executed_at {
-                EventTime::Aware(time) => time >= command.issued_at && time < command.expires_at,
-                EventTime::Naive(_) => false,
-            };
+            let in_time = result.executed_at >= command.issued_at
+                        && result.executed_at < command.expires_at;
             if !in_time {
                 result.status = AdapterCommandResultStatus::Failed;
                 result.detail_code = "result_outside_validity_window".into();
@@ -112,7 +110,7 @@ impl Queue {
             command_id: command.command_id,
             command_type: AdapterCommandResultCommandType::RecallHorse,
             status: AdapterCommandResultStatus::Expired,
-            executed_at: EventTime::Aware(now.fixed_offset()),
+            executed_at: now.fixed_offset(),
             selected_slot: None,
             selected_item_id: None,
             detail_code: "server_result_timeout".into(),
@@ -323,7 +321,7 @@ mod tests {
     #[test]
     fn horse_queue_rejects_wrong_type_identity_missing_fields_and_bad_time() {
         type Mutation = (fn(&mut AdapterCommandResult), &'static str);
-        let cases: [Mutation; 7] = [
+        let cases: [Mutation; 6] = [
             (
                 |r: &mut AdapterCommandResult| {
                     r.command_type = AdapterCommandResultCommandType::SelectHotbar
@@ -357,18 +355,14 @@ mod tests {
             (
                 |r: &mut AdapterCommandResult| {
                     r.executed_at =
-                        EventTime::Aware((now() - Duration::milliseconds(1)).fixed_offset())
+                        (now() - Duration::milliseconds(1)).fixed_offset()
                 },
                 "result_outside_validity_window",
             ),
             (
                 |r: &mut AdapterCommandResult| {
-                    r.executed_at = EventTime::Aware((now() + Duration::seconds(5)).fixed_offset())
+                    r.executed_at = (now() + Duration::seconds(5)).fixed_offset()
                 },
-                "result_outside_validity_window",
-            ),
-            (
-                |r: &mut AdapterCommandResult| r.executed_at = EventTime::Naive(now().naive_utc()),
                 "result_outside_validity_window",
             ),
         ];
@@ -461,7 +455,7 @@ mod tests {
             );
             let mut success = result(&command);
             success.executed_at =
-                EventTime::Aware((now() + Duration::milliseconds(4_700)).fixed_offset());
+                (now() + Duration::milliseconds(4_700)).fixed_offset();
             let out = state.observe_results(
                 &[success.clone()],
                 now() + Duration::milliseconds(receipt_ms),
@@ -482,7 +476,7 @@ mod tests {
         let mut state = state();
         let command = issue(&mut state);
         let mut too_late = result(&command);
-        too_late.executed_at = EventTime::Aware((now() + Duration::seconds(5)).fixed_offset());
+        too_late.executed_at = (now() + Duration::seconds(5)).fixed_offset();
         let out = state.observe_results(&[too_late], now() + Duration::seconds(6), false);
         assert_eq!(
             out.observed[0].result.status,

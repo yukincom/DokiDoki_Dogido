@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class ScreenshotSessionTest {
     private DogidoEventClient client() throws Exception {
         var c=new DogidoEventClient(org.slf4j.LoggerFactory.getLogger("screenshot-test"),
-            new DogidoEventClient.ConnectionSettings(true,"http://127.0.0.1:1",""),cmd->{},(cmd,ref)->{},()->false);
+            new DogidoEventClient.ConnectionSettings(true,"http://127.0.0.1:1",""),cmd->{},(cmd,ref)->{},()->false,null,null,null,null,null);
         session(c,"session");return c;
     }
     private void session(DogidoEventClient c,String id) throws Exception {

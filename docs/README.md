@@ -82,7 +82,7 @@ Issueの開閉（Open/Close）状態はリンク先にて確認してくださ�
 | 3 | [sample-event-log-cases.md](sample-event-log-cases.md) | イベントログの代表ケース |
 | 4 | [Rust本体の案内](../dogido-rust/README.md) | 現行のビルド・起動・補助依存 |
 | 5 | [実機チェック](../dogido-rust/manual-dialogue-check.md) | Rust本体の一巡・個別確認・結果記録 |
-| 6 | [shared-llm-profile.md](shared-llm-profile.md) | 別に起動した共有 MLX endpoint と従来 standalone の明示切替 |
+| 6 | [shared-llm-profile.md](shared-llm-profile.md) | 共有MLX endpointと設定プロファイルの選択 |
 | 7 | [voice-echo-cancellation.md](voice-echo-cancellation.md) | macOSの任意AEC、独立導入、権限と実機試験 |
 | 8 | [debug-checklist.md](debug-checklist.md) | 旧Python版のデバッグ履歴。現在の実機結果とは区別 |
 | 9 | [3D身体とRust本線の連携境界](../dogido-rust/docs/body-integration-boundary.md) | Body API v3、自他位置のP1接続、身体と本線の分担・残る接続 |
@@ -107,7 +107,7 @@ Minecraft クライアント側の手順は [adapter/minecraft-fabric/README.md]
 | 5 | [smell-policy.md](smell-policy.md) | 近接源・温度・天候をコードで解決するスメルバトル |
 | 6 | [voice-delivery-plan.md](voice-delivery-plan.md) | ボイス速度・間・川柳の呼吸（#13） |
 | 7 | [tts-reading-unidic-plan.md](tts-reading-unidic-plan.md) | TTS 誤読補正・UniDic 方針 |
-| 8 | [main-dialogue-integration.md](main-dialogue-integration.md) | 本体の会話所有権・戦闘／雷／川柳中断・再生確定・同意済み専用Chrome検索 |
+| 8 | [main-dialogue-integration.md](main-dialogue-integration.md) | 本体の会話所有権・戦闘／雷／川柳中断・再生確定。旧Web検索は撤去済みの履歴 |
 | 9 | [monster-schema.md](monster-schema.md) | 敵対エンティティ定義 |
 | 10 | [skeleton-spec.md](skeleton-spec.md) · [boss-spec.md](boss-spec.md) · [environmental-hostile-spec.md](environmental-hostile-spec.md) | 脅威種別ごとの仕様 |
 | 11 | [mob_list.md](mob_list.md) | モブ日英・反応メモ（人間向け。runtime は catalogs） |

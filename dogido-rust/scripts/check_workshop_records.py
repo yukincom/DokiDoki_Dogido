@@ -38,8 +38,6 @@ def finished(folder, sid, turn):
 
 def model(text, prompt, n):
     # 対象・具体変更・終了はBERTへ変更済み。本文モデルへ旧判定を戻さない。
-    if "段階: after_validation" in prompt:
-        raise AssertionError("failed edit must not trigger another model call")
     if text == "今の句":
         return step(text, "show_current")
     if text in {"採用して", "却下して"}:

@@ -7,7 +7,6 @@ use clap::{Parser, Subcommand};
 use dogido_rust::{
     dialogue::{Dialogue, DialogueConfig},
     llm::RigLlm,
-    planner::{self, PreparedPlan},
     server::{Application, ServerConfig, Settings as ServerSettings},
     types::GenerationRequest,
 };
@@ -54,14 +53,6 @@ enum Command {
         minecraft_cache: PathBuf,
         #[arg(long)]
         source_lock: PathBuf,
-    },
-    /// 通常雑談plannerだけを比較。状態機械の投影fixtureを読み、発話・操作・保存はしない。
-    PlanChat {
-        request: PathBuf,
-        #[arg(long, default_value = "http://127.0.0.1:8080/v1")]
-        base_url: String,
-        #[arg(long, default_value_t = 20_000)]
-        timeout_ms: u64,
     },
     /// 接続専用HTTPサーバー。AI・音声・記憶には接続しない。
     Serve {
@@ -191,23 +182,6 @@ async fn main() -> Result<()> {
                 "{}",
                 serde_json::to_string(&dogido_rust::knowledge::render(&value))?
             );
-        }
-        Command::PlanChat {
-            request,
-            base_url,
-            timeout_ms,
-        } => {
-            let input: PreparedPlan = serde_json::from_slice(&std::fs::read(&request)?)?;
-            let api_key = std::env::var("DOGIDO_LLM_API_KEY")
-                .ok()
-                .filter(|s| !s.is_empty());
-            let client = RigLlm::new(
-                &base_url,
-                api_key.as_deref(),
-                Duration::from_millis(timeout_ms),
-            )?;
-            let report = planner::run(&client, &input).await?;
-            println!("{}", serde_json::to_string_pretty(&report)?);
         }
         Command::Serve {
             listen,

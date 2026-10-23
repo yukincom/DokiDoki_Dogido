@@ -151,36 +151,7 @@ public final class DogidoEventClient {
         }
     }
 
-    public DogidoEventClient(
-        Logger logger,
-        ConnectionSettings config,
-        Consumer<DogidoCommandProtocol.SelectHotbarCommand> commandHandler,
-        BiConsumer<HorseRecallProtocol.Command, SessionRef> horseCommandHandler,
-        BooleanSupplier horseRecallAvailable
-    ) {
-        this(logger,config,commandHandler,horseCommandHandler,horseRecallAvailable,null);
-    }
-    public DogidoEventClient(Logger logger,ConnectionSettings config,
-        Consumer<DogidoCommandProtocol.SelectHotbarCommand> commandHandler,
-        BiConsumer<HorseRecallProtocol.Command,SessionRef> horseCommandHandler,BooleanSupplier horseRecallAvailable,
-        BiConsumer<dogido.fabric.body.BodyInspectProtocol.Command,SessionRef> bodyCommandHandler) {
-        this(logger,config,commandHandler,horseCommandHandler,horseRecallAvailable,bodyCommandHandler,null);
-    }
-    public DogidoEventClient(Logger logger,ConnectionSettings config,
-        Consumer<DogidoCommandProtocol.SelectHotbarCommand> commandHandler,
-        BiConsumer<HorseRecallProtocol.Command,SessionRef> horseCommandHandler,BooleanSupplier horseRecallAvailable,
-        BiConsumer<dogido.fabric.body.BodyInspectProtocol.Command,SessionRef> bodyCommandHandler,
-        BiConsumer<dogido.fabric.screenshot.ScreenshotProtocol.Command,SessionRef> screenshotHandler) {
-        this(logger,config,commandHandler,horseCommandHandler,horseRecallAvailable,bodyCommandHandler,screenshotHandler,null,null);
-    }
-    public DogidoEventClient(Logger logger,ConnectionSettings config,
-        Consumer<DogidoCommandProtocol.SelectHotbarCommand> commandHandler,
-        BiConsumer<HorseRecallProtocol.Command,SessionRef> horseCommandHandler,BooleanSupplier horseRecallAvailable,
-        BiConsumer<dogido.fabric.body.BodyInspectProtocol.Command,SessionRef> bodyCommandHandler,
-        BiConsumer<dogido.fabric.screenshot.ScreenshotProtocol.Command,SessionRef> screenshotHandler,
-        BiConsumer<dogido.fabric.screenshot.BodyViewProtocol.Command,SessionRef> bodyViewHandler,Consumer<String> bodyViewAcknowledged) {
-        this(logger,config,commandHandler,horseCommandHandler,horseRecallAvailable,bodyCommandHandler,screenshotHandler,bodyViewHandler,bodyViewAcknowledged,null);
-    }
+    /** 現行の各命令handlerをまとめて受け取り、sessionと配送台帳を初期化する。 */
     public DogidoEventClient(Logger logger,ConnectionSettings config,
         Consumer<DogidoCommandProtocol.SelectHotbarCommand> commandHandler,
         BiConsumer<HorseRecallProtocol.Command,SessionRef> horseCommandHandler,BooleanSupplier horseRecallAvailable,

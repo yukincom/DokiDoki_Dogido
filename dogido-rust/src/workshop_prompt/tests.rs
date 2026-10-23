@@ -35,18 +35,16 @@ fn all_consultation_prompts_match_fixture_exactly() {
             count += 1;
         }
     }
-    assert_eq!(count, 666);
+    assert_eq!(count, 360);
     let keys = [
         "raw_semantic",
         "current_idea",
         "meaning_ack",
-        "confirm_close",
         "followup",
         "editing",
         "conversation_candidate",
         "propose_revision",
         "pending",
-        "after_validation",
     ];
     assert_eq!(ASSETS["extra_order"], json!(keys));
 }
@@ -268,9 +266,8 @@ fn native_runtime_materials_match_every_canonical_preparation() {
 }
 
 #[tokio::test]
-async fn non_editing_phases_and_restricted_actions_do_not_use_helper() {
-    for index in [192, 384, 0] {
-        let case = &FIXTURES["projection_cases"][index];
+async fn consultation_preparation_does_not_use_helper() {
+    for (index, case) in FIXTURES["projection_cases"].as_array().unwrap().iter().enumerate() {
         let mut frame = case["frame"].clone();
         if index == 0 {
             frame["allowed_actions"] = json!(["respond", "ask"]);

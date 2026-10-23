@@ -80,7 +80,7 @@ fn allowed_workshop_actions(
         allowed.extend(stage.actions(pending).iter().copied());
     }
     allowed.retain(|action| match *action {
-        "close_workshop" | "confirm_close" => false,
+        "close_workshop" => false,
         "stage_player_edit" => matches!(classified, Some(ClassifiedWorkshop::Change(_))),
         "propose_revision" => has_target,
         _ => true,
@@ -450,7 +450,7 @@ impl Dialogue {
                     let payload = if native {
                         tool_call.as_ref().map(tools::Call::payload)
                     } else {
-                        crate::planner::extract_object(&report.generated.text)
+                        crate::text_format::extract_object(&report.generated.text)
                     };
                     let Some(mut payload) = payload.filter(|_| !truncated) else {
                         if reply.interrupted() || self.workshop_combat_priority(input) {
@@ -589,7 +589,7 @@ impl Dialogue {
                         );
                         if workshop_followup::is_action(a)
                             && let Err(error) =
-                                workshop_followup::validate(step, text, stage, pending.is_some())
+                                workshop_followup::validate(step, stage, pending.is_some())
                         {
                             reason = error.to_string();
                             if attempt == 0 {
@@ -868,11 +868,6 @@ impl Dialogue {
             && let Some(fixed_speech) = workshop_followup::speech(&action)
         {
             speech = fixed_speech.into();
-            if action == "continue_workshop"
-                && let Some(target) = crate::workshop_target::Target::from_view(view, lines)
-            {
-                speech = format!("おけ、{}の話を続けよか。", target.label(lines));
-            }
         }
         match action.as_str() {
             // 未採用案を残した終了は保存処理を通さない。案を採用・保存したという
@@ -1172,7 +1167,7 @@ mod bert_tests {
 
     #[test]
     fn contextual_conversation_cannot_fall_back_to_line_change_or_end_classification() {
-        for stage in [Stage::Discussion, Stage::CloseConfirmation] {
+        for stage in [Stage::Discussion, Stage::MeaningExplained] {
             let allowed = allowed_workshop_actions("decide", false, true, stage, None, false);
             for forbidden in [
                 "close_workshop",

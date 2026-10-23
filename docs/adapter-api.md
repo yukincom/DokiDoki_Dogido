@@ -55,9 +55,9 @@ adapter → server の主経路:
 - `POST /api/v1/adapter-sessions/{session_id}/heartbeat`
 - `DELETE /api/v1/adapter-sessions/{session_id}`
 
-プレイヤー発話のサイドチャネル（adapter 以外）:
+音声とMinecraftテキストの共通入力受付:
 
-- `POST /api/v1/player-input` … マイク入力・開発時のテキスト注入。詳細は [§21](#21-post-apiv1player-input)
+- `POST /api/v1/player-input` … マイク、Minecraftの`/dogido`・会話画面、開発時のテキスト入力。詳細は [§21](#21-post-apiv1player-input)
 
 ## 6. `GET /healthz`
 
@@ -382,7 +382,7 @@ adapter 終了時に session を閉じる。
 - JSON parse 可能であること
 - `schema_version` が対応範囲内であること
 - `game` は現時点では `minecraft-java`
-- `observed_at` は ISO 8601
+- `observed_at` と操作結果の `executed_at` は `T` 区切り・UTC offset必須のRFC 3339文字列（`Z` または `+09:00` 等）。日付のみ、offsetなし、Unix秒／ミリ秒からの補完はしない
 - `event.name` は許可済み enum に含まれること
 
 ### `sequence`

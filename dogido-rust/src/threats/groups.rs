@@ -1,6 +1,5 @@
 //! 群れの優先順位と文面。数は現在のvisualだけから取り、過去の観測を加算しない。
 use super::*;
-use crate::events::EventTime;
 use std::cmp::Ordering;
 
 pub(super) fn ordinary(t: &VisualThreat) -> bool {
@@ -122,28 +121,18 @@ fn overwhelmed(e: &GameEvent, preferred: &[String]) -> (String, Vec<String>) {
 fn massive(e: &GameEvent) -> String {
     // 大群向けの定型文はsequence・観測時刻・場所から作るseedで決定的に選ぶ。
     // 時刻の表記を変えると同じイベントの文面が変わるため、小数は非ゼロ時だけ6桁、
-    // offsetは元イベントにあるときだけ付ける既存形式を保つ（UTCへ変換はしない）。
-    let date = match &e.observed_at {
-        EventTime::Aware(t) => format!(
-            "{}{}{}",
-            t.format("%Y-%m-%dT%H:%M:%S"),
-            if t.timestamp_subsec_micros() == 0 {
-                String::new()
-            } else {
-                format!(".{:06}", t.timestamp_subsec_micros())
-            },
-            t.format("%:z")
-        ),
-        EventTime::Naive(t) => format!(
-            "{}{}",
-            t.format("%Y-%m-%dT%H:%M:%S"),
-            if t.and_utc().timestamp_subsec_micros() == 0 {
-                String::new()
-            } else {
-                format!(".{:06}", t.and_utc().timestamp_subsec_micros())
-            }
-        ),
-    };
+    // 元イベントのoffsetを保持する既存形式を保つ（UTCへ変換はしない）。
+    let t = &e.observed_at;
+    let date = format!(
+        "{}{}{}",
+        t.format("%Y-%m-%dT%H:%M:%S"),
+        if t.timestamp_subsec_micros() == 0 {
+            String::new()
+        } else {
+            format!(".{:06}", t.timestamp_subsec_micros())
+        },
+        t.format("%:z")
+    );
     let seed = format!(
         "{}|{date}|{}|{}",
         e.sequence

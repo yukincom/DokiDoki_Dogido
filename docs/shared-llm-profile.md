@@ -16,7 +16,7 @@ cp .env.shared.example .env.shared
 `.env.shared` は `.env` の後に読み込まれ、LLM の接続先だけを上書きします。
 API キーは不要で、このファイルは Git 対象外です。共有プロファイルでは次を起動時に検査します。
 
-- chat / haiku がともに `chat_completions`、`local`、`http://127.0.0.1:8080/v1`
+- chat / haiku がともに `chat_completions`、`http://127.0.0.1:8080/v1`
 - request の `model` が必ず `default_model`
 
 検査に失敗した場合は起動を止めます。共有 endpoint の失敗時にプロセス内 MLX をロードする

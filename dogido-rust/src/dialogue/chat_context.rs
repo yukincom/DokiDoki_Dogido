@@ -107,7 +107,7 @@ pub(super) fn capture(
 ) -> anyhow::Result<Native> {
     let senses = super::body_runtime::event(s, event);
     Ok(Native {
-        snapshot: s.chat_observation.snapshot_body(&senses, &CatalogLabels)?,
+        snapshot: s.chat_observation.snapshot_body(&senses, &CatalogLabels),
         sensory_event: Some(senses.clone()),
         context: Context {
             mode: serde_json::to_value(s.mode)
@@ -133,27 +133,12 @@ pub(super) fn capture(
     })
 }
 
-/// Exact small speech projection from the same view passed to the workshop job.
-/// `Workshop::open` already enriches its immutable materials, but legacy views
-/// retain the canonical metadata fallback here as well.
+/// Workshop::openが準備した同じ材料と現在句から、通常会話へ渡す短い表示を作る。
+/// 欠けた材料をemissionから復活させず、観測の可視性と相談中の正本をそのまま保つ。
 fn workshop_details(view: &Value) -> anyhow::Result<crate::chat_materials::WorkshopFields> {
-    use crate::workshop_editing::materials::{material_context_visible, short_material_entries};
+    use crate::workshop_editing::materials::short_material_entries;
     let snapshot = crate::workshop_projection::Snapshot::from_view(view)?;
-    let mut materials = snapshot.materials;
-    for (key, visibility) in [
-        ("interpretation", None),
-        ("biome", Some("biome")),
-        ("structure", None),
-        ("time_phase", Some("sky")),
-    ] {
-        let value = &view["emission"][key];
-        if crate::chat_catalog::truth(value)
-            && materials.get(key).is_none()
-            && visibility.is_none_or(|key| material_context_visible(&materials, key))
-        {
-            materials[key] = value.clone();
-        }
-    }
+    let materials = snapshot.materials;
     let material = short_material_entries(&materials)
         .into_iter()
         .min_by_key(|(label, source)| {

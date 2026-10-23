@@ -2,22 +2,15 @@ use super::*;
 use crate::workshop_edit;
 use serde_json::json;
 #[test]
-fn legacy_inputs_keep_data_integrity_under_model_owned_edits() {
+fn current_inputs_keep_data_integrity_under_model_owned_edits() {
     let cases: Value = serde_json::from_str(include_str!("fixtures.json")).unwrap();
-    assert_eq!(cases.as_array().unwrap().len(), 2006);
+    assert_eq!(cases.as_array().unwrap().len(), 1682);
     for (index, case) in cases.as_array().unwrap().iter().enumerate() {
         let mut engine = Engine {
             readings: serde_json::from_value(case["readings"].clone()).unwrap(),
         };
         let f = &case["input"];
         let op = text(&case["op"]);
-        if op == "combat_fallback" {
-            // BERTへ変更済み。旧判定へ戻さない。旧fixtureは操作の撤去を確認する。
-            let mut retired = f.clone();
-            retired["op"] = op.into();
-            assert!(engine.project(&retired).is_err());
-            continue;
-        }
         let actual: Result<Value> = match op {
             "normalize" => engine.normalized(text(&f["text"]), true).map(|v| json!(v)),
             "material" => engine
@@ -42,10 +35,10 @@ fn legacy_inputs_keep_data_integrity_under_model_owned_edits() {
                         Err(error)
                             if matches!(
                                 op,
-                                "player_edit" | "discussion_candidate" | "explicit_discussion"
+                                "player_edit" | "discussion_candidate"
                             ) && error.downcast_ref::<NeedsReading>().is_some() =>
                         {
-                            // 旧コーパスで照会されなかった語は辞書未解決として模擬する。
+                            // 辞書fixtureにない語は辞書未解決として模擬する。
                             // 読みを推測せず、表記を保持したまま編集できることを確認する。
                             let source = error.downcast_ref::<NeedsReading>().unwrap().0.clone();
                             engine.readings.insert(source.clone(), source);
@@ -123,7 +116,7 @@ fn legacy_inputs_keep_data_integrity_under_model_owned_edits() {
                     );
                 }
             }
-        } else if matches!(op, "discussion_candidate" | "explicit_discussion") {
+        } else if op == "discussion_candidate" {
             if let Some(candidate) = actual["candidate"].as_object() {
                 let proposal = &candidate["proposal"];
                 assert!(
@@ -155,6 +148,20 @@ fn legacy_inputs_keep_data_integrity_under_model_owned_edits() {
                 f["text"]
             );
         }
+    }
+}
+
+#[test]
+fn retired_operations_are_unsupported_with_a_valid_current_workshop() {
+    let cases: Value = serde_json::from_str(include_str!("fixtures.json")).unwrap();
+    let current = cases.as_array().unwrap().iter()
+        .find(|case| case["op"] == "player_edit").unwrap();
+    let mut frame = current["input"].clone();
+    Snapshot::from_view(&frame["workshop"]).unwrap();
+    for op in ["combat_fallback", "explicit_discussion"] {
+        frame["op"] = op.into();
+        let error = Engine::default().project(&frame).err().unwrap();
+        assert_eq!(error.to_string(), "unsupported native workshop edit operation");
     }
 }
 

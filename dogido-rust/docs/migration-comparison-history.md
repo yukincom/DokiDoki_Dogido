@@ -284,7 +284,8 @@ python dogido-rust/scripts/check_reading_runtime.py
 python dogido-rust/scripts/check_memory_runtime.py
 python dogido-rust/scripts/check_poem_input.py
 python -m pytest dogido-rust/scripts/test_memory_query.py -q
-python -m pytest dogido-rust/scripts/test_combat_input_helper.py -q
+# 撤去済みの試験（再作成・実行しない）
+# python -m pytest dogido-rust/scripts/test_combat_input_helper.py -q
 ```
 
 実モデルの相談だけを試す場合は、起動済みの接続先を明示します。観測・句・音声は模擬で、実ゲームやスピーカーは使いません。このコマンド自体はMLXを起動・停止しません。
@@ -349,7 +350,7 @@ python dogido-rust/scripts/generate_address_fixtures.py
 python dogido-rust/scripts/check_address_runtime.py
 ```
 
-### 通常会話plannerの単独確認
+### 撤去済みの履歴: 通常会話plannerの単独確認
 
 ```sh
 dogido-rust/target/release/dogido-rust plan-chat dogido-rust/fixtures/planner/explicit_repair.json

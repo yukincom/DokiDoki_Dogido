@@ -3,13 +3,13 @@ use super::*;
 fn records_only_result_facts_not_speech_or_model_payloads() {
     let value = result_fields(
         &json!({"text":"speech","error":"private server detail","llm_reports":["prompt"],
-            "workshop_steps":[{"action":"inspect","speech":"hidden","checks":["meter"],"validation_codes":["meter_not_exact"]}]}),
+            "workshop_steps":[{"action":"inspect","speech":"hidden","checks":["reading"],"validation_codes":["reading_unavailable"]}]}),
     );
     assert!(value.get("text").is_none());
     assert!(value.get("error").is_none());
     assert!(value.get("llm_reports").is_none());
     assert!(value["steps"][0].get("speech").is_none());
-    assert_eq!(value["steps"][0]["validation_codes"][0], "meter_not_exact");
+    assert_eq!(value["steps"][0]["validation_codes"][0], "reading_unavailable");
 }
 #[tokio::test]
 async fn writer_flushes_and_keeps_old_lines() {
@@ -194,7 +194,7 @@ async fn private_input_is_excluded_from_admission_decision_and_terminal() {
     f.finish().await;
 }
 #[tokio::test]
-async fn game_event_first_admission_is_not_a_forward_and_does_not_repeat_on_duplicate() {
+async fn dedicated_input_admission_is_not_a_forward_and_events_do_not_repeat_it() {
     let f = fixture();
     f.d.data
         .lock()
@@ -206,14 +206,13 @@ async fn game_event_first_admission_is_not_a_forward_and_does_not_repeat_on_dupl
     let mut raw = super::super::empty_event("試験");
     raw["sequence"] = 44.into();
     raw["event"]["name"] = "ambient_mob_detected".into();
-    raw["meta"] = json!({"user_text":"合成の会話入力"});
     let event: GameEvent = serde_json::from_value(raw).unwrap();
-    let result = f.d.observe("s", event.clone(), Some("first-input"));
+    f.d.observe("s", event.clone(), Some("first-input"));
+    let result = f.d.submit(Some("s"), "合成の会話入力", "text");
     assert_eq!(
-        result["player_input"]["reason"], "fresh_safe_snapshot_required",
+        result["reason"], "fresh_safe_snapshot_required",
         "{result}"
     );
-    assert!(result.get("_workshop_direct_input").is_none());
     f.d.observe("s", event, Some("first-input"));
     let rows = f.records().await;
     let admissions: Vec<_> = rows
@@ -238,6 +237,22 @@ async fn game_event_first_admission_is_not_a_forward_and_does_not_repeat_on_dupl
         f.records().await.last().unwrap()["event_kind"],
         "forwarded_admission"
     );
+    f.finish().await;
+}
+#[tokio::test]
+async fn retired_event_text_cannot_admit_input_or_change_its_generation() {
+    let f = fixture();
+    let generation = f.d.data.lock().unwrap().sessions["s"].input_generation;
+    let mut raw = super::super::empty_event("試験");
+    raw["meta"] = json!({"user_text":"静かにして"});
+    let result = f.d.observe("s", GameEvent::parse(raw).unwrap(), None);
+    assert_eq!(result["accepted"], true);
+    assert!(result.get("player_input").is_none());
+    let data = f.d.data.lock().unwrap();
+    assert_eq!(data.sessions["s"].input_generation, generation);
+    assert_eq!(data.sessions["s"].combat.shut_up_count, 0);
+    drop(data);
+    assert!(f.records().await.iter().all(|r| r["event_kind"] != "input_admission"));
     f.finish().await;
 }
 #[tokio::test]

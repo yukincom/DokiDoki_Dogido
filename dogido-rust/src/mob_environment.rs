@@ -1,5 +1,6 @@
-//! Current per-individual measurements and known identities paired with catalogue species IDs.
-//! Knowledge never establishes a measurement, elapsed duration, death or conversion.
+//! 個体ごとの現在環境・識別情報をカタログ種別へ対応させ、会話用の観測を返す。
+//! environmentの実測だけを使い、戦闘用flat項目から欠けた環境を補わない。
+//! 保存・状態変更は行わず、一般知識から経過時間・死亡・変化を確定しない。
 use crate::events::{GameEvent, MobEnvironment, MobIdentity, VisualThreat};
 use serde_json::{Value, json};
 
@@ -8,8 +9,6 @@ struct Observation<'a> {
     identity: Option<&'a MobIdentity>,
     fallback_id: Option<&'a str>,
     environment: Option<&'a MobEnvironment>,
-    legacy_water: bool,
-    legacy_fire: bool,
     basis: &'a str,
     approaching: Option<bool>,
 }
@@ -20,8 +19,6 @@ fn add(rows: &mut Vec<Value>, observation: Observation<'_>) {
         identity,
         fallback_id,
         environment,
-        legacy_water,
-        legacy_fire,
         basis,
         approaching,
     } = observation;
@@ -42,17 +39,7 @@ fn add(rows: &mut Vec<Value>, observation: Observation<'_>) {
             }
         }
     }
-    // Legacy false is also the wire default: it cannot establish dry land.
-    if environment.is_none() {
-        if legacy_water {
-            state.entry("touching_water").or_insert(true.into());
-        }
-        if legacy_fire {
-            state.entry("on_fire").or_insert(true.into());
-        }
-    }
-    // A missing tamed field has a legacy false default, so only a positive
-    // observation establishes taming. A name never establishes taming or ownership.
+    // 手懐けは実測trueだけを採用する。名札や環境から所有関係を推定しない。
     let tamed = identity.is_some_and(|value| value.tamed);
     let custom_name = identity.and_then(crate::mob_identity::name);
     if state.is_empty() && !tamed && custom_name.is_none() {
@@ -107,8 +94,6 @@ pub fn project(event: &GameEvent) -> Value {
                 identity: target.identity.as_ref(),
                 fallback_id: target.entity_id.as_deref(),
                 environment: target.environment.as_ref(),
-                legacy_water: target.in_water,
-                legacy_fire: target.on_fire,
                 basis: "visual",
                 approaching: Some(target.approaching),
             },
@@ -122,8 +107,6 @@ pub fn project(event: &GameEvent) -> Value {
                 identity: target.identity.as_ref(),
                 fallback_id: None,
                 environment: target.environment.as_ref(),
-                legacy_water: false,
-                legacy_fire: false,
                 basis: "passive_observation",
                 approaching: None,
             },
@@ -145,8 +128,6 @@ pub fn project(event: &GameEvent) -> Value {
                 identity: Some(identity),
                 fallback_id: None,
                 environment: None,
-                legacy_water: false,
-                legacy_fire: false,
                 basis: "companion_observation",
                 approaching: None,
             },
@@ -163,8 +144,6 @@ pub fn project(event: &GameEvent) -> Value {
                 identity: target.identity.as_ref(),
                 fallback_id: None,
                 environment: target.environment.as_ref(),
-                legacy_water: false,
-                legacy_fire: false,
                 basis: "look_target",
                 approaching: None,
             },
@@ -182,8 +161,6 @@ pub fn visual(target: &VisualThreat) -> Option<Value> {
             identity: target.identity.as_ref(),
             fallback_id: target.entity_id.as_deref(),
             environment: target.environment.as_ref(),
-            legacy_water: target.in_water,
-            legacy_fire: target.on_fire,
             basis: "visual",
             approaching: Some(target.approaching),
         },

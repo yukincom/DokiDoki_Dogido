@@ -35,7 +35,7 @@ class BodyConnectionActionTest {
     @Test void recallTakesPriorityOverLookAndMoveButNotAnotherRecall() throws Exception {
         var source=new Source(); var connection=connection(source); UUID lookId=UUID.randomUUID(),moveId=UUID.randomUUID(),recallId=UUID.randomUUID();
         var look=new BodyConnection.LookRequest(context,201,lookId,100,20,new Point(1,65,2));
-        var move=new BodyConnection.MoveRequest(context,202,moveId,100,100,new Point(2,65,3));
+        var move=new BodyConnection.MoveRequest(context,202,moveId,100,100,new Point(2,65,3),Purpose.INSPECT);
         var recall=new BodyConnection.RecallRequest(context.ownerId(),UUID.randomUUID(),recallId,context.dimension());
         assertEquals("queued",connection.lookAt(look)); assertEquals("body_action_pending",connection.moveTo(move));
         assertEquals("queued",connection.lookAt(look)); // same ID keeps the bridge's idempotent retry contract
@@ -59,7 +59,7 @@ class BodyConnectionActionTest {
         var pending=constructor.newInstance(command,new dogido.fabric.protocol.DogidoEventClient.SessionRef("session",1),UUID.randomUUID(),201L,java.time.Instant.now().plusSeconds(35));
         var field=BodyRequestRuntime.class.getDeclaredField("pending"); field.setAccessible(true); field.set(runtime,pending);
         runtime.tick(); // stale generation is rejected before touching MinecraftClient
-        var move=new BodyConnection.MoveRequest(context,202,UUID.randomUUID(),100,100,new Point(2,65,3));
+        var move=new BodyConnection.MoveRequest(context,202,UUID.randomUUID(),100,100,new Point(2,65,3),Purpose.INSPECT);
         assertEquals("queued",connection.moveTo(move));
         connection.release(move.actionId()); connection.lookAt(look); field.set(runtime,pending); runtime.clear();
         assertEquals("queued",connection.moveTo(move));

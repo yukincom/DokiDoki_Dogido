@@ -233,12 +233,14 @@ def main():
             control["environment_action"] = "speak"
             control["environment_payload"] = {"action":"speak", "speech":"さっき見えた木、気になるな。"}
             gate = threading.Event()
-            control["tts_gates"]["さっき見えた木、気になるな。"] = gate
+            # 表示本文と合成用の読みは異なる。この試験の合成要求自体を止める。
+            control["tts_gate_selector"] = lambda _: gate
             before_calls = len(calls())
             before_seen = len(seen)
             trigger(sid, "surroundings")
             wait_for(lambda: any(r["path"].startswith("/synthesis?") for r in seen[before_seen:]))
             pending = reactions(sid)[-1]
+            assert pending["playback_status"] not in {"completed", "failed", "cancelled"}, pending
             time.sleep(.12)
             send(sid, passive_mobs=[cow], nearby_composition=blocks)
             assert row(base,pending["turn_id"],{"cancelled"}) is None
@@ -246,6 +248,7 @@ def main():
             completed = wait_for(lambda: row(base,pending["turn_id"],{"completed"}))
             assert completed["text"] == "さっき見えた木、気になるな。", completed
             assert len(calls()) == before_calls+1
+            control.pop("tts_gate_selector")
             control.pop("environment_payload")
             close(sid)
             passed.append("ordinary_table_change_during_tts_keeps_the_sampled_utterance")

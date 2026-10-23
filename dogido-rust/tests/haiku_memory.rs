@@ -78,7 +78,7 @@ fn only_whole_explicit_clear_requests_change_lessons() {
 fn feedback_mapping_excludes_ack_adoption_and_praise_lessons() {
     assert_eq!(
         feedback_kind(
-            &json!({"action":"respond","findings":[{"problem":"off_scene"},{"problem":"meter"}]})
+            &json!({"action":"respond","findings":[{"problem":"off_scene"},{"problem":"forced_compression"}]})
         ),
         Some("forced_compress")
     );
@@ -96,7 +96,7 @@ fn feedback_mapping_excludes_ack_adoption_and_praise_lessons() {
         "unrelated",
     ] {
         assert!(
-            feedback_kind(&json!({"action":action,"findings":[{"problem":"meter"}]})).is_none()
+            feedback_kind(&json!({"action":action,"findings":[{"problem":"forced_compression"}]})).is_none()
         );
     }
     assert!(lesson("praise").is_none());
@@ -213,7 +213,7 @@ fn praise_and_repair_preserve_existing_lessons() {
     let f = Fixture::new();
     f.write("long_term/haiku_lessons.jsonl", &[l("scene", 0)]);
     for action in ["praise", "propose_revision"] {
-        f.store().save_feedback(json!({"entry_id":"original","player_text":"あ".repeat(300),"surface_at_time":"pending"}),&json!({"action":action,"findings":[{"problem":"meter"}]}),at()).unwrap();
+        f.store().save_feedback(json!({"entry_id":"original","player_text":"あ".repeat(300),"surface_at_time":"pending"}),&json!({"action":action,"findings":[{"problem":"forced_compression"}]}),at()).unwrap();
     }
     assert_eq!(read(&f.0.join("long_term/haiku_lessons.jsonl")).len(), 1);
     let rows = read(&f.0.join("long_term/haiku_critiques.jsonl"));

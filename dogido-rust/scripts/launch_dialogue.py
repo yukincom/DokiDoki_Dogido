@@ -37,7 +37,7 @@ def check_runtime_files(root):
 
 def model_enabled(settings):
     routes = [settings.llm_route_settings(route) for route in ("chat", "haiku")]
-    active = [route.llm_effective_backend != "noop" for route in routes]
+    active = [route.llm_backend != "noop" for route in routes]
     if settings.llm_enabled and active[0] != active[1]:
         raise ValueError("Rust起動ではchat／haikuの片方だけをnoopにする設定は未対応です。")
     return settings.llm_enabled and all(active)
@@ -56,7 +56,10 @@ def voice_settings(settings, folder):
 
 
 def request_classifier_settings(settings, folder):
-    """相対パスは設定フォルダ基準。未指定は従来動作、有効時の不備は起動失敗にする。"""
+    """相対パスは設定フォルダ基準。未指定は分類なしとし、旧判定へ戻さない。
+
+    分類器を指定した場合は採用記録と実行環境を確認し、不備があれば起動を止める。
+    """
     root = settings.request_classifier_model_root
     python = settings.request_classifier_python
     if root is not None:

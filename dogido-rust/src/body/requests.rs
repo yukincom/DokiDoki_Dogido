@@ -2,7 +2,7 @@
 //! 意図・座標・所有者の推測やモデル呼出しは行わない。実移動と向きの適用は身体Modが所有する。
 use super::contracts::{Context, canonical_uuid};
 use crate::events::{
-    AdapterCommandResult, AdapterCommandResultCommandType, AdapterCommandResultStatus, EventTime,
+    AdapterCommandResult, AdapterCommandResultCommandType, AdapterCommandResultStatus,
 };
 use anyhow::{Result, ensure};
 use chrono::{DateTime, Duration as UtcDuration, Utc};
@@ -217,9 +217,7 @@ impl State {
             {
                 continue;
             }
-            let EventTime::Aware(executed) = r.executed_at else {
-                continue;
-            };
+            let executed = r.executed_at;
             if executed < p.utc || executed > utc || executed >= p.utc + UtcDuration::seconds(35) {
                 continue;
             }
@@ -598,7 +596,7 @@ mod tests {
 
     #[test]
     fn results_must_match_command_kind_id_generation_owner_dimension_and_time() {
-        for changed in 0..8 {
+        for changed in 0..7 {
             let mut f = Fixture::new();
             let command = f.issue(Mode::LookPlayer);
             let mut result = f.result(&command, "succeeded", "facing_target");
@@ -609,8 +607,7 @@ mod tests {
                 3 => result["owner_id"] = json!(OTHER_OWNER),
                 4 => result["dimension"] = json!("minecraft:the_nether"),
                 5 => result["executed_at"] = json!(f.utc - UtcDuration::seconds(1)),
-                6 => result["executed_at"] = json!(f.utc + UtcDuration::seconds(3)),
-                _ => result["executed_at"] = json!("2026-10-23T03:00:01"),
+                _ => result["executed_at"] = json!(f.utc + UtcDuration::seconds(3)),
             }
             assert!(
                 f.observe(vec![result]).is_empty(),

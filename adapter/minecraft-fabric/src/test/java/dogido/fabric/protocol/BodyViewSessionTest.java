@@ -13,7 +13,7 @@ class BodyViewSessionTest {
     private DogidoEventClient client(List<String> used) throws Exception {
         var c=new DogidoEventClient(org.slf4j.LoggerFactory.getLogger("body-view-test"),
             new DogidoEventClient.ConnectionSettings(true,"http://127.0.0.1:1",""),cmd->{},(cmd,ref)->{},()->false,
-            null,null,(cmd,ref)->{},used::add);
+            null,null,(cmd,ref)->{},used::add,null);
         var field=DogidoEventClient.class.getDeclaredField("sessionId");field.setAccessible(true);field.set(c,"session");return c;
     }
     private BodyViewProtocol.State state(DogidoEventClient c) throws Exception {

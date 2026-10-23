@@ -203,9 +203,7 @@ def main():
 
     with token_fixture("unavailable") as (args, token_dir), fixture(extra_args=args) as (base,process,log,control,seen,gate,drafting,checks,send,hud,rows,stored,folder):
         def no_dictionary(text,prompt,n):
-            if "段階: after_validation" in prompt:
-                raise AssertionError("unresolved reading must not trigger another model call")
-            return edit(text,replacement="桜色")
+            raise AssertionError("verbatim edit must not call a model")
         calls=install(control,no_dictionary)
         sid=ready(base,send,rows);original=stored(sid)
         r=finish(base,send,sid,"上五を『桜色』にして")

@@ -10,7 +10,7 @@
 | `catalog_tools/` | 資料整備用の検索・カタログCLI/API | [詩の基礎知識](../reference/language_education_and_poetry/README.md)・[Minecraft資料](../reference/minecraft_technical/README.md)を参照 |
 | [prompt_lab](prompt_lab/README.md) | Rust本番経路の反応確認と、比較用のプロンプト候補 | 本体の正本へ自動反映しない。試験条件は各READMEを参照 |
 | [composite_structure_recognition](composite_structure_recognition/README.md) | 橋・飛び石・海中トンネルなどの独立認識試作 | `python -m pytest dev_tools/composite_structure_recognition/test_recognizer.py -q` |
-| [request_classifier](request_classifier/README.md) | ModernBERT-Jaの依頼5分類データ・独立学習・評価 | v1.7再評価・3 seed比較の記録。採用されたv1.9の本体接続は[接続記録](../docs/2026-10-15-modernbert-integration-preparation.md)を参照 |
+| [request_classifier](request_classifier/README.md) | ModernBERT-Jaの旧5分類データ・独立学習・評価の記録 | v1.7再評価・3 seed比較を保持。現行本体は元seed42・23分類を採用し、正本と接続範囲は[2026-10-23の接続記録](../docs/2026-10-23-modernbert-23class-integration.md)を参照 |
 | [body_view_probe](body_view_probe/README.md) | 身体視点の撮影・座標枠・192px画像の単発試験 | 受信待機の確認後に撮影。画像確認後に既存Gemmaへ一回送信 |
 | [vision_entry_probe](vision_entry_probe/README.md) | プレイヤーの視野進入の座標先読み・採点 | 既存HTTP診断を読み取る独立試験。実発話の前倒しは未接続 |
 

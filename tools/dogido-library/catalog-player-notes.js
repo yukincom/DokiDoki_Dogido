@@ -1,3 +1,4 @@
+/* カタログの個人メモと未追加の入力を保持する。保存済みの読み資料は保全し、読み訂正の編集には使わない。 */
 (function(root){
   'use strict';
   const LIMIT=10, PREFIX='dogido-library:catalog-player-notes:v1:';
@@ -12,7 +13,7 @@
           if(raw!==null){
             const value=JSON.parse(raw);
             if(!value||!Array.isArray(value.keys)||value.keys.length>LIMIT||value.keys.some(k=>typeof k!=='string'))throw new Error('Invalid notes');
-            // Preserve the old single reading without guessing its target word.
+            // 過去に保存した個人メモ内の読みを失わないための読込み。現在の読み訂正は専用APIが所有する。
             const readings=value.readings??(typeof value.reading==='string'?(value.reading?[{word:'',reading:value.reading}]:[]):null);
             if(!Array.isArray(readings)||readings.some(r=>!r||typeof r.word!=='string'||typeof r.reading!=='string'))throw new Error('Invalid readings');
             data={keys:[...value.keys],readings:readings.map(r=>({word:r.word,reading:r.reading}))};
@@ -38,9 +39,6 @@
       add(key,value){const data=record(key);if(!data||typeof value!=='string'||!value.trim()||data.keys.length>=LIMIT)return false;data.keys.push(value.trim());drafts.delete(key);return persist(key,data);},
       edit(key,index,value){const data=record(key);if(!data||!Number.isInteger(index)||index<0||index>=data.keys.length||typeof value!=='string')return false;data.keys[index]=value;return persist(key,data);},
       remove(key,index){const data=record(key);if(!data||!Number.isInteger(index)||index<0||index>=data.keys.length)return false;data.keys.splice(index,1);return persist(key,data);},
-      addReading(key,word,reading){const data=record(key);if(!data||typeof word!=='string'||typeof reading!=='string'||!word.trim()||!reading.trim())return false;data.readings.push({word:word.trim(),reading:reading.trim()});return persist(key,data);},
-      editReading(key,index,field,value){const data=record(key);if(!data||!Number.isInteger(index)||index<0||index>=data.readings.length||!['word','reading'].includes(field)||typeof value!=='string')return false;data.readings[index][field]=value;return persist(key,data);},
-      removeReading(key,index){const data=record(key);if(!data||!Number.isInteger(index)||index<0||index>=data.readings.length)return false;data.readings.splice(index,1);return persist(key,data);}
     };
   }
   const api={create,LIMIT,PREFIX};

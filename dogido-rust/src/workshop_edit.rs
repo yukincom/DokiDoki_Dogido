@@ -536,7 +536,7 @@ mod tests {
         unknown[0].reading_text.clear();
         let first = Pending::stage(&base, &base, unknown, 0).unwrap();
         assert_eq!(
-            crate::workshop::inspect(&first.lines, &["reading".into(), "meter".into()])["lines"][0]
+            crate::workshop::inspect(&first.lines, &["reading".into()])["lines"][0]
                 ["reading_status"],
             "unavailable"
         );

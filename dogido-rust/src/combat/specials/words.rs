@@ -1,5 +1,4 @@
 use super::*;
-use crate::events::EventTime;
 use std::{cmp::Ordering, sync::LazyLock};
 
 use crate::entry_catalog::BIOMES;
@@ -158,27 +157,17 @@ pub(super) fn sequence(e: &GameEvent) -> String {
         .unwrap_or_default()
 }
 pub(super) fn date(e: &GameEvent) -> String {
-    match &e.observed_at {
-        EventTime::Aware(t) => format!(
-            "{}{}{}",
-            t.format("%Y-%m-%dT%H:%M:%S"),
-            if t.timestamp_subsec_micros() == 0 {
-                String::new()
-            } else {
-                format!(".{:06}", t.timestamp_subsec_micros())
-            },
-            t.format("%:z")
-        ),
-        EventTime::Naive(t) => format!(
-            "{}{}",
-            t.format("%Y-%m-%dT%H:%M:%S"),
-            if t.and_utc().timestamp_subsec_micros() == 0 {
-                String::new()
-            } else {
-                format!(".{:06}", t.and_utc().timestamp_subsec_micros())
-            }
-        ),
-    }
+    let t = &e.observed_at;
+    format!(
+        "{}{}{}",
+        t.format("%Y-%m-%dT%H:%M:%S"),
+        if t.timestamp_subsec_micros() == 0 {
+            String::new()
+        } else {
+            format!(".{:06}", t.timestamp_subsec_micros())
+        },
+        t.format("%:z")
+    )
 }
 pub(super) fn massive(e: &GameEvent, mode: Mode) -> String {
     if mode == Mode::SuppressedPanic {

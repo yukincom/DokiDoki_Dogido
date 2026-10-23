@@ -15,16 +15,10 @@ public final class BodyConnection {
         public static Hearing unavailable() { return new Hearing(false,-1,List.of(),false); }
     }
     public record Frame(JsonObject observation, Hearing hearing, JsonObject autonomy) {
-        public Frame(JsonObject observation, Hearing hearing) { this(observation,hearing,BodyInspectProtocol.unavailable("not_sampled")); }
         static Frame unavailable(String reason) { return new Frame(BodyConnection.unavailable(reason),Hearing.unavailable(),BodyInspectProtocol.unavailable(reason)); }
     }
     public record MoveRequest(BodyInspectProtocol.Context context, long sequence, UUID actionId,
-            long observedServerTick, int validForTicks, BodyInspectProtocol.Point destination, BodyInspectProtocol.Purpose purpose) {
-        public MoveRequest(BodyInspectProtocol.Context context,long sequence,UUID actionId,
-                long observedServerTick,int validForTicks,BodyInspectProtocol.Point destination) {
-            this(context,sequence,actionId,observedServerTick,validForTicks,destination,BodyInspectProtocol.Purpose.INSPECT);
-        }
-    }
+            long observedServerTick, int validForTicks, BodyInspectProtocol.Point destination, BodyInspectProtocol.Purpose purpose) {}
     /** 注視点は移動先ではない。同じaction配送で所有者・世代・期限・重複を検査する。 */
     public record LookRequest(BodyInspectProtocol.Context context,long sequence,UUID actionId,
             long observedServerTick,int validForTicks,BodyInspectProtocol.Point target) {}

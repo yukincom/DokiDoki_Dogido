@@ -13,7 +13,6 @@ pub(super) fn handles(action: &str) -> bool {
             | "inspect"
             | "unrelated"
             | "acknowledge_meaning"
-            | "continue_workshop"
     )
 }
 

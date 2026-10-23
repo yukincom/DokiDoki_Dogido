@@ -423,8 +423,3 @@ pub fn short_material_entries(materials: &Value) -> Vec<(String, String)> {
     }
     out
 }
-
-/// material_visibilityで明示的にfalseとされた文脈だけを隠す。旧記録などで欄がない場合は表示可能とする。
-pub fn material_context_visible(materials: &Value, context: &str) -> bool {
-    materials["material_visibility"][context] != false
-}

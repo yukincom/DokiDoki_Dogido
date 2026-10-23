@@ -111,12 +111,11 @@ fn repeated_death_after_end_does_not_renew_name_ttl_and_current_is_not_presence(
     tick(&mut engine, &first, 0, true);
     let updates = engine.take_name_updates();
     assert_eq!(updates.confirmed_types, ["zombie"]);
-    memory.observe(&first, &updates, &TestLabels).unwrap();
+    memory.observe(&first, &updates, &TestLabels);
     let end = frame(1000, "combat_ended", json!({}));
     tick(&mut engine, &end, 1000, true);
     memory
-        .observe(&end, &engine.take_name_updates(), &TestLabels)
-        .unwrap();
+        .observe(&end, &engine.take_name_updates(), &TestLabels);
     let repeat = frame(
         5000,
         "hostile_defeated",
@@ -125,16 +124,14 @@ fn repeated_death_after_end_does_not_renew_name_ttl_and_current_is_not_presence(
     tick(&mut engine, &repeat, 5000, true);
     let updates = engine.take_name_updates();
     assert!(updates.confirmed_types.is_empty());
-    memory.observe(&repeat, &updates, &TestLabels).unwrap();
+    memory.observe(&repeat, &updates, &TestLabels);
     let inside = memory
-        .snapshot(&frame(10000, "status_snapshot", json!({})), &TestLabels)
-        .unwrap();
+        .snapshot(&frame(10000, "status_snapshot", json!({})), &TestLabels);
     assert_eq!(inside.name_context.types, ["zombie"]);
     assert!(inside.current.visual_types.is_empty() && inside.current.hearing_types.is_empty());
     assert!(
         memory
             .snapshot(&frame(10001, "status_snapshot", json!({})), &TestLabels)
-            .unwrap()
             .name_context
             .types
             .is_empty()
@@ -279,10 +276,9 @@ fn consumed_ids_are_removed_by_observation_memory_even_when_name_hook_is_empty()
         o.observe(&event, at);
         let update = o.take_name_updates();
         assert_eq!(update.confirmed_types.len(), usize::from(at == 0));
-        memory.observe(&event, &update, &TestLabels).unwrap();
+        memory.observe(&event, &update, &TestLabels);
         let snap = memory
-            .snapshot(&frame(at + 1, "status_snapshot", json!({})), &TestLabels)
-            .unwrap();
+            .snapshot(&frame(at + 1, "status_snapshot", json!({})), &TestLabels);
         assert_eq!(snap.recent.visual_types, ["skeleton"]);
     }
 }
@@ -321,14 +317,14 @@ fn consumed_id_keeps_other_and_unidentified_same_species_memos() {
             ]
         }),
     );
-    memory.observe(&seen, &NameOutcomeUpdate::default(), &TestLabels).unwrap();
+    memory.observe(&seen, &NameOutcomeUpdate::default(), &TestLabels);
     let died = frame(
         1000,
         "hostile_defeated",
         json!({"combat":{"hostile_outcomes":[outcome("dead","zombie","player_kill")]}}),
     );
-    memory.observe(&died, &NameOutcomeUpdate::default(), &TestLabels).unwrap();
-    let snapshot = memory.snapshot(&died, &TestLabels).unwrap();
+    memory.observe(&died, &NameOutcomeUpdate::default(), &TestLabels);
+    let snapshot = memory.snapshot(&died, &TestLabels);
     assert_eq!(snapshot.recent.visual_memos.len(), 2);
     assert!(snapshot.recent.visual_memos.iter().all(|v| v.dedupe_key != "visual:dead"));
     assert_eq!(snapshot.recent.hearing_memos.len(), 2);

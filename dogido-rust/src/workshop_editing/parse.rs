@@ -80,9 +80,6 @@ pub(super) fn explicit_line(s: &str) -> Option<usize> {
         None
     }
 }
-pub(super) fn explicit_discussion(s: &str) -> bool {
-    RE["explicit_discussion"].is_match(s)
-}
 pub(super) fn fragment_prefix(s: &str) -> String {
     RE["fragment_prefix"].replace(s, "").into_owned()
 }

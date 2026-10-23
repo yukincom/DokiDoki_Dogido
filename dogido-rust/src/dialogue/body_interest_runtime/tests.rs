@@ -136,7 +136,7 @@ fn can_revisit_after_thirty_seconds(d: &Dialogue) -> bool {
 }
 
 #[tokio::test]
-async fn same_event_cancellation_is_applied_before_recording_arrival() {
+async fn cancellation_is_applied_before_recording_arrival() {
     for transition in ["epoch", "unavailable", "pause", "input", "mode"] {
         let mock = Mock::new(Duration::ZERO,INSPECT).await;
         let d = server(&mock,true);
@@ -150,7 +150,7 @@ async fn same_event_cancellation_is_applied_before_recording_arrival() {
             }
             "unavailable" => receipt["body_observation"] = json!({"version":3,"status":"unavailable","reason":"not_bound"}),
             "pause" => receipt["world"]["game_paused"] = json!(true),
-            "input" => receipt["meta"] = json!({"user_text":"こんにちは"}),
+            "input" => { d.submit(Some("s"), "こんにちは", "text"); },
             _ => receipt["body_autonomy"]["mode"] = json!("direct"),
         }
         assert_eq!(observe(&d,receipt)["commands"],json!([]),"{transition}");

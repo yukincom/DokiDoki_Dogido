@@ -30,7 +30,6 @@ pub struct Decision {
     pub stop_audio: bool,
     pub chat_allowed: bool,
     pub dimension_changed: bool,
-    pub input_handled: bool,
 }
 /// 1セッションあたりの脅威状態、被弾履歴、および警告インターバルを保持・管理する。
 /// 完全観測と部分通知を厳密に区別し、通知ペイロードの情報省略を「安全になった」と誤認・過小評価しないよう保護する。
@@ -183,10 +182,6 @@ impl Engine {
         {
             self.low_health_armed = true;
         }
-        let quiet = event.meta.user_text.as_deref().is_some_and(wants_quiet);
-        if quiet {
-            self.shut_up_count = self.shut_up_count.saturating_add(1);
-        }
         if complete {
             self.partial_danger = false;
             self.update_stalled(&e, now);
@@ -251,7 +246,6 @@ impl Engine {
                         .latest_full_at
                         .is_some_and(|at| now.saturating_sub(at) <= 10_000)),
             dimension_changed,
-            input_handled: quiet,
         };
         if dimension_changed {
             d.stop_audio = true;
@@ -330,7 +324,6 @@ impl Engine {
             stop_audio: false,
             chat_allowed: false,
             dimension_changed: false,
-            input_handled: true,
         };
         if let Some(speech) = query {
             self.deliver(event, now, speech, &mut d);
