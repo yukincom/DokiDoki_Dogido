@@ -1,8 +1,8 @@
 //! 未採用の行差分Pendingと、採用時のCAS・追記保存の契約。
 //! 発話から案を作るworkshop_editingとは分担し、元句一致・対象外不変・読みをここで再検証する。
-//! 実際にpendingを変更し保存を呼ぶのはdialogue/workshop_edits。生成案の採用前検証も同じ境界を使う。
+//! pendingの変更はdialogue/workshop_editsが所有し、本棚の直接編集も共通の追記境界を使う。
 use crate::haiku_record::{Emission, HaikuLine, MemoryStore, SAVE_LOCK, append_line, locked_file};
-use anyhow::{Result, ensure};
+use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::io::{BufRead, BufReader};
@@ -265,86 +265,95 @@ impl MemoryStore {
         pending: &Pending,
         parent: Option<&str>,
     ) -> Result<String> {
-        self.save_revision(original, pending, parent, false)
+        self.save_current_revision(original, pending, parent)
     }
-    /// Text windows share the source poem; reject an edit based on an older head.
+    /// 同じ保存句を共有する画面・本体の編集を、最新の親版へだけ保存する。
     pub fn save_current_revision(
         &self,
         original: &Emission,
         pending: &Pending,
         parent: Option<&str>,
     ) -> Result<String> {
-        self.save_revision(original, pending, parent, true)
-    }
-    fn save_revision(
-        &self,
-        original: &Emission,
-        pending: &Pending,
-        parent: Option<&str>,
-        require_latest: bool,
-    ) -> Result<String> {
         pending.validate(&pending.base)?;
+        self.save_current_revision_record(
+            &original.entry(),
+            &json!({"lines":pending.base}),
+            &pending.record(original, parent),
+        )
+    }
+    /// 本体・相談室・本棚の同じ句を、最新の保存版へだけ追記する共通境界。
+    /// originalは元entry、baseは編集開始時の記録、recordは呼出側が組み立てたrevision。
+    /// プロセス内→固定句→実ファイルの順でロックし、削除・元句・版を再照合する。
+    /// 本棚の個人メモや写真のstateは触らず、手入力の内容を意味で審査しない。
+    pub(crate) fn save_current_revision_record(
+        &self,
+        original: &Value,
+        base: &Value,
+        record: &Value,
+    ) -> Result<String> {
+        use crate::haiku_record::verse::record_surfaces;
+        let entry_id = original["id"].as_str().context("invalid_original_id")?;
+        let revision_id = record["id"].as_str().context("invalid_revision_id")?;
+        ensure!(record["haiku_id"] == entry_id, "revision_poem_mismatch");
+        ensure!(
+            record["parent_revision_id"].is_null() || record["parent_revision_id"].is_string(),
+            "invalid_parent_revision"
+        );
+        let parent = record["parent_revision_id"].as_str();
         let _guard = SAVE_LOCK
             .lock()
             .map_err(|_| anyhow::anyhow!("haiku save mutex poisoned"))?;
         let _poems = crate::poem_trash::lock(self.root())?;
         ensure!(
-            !crate::poem_trash::is_deleted(self.root(), &original.entry_id())?,
+            !crate::poem_trash::is_deleted(self.root(), entry_id)?,
             "poem_deleted"
         );
-        let mut file = locked_file(&self.root().join("long_term/haiku_revisions.jsonl"))?;
+        let path = self.root().join("long_term/haiku_revisions.jsonl");
+        crate::poem_trash::regular(&path)?;
+        let mut file = locked_file(&path)?;
         let rows: Vec<Value> = BufReader::new(&file)
             .lines()
             .map(|l| Ok(serde_json::from_str(&l?)?))
             .collect::<Result<_>>()?;
-        let record = pending.record(original, parent);
-        if let Some(existing) = rows.iter().find(|r| r["id"] == pending.id) {
+        if let Some(existing) = rows.iter().find(|r| r["id"] == revision_id) {
             // A retry after a successful append/sync error must not append twice.
             let mut expected = record.clone();
             expected["created_at"] = existing["created_at"].clone();
             ensure!(expected == *existing, "revision_id_conflict");
-            if require_latest {
-                ensure!(
-                    rows.iter()
-                        .rev()
-                        .find(|r| r["haiku_id"] == original.entry_id())
-                        .is_some_and(|r| r["id"] == pending.id),
-                    "saved_poem_changed"
-                );
-            }
-            return Ok(pending.id.clone());
-        }
-        if require_latest {
-            let latest = rows
-                .iter()
-                .rev()
-                .find(|r| r["haiku_id"] == original.entry_id());
             ensure!(
-                latest.and_then(|r| r["id"].as_str()) == parent,
+                rows.iter()
+                    .rev()
+                    .find(|r| r["haiku_id"] == entry_id)
+                    .is_some_and(|r| r["id"] == revision_id),
                 "saved_poem_changed"
             );
-            let entries = self.local_poem_rows("haiku_entries.jsonl")?;
-            ensure!(
-                entries.iter().any(|r| r["id"] == original.entry_id()
-                    && r["lines"] == json!(original.prepared.lines)),
-                "source_poem_changed"
-            );
+            return Ok(revision_id.to_owned());
         }
-        if let Some(parent) = parent {
-            ensure!(
-                rows.iter().any(|r| r["id"] == parent
-                    && r["haiku_id"] == original.entry_id()
-                    && r["lines"] == json!(pending.base)),
-                "parent_revision_mismatch"
-            );
-        } else {
-            ensure!(
-                pending.base == original.prepared.lines,
-                "missing_parent_revision"
-            );
-        }
-        append_line(&mut file, &record)?;
-        Ok(pending.id.clone())
+        let latest = rows.iter().rev().find(|r| r["haiku_id"] == entry_id);
+        ensure!(
+            latest.is_none_or(|row| row["id"].is_string()),
+            "invalid_saved_revision"
+        );
+        ensure!(
+            latest.and_then(|r| r["id"].as_str()) == parent,
+            "saved_poem_changed"
+        );
+        let entries = crate::poem_trash::raw_rows(self.root(), "haiku_entries.jsonl")?;
+        let sources: Vec<_> = entries.iter().filter(|r| r["id"] == entry_id).collect();
+        ensure!(sources.len() == 1, "source_poem_changed");
+        let source = sources[0];
+        ensure!(
+            source["lines"] == original["lines"]
+                && record_surfaces(source) == record_surfaces(original),
+            "source_poem_changed"
+        );
+        let head = latest.unwrap_or(source);
+        ensure!(
+            head["lines"] == base["lines"] && record_surfaces(head) == record_surfaces(base),
+            "parent_revision_mismatch"
+        );
+        append_line(&mut file, record)?;
+        Ok(revision_id.to_owned())
     }
 }
 
@@ -542,6 +551,9 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("dogido-edit-{}", uuid::Uuid::new_v4()));
         let store = MemoryStore::new(&dir);
         let original = emission();
+        store
+            .save_agent_haiku("saved", "player", &original)
+            .unwrap();
         let base = &original.prepared.lines;
         let first = Pending::stage(base, base, replace(base.clone(), 0, "さくらいろ"), 0).unwrap();
         let id = store.save_player_revision(&original, &first, None).unwrap();

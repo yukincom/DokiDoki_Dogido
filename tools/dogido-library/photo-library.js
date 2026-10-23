@@ -34,7 +34,7 @@
     document.dispatchEvent(new Event('dogido-album-rendered'));
   }
   function updateTitleFields(id,source){
-    document.querySelectorAll('[data-photo-title]').forEach(input=>{if(input.dataset.photoTitle===id&&input!==source)input.value=model.title(id);});
+    document.querySelectorAll('[data-photo-title]').forEach(input=>{if(input.dataset.photoTitle===id&&input!==source&&input.value!==model.title(id))input.value=model.title(id);});
     document.querySelectorAll('[data-photo-label]').forEach(label=>{if(label.dataset.photoLabel===id)label.textContent=model.displayTitle(id);});
     document.querySelectorAll('[data-page-photo]').forEach(button=>{if(button.dataset.pagePhoto===id)button.setAttribute('aria-label',model.displayTitle(id));});
   }

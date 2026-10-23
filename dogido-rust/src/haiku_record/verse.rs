@@ -3,6 +3,36 @@
 use super::HaikuLine;
 use anyhow::{Result, ensure};
 
+/// 保存行の表示表記を取り出す。正規行がない旧記録だけ、既存の区切りを使う。
+/// 読みの推定や句の品質判定はせず、本棚の表示と保存時の元句照合で共有する。
+pub(crate) fn record_surfaces(row: &serde_json::Value) -> Vec<String> {
+    let lines: Vec<_> = row["lines"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|line| {
+            line["surface_text"]
+                .as_str()
+                .or(line["reading_text"].as_str())
+                .map(str::to_owned)
+        })
+        .collect();
+    if !lines.is_empty() {
+        return lines;
+    }
+    row["revised_surface_text"]
+        .as_str()
+        .or(row["revised_text"].as_str())
+        .or(row["surface_text"].as_str())
+        .or(row["text"].as_str())
+        .unwrap_or("")
+        .split(['\n', '/', '／'])
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned)
+        .collect()
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LinePosition {
     Upper,

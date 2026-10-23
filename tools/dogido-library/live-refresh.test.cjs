@@ -32,3 +32,7 @@ for(const reason of ['input','dirty','dialog','hidden'])test('pending refresh de
 test('old response cannot undo a completed save',async()=>{
  const f=fixture(),p=f.start();f.scope.revision=5;f.resolve(2);await p;assert.equal(f.scope.M.poems.length,0);
 });
+test('an open poem editor retains native input history even after saving and blurring',async()=>{
+ const f=fixture();f.scope.window.DogidoPoemEditor={isOpen:()=>true};await f.start();
+ assert.equal(f.scope.M.poems.length,0);
+});

@@ -219,43 +219,12 @@ impl MemoryStore {
         );
         ensure!(!revision.text.trim().is_empty(), "empty_revision");
         validate_lines(&revision.text, &revision.source, &revision.lines)?;
-        let _guard = SAVE_LOCK
-            .lock()
-            .map_err(|_| anyhow::anyhow!("haiku save mutex poisoned"))?;
-        let _poems = crate::poem_trash::lock(self.root())?;
-        ensure!(
-            !crate::poem_trash::is_deleted(self.root(), &revision.original.entry_id())?,
-            "poem_deleted"
-        );
-        let mut file = locked_file(&self.root().join("long_term/haiku_revisions.jsonl"))?;
-        let mut rows = vec![];
-        for line in BufReader::new(&file).lines() {
-            if let Ok(r) = serde_json::from_str::<Value>(&line?) {
-                rows.push(r);
-            }
-        }
-        if let Some(old) = rows.iter().find(|r| r["id"] == revision.id) {
-            ensure!(*old == revision.record(), "whole_revision_id_conflict");
-            return Ok(());
-        }
-        if let Some(parent) = &revision.parent {
-            let p = rows
-                .iter()
-                .filter(|r| r["id"] == *parent)
-                .collect::<Vec<_>>();
-            ensure!(
-                p.len() == 1
-                    && p[0]["haiku_id"] == revision.original.entry_id()
-                    && p[0]["lines"] == json!(revision.base),
-                "parent_revision_mismatch"
-            );
-        } else {
-            ensure!(
-                revision.base == revision.original.prepared.lines,
-                "parent_revision_required"
-            );
-        }
-        append_line(&mut file, &revision.record())
+        self.save_current_revision_record(
+            &revision.original.entry(),
+            &json!({"lines":revision.base}),
+            &revision.record(),
+        )?;
+        Ok(())
     }
 }
 

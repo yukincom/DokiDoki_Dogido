@@ -30,9 +30,8 @@ def main():
                 assert incoming["tool_choice"] == "none"
                 assert len(tool_results) == 1
                 result = json.loads(tool_results[0]["content"])
-                assert set(result["checks"]) == {"reading", "meter", "source"}, result
+                assert set(result["checks"]) == {"reading", "source"}, result
                 assert [r["reading_text"] for r in result["lines"]] == LINES, result
-                assert [r["mora_count"] for r in result["lines"]] == [5, 7, 5], result
                 assert all(r["source_status"] == "recorded" for r in result["lines"]), result
                 assistant = next(m for m in incoming["messages"] if m.get("tool_calls"))
                 assert assistant["tool_calls"][0]["id"] == tool_results[0]["tool_call_id"]
@@ -45,19 +44,19 @@ def main():
                 with urllib.request.urlopen(request, timeout=45) as response:
                     return json.load(response)
             if tool_results:
-                message = {"role":"assistant","content":json.dumps(step("読みと音数と出典を確認して",
-                    speech="読みを確認したで。五・七・五で、三行とも出典の記録があるわ。"), ensure_ascii=False)}
+                message = {"role":"assistant","content":json.dumps(step("読みと出典を確認して",
+                    speech="読みを確認したで。三行とも出典の記録があるわ。"), ensure_ascii=False)}
             else:
                 message = {"role":"assistant","content":None,"tool_calls":[{
                     "id":"inspection-1","type":"function","function":{"name":"inspect_verse",
-                        "arguments":json.dumps({"checks":["reading","meter","source"]})}}]}
+                        "arguments":json.dumps({"checks":["reading","source"]})}}]}
             return {"id":"inspection-smoke","model":"fixture","object":"chat.completion","created":0,
                     "choices":[{"index":0,"message":message,
                         "finish_reason":"tool_calls" if not tool_results else "stop"}]}
         control["completion_override"] = completion
         sid = ready(base, send, rows)
         before = stored(sid)
-        turn = submit(base, sid, "この句の読みと音数と出典を確認して")
+        turn = submit(base, sid, "この句の読みと出典を確認して")
         reply = wait_with_observations(base, send, sid, turn)
         assert reply["playback_status"] == "completed", (reply, log.read_text()[-4000:])
         assert results and reply["workshop_steps"][0]["action"] == "inspect", reply
@@ -67,7 +66,7 @@ def main():
         if not args.base_url:
             assert len(calls) == 2
         print(json.dumps({"passed":True,"model":"live" if args.base_url else "mock",
-            "model_calls":len(calls),"checks":results[0]["checks"],"mora_counts":[5,7,5],
+            "model_calls":len(calls),"checks":results[0]["checks"],
             "reply":reply["text"],"verse_unchanged":True}, ensure_ascii=False))
 
 

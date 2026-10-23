@@ -113,12 +113,14 @@
     const data=await response.json();if(!response.ok)throw Error(data.detail||'操作できませんでした。');return data;
   }
   async function save(){
+    if(!readings.hasChanges())return;
     readings.validate();
     for(const edit of readings.changes()){
       const data=await request('/api/readings',edit.method,edit.body);readings.accept(edit,data);
     }
     readingNotice='保存しました。次の読み上げから反映されます。';
-    if(readingPageOpen())renderReadingsPage();else decorate();
+    // 保存のたびに入力欄を破棄すると標準undoとカーソル位置が失われる。
+    if(readingPageOpen())document.querySelector('[data-reading-page-status]').textContent=readingNotice;else decorate();
     changed();
   }
   window.DogidoReadings={hasChanges:()=>readings.hasChanges(),save,renderPage:renderReadingsPage,hasInput:()=>Boolean(addition.surface.trim()||addition.reading.trim()),busy:()=>busy};

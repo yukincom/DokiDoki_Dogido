@@ -1,5 +1,6 @@
 //! ゲーム非依存の本棚。loopback専用で、他のUIへの導線は作らない。
 mod research;
+mod poem_edit;
 pub mod captures;
 pub mod store;
 #[cfg(test)]
@@ -50,7 +51,8 @@ impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let reason = self.0.to_string();
         let (status, detail) = match reason.as_str() {
-            "changed" | "reading_changed" => (
+            "changed" | "reading_changed" | "saved_poem_changed" | "source_poem_changed"
+            | "parent_revision_mismatch" | "revision_id_conflict" => (
                 StatusCode::CONFLICT,
                 "別の画面から更新されています。入力を控えて本棚を開き直してください。",
             ),
@@ -61,7 +63,7 @@ impl IntoResponse for ApiError {
             ),
             "memory_disabled" => (
                 StatusCode::CONFLICT,
-                "本体設定で記憶が無効になっています。読み訂正は保存できません。",
+                "本体設定で記憶が無効になっています。保存できません。",
             ),
             _ => (
                 StatusCode::BAD_REQUEST,
@@ -165,6 +167,12 @@ async fn boot(State(app): State<Arc<App>>) -> Result<Response, ApiError> {
 async fn edit(State(app): State<Arc<App>>, Json(value): Json<Value>) -> ApiResult {
     Ok(Json(blocking(move || app.store.edit(&value)).await?))
 }
+async fn edit_poem(State(app): State<Arc<App>>, Json(edit): Json<poem_edit::Edit>) -> ApiResult {
+    Ok(Json(blocking(move || {
+        ensure!(app.memory_enabled, "memory_disabled");
+        poem_edit::save(&app.store, &edit)
+    }).await?))
+}
 async fn photos(State(app): State<Arc<App>>, Json(value): Json<Value>) -> ApiResult {
     Ok(Json(blocking(move || app.store.photo_edit(&value)).await?))
 }
@@ -239,6 +247,8 @@ async fn photo_image(
     Ok(([(header::CONTENT_TYPE, "image/png")], bytes).into_response())
 }
 const PUBLIC: &[&str] = &[
+    "poem-editor.js",
+    "poem-editor.css",
     "index.html",
     "styles.css",
     "photo-layout.css",
@@ -296,6 +306,7 @@ fn router(app: Arc<App>) -> Router {
     Router::new()
         .route("/bootstrap.js", get(boot))
         .route("/api/library", get(library_snapshot).put(edit))
+        .route("/api/poems/current", put(edit_poem))
         .route("/api/poems/export", axum::routing::post(export_poems))
         .route("/api/photos", put(photos))
         .route("/api/readings", put(reading).delete(remove_reading))

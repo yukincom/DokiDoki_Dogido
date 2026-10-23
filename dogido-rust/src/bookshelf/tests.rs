@@ -3,6 +3,400 @@ use crate::haiku_record::MemoryStore;
 use serde_json::json;
 use std::fs;
 
+fn poem_edit_request(id: &str, parent: Option<&str>, expected: &[&str], lines: [&str; 3]) -> Value {
+    json!({"id":id,"requestId":uuid::Uuid::new_v4().to_string(),
+        "expectedRevisionId":parent,"expectedLines":expected,"lines":lines})
+}
+fn save_poem(store: &store::Store, value: Value) -> anyhow::Result<Value> {
+    poem_edit::save(store, &serde_json::from_value(value)?)
+}
+
+#[test]
+fn bookshelf_poem_edit_keeps_original_history_metadata_and_source_isolation() {
+    let f = Fixture::new();
+    let dir = f.poem("root", "p");
+    let other = f.poem("other", "p");
+    let store = f.store();
+    store
+        .edit(&json!({"revision":0,"section":"poems","key":"root:p",
+        "value":{"favorite":true,"note":"そのまま"}}))
+        .unwrap();
+    let original = fs::read(dir.join("long_term/haiku_entries.jsonl")).unwrap();
+    let history = fs::read(dir.join("long_term/haiku_revisions.jsonl")).unwrap();
+    let other_history = fs::read(other.join("long_term/haiku_revisions.jsonl")).unwrap();
+    let metadata = fs::read(store.memory.join("bookshelf/state.json")).unwrap();
+    let request = poem_edit_request(
+        "root:p",
+        Some("r1"),
+        &["ひるのやま", "とりのこえする", "もりのみち"],
+        ["　未知の漢字🙂  ", "a / b", "字数には合わせない"],
+    );
+    let result = save_poem(&store, request.clone()).unwrap();
+    assert_eq!(result["poem"]["lines"], request["lines"]);
+    assert_eq!(result["poem"]["originalLines"][0], "あさのやま");
+    assert_eq!(result["poem"]["history"].as_array().unwrap().len(), 2);
+    assert_eq!(result["poem"]["current"]["source"], "bookshelf_explicit");
+    assert!(
+        result["poem"]["current"]["lines"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|line| line["reading_text"] == "" && line["source_atom_ids"] == json!([]))
+    );
+    assert_eq!(
+        fs::read(dir.join("long_term/haiku_entries.jsonl")).unwrap(),
+        original
+    );
+    assert!(
+        fs::read(dir.join("long_term/haiku_revisions.jsonl"))
+            .unwrap()
+            .starts_with(&history)
+    );
+    assert_eq!(
+        fs::read(other.join("long_term/haiku_revisions.jsonl")).unwrap(),
+        other_history
+    );
+    assert_eq!(
+        fs::read(store.memory.join("bookshelf/state.json")).unwrap(),
+        metadata
+    );
+    assert_eq!(save_poem(&store, request).unwrap(), result);
+}
+
+fn bookshelf_emission() -> crate::haiku_record::Emission {
+    use crate::haiku_record::{HaikuLine, LinePosition, PreparedEmission};
+    let lines: Vec<_> = ["さくらいろ", "くろいおのもつ", "あさひかる"]
+        .iter()
+        .enumerate()
+        .map(|(i, s)| {
+            let (id, position, name) = LinePosition::ALL[i].metadata();
+            HaikuLine {
+                line_id: id.into(),
+                line_index: i,
+                position: position.into(),
+                canonical_name: name.into(),
+                surface_text: (*s).into(),
+                reading_text: (*s).into(),
+                source_atom_ids: vec![format!("atom:{i}")],
+                source_atoms: vec![],
+                provenance: "generated".into(),
+            }
+        })
+        .collect();
+    PreparedEmission {
+        text: "元の句".into(),
+        surface_text: None,
+        reading_text: None,
+        lines,
+        materials: Default::default(),
+        interpretation: None,
+        preface: None,
+        biome: None,
+        structure: None,
+        time_phase: None,
+        dimension: None,
+        event_sequence: Some(42),
+        route: None,
+    }
+    .complete(now())
+    .unwrap()
+}
+
+#[test]
+fn bookshelf_poem_edit_preserves_untouched_line_records_and_reloads_unknown_reading() {
+    let f = Fixture::new();
+    let store = f.store();
+    let original = bookshelf_emission();
+    MemoryStore::new(&store.memory)
+        .save_agent_haiku("test", "player", &original)
+        .unwrap();
+    let id = format!("root:{}", original.entry_id());
+    let request = poem_edit_request(
+        &id,
+        None,
+        &["さくらいろ", "くろいおのもつ", "あさひかる"],
+        ["表記を変える", "くろいおのもつ", "あさひかる"],
+    );
+    let result = save_poem(&store, request).unwrap();
+    assert_eq!(
+        result["poem"]["current"]["lines"][1],
+        json!(original.prepared.lines[1])
+    );
+    assert_eq!(
+        result["poem"]["current"]["lines"][2],
+        json!(original.prepared.lines[2])
+    );
+    let loaded = crate::poem_book::load(&store.memory).unwrap();
+    let poem = loaded.values().next().unwrap();
+    assert_eq!(poem.lines[0].surface_text, "表記を変える");
+    assert!(poem.lines[0].reading_text.is_empty());
+    assert_eq!(poem.lines[1..], original.prepared.lines[1..]);
+    // ゲーム側が古いpinを保存しようとしても、本棚で保存した版を押し出さない。
+    let mut stale_lines = original.prepared.lines.clone();
+    stale_lines[0].surface_text = "ゲームから古い編集".into();
+    stale_lines[0].reading_text.clear();
+    stale_lines[0].source_atom_ids.clear();
+    stale_lines[0].source_atoms.clear();
+    stale_lines[0].provenance = "player_explicit".into();
+    let pending = crate::workshop_edit::Pending::stage(
+        &original.prepared.lines,
+        &original.prepared.lines,
+        stale_lines,
+        0,
+    )
+    .unwrap();
+    assert_eq!(
+        MemoryStore::new(&store.memory)
+            .save_player_revision(&original, &pending, None)
+            .unwrap_err()
+            .to_string(),
+        "saved_poem_changed"
+    );
+}
+
+#[test]
+fn bookshelf_poem_edit_rejects_stale_retry_conflicts_and_deleted_poems_without_appending() {
+    let f = Fixture::new();
+    let dir = f.poem("root", "p");
+    let store = f.store();
+    let request = poem_edit_request(
+        "root:p",
+        Some("r1"),
+        &["ひるのやま", "とりのこえする", "もりのみち"],
+        ["変更", "中の句", "下の句"],
+    );
+    let saved = save_poem(&store, request.clone()).unwrap();
+    let before = fs::read(dir.join("long_term/haiku_revisions.jsonl")).unwrap();
+    let mut stale = request.clone();
+    stale["requestId"] = uuid::Uuid::new_v4().to_string().into();
+    assert_eq!(
+        save_poem(&store, stale).unwrap_err().to_string(),
+        "saved_poem_changed"
+    );
+    let mut changed_retry = request.clone();
+    changed_retry["lines"][0] = "再送ではない別内容".into();
+    assert_eq!(
+        save_poem(&store, changed_retry).unwrap_err().to_string(),
+        "revision_id_conflict"
+    );
+    crate::poem_trash::change(&store.memory, "root:p", false, now()).unwrap();
+    assert_eq!(
+        save_poem(&store, request.clone()).unwrap_err().to_string(),
+        "poem_deleted"
+    );
+    crate::poem_trash::change(&store.memory, "root:p", true, now()).unwrap();
+    assert_eq!(save_poem(&store, request).unwrap(), saved);
+    assert_eq!(
+        fs::read(dir.join("long_term/haiku_revisions.jsonl")).unwrap(),
+        before
+    );
+}
+
+#[test]
+fn bookshelf_poem_edit_only_one_concurrent_writer_can_advance_the_same_head() {
+    let f = Fixture::new();
+    let dir = f.poem("root", "p");
+    let barrier = Arc::new(std::sync::Barrier::new(2));
+    let jobs: Vec<_> = ["一方の変更", "もう一方の変更"]
+        .into_iter()
+        .map(|text| {
+            let store = f.store();
+            let barrier = barrier.clone();
+            let request = poem_edit_request(
+                "root:p",
+                Some("r1"),
+                &["ひるのやま", "とりのこえする", "もりのみち"],
+                [text, "中の句", "下の句"],
+            );
+            std::thread::spawn(move || {
+                barrier.wait();
+                save_poem(&store, request)
+            })
+        })
+        .collect();
+    let results: Vec<_> = jobs.into_iter().map(|job| job.join().unwrap()).collect();
+    assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
+    assert_eq!(
+        results
+            .iter()
+            .filter_map(|result| result.as_ref().err())
+            .next()
+            .unwrap()
+            .to_string(),
+        "saved_poem_changed"
+    );
+    assert_eq!(
+        crate::poem_trash::raw_rows(&dir, "haiku_revisions.jsonl")
+            .unwrap()
+            .len(),
+        2
+    );
+}
+
+#[test]
+fn bookshelf_poem_edit_response_rejects_a_newer_revision_after_its_own_save() {
+    let f = Fixture::new();
+    let dir = f.poem("root", "p");
+    let store = f.store();
+    let first = save_poem(
+        &store,
+        poem_edit_request(
+            "root:p",
+            Some("r1"),
+            &["ひるのやま", "とりのこえする", "もりのみち"],
+            ["最初の編集", "中", "下"],
+        ),
+    )
+    .unwrap();
+    let first_id = first["poem"]["current"]["id"].as_str().unwrap();
+    assert_eq!(
+        poem_edit::saved_projection(&store, &dir, "root:p", first_id).unwrap(),
+        first
+    );
+    // 最初の保存が終わった直後、応答用の読取より先に別の編集が保存された状態。
+    let second = save_poem(
+        &store,
+        poem_edit_request(
+            "root:p",
+            Some(first_id),
+            &["最初の編集", "中", "下"],
+            ["別の編集", "中", "下"],
+        ),
+    )
+    .unwrap();
+    assert_eq!(
+        poem_edit::saved_projection(&store, &dir, "root:p", first_id)
+            .unwrap_err()
+            .to_string(),
+        "saved_poem_changed"
+    );
+    assert_eq!(
+        poem_edit::saved_projection(
+            &store,
+            &dir,
+            "root:p",
+            second["poem"]["current"]["id"].as_str().unwrap()
+        )
+        .unwrap(),
+        second
+    );
+    assert_eq!(
+        crate::poem_trash::raw_rows(&dir, "haiku_revisions.jsonl")
+            .unwrap()
+            .len(),
+        3
+    );
+}
+
+#[test]
+fn bookshelf_poem_edit_supports_one_line_legacy_as_three_lines_and_checks_shape_only() {
+    let f = Fixture::new();
+    let dir = f.poem("root", "p");
+    fs::write(dir.join("long_term/haiku_revisions.jsonl"), "").unwrap();
+    let entry = json!({"id":"p","kind":"player_haiku","author":"player","text":"未分割の旧句","created_at":"2026-10-13T00:00:00Z"});
+    fs::write(
+        dir.join("long_term/haiku_entries.jsonl"),
+        format!("{entry}\n"),
+    )
+    .unwrap();
+    let request = poem_edit_request(
+        "root:p",
+        None,
+        &["未分割の旧句"],
+        ["上", "字数自由の中", "　下　"],
+    );
+    let result = save_poem(&f.store(), request).unwrap();
+    assert_eq!(
+        result["poem"]["lines"],
+        json!(["上", "字数自由の中", "　下　"])
+    );
+    assert_eq!(result["poem"]["original"], entry);
+    for invalid in ["", " ", "改\n行", "改\r行"] {
+        let request = poem_edit_request("root:p", None, &["未分割の旧句"], [invalid, "中", "下"]);
+        assert_eq!(
+            save_poem(&f.store(), request).unwrap_err().to_string(),
+            "invalid_poem_lines"
+        );
+    }
+}
+
+#[tokio::test]
+async fn http_poem_edit_uses_existing_guard_and_reports_head_conflict() {
+    let f = Fixture::new();
+    f.poem("root", "p");
+    let app = test_app(&f);
+    let request = poem_edit_request(
+        "root:p",
+        Some("r1"),
+        &["ひるのやま", "とりのこえする", "もりのみち"],
+        ["変更", "中", "下"],
+    );
+    for (host, token, origin) in [
+        ("evil.example", "secret-test-token", None),
+        ("127.0.0.1:45678", "", None),
+        (
+            "127.0.0.1:45678",
+            "secret-test-token",
+            Some("https://evil.example"),
+        ),
+    ] {
+        assert_eq!(
+            call(
+                app.clone(),
+                "/api/poems/current",
+                Some(request.clone()),
+                host,
+                token,
+                origin
+            )
+            .await
+            .0,
+            StatusCode::FORBIDDEN
+        );
+    }
+    let (status, body) = call(
+        app.clone(),
+        "/api/poems/current",
+        Some(request.clone()),
+        "127.0.0.1:45678",
+        "secret-test-token",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["poem"]["lines"], request["lines"]);
+    let mut stale = request;
+    stale["requestId"] = uuid::Uuid::new_v4().to_string().into();
+    assert_eq!(
+        call(
+            app.clone(),
+            "/api/poems/current",
+            Some(stale.clone()),
+            "127.0.0.1:45678",
+            "secret-test-token",
+            None
+        )
+        .await
+        .0,
+        StatusCode::CONFLICT
+    );
+    let mut disabled = (*app).clone();
+    disabled.memory_enabled = false;
+    assert_eq!(
+        call(
+            Arc::new(disabled),
+            "/api/poems/current",
+            Some(stale),
+            "127.0.0.1:45678",
+            "secret-test-token",
+            None
+        )
+        .await
+        .0,
+        StatusCode::CONFLICT
+    );
+}
+
 struct Fixture {
     root: PathBuf,
 }
@@ -95,7 +489,10 @@ fn minecraft_capture_registers_once_without_copying_or_changing_notes() {
     );
     assert_eq!(p["items"][0]["source"], "minecraft");
     assert_eq!(p["items"][0]["filename"], "dogido_2026-10-20_12.00.00.png");
-    assert_eq!(s.read().unwrap()["minecraftPhotos"][&photo]["receipt"]["capture_view"], json!(r.capture_view));
+    assert_eq!(
+        s.read().unwrap()["minecraftPhotos"][&photo]["receipt"]["capture_view"],
+        json!(r.capture_view)
+    );
     assert_eq!(s.player().unwrap(), before);
     assert!(!s.photos.exists());
     assert_eq!(
@@ -127,8 +524,14 @@ fn historical_minecraft_photo_without_capture_view_stays_readable_and_idempotent
     let before = s.read().unwrap();
     assert_eq!(before["minecraftPhotos"][&photo]["receipt"], historical);
     let reopened = f.store();
-    assert_eq!(reopened.photo_snapshot_now().unwrap()["items"][0]["filename"], old_name);
-    assert_eq!(reopened.image_bytes(&photo).unwrap(), fs::read(r.directory.join(old_name)).unwrap());
+    assert_eq!(
+        reopened.photo_snapshot_now().unwrap()["items"][0]["filename"],
+        old_name
+    );
+    assert_eq!(
+        reopened.image_bytes(&photo).unwrap(),
+        fs::read(r.directory.join(old_name)).unwrap()
+    );
     reopened.register_capture(&id, &r).unwrap();
     assert_eq!(reopened.read().unwrap(), before);
 }

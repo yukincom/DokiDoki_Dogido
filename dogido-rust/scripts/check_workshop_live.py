@@ -41,7 +41,7 @@ def main():
         thread = threading.Thread(target=heartbeat)
         thread.start()
         try:
-            for text in ["この句はどういう意味？", "音数を確認して",
+            for text in ["この句はどういう意味？", "この句の読みを確認して",
                     "『終了』って言葉が気になっただけで、まだ相談を続けたい",
                     "今日は句の相談をここでおしまいにしよう"]:
                 started = time.monotonic()

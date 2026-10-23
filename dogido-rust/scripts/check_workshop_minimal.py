@@ -25,20 +25,11 @@ def main():
                         "speech": "この言葉の響き、一緒に考えよか。"}
             if text == "この子はもう完成でいいんじゃないかな":
                 return {**step(text, "close_workshop"), "speech": "この句の響き、一緒に考えたな。"}
-            if text == "白い骨の響きはどうかな":
+            if text == "白い骨の読みを確認して":
                 if "段階: decide" in prompt:
-                    return {"action": "inspect", "checks": ["reading", "meter"], "inspect_text": "白い骨"}
-                assert '"reading_text": "しろいほね"' in prompt and '"mora_count": 5' in prompt, prompt
-                return {"action": "respond", "speech": "しろいほね、五音やな。そのまま下五に置ける響きやで。"}
-            if text in ("下五のしろいほねたちの音数を確認して", "中七のしろいほねの音数を確認して"):
-                lower = text.startswith("下五")
-                if "段階: decide" in prompt:
-                    return {"action": "inspect", "checks": ["meter"],
-                            "inspect_text": "しろいほねたち" if lower else "しろいほね",
-                            "inspect_line_index": 2 if lower else 1}
-                assert ('"meter_status": "too_long"' if lower else '"meter_status": "too_short"') in prompt, prompt
-                assert ('"meter_delta": 2' if lower else '"meter_delta": -2') in prompt, prompt
-                return {"action": "respond", "speech": "下五は二音多いで。" if lower else "中七は二音足りんで。"}
+                    return {"action": "inspect", "checks": ["reading"], "inspect_text": "白い骨"}
+                assert '"reading_text": "しろいほね"' in prompt, prompt
+                return {"action": "respond", "speech": "しろいほね、という読みやで。"}
             if text == "うん！変えて！":
                 assert "白い骨" in prompt and "conversation_candidate" in prompt
                 result = step(text, "stage_conversation_candidate")
@@ -59,20 +50,12 @@ def main():
         assert not (token_dir / "requests.jsonl").exists(), "ordinary conversation requested a dictionary"
         passed.append("live_wording_and_missing_metadata_keep_conversation_without_inspection_or_save")
 
-        result = finish(base, send, sid, "白い骨の響きはどうかな")
+        result = finish(base, send, sid, "白い骨の読みを確認して")
         assert [s["action"] for s in result["workshop_steps"]] == ["inspect", "respond"], result
         requests = [json.loads(line) for line in (token_dir / "requests.jsonl").read_text().splitlines()]
         assert [request["text"] for request in requests] == ["白い骨"], requests
         assert not revisions(folder, sid) and hud(sid)["canonical_lines"] == LINES
         passed.append("model_can_request_dictionary_reading_then_discuss_without_editing")
-
-        for text, reply in [("下五のしろいほねたちの音数を確認して", "下五は二音多いで。"),
-                            ("中七のしろいほねの音数を確認して", "中七は二音足りんで。")]:
-            result = finish(base, send, sid, text)
-            assert [s["action"] for s in result["workshop_steps"]] == ["inspect", "respond"], result
-            assert result["text"] == reply and not revisions(folder, sid), result
-            assert hud(sid)["canonical_lines"] == LINES
-        passed.append("meter_excess_and_shortage_reach_the_model_and_its_reply_without_mutation")
 
         result = finish(base, send, sid, "うん！変えて！")
         assert result["workshop_action"] == "stage_conversation_candidate", result
@@ -90,8 +73,8 @@ def main():
         base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder = context
         def unavailable(text, prompt, n):
             if "段階: decide" in prompt:
-                return {"action": "inspect", "checks": ["reading", "meter"], "inspect_text": "白い骨"}
-            assert '"reading_status": "unavailable"' in prompt and '"mora_count": null' in prompt
+                return {"action": "inspect", "checks": ["reading"], "inspect_text": "白い骨"}
+            assert '"reading_status": "unavailable"' in prompt
             return {"action": "ask", "speech": "読みは確認できんかったわ。しろいほね、のつもりでええ？"}
         install(control, unavailable)
         sid = ready(base, send, rows)

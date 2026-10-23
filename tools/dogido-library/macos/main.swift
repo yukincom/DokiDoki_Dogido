@@ -19,10 +19,16 @@ final class Bookshelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavi
         let appMenu = NSMenu()
         appMenu.addItem(withTitle: "本棚を終了", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         let top = NSMenuItem(); top.submenu = appMenu; menu.addItem(top)
+        let fileMenu = NSMenu(title: "ファイル")
+        let save = fileMenu.addItem(withTitle: "変更を保存", action: #selector(saveChanges(_:)), keyEquivalent: "s")
+        save.target = self
+        let file = NSMenuItem(); file.title = "ファイル"; file.submenu = fileMenu; menu.addItem(file)
         let editMenu = NSMenu(title: "編集")
         for (title, selector, key) in [("コピー", "copy:", "c"), ("貼り付け", "paste:", "v"), ("切り取り", "cut:", "x"), ("すべて選択", "selectAll:", "a"), ("取り消す", "undo:", "z")] {
             editMenu.addItem(withTitle: title, action: Selector(selector), keyEquivalent: key)
         }
+        let redo = editMenu.addItem(withTitle: "やり直す", action: Selector(("redo:")), keyEquivalent: "z")
+        redo.keyEquivalentModifierMask = [.command, .shift]
         let edit = NSMenuItem(); edit.title = "編集"; edit.submenu = editMenu; menu.addItem(edit)
         NSApp.mainMenu = menu
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1180, height: 860), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
@@ -63,6 +69,11 @@ final class Bookshelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavi
         }
         do { try process.run(); child = process }
         catch { fail("本棚を起動できませんでした。実行環境を確認してください。") }
+    }
+
+    @objc private func saveChanges(_ sender: Any?) {
+        guard launched, web.url?.host == baseURL?.host, web.url?.port == baseURL?.port else { return }
+        web.evaluateJavaScript("window.dogidoLibrarySave?.(); void 0")
     }
 
     private func readOutput(_ chunk: String) {

@@ -192,11 +192,11 @@ def main():
         assert {"桜の葉", "桜色"} <= {request["text"] for request in token_requests}
         passed.append("model_selected_current_fragment_and_kanji_edit_apply_once")
         def inspection(text,prompt,n):
-            if "段階: decide" in prompt:return step(text,"inspect",checks=["source","meter"])
+            if "段階: decide" in prompt:return step(text,"inspect",checks=["source"])
             assert '\"verse_kind\": \"canonical\"' in prompt and '\"source_status\": \"unavailable\"' in prompt
             return step(text,speech="出典の記録がない行があるで。")
         install(control,inspection)
-        r=finish(base,send,sid,"出典と音数を確認して")
+        r=finish(base,send,sid,"出典を確認して")
         assert r["workshop_action"]=="explain" and len(revisions(folder,sid))==2,r
         passed.append("inspection_reads_new_canonical_without_borrowing_old_source")
 

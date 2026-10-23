@@ -1,5 +1,6 @@
 //! 本棚専用の投影と個人メモ。句・読み訂正の正本を複製しない。
 use crate::poem_trash as trash;
+use crate::haiku_record::verse::record_surfaces as lines;
 use anyhow::{Context, Result, ensure};
 use chrono::{DateTime, Duration, Utc};
 use serde_json::{Value, json};
@@ -431,33 +432,6 @@ fn hash(path: &Path) -> Result<String> {
         h.update(&chunk[..n]);
     }
     Ok(format!("{:x}", h.finalize()))
-}
-fn lines(row: &Value) -> Vec<String> {
-    let ls: Vec<_> = row["lines"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(|l| {
-            l["surface_text"]
-                .as_str()
-                .or(l["reading_text"].as_str())
-                .map(str::to_owned)
-        })
-        .collect();
-    if !ls.is_empty() {
-        return ls;
-    }
-    row["revised_surface_text"]
-        .as_str()
-        .or(row["revised_text"].as_str())
-        .or(row["surface_text"].as_str())
-        .or(row["text"].as_str())
-        .unwrap_or("")
-        .split(['\n', '/', '／'])
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(str::to_owned)
-        .collect()
 }
 pub fn poems(root: &Path, deleted: bool) -> Result<Vec<Value>> {
     let mut out = vec![];

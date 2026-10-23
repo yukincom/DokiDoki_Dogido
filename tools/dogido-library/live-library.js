@@ -1,4 +1,4 @@
-/* Real bookshelf: personal annotations only. No lessons, catalogue writes or game actions. */
+/* 本棚の入力をまとめて保存する。句は既存revision、個人メモと写真は各保存先へ。 */
 (function(){
   'use strict';
   const boot=window.DOGIDO_BOOTSTRAP;if(!boot)return;
@@ -29,17 +29,18 @@
   function unadded(){return catalogNotes.hasDrafts()||['catalog-reading-word','catalog-reading-new'].some(id=>$(id)?.value.trim());}
   const photoDirty=()=>Boolean(window.DogidoPhotos?.hasChanges());
   const readingDirty=()=>Boolean(window.DogidoReadings?.hasChanges());
-  window.dogidoLibraryHasUnsaved=()=>saving||changes().length>0||Boolean(unadded())||photoDirty()||readingDirty()||Boolean(window.DogidoReadings?.hasInput())||Boolean(window.DogidoReadings?.busy());
+  const poemDirty=()=>Boolean(window.DogidoPoemEditor?.hasChanges());
+  window.dogidoLibraryHasUnsaved=()=>saving||changes().length>0||Boolean(unadded())||photoDirty()||readingDirty()||poemDirty()||Boolean(window.DogidoReadings?.hasInput())||Boolean(window.DogidoReadings?.busy());
   function dirtyStatus(){
     if(saving)return;
-    const dirty=changes().length>0||photoDirty()||readingDirty();
+    const dirty=changes().length>0||photoDirty()||readingDirty()||poemDirty();
     saveStatus(boot.status.active?label:dirty?'保存していない変更があります。'+label:label);
     saveButton.disabled=boot.status.active||!dirty;
     saveButton.classList.toggle('has-changes',dirty);
   }
   // Save all edited pages, not only the currently selected entry.
-  saveButton.addEventListener('click',async()=>{
-    if(saving)return;
+  async function saveAll(){
+    if(saving||boot.status.active)return;
     if(unadded()||window.DogidoReadings?.hasInput()){saveStatus('入力中の言葉は「追加」を押してから保存してください。',true);return;}
     const edits=changes();
     if(edits.some(e=>e.section==='catalog'&&(e.value.keys.some(k=>!k.trim())||e.value.readings.some(r=>!r.word.trim()||!r.reading.trim())))){
@@ -55,13 +56,26 @@
       }
       await window.DogidoPhotos?.save();
       await window.DogidoReadings?.save();
-      saveStatus(changes().length||photoDirty()||readingDirty()?'保存中に編集した変更が残っています。もう一度保存してください。':'保存しました。',true);
+      await window.DogidoPoemEditor?.save();
+      saveStatus(changes().length||photoDirty()||readingDirty()||poemDirty()?'保存中に編集した変更が残っています。もう一度保存してください。':'保存しました。',true);
     }catch(error){saveStatus(error.message,true);}
-    finally{saving=false;const dirty=changes().length>0||photoDirty()||readingDirty();saveButton.disabled=boot.status.active||!dirty;saveButton.classList.toggle('has-changes',dirty);}
+    finally{saving=false;const dirty=changes().length>0||photoDirty()||readingDirty()||poemDirty();saveButton.disabled=boot.status.active||!dirty;saveButton.classList.toggle('has-changes',dirty);}
+  }
+  let composing=false,saveAfterComposition=false;
+  document.addEventListener('compositionstart',()=>{composing=true;});
+  document.addEventListener('compositionend',()=>{composing=false;if(saveAfterComposition){saveAfterComposition=false;setTimeout(saveAll,0);}});
+  window.dogidoLibrarySave=()=>{if(composing){saveAfterComposition=true;return;}return saveAll();};
+  saveButton.addEventListener('click',window.dogidoLibrarySave);
+  document.addEventListener('keydown',event=>{
+    if((event.metaKey||event.ctrlKey)&&!event.altKey&&!event.shiftKey&&event.key.toLowerCase()==='s'){
+      event.preventDefault();window.dogidoLibrarySave();
+    }
+    // ⌘Z／⇧⌘Z、切り取り・コピー・ペーストは入力欄の標準動作へ任せる。
   });
   window.addEventListener('beforeunload',event=>{if(window.dogidoLibraryHasUnsaved()){event.preventDefault();event.returnValue='';}});
   document.addEventListener('dogido-photos-changed',dirtyStatus);
   document.addEventListener('dogido-readings-changed',dirtyStatus);
+  document.addEventListener('dogido-poems-changed',dirtyStatus);
   for(const name of ['click','input','submit'])document.addEventListener(name,event=>{
     if(event.target.closest('#library-save'))return;
     queueMicrotask(()=>{
@@ -91,6 +105,7 @@
   // 表示中の新しい句・写真だけ追従する。入力・保存・選択ダイアログ中は前後とも保留する。
   let refreshing=false,signature='';
   const canRefresh=()=>!document.hidden&&!window.dogidoLibraryHasUnsaved()
+    &&!window.DogidoPoemEditor?.isOpen()
     &&!document.querySelector('dialog[open]')
     &&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName)
     &&!document.activeElement?.isContentEditable;

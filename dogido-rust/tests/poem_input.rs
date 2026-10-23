@@ -145,6 +145,7 @@ fn full_revision_follows_saved_canonical_parent_and_deduplicates_same_operation(
     let f = Fixture::new();
     let s = f.store();
     let mut r = revision();
+    s.save_agent_haiku("saved", "player", &r.original).unwrap();
     s.save_whole_revision(&r).unwrap();
     s.save_whole_revision(&r).unwrap();
     let first = r.id.clone();
@@ -155,6 +156,12 @@ fn full_revision_follows_saved_canonical_parent_and_deduplicates_same_operation(
     r.id = "rev_three".into();
     r.base[0].reading_text = "ちがうく".into();
     assert!(s.save_whole_revision(&r).is_err());
+    // 読み・元句が正しくても、すでに次の版が保存された古いparentへ分岐しない。
+    r.base = revision().lines;
+    assert_eq!(
+        s.save_whole_revision(&r).unwrap_err().to_string(),
+        "saved_poem_changed"
+    );
     assert_eq!(
         fs::read_to_string(f.0.join("long_term/haiku_revisions.jsonl"))
             .unwrap()
@@ -168,6 +175,7 @@ fn unresolved_archive_preserves_literal_text_and_no_canonical_reading_is_invente
     let f = Fixture::new();
     let s = f.store();
     let mut r = revision();
+    s.save_agent_haiku("saved", "player", &r.original).unwrap();
     r.text = "まだ読みの分からない私の句".into();
     r.lines.clear();
     s.save_whole_revision(&r).unwrap();
