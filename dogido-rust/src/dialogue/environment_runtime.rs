@@ -175,7 +175,8 @@ pub(super) fn focus(
     }
 }
 
-/// Reuse one factual/history context when a queued decision is about to run.
+/// 環境判断の全観測・変化・履歴を一箇所で組み立て、生成直前にも更新する。
+/// 静止画像は同じ入力へ添える。周期通知だけは当回の比較表を保持し、未提示の差分の消費を防ぐ。
 pub(super) fn refresh_dialogue_context(s: &Session, actions: &mut [Speech]) -> bool {
     for action in actions {
         if !crate::reaction_leaf::is_model_reaction(action) {
@@ -195,11 +196,11 @@ pub(super) fn refresh_dialogue_context(s: &Session, actions: &mut [Speech]) -> b
         if !leaf.details[key].is_object() {
             leaf.details[key] = json!({});
         }
-        // 周期の気づきは当回の表を固定する。生成・音声待ちの普通の移動で差し替えない。
-        if action.kind != crate::environment::notice::KIND
-            || !leaf.details[key]["world_context"].is_object()
-        {
-            let context = if action.kind == crate::environment::notice::KIND {
+        // 定期比較の表だけを固定する。画像の判断は生成時点の全観測を他の環境反応と共有し、
+        // 撮影後に変わった天候・匂い・モブ等を古い値に戻さない。画像自体は撮影時刻付きで固定する。
+        let periodic_notice = action.kind == crate::environment::notice::KIND && action.image.is_none();
+        if !periodic_notice || !leaf.details[key]["world_context"].is_object() {
+            let mut context = if periodic_notice {
                 let Some(context) = s.conversation_observation.noticing_context() else {
                     return false;
                 };
@@ -207,9 +208,21 @@ pub(super) fn refresh_dialogue_context(s: &Session, actions: &mut [Speech]) -> b
             } else {
                 super::body_runtime::context(s).unwrap_or_default()
             };
+            if let Some(image) = &action.image {
+                let capture = leaf.details["visual_capture"].clone();
+                context.changes.push(crate::conversation_observation::Change {
+                    kind: "body_view".into(),
+                    before: json!({"sha256":capture["previous_sha256"]}),
+                    now: json!({"sha256":image.sha256,"captured_at":image.captured_at,
+                        "motion_sequence":capture["motion_sequence"]}),
+                    observed_at: image.captured_at.clone(),
+                    revision: context.revision,
+                });
+                leaf.details[key]["visual_capture"] = capture;
+            }
             leaf.details[key]["world_context"] = json!(context.for_reaction(kind, &leaf.details));
         }
-        if action.kind == crate::environment::notice::KIND {
+        if periodic_notice {
             // 周期の環境差分とrevisionは固定し、身体の現在値だけを生成時点へ揃える。
             // 最新の会話Context全体へ置換すると、未提示の差分まで消費してしまう。
             let current = super::body_runtime::context(s).unwrap_or_default();
