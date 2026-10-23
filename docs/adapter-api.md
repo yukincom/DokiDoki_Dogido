@@ -385,6 +385,8 @@ adapter 終了時に session を閉じる。
 - `observed_at` と操作結果の `executed_at` は `T` 区切り・UTC offset必須のRFC 3339文字列（`Z` または `+09:00` 等）。日付のみ、offsetなし、Unix秒／ミリ秒からの補完はしない
 - `event.name` は許可済み enum に含まれること
 
+数値項目はJSON number、真偽値はJSON booleanで送る。整数欄は整数表記を使い、数値文字列・真偽値から数値・数値や文字列から真偽値への互換変換は行わない。値域・有限値・項目間の整合検査は維持する。
+
 ### `sequence`
 
 - 非負整数

@@ -1,5 +1,6 @@
 //! Fabricアダプターから送信される観測JSONを、戦闘・環境・対話の各エンジンが共通して参照するRust型へとマッピングするイベント契約。
 //! 各build関数が生成する部分観測データをEventDataへと集約し、`GameEvent::parse` において型・数値範囲・セマンティクス（意味論）を網羅的に検査する。
+//! 数値はJSON number、真偽値はJSON booleanとして受け、文字列や別型からは変換しない。
 //! フィールドが省略された場合やnullの場合は `Option::None` となる。真偽値や配列のデフォルト値から送信の有無を逆算することはできない。
 //! 「配列が空であること」を「ゲーム世界全体に存在しないこと」と即断するかどうかはこの型定義層では判定せず、利用側（各ドメインエンジン）がイベント種別と観測の鮮度に基づいて判断する。
 //! 大半の型は `extra` フィールドに未知のキーを許容・保持するが、匂い関連の型は厳密に閉じた契約として未知キーを明示的に拒否する。
@@ -423,7 +424,6 @@ pub struct AdapterCommandResult {
     pub executed_at: DateTime<FixedOffset>,
     /// 結果時点で確認できた選択slot（0〜8）。確認できない場合は省略またはnull。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub selected_slot: Option<i64>,
     /// 結果時点の主手itemの名前空間付きID。確認できない場合はNone。
     #[serde(default)]
@@ -464,7 +464,6 @@ pub struct AmbientSound {
     pub certainty: Certainty,
     /// その音を観測してからのミリ秒。Fabricはtick差×50で計算し、未送信ならNone。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub heard_ago_ms: Option<i64>,
     #[serde(flatten)]
@@ -488,11 +487,9 @@ pub struct AuditoryThreat {
     pub certainty: Certainty,
     /// 音だけでも種名を発話してよいというadapterの根拠区分。省略時はfalse。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub spoken_name_allowed: bool,
     /// 元の音観測からのミリ秒。イベントの受信時刻とは別で、同じ古い音を新鮮に扱わない。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub heard_ago_ms: Option<i64>,
     #[serde(flatten)]
@@ -505,73 +502,55 @@ pub struct AuditoryThreat {
 pub struct CombatState {
     /// 最後の体力減少からの経過ミリ秒。Fabricのtick差×50で、Noneは情報なし。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub recent_damage_ms: Option<i64>,
     /// 最後の視覚脅威観測からの経過ミリ秒。Noneは時刻情報なし。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub recent_hostile_visual_ms: Option<i64>,
     /// 最後の敵対音観測からの経過ミリ秒。Noneは時刻情報なし。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub recent_hostile_audio_ms: Option<i64>,
     /// adapterの脅威リスト内で距離7ブロック以内にいる数。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub hostiles_within_7: Option<i64>,
     /// adapterの脅威リスト内で距離10ブロック以内にいる数。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub hostiles_within_10: Option<i64>,
     /// 敵数集計に用いた探索距離。単位はブロック。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub hostile_scan_distance: Option<f64>,
     /// 探索距離内から飛行敵の種類を除いた数。接地している個体だけの数ではない。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub hostiles_within_scan_ground: Option<i64>,
     /// adapterの戦闘追跡または現在の敵視覚・聴覚が示す継続候補。Rustの最終戦況とは別。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub combat_active_hint: Option<bool>,
     /// 確認済み死亡・爆散の記録。Noneは未送信、Some([])は送信された空リスト。
     #[serde(default)]
     pub hostile_outcomes: Option<Vec<HostileOutcome>>,
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub warden_recently_hurt: Option<bool>,
     /// adapterが追跡対象の死亡状態を確認したウォーデン撃破情報。Noneは情報なし。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub warden_defeat_confirmed: Option<bool>,
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub warden_ranged_trap_active: Option<bool>,
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub warden_nearby_iron_golem_count: Option<i64>,
     /// 近接する経験値orbの数。これ単独では誰が何を倒したかは表さない。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub nearby_experience_orb_count: Option<i64>,
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub warden_end_crystal_bombardment_active: Option<bool>,
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub warden_nearby_end_crystal_count: Option<i64>,
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub warden_tnt_minecart_setup_active: Option<bool>,
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub warden_nearby_tnt_minecart_count: Option<i64>,
     #[serde(default)]
     pub dragon_phase: Option<String>,
     /// 追跡中ドラゴンまでの距離（ブロック）。未追跡時などはNone。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub dragon_distance: Option<f64>,
     #[serde(default)]
     pub dragon_horizontal: Option<String>,
@@ -579,10 +558,8 @@ pub struct CombatState {
     pub dragon_vertical: Option<String>,
     /// adapterが追跡対象の死亡状態を確認したドラゴン撃破情報。Noneは情報なし。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub dragon_defeat_confirmed: Option<bool>,
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub end_crystal_count: Option<i64>,
     #[serde(flatten)]
     pub extra: BTreeMap<String, Value>,
@@ -620,26 +597,20 @@ pub struct DroppedItem {
     /// Fabricはitemのregistry IDから名前空間を除いたpathを送る。
     pub name: String,
     /// 同種類のItemEntityが持つstack個数の合計。1以上。
-    #[serde(deserialize_with = "wire::deserialize")]
     pub count: i64,
     /// 合算したItemEntityの数。個数とは別で、省略時の互換値は1。
     #[serde(default = "default_droppeditem_entity_count")]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub entity_count: i64,
     /// 同種類の最寄りItemEntityまでの距離（ブロック）。未送信ならNone。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub distance: Option<f64>,
     /// 同種類の最も新しいItemEntityの経過時間。Fabricのitem age tick×50ミリ秒。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub age_ms: Option<i64>,
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub block_item: bool,
     /// item・ブロック種類による採掘材料候補。実際に今回掘って得たことの証拠ではない。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub mining_related: bool,
     #[serde(flatten)]
     pub extra: BTreeMap<String, Value>,
@@ -673,26 +644,21 @@ pub struct HostileOutcome {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct HotbarSlot {
     /// hotbarの0始まりの枠番号（0〜8）。画面上の1〜9キーと1ずれる。
-    #[serde(deserialize_with = "wire::deserialize")]
     pub slot: i64,
     /// 名前空間付きitem ID。現Fabricは空枠で省略する。
     #[serde(default)]
     pub item_id: Option<String>,
     /// この枠のstack個数。空枠および省略時は0。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub count: i64,
     /// 消費済みの耐久値。残り耐久値ではなく、max_damageとの差で残量を求める。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub damage: i64,
     /// itemの最大耐久値。Fabricの空枠では0。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub max_damage: i64,
     /// 主手装備の属性補正をプレイヤー基礎値へ適用した攻撃力。空枠では省略。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub attack_damage: Option<f64>,
     #[serde(default = "default_hotbarslot_weapon_kind")]
     pub weapon_kind: HotbarSlotWeaponKind,
@@ -704,7 +670,6 @@ pub struct HotbarSlot {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct HotbarState {
     /// 現在選択されている0始まりのslot番号（0〜8）。
-    #[serde(deserialize_with = "wire::deserialize")]
     pub selected_slot: i64,
     /// 最大9枠。現Fabricは空枠も送り、受信側は番号の重複をsemanticで拒否する。
     #[serde(default)]
@@ -730,7 +695,6 @@ pub struct LookTarget {
     pub environment: Option<MobEnvironment>,
     /// プレイヤーから対象までの距離（ブロック）。ブロックはその中心までを測る。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub distance: Option<f64>,
     #[serde(flatten)]
     pub extra: BTreeMap<String, Value>,
@@ -745,7 +709,6 @@ pub struct MetaState {
     #[serde(default)]
     pub call_name: Option<String>,
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub debug: bool,
     /// player_diedなどで添える、取得できた死亡理由。省略時に原因を推定しない。
     #[serde(default)]
@@ -767,20 +730,15 @@ impl Default for MetaState {
 pub struct MobEnvironment {
     /// entity.isTouchingWater()の実測。水没とは別の接水状態。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub touching_water: Option<bool>,
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub submerged_in_water: Option<bool>,
     /// entity.isTouchingWaterOrRain()の実測。falseでも他の生存条件は保証しない。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub touching_water_or_rain: Option<bool>,
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub on_ground: Option<bool>,
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub on_fire: Option<bool>,
     #[serde(flatten)]
     pub extra: BTreeMap<String, Value>,
@@ -801,7 +759,6 @@ pub struct MobIdentity {
     pub custom_name: Option<String>,
     /// 手懐け可能な個体の実状態。省略時の互換値はfalse。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub tamed: bool,
     #[serde(flatten)]
     pub extra: BTreeMap<String, Value>,
@@ -815,7 +772,6 @@ pub struct NearbyResource {
     pub name: String,
     /// 同じ資源名で最寄りの候補までの距離（ブロック）。未送信ならNone。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub distance: Option<f64>,
     /// 省略時は各軸None。現FabricのbuildNearbyResourcesは距離までを送る。
     #[serde(default)]
@@ -836,7 +792,6 @@ pub struct PassiveMob {
     pub environment: Option<MobEnvironment>,
     /// プレイヤーから個体までの距離（ブロック）。未送信ならNone。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub distance: Option<f64>,
     #[serde(default)]
     pub direction: Direction,
@@ -848,7 +803,6 @@ pub struct PassiveMob {
     #[serde(default)]
     pub caution_reason: Option<String>,
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub is_baby: Option<bool>,
     /// 村人の職業ID。村人以外や取得できない場合は省略される。
     #[serde(default)]
@@ -872,19 +826,15 @@ pub struct PlayerState {
     pub position: Position,
     /// Minecraftが返す水平向きの角度（度）。Noneは角度情報なし。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub yaw: Option<f64>,
     /// Minecraftが返す上下向きの角度（度）。Noneは角度情報なし。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub pitch: Option<f64>,
     /// ゲームの体力値。ハートの表示個数ではなく、Noneは体力未取得。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub health: Option<f64>,
     /// MinecraftのFoodLevel値。Noneは空腹度未取得。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub hunger: Option<i64>,
     /// 名前空間付きdimension ID。座標を比較する際に同じ世界かを区別する。
     #[serde(default)]
@@ -893,7 +843,6 @@ pub struct PlayerState {
     #[serde(default)]
     pub held_item: Option<String>,
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub block_breaking_active: Option<bool>,
     /// 選択操作の照合に使う現在snapshot。Noneならこのイベントからslotを確認できない。
     #[serde(default)]
@@ -917,13 +866,10 @@ impl Default for PlayerState {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Position {
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub x: Option<f64>,
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub y: Option<f64>,
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub z: Option<f64>,
     #[serde(flatten)]
     pub extra: BTreeMap<String, Value>,
@@ -943,7 +889,6 @@ pub struct RecentBlockBreak {
     pub material: RecentBlockBreakMaterial,
     /// 破壊記録からのtick差×50ミリ秒。省略時の通信上の既定値は0。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub age_ms: i64,
     #[serde(flatten)]
     pub extra: BTreeMap<String, Value>,
@@ -959,10 +904,10 @@ pub struct SmellObservation {
     /// 個体の一覧ではなく匂いの種類一覧。同じIDを複数入れて数や強度を加算できない。
     pub components: Vec<SmellComponent>,
     /// 気温由来の補正点（-7〜2）。摂氏温度ではない。
-    #[serde(default, deserialize_with = "wire::deserialize")]
+    #[serde(default)]
     pub temperature_modifier: i64,
     /// Fabricの雨上がり観測窓。rain_after成分にはtrueが必要。
-    #[serde(default, deserialize_with = "wire::deserialize")]
+    #[serde(default)]
     pub rain_after_active: bool,
     /// 一度「あっ」と気づく候補。通常componentsを消さず、出力完了後はそちらへ戻す。
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -991,7 +936,6 @@ pub struct SmellComponent {
     pub valence: SmellObservationValence,
     pub source_kind: SmellObservationSourceKind,
     /// 1は仄か、8は強烈。範囲1〜12で、物理的濃度や距離ではない。
-    #[serde(deserialize_with = "wire::deserialize")]
     pub effective_strength: i64,
 }
 /// buildVehicleStateが乗車中だけ作る乗り物の種類・活動・操作席情報。
@@ -1004,7 +948,6 @@ pub struct VehicleState {
     pub activity: VehicleStateActivity,
     /// その乗り物の操作席がプレイヤーか。単なる同乗と操作を区別する。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub controlling: bool,
     #[serde(flatten)]
     pub extra: BTreeMap<String, Value>,
@@ -1026,23 +969,18 @@ pub struct VisualThreat {
     pub environment: Option<MobEnvironment>,
     /// プレイヤーから対象までの距離（ブロック）。未送信ならNone。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub distance: Option<f64>,
     #[serde(default)]
     pub direction: Direction,
     /// adapterの追跡で距離が縮んでいるか。省略時の互換値はfalse。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub approaching: bool,
     /// クリーパーの導火状態。Noneは情報なしで、非作動を明示したfalseと区別する。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub fuse_active: Option<bool>,
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub on_fire: bool,
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub in_water: bool,
     #[serde(default = "default_visualthreat_certainty")]
     pub certainty: Certainty,
@@ -1056,7 +994,6 @@ pub struct VisualThreat {
 pub struct WorldState {
     /// ワールド時刻を24000で割った余り（tick）。現Fabricは昼夜周期のある次元だけ送る。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub time_of_day: Option<i64>,
     /// time_of_dayを朝昼夕夜へ分類した値。現Fabricは昼夜周期のない次元で省略する。
     #[serde(default)]
@@ -1071,22 +1008,17 @@ pub struct WorldState {
     pub structure: Option<String>,
     /// 現在ブロックでのworld.getLightLevel()（0〜15）。明るさの比率ではない。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub local_light: Option<i64>,
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub sky_visible: Option<bool>,
     /// 同じ水平座標のMOTION_BLOCKING_NO_LEAVES高さ（ブロック）。昼夜周期のある次元で送る。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub surface_y: Option<i64>,
     /// surface_yとプレイヤーのブロックYとの差を0以上にした深さ（ブロック）。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub depth_below_surface: Option<i64>,
     /// 上方の非開放ブロックまでの高さ（ブロック）。Fabricは24段で走査を打ち切り、未検出も24。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub ceiling_height: Option<f64>,
     /// True only when the upward scan found a ceiling; false means height is the search bound.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1095,136 +1027,102 @@ pub struct WorldState {
     pub overhead_cover_type: Option<String>,
     /// 現Fabricでは接水または水没をまとめた値。頭部まで水没したことだけを意味しない。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub is_submerged: Option<bool>,
     /// 接水・水没時に上へ走査した連続fluidブロック数（最大8）。Noneは未送信。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub submerged_depth_blocks: Option<i64>,
     /// player.getAir()の空気残量カウンタ。秒へ換算した値ではない。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub air_supply: Option<i64>,
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub nearby_door_count: Option<i64>,
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub open_door_count: Option<i64>,
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub nearby_window_present: Option<bool>,
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub nearby_bed_count: Option<i64>,
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub nearby_sleeping_people_count: Option<i64>,
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub drafty_opening_count: Option<i64>,
     /// このadapter接続中に周囲のベッドで睡眠開始を観測したか。全リスポーン設定の照会ではない。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub respawn_point_set: Option<bool>,
     /// 観測済みリスポーン位置までの距離（ブロック）。未観測・別次元などでは省略する。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub respawn_distance: Option<f64>,
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub cardinal_wall_count: Option<i64>,
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub double_height_open_side_count: Option<i64>,
     /// 扉・囲まれ方・天井などからadapterが推定する室内条件。危険全般の不在保証ではない。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub safe_zone_with_door: Option<bool>,
     /// 周辺の非開放ブロック比率と空の遮蔽から求める囲まれ度（0〜1）。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub enclosure_score: Option<f64>,
     /// adapterの走査範囲にある明るさ7以下の開放ブロック数。連結成分を探索した体積ではない。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub connected_dark_volume: Option<i64>,
     /// 近接走査中の暗い開放ブロックまでの最短距離（ブロック）。未検出はFabricで99。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub nearest_dark_spawn_distance: Option<f64>,
     /// 明るさ・囲まれ方・暗い領域などからadapterが求めた危険な暗さの指標（0〜1）。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub danger_darkness_score: Option<f64>,
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub nearby_light_source_count: Option<i64>,
     /// 走査した照明器具までの最短距離（ブロック）。範囲内で未検出ならFabricは99を送る。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub nearest_light_source_distance: Option<f64>,
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub nearby_damaging_light_source_count: Option<i64>,
     /// 走査した火・焚き火など有害光源までの最短距離（ブロック）。未検出はFabricで99。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub nearest_damaging_light_source_distance: Option<f64>,
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub standing_on_magma_block: Option<bool>,
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub nearby_firefly_bush_count: Option<i64>,
     #[serde(default)]
     pub ominous_sound_kind: Option<String>,
     /// 保持中の不穏音からの経過ミリ秒。Fabricは鮮度窓を超えるとkindとともに省略する。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub ominous_sound_recent_ms: Option<i64>,
     #[serde(default)]
     pub boss_omen_kind: Option<String>,
     /// 実際に観測した雨音からの経過ミリ秒。鮮度窓外ではFabricが省略する。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub rain_sound_recent_ms: Option<i64>,
     /// 実際に観測した雷鳴からの経過ミリ秒。鮮度窓外ではFabricが省略する。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub thunder_sound_recent_ms: Option<i64>,
     /// 近接落雷の観測からの経過ミリ秒。鮮度・距離条件を満たす場合に送る。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub nearby_lightning_strike_recent_ms: Option<i64>,
     /// 観測した近接落雷までの距離（ブロック）。Noneは今回の有効情報なし。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub nearby_lightning_strike_distance: Option<f64>,
     /// エンダーアイ投擲音の観測からの経過ミリ秒。鮮度窓外ではFabricが省略する。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub ender_eye_launch_recent_ms: Option<i64>,
     /// 近接走査で見つかったポータル種類。未検出時は関連三項目をFabricが省略する。
     #[serde(default)]
     pub nearby_portal_type: Option<String>,
     /// 近接ポータルまでの距離（ブロック）。Noneは有効な距離情報なし。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub nearby_portal_distance: Option<f64>,
     #[serde(default)]
     pub nearby_portal_encounter: Option<WorldStateNearbyPortalEncounter>,
     /// 非敵対Mobの送信上限4件を適用する前の村人数。送られたpassive_mobsの要素数とは異なる。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub visible_villager_count: Option<i64>,
     /// 検出できたエンドポータルフレームまでの距離（ブロック）。未検出ならNone。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub nearby_end_portal_frame_distance: Option<f64>,
     /// FabricのMinecraftClient.isPaused()。Noneはpause情報未送信で、Rust側の会話停止命令ではない。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub game_paused: Option<bool>,
     #[serde(flatten)]
@@ -1361,7 +1259,6 @@ pub struct EventData {
     pub observed_at: DateTime<FixedOffset>,
     /// adapterのnextSequenceによる通し番号。Noneは番号なしで、重複・順序の台帳はsession側が持つ。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub sequence: Option<i64>,
     pub event: EventDescriptor,
     #[serde(default)]
@@ -1398,7 +1295,6 @@ pub struct EventData {
     pub owned_horses: Option<crate::assist::horse_recall::Snapshot>,
     /// buildInventoryが所持枠をitem IDのpathごとに合算した個数。入手・クラフト・設置の行為ログではない。
     #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
     pub inventory: BTreeMap<String, i64>,
     #[serde(default)]
     pub nearby_resources: Vec<NearbyResource>,

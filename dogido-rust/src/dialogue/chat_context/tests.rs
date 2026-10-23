@@ -42,7 +42,7 @@ fn kill(id: &str, mob: &str) -> Value {
 }
 #[test]
 fn original_inventory_order_is_private_validated_and_clone_stable() {
-    let mut v: Value = serde_json::from_str(r#"{"schema_version":"2026-05-24","adapter":"test","observed_at":"2026-09-29T00:00:00Z","event":{"name":"status_snapshot","source_kind":"system","priority_hint":"background","certainty":"high"},"inventory":{"z:item":1,"a:item":2,"m:item":"3"}}"#).unwrap();
+    let mut v: Value = serde_json::from_str(r#"{"schema_version":"2026-05-24","adapter":"test","observed_at":"2026-09-29T00:00:00Z","event":{"name":"status_snapshot","source_kind":"system","priority_hint":"background","certainty":"high"},"inventory":{"z:item":1,"a:item":2,"m:item":3}}"#).unwrap();
     let e = GameEvent::parse(v.clone()).unwrap();
     assert_eq!(e.inventory_order(), ["z:item", "a:item", "m:item"]);
     assert_eq!(e.clone().inventory_order(), e.inventory_order());

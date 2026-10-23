@@ -10,6 +10,7 @@ DokiDoki Dogido の設計・仕様ドキュメントです。
 | [../AGENTS.md](../AGENTS.md) | 実装エージェント向けの制約と作業ガイド |
 | [ローカルの軽量処理優先とLLM呼出監査](2026-10-18-dialogue-model-call-audit.md) | コード・分類器を優先する方針、呼出回数、分類追加と移行の状況 |
 | [ModernBERT 23分類の本体接続](2026-10-23-modernbert-23class-integration.md) | 890件版seed42の採用、川柳・モブ・身体操作の接続 |
+| [旧実装・後方互換経路の削除](2026-10-24-legacy-path-removal.md) | 削除範囲、現行契約、検証結果 |
 | [../dev_tools/README.md](../dev_tools/README.md) | 表示プレビュー・音声診断・対話評価・独立試作 |
 | [通常会話のドギド視点画像](2026-10-21-chat-image.md) | 一枚撮影・192px・同時生成・一時画像の保持 |
 | [Minecraftのテキスト会話](2026-10-09-minecraft-text-dialogue.md) | `/dogido`、音声の切替、表示確認の仕様と確認状況 |

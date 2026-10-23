@@ -82,7 +82,7 @@ impl Queue {
             result.detail_code = "server_result_timeout".into();
         } else if result.status == AdapterCommandResultStatus::Succeeded {
             let in_time = result.executed_at >= command.issued_at
-                        && result.executed_at < command.expires_at;
+                && result.executed_at < command.expires_at;
             if !in_time {
                 result.status = AdapterCommandResultStatus::Failed;
                 result.detail_code = "result_outside_validity_window".into();
