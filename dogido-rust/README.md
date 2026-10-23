@@ -6,7 +6,7 @@ HTTP受付、ゲーム判断、通常会話、川柳・共同編集、記憶、�
 
 ## 準備
 
-Rustの版は `rust-toolchain.toml`、依存は `Cargo.lock` で固定しています。Python補助はリポジトリのルートで `pip install -e .`、必要に応じて `.[tts-reading]` 等の追加依存を導入します。共有LLMとVOICEVOXは設定した既存のものを使用します。
+Rustの版は `rust-toolchain.toml`、依存は `Cargo.lock` で固定しています。Python補助は[ルートREADMEの初回導入](../README.md#1-本体の準備と起動)を先に済ませ、リポジトリのルートで `python -m pip install -e .`、必要に応じて `.[tts-reading]` 等の追加依存を導入します。共有LLMとVOICEVOXは設定した既存のものを使用します。
 
 以下はすべてリポジトリのルートから実行します。
 

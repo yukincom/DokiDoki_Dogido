@@ -42,3 +42,6 @@ transformers==5.19.0
 truststore==0.10.5
 typer==0.27.3
 typing-extensions==4.16.0
+# CA事故対応。installer自身のvendored CAも更新する。
+certifi>=2026.10.19
+pip>=26.2.2

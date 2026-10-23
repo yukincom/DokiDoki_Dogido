@@ -6,3 +6,6 @@ fugashi==1.5.2
 unidic-lite==1.0.8
 numpy==2.2.6
 pywebrtc-audio==0.2.0
+# CA事故対応。installer自身のvendored CAも更新する。
+certifi>=2026.10.19
+pip>=26.2.2

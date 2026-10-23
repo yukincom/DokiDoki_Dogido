@@ -17,6 +17,7 @@ RUNTIME_DATA = (
     "dogido_server/runtime_defaults.json",
     "dogido_server/runtime_settings.py",
     "dogido_server/config.py",
+    "dogido_server/tls_security.py",
     "dogido_server/voice_settings.py",
     "dogido_server/voice_capture.py",
     "dogido_server/echo_input.py",

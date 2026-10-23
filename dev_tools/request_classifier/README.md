@@ -27,6 +27,7 @@ python3 -m unittest discover -s dev_tools/request_classifier -p 'test_*.py' -v
 
 ```bash
 python3 -m venv .dogido_tools/request_classifier/.venv
+.dogido_tools/request_classifier/.venv/bin/python -m dogido_server.tls_security --bootstrap
 .dogido_tools/request_classifier/.venv/bin/python -m pip install -r dev_tools/request_classifier/requirements-train.txt
 .dogido_tools/request_classifier/.venv/bin/python dev_tools/request_classifier/train.py \
   --output-dir .dogido_tools/request_classifier/new-run \
