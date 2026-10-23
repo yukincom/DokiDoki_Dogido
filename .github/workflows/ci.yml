@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    name: Rust tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # cargo.shが既存のrust-toolchain.tomlとCargo.lockを使用する。
+      - name: Test all Rust targets
+        run: ./dogido-rust/cargo.sh test --all-targets --locked
+
+  helpers:
+    name: Python and library tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.11"
+      - name: Bootstrap installer and install test dependencies
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m dogido_server.tls_security --bootstrap
+          .venv/bin/python -m pip --disable-pip-version-check install -e '.[dev]' numpy==2.2.6
+      - name: Test Python helpers
+        run: .venv/bin/python -m pytest -q tests dogido-rust/scripts/test_*.py
+      - name: Test library models
+        run: node --test tools/dogido-library/*.test.cjs
+      - name: Check shell syntax
+        run: |
+          sh -n scripts/check_uv.sh
+          bash -n scripts/setup_echo_capture.sh
