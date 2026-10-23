@@ -18,12 +18,13 @@ API キーは不要で、このファイルは Git 対象外です。共有プ�
 
 - chat / haiku がともに `chat_completions`、`local`、`http://127.0.0.1:8080/v1`
 - request の `model` が必ず `default_model`
-- `DOGIDO_PLATFORM_AI_PROVIDER=chat`
 
 検査に失敗した場合は起動を止めます。共有 endpoint の失敗時にプロセス内 MLX をロードする
 fallback はなく、ドギド終了時にも 8080 を停止しません。8080 の起動・停止・モデル・並列度・
 context・cache は共有 MLX サーバー側で管理します。`GET /v1/models` は現在ロード中のモデル確認には
 使いません。
+
+OS AIの接続とprovider設定は撤去済みです。意図分類は共通BERT、戦闘中断後の再開・継続はRustの警戒解除判定を使います。[現行仕様](2026-10-23-modernbert-23class-integration.md)。
 
 ## 起動
 

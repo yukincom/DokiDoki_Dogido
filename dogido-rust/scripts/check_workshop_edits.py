@@ -7,7 +7,8 @@ import fcntl
 import json
 import threading
 from check_workshop_runtime import install, ready, step, session
-from check_haiku_runtime import fixture, LINES
+from check_haiku_runtime import LINES
+from check_workshop_fixture import fixture
 from check_dialogue import request, row, submit, wait_for
 
 
@@ -109,7 +110,7 @@ def main():
         assert r["workshop_action"]=="close_workshop" and hud(sid)["state"]=="closed"
         passed.append("polite_explicit_close_needs_no_second_adoption")
 
-    # 操作の意味はモデルが決める。Rustは音数・重複・否定・引用・疑問で覆さない。
+    # このケースの変更意思は固定BERT結果。Rustは音数・重複・文の語形で覆さない。
     for text, word in [
         ("上五を『さくら』にして", "さくら"),
         ("上五を『さくらいろ』にしないで", "さくらいろ"),
@@ -123,7 +124,7 @@ def main():
             r=finish(base,send,sid,text)
             assert r["workshop_outcome"]=="player_edit_saved",r
             assert hud(sid)["canonical_lines"]==[word,*LINES[1:]] and len(revisions(folder,sid))==1,r
-    passed.append("model_edits_execute_with_nonstandard_meter_duplicate_and_varied_wording")
+    passed.append("bert_edits_execute_with_nonstandard_meter_duplicate_and_varied_wording")
     with fixture() as (base,process,log,control,seen,gate,drafting,checks,send,hud,rows,stored,folder):
         install(control,lambda text,prompt,n:edit(text));sid=ready(base,send,rows)
         r=finish(base,send,sid,"上五を直して")
@@ -147,7 +148,7 @@ def main():
             entered.set();release.wait(8);return edit_or_command(text)
         install(control,blocked);sid=ready(base,send,rows)
         try:
-            old=submit(base,sid,"上五を『さくらいろ』にして");wait_for(entered.is_set)
+            old=submit(base,sid,"上五の言葉はさくらいろがいい。そこへ変更をお願い");wait_for(entered.is_set)
             newer=submit(base,sid,"今の句");release.set();wait_for(lambda:row(base,newer,{"completed"}))
             assert row(base,old,{"cancelled"}) and hud(sid)["canonical_lines"]==LINES and not revisions(folder,sid)
             passed.append("cancelled_extraction_cannot_apply_late_result")
@@ -180,12 +181,12 @@ def main():
         calls=install(control,lambda text,prompt,n:edit(text,
             replacement="桜色" if "桜色" in text else "さくらさく", reference="", fragment="桜の葉" if "桜の葉" in text else "さくらいろ"))
         sid=ready(base,send,rows);original=stored(sid)
-        for text,want in [("桜の葉を桜色に変えて","桜色"),("さくらいろをさくらさくに変えて","さくらさく")]:
+        for text,want,expected_calls in [("桜の葉を桜色に変えて","桜色",1),("さくらいろをさくらさくに変えて","さくらさく",0)]:
             r=finish(base,send,sid,text)
-            assert r["workshop_outcome"]=="player_edit_saved" and len(r["llm_reports"])==1,r
+            assert r["workshop_outcome"]=="player_edit_saved" and len(r["llm_reports"])==expected_calls,r
             assert hud(sid)["canonical_lines"]==[want,*LINES[1:]] and not hud(sid)["pending_lines"]
         assert len(revisions(folder,sid))==2 and stored(sid)==original
-        assert len(calls)==2
+        assert len(calls)==1
         first=revisions(folder,sid)[0]["lines"][0]
         assert first["surface_text"]=="桜色" and first["reading_text"]=="さくらいろ"
         token_requests=[json.loads(line) for line in (token_dir/"requests.jsonl").read_text().splitlines()]
@@ -208,7 +209,7 @@ def main():
         calls=install(control,no_dictionary)
         sid=ready(base,send,rows);original=stored(sid)
         r=finish(base,send,sid,"上五を『桜色』にして")
-        assert r["workshop_outcome"]=="player_edit_saved" and len(calls)==1,r
+        assert r["workshop_outcome"]=="player_edit_saved" and len(calls)==0 and not r["llm_reports"],r
         assert hud(sid)["canonical_lines"]==["桜色",*LINES[1:]] and not hud(sid)["pending_lines"]
         saved=revisions(folder,sid)
         assert stored(sid)==original and len(saved)==1
@@ -225,12 +226,12 @@ def main():
         for text in ["採用しないよ","『採用』って言っただけ","採用したらどうなる？","採用かな？"]:
             r=finish(base,send,sid,text)
             assert r["workshop_action"]=="respond" and hud(sid)["pending_lines"] and not revisions(folder,sid),r
-        bad_close=install(control,lambda text,prompt,n:{**step(text,"close_workshop"),"evidence":"前の発話にしかない終了意思","speech":"この句の話、聞いとるで。"})
+        ending=install(control,lambda text,prompt,n:step(text,"ask",speech="この案を採用するか、破棄するか教えてな。"))
         r=finish(base,send,sid,"お開きー")
-        assert r["workshop_action"]=="respond" and len(bad_close)==1,r
-        assert r["text"]=="この句の話、聞いとるで。" and hud(sid)["state"]=="open",r
+        assert r["workshop_action"]=="ask" and len(ending)==1,r
+        assert r["text"]=="この案を採用するか、破棄するか教えてな。" and hud(sid)["state"]=="open",r
         assert hud(sid)["canonical_lines"]==LINES and hud(sid)["pending_lines"] and not revisions(folder,sid)
-        passed.append("invalid_model_close_keeps_pending_and_original_reply_without_confirmation")
+        passed.append("bert_end_without_adoption_keeps_pending_and_asks_once")
         install(control,lambda text,prompt,n:step(text,"ask",speech="今の案を使うか、もう少し話すか聞かせてな。"))
         for text in ["終了","いい句だね"]:
             r=finish(base,send,sid,text)

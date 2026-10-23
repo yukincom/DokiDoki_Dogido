@@ -132,7 +132,7 @@ impl Queue {
 mod tests {
     //! 実移動やモデルを使わず、発行から結果ACKまでの境界を検査する。
     use super::*;
-    use crate::assist::{AssistState, Input, SELECT_HOTBAR_CAPABILITY, Submission};
+    use crate::assist::{AssistState, SELECT_HOTBAR_CAPABILITY, Submission};
     use crate::events::GameEvent;
     use serde_json::json;
 
@@ -140,6 +140,23 @@ mod tests {
         DateTime::parse_from_rfc3339("2026-10-11T00:00:00Z")
             .unwrap()
             .with_timezone(&Utc)
+    }
+    fn classified(
+        text: &str,
+        label: crate::request_classifier::Label,
+    ) -> crate::request_classifier::Classification {
+        use crate::request_classifier::{Classification, LABELS, Prediction};
+        Classification {
+            text: text.into(),
+            source: "text".into(),
+            manifest_sha256: "fixture".into(),
+            prediction: Prediction {
+                label,
+                probabilities: LABELS.map(|candidate| if candidate == label { 1.0 } else { 0.0 }),
+                token_count: 1,
+                inference_ms: 0.0,
+            },
+        }
     }
     fn prepared() -> Prepared {
         let snapshot: Snapshot = serde_json::from_value(json!({
@@ -151,7 +168,14 @@ mod tests {
                 "has_passengers":false,"leashed":false}]
         }))
         .unwrap();
-        Prepared::new(snapshot, "ぶちを呼んで").unwrap()
+        Prepared::from_classified(
+            snapshot,
+            &classified(
+                "ぶちを呼んで",
+                crate::request_classifier::Label::RecallMount,
+            ),
+        )
+        .unwrap()
     }
     fn choice() -> Choice {
         Choice {
@@ -190,12 +214,9 @@ mod tests {
             "combat":{"combat_active_hint":false}})
     }
     fn sword(state: &mut AssistState, time: DateTime<Utc>) -> crate::assist::Dispatch {
-        let input = Input {
-            raw_text: "剣".into(),
-            ..Input::default()
-        };
-        let Submission::Handled(dispatch) = state.submit(
-            input,
+        let request = classified("剣", crate::request_classifier::Label::EquipSword);
+        let Submission::Handled(dispatch) = state.submit_classified(
+            &request,
             &GameEvent::parse(event_value()).unwrap(),
             time,
             false,
@@ -248,12 +269,11 @@ mod tests {
                 .enqueue_horse(&p, &choice(), &p.snapshot, now())
                 .is_err()
         );
-        state.invalidate_intent();
-        state.submit(
-            Input {
-                raw_text: "今日は晴れやな".into(),
-                ..Input::default()
-            },
+        state.submit_classified(
+            &classified(
+                "今日は晴れやな",
+                crate::request_classifier::Label::NotTarget,
+            ),
             &GameEvent::parse(event_value()).unwrap(),
             now(),
             false,

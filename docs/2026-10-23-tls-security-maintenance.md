@@ -45,9 +45,9 @@ UniDic補助の `fugashi.Tagger`、依頼分類workerの `torch`／`transformers
 
 [Pytra](https://github.com/yaneurao/Pytra)の共有checkoutはcommit `9f341e04fefd8eacac1081c59e80f4042ee80a6f`と一致することを確認した。重複取得・共有ソースの変更はしていない。互換仕様と `pytra.std` を読み、候補が使う `shutil.which`／`os.access` をそのまま変換できる対応がないことを確認した。依頼元からは最小add関数のRust packageが未生成moduleへのimportによりE0432となった報告もある。ドギド側では変換・生成物採用は行わず、生成コードの同等性を検証済みとはしない。
 
-## 検査結果
+状況要約の保持案、静止画像での発話品質の実機確認は[静止時の視覚仕様](2026-10-22-stop-vision.md)へ未実装・未確認として記録した。
 
-### 書類側mainの更新確認
+## 検査結果
 
 - `cargo test --all-targets --locked`：34 target、874件成功、実音声1件は既存skip。`cargo build --release --locked`も成功。
 - `pytest -q tests dogido-rust/scripts/test_*.py`：196件成功、11件skip、22 subtest成功。最低版・更新失敗時の停止・旧uv配布拒否・3種類のライセンス配置・生成notebookのhash固定導入と構文、既存の設定・家庭用ランチャー等を確認した。
@@ -57,12 +57,16 @@ UniDic補助の `fugashi.Tagger`、依頼分類workerの `torch`／`transformers
 - 更新したreleaseと実設定で、本体／音声の `launch_dialogue.py --check` がともに成功。サービス起動・録音・既存サービスの再起動は行っていない。
 - 家庭用セットの完全な再作成・別Macへの配布・Minecraft実接続、OS証明書の不信頼状態と実TLS接続は未確認。作成済み配布物と稼働中プロセスには更新が自動反映されない。
 
-### 公開mainから切り出した変更
+## 公開用差分の検証とPR（2026-10-23）
 
-公開main `e2f808d`を基準に、更新commit `3ecf6c8`から本件の17ファイルだけを適用した。前段の分類器・身体・画像入力の変更と未コミット作業は含めない。家庭用ファイル一覧は公開mainが現在使用するplatform AI補助を保持し、更新用のPython補助だけを追加した。
+[更新PR #46](https://github.com/yukincom/DokiDoki_Dogido/pull/46)を作成した。公開main `e2f808d`から、今回の更新17ファイルだけをcommit `baad89e`として切り出した。前段の分類器・身体・画像入力の変更と、進行中の本棚変更は含めていない。PR作成時点では未マージ。
 
-- 公開用ブランチのRust全34 target：828件成功、実音声1件は既存skip。専用releaseビルド成功。
-- 公開用ブランチのPython補助：229件成功、11件skip、36 subtest成功。書類側mainとはテスト対象が異なるため、件数を分けて記録する。
-- 公開版の `.env.example` を使った本体 `--check` と、既存の音声設定を使った `--voice --check` が成功。サービス起動・録音は行っていない。
-- 開発mainで先行する23分類モデルの設定をそのまま使った本体checkは `model label mapping mismatch` で不成立。公開mainのラベル契約と異なるためであり、この更新に分類器の変更を混ぜて回避しない。
-- GitHub Actionsはユーザーの指示で停止。2026-10-23にリポジトリの `enabled=false` を確認した。CIの新規実行・再実行をせず、上記のローカル検証で確認した。
+公開用ブランチでもRust 828件（実音声1件skip）、Python 229件（11件skip、36 subtest）が成功し、専用releaseをビルドした。公開版の標準設定による本体checkと既存音声設定のcheckが成功。先行する23分類モデルの実設定は公開版のラベル契約と異なるため、その組合せでの本体checkは不成立として公開側docsにも記録した。
+
+GitHub Actionsはユーザーの指示で停止。pushとPR作成の前後にリポジトリの `enabled=false` を確認し、CIの新規実行・再実行は行っていない。常駐サービスも再起動していない。
+
+## 現行実装への公開統合とCI再開（2026-10-23）
+
+上記PR #46の公開時点とCI停止は当時の記録。ユーザーの再開・main反映指示により、現在はActionsを有効化し、ブランチへのpushだけを起動条件にする。定期実行は設定しない。
+
+OSAI撤去済みの開発mainを公開版へ統合し、旧OSAIのSDK・設定・worker・fallback・旧テストを削除した。セキュリティ更新だけを切り出した版に残った旧実装は維持しない。23分類BERTと身体・画像入力の検証済み変更も含むため、公開版と開発版のラベル契約は一致する。未コミットの本棚作業は含めない。統合範囲とCI検証は[CI記録](2026-10-23-github-actions-ci.md)を参照する。

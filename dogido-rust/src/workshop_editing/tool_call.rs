@@ -255,5 +255,63 @@ pub fn normalize_player_edit_tool(
     Ok(frame)
 }
 
+/// 対象と元句は共通分類と現在snapshotから補完する。原文の置換語は補完しない。
+pub fn fill_classified_edit_target(workshop: &Value, index: usize, args: &mut Value) -> Result<()> {
+    let snapshot = Snapshot::from_view(workshop)?;
+    let lines = editing_records(&snapshot);
+    ensure!(
+        lines.len() == 3 && index < lines.len(),
+        "invalid_classified_target"
+    );
+    let args = args.as_object_mut().context("invalid_tool_arguments")?;
+    args.insert("line_id".into(), lines[index].line_id.clone().into());
+    args.insert(
+        "expected_text".into(),
+        lines[index].surface_text.clone().into(),
+    );
+    args.remove("line_reference_evidence");
+    Ok(())
+}
+
+/// 既存のA/B抽出が一意に成立するときだけ、生成を挟まず同じ編集検証へ渡す。
+pub fn verbatim_player_edit(
+    workshop: &Value,
+    original: &str,
+    index: usize,
+) -> Result<Option<Value>> {
+    // 直接編集では発話全体を根拠にする。長い発話や一意でない形は既存の限定抽出へ渡す。
+    if original.chars().count() > 120 {
+        return Ok(None);
+    }
+    let Some(verbatim) = parse::verbatim_edit(original).ok().flatten() else {
+        return Ok(None);
+    };
+    let snapshot = Snapshot::from_view(workshop)?;
+    let lines = editing_records(&snapshot);
+    ensure!(
+        lines.len() == 3 && index < lines.len(),
+        "invalid_classified_target"
+    );
+    let fragment = parse::fragment_prefix(verbatim.target);
+    let fragment = parse::unquote(&fragment);
+    let references = parse::explicit_lines(verbatim.target);
+    let whole_line = !verbatim.target_quoted
+        && references.len() == 1
+        && references.contains(&index)
+        && fragment.is_empty();
+    if !whole_line
+        && (fragment.is_empty()
+            || !(lines[index].surface_text.contains(fragment)
+                || lines[index].reading_text.contains(fragment)))
+    {
+        return Ok(None);
+    }
+    let mut args = json!({"target_fragment":if whole_line {""} else {fragment},
+        "replacement_text":verbatim.replacement,
+        "evidence":original, "confidence":1.0});
+    fill_classified_edit_target(workshop, index, &mut args)?;
+    Ok(Some(normalize_player_edit_tool(workshop, original, &args)?))
+}
+
 #[cfg(test)]
 mod tests;

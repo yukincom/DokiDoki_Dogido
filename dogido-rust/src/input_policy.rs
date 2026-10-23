@@ -1,4 +1,4 @@
-//! player入力を閉じた語彙・文型で調べ、静粛要求・戦況質問・句の保存/修正へ分類する。
+//! BERT対象外の静粛要求・所持品照会・句の保存形式を原文から読む。
 //! 原文と共有input-policy.jsonからProjectionを返す純粋な読取り処理。
 //! 呼び手が現在状態・権限・根拠と合わせて採否を決めるため、分類だけでは保存や操作を実行しない。
 use regex::Regex;
@@ -33,15 +33,10 @@ static SHORT_INVENTORY: LazyLock<Regex> = LazyLock::new(|| {
         .replace(r"(?=$|[?？!！。、,])", r"(?:$|[?？!！。、,])");
     compile(&pattern)
 });
-static DIRECTION_STRIP: LazyLock<Regex> =
-    LazyLock::new(|| compile(POLICY["direction_strip"].as_str().unwrap()));
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Projection {
     pub wants_quiet: bool,
     pub should_block_ambient: bool,
-    pub asks_hostile_count: bool,
-    pub asks_hostile_direction: bool,
-    pub asks_dragon_direction: bool,
     pub asks_save_last_haiku: bool,
     pub asks_inventory: bool,
     pub asks_about_sound: bool,
@@ -80,20 +75,9 @@ fn payload(raw: &str, prefix_key: &str) -> Option<String> {
 }
 /// `normalized`の再正規化はせず、句本文だけは改行・引用を保持した`raw`から読む。
 /// slash commandの早期returnと保存可否は呼出側が既存の規則で判断する。
-// TODO(request-classifier): enemy_information 接続後は、下の敵数・方角・ドラゴン語句を
-// 「敵情報経路へ入れるか」の再判定に使わず、同一入力の分類結果で経路を決める。
-// 現5分類は数／方角／対象を区別しないため、その属性抽出や所持品・音・静粛判定は別課題。
+// モブ質問はBERTへ変更済み。旧判定へ戻さない。対象・数・方角は受理後の現在観測へ照合する。
 pub fn classify(raw: &str, normalized: &str) -> Projection {
     let text = fold(normalized);
-    let has_dragon = words("DRAGON_KEYWORDS").any(|word| text.contains(&fold(word)));
-    let has_direction = has(&text, "DIRECTION_QUERY_KEYWORDS");
-    let compact_direction = DIRECTION_STRIP.replace_all(&text, "");
-    let asks_hostile_direction = !text.is_empty()
-        && !has_dragon
-        && has_direction
-        && (has(&text, "HOSTILE_DIRECTION_REFERENTS")
-            || ["どっち", "どこ", "どのへん", "どの辺", "方向", "方角"]
-                .contains(&compact_direction.as_ref()));
     let possession = has(&text, "POSSESSION_HINT_KEYWORDS");
     let asks_inventory = !text.is_empty()
         && (has(&text, "INVENTORY_TOPIC_KEYWORDS")
@@ -113,13 +97,6 @@ pub fn classify(raw: &str, normalized: &str) -> Projection {
     Projection {
         wants_quiet: !text.is_empty() && has(&text, "HUSH_KEYWORDS"),
         should_block_ambient: !normalized.is_empty(),
-        asks_hostile_count: !text.is_empty()
-            && has(&text, "HOSTILE_COUNT_QUERY_KEYWORDS")
-            && (has(&text, "HOSTILE_QUERY_KEYWORDS")
-                || text.contains("残り")
-                || text.contains("あと")),
-        asks_hostile_direction,
-        asks_dragon_direction: !text.is_empty() && has_dragon && has_direction,
         asks_save_last_haiku: !text.is_empty()
             && (has(&text, "SAVE_LAST_HAIKU_KEYWORDS")
                 || (text.contains("保存")

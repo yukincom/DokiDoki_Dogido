@@ -3,6 +3,7 @@ package dogido.lab;
 import com.google.gson.Gson;
 import dogido.lab.api.BodyProtocol.HearingObservation;
 import dogido.lab.api.BodyProtocol.Snapshot;
+import dogido.lab.api.BodyProtocol.RecallReceipt;
 import java.nio.charset.StandardCharsets;
 
 /**
@@ -14,10 +15,14 @@ final class BodySnapshotPayload {
     private static final Gson JSON = new Gson();
     private BodySnapshotPayload() {}
 
-    static String encode(Snapshot snapshot) {
+    static String encode(Snapshot snapshot) { return encode(snapshot,null); }
+    /** 呼び寄せのreceiptも同じ送信上限へ含め、操作結果を省くことなく聴覚だけを調整する。 */
+    static String encode(Snapshot snapshot, RecallReceipt recall) {
         Snapshot bounded = snapshot;
         while (true) {
-            String text = JSON.toJson(bounded);
+            var envelope = JSON.toJsonTree(bounded).getAsJsonObject();
+            if (recall != null) envelope.add("recall_result",JSON.toJsonTree(recall));
+            String text = JSON.toJson(envelope);
             if (text.length() <= MAX_BYTES && text.getBytes(StandardCharsets.UTF_8).length <= MAX_BYTES) return text;
             HearingObservation hearing = bounded.hearing();
             if (hearing == null || hearing.sounds().isEmpty())

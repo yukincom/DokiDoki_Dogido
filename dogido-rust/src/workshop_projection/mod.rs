@@ -1,7 +1,6 @@
 //! Read-only workshop snapshots and request materials. No edits, state, saving,
 //! dictionary lookup, or model calls. Snapshot data stays tied to its saved poem.
 use crate::text_format::{self, ContainerFormat::QuotedRepr};
-mod followup;
 #[cfg(test)]
 mod tests;
 use crate::{
@@ -10,7 +9,6 @@ use crate::{
     haiku_record::HaikuLine,
 };
 use anyhow::{Context, Result};
-pub use followup::fixed_combat_resume;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
@@ -362,9 +360,6 @@ pub fn details_for(frame: &Value) -> Result<Value> {
         details["workshop_context"]["discussion_target"] = target.context(lines);
     }
     details["allowed_actions"] = actions.into();
-    if view["followup"] == "combat_resume_confirmation" {
-        details["conversation_stage"] = json!("combat_resume_confirmation");
-    }
     Ok(details)
 }
 pub fn revision_input(frame: &Value) -> Result<Value> {

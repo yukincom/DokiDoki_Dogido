@@ -2,8 +2,8 @@
 //! 待機中と実行中の取消・観測鮮度を監視し、状態反映は同じturnとepochを検証するupdateへ渡す。
 //! 実再生結果の反映後に通常会話からの発句再開を判定し、受付時の情報と実行結果をworkshop記録へ結ぶ。
 use super::{
-    Dialogue, bridge, chat_context, fresh, history, monitor, observation_fresh,
-    workshop_combat_input, workshop_focus, workshop_record,
+    Dialogue, bridge, chat_context, fresh, history, monitor, observation_fresh, workshop_focus,
+    workshop_record,
 };
 use crate::playback::Status as PlaybackStatus;
 use serde_json::{Value, json};
@@ -117,7 +117,6 @@ impl Dialogue {
         let monitor_sid = sid.clone();
         let mut monitor_cancel = cancel.clone();
         let workshop_id = input["workshop"]["workshop_id"].as_str().map(str::to_owned);
-        let provisional_target = input["workshop"]["provisional"].as_str().map(str::to_owned);
         let ordinary_reply = self
             .data
             .lock()
@@ -134,13 +133,8 @@ impl Dialogue {
                         let mut d=owner.data.lock().unwrap();
                         owner.tick_workshop(&mut d, &monitor_sid);
                         let stale = d.sessions.get(&monitor_sid).is_some_and(|s| {
-                            // 閉じる返答の配送中も、開始時と同じ安定した敵なら最後まで話せる。
-                            let same_threat = provisional_target.as_ref().is_some_and(|key| {
-                                workshop_combat_input::ready(s, owner.clock.elapsed().as_millis() as u64, &owner.config).as_ref() == Some(key)
-                            });
                             let workshop_allowed = workshop_id.is_some()
-                                && (workshop_focus::quiet_observation(s)
-                                    || workshop_combat_input::provisional(s) || same_threat);
+                                && workshop_focus::quiet_observation(s);
                             s.epoch == epoch && !super::reply_queue::playback_started(&d, &monitor_sid)
                                 && !(fresh(s) || workshop_allowed
                                 || ordinary_reply && observation_fresh(s))

@@ -300,6 +300,7 @@ impl Dialogue {
         }
         s.record_private_generation = Some((s.input_generation, private));
         super::body_interest_runtime::cancel(s);
+        s.body_requests.cancel();
         Self::cancel_request_classification(&mut d, &session_id);
         Self::cancel_combat_input(&mut d, &session_id);
         Self::cancel_haiku(&mut d, &session_id, "new_player_input");
@@ -331,8 +332,18 @@ impl Dialogue {
             return self.start_request_classification(&mut d, &mut jobs, &session_id, text, source);
         }
         if !quiet
+            && let Some(result) =
+                self.body_request_input(&mut d, &mut jobs, &session_id, text, source)
+        {
+            return result;
+        }
+        if !quiet
             && !skip_assist
-            && !workshop_focus::quiet(&d.sessions[&session_id])
+            && (!workshop_focus::quiet(&d.sessions[&session_id])
+                || super::request_runtime::classification(&d.sessions[&session_id], text, source)
+                    .is_some_and(|r| {
+                        r.prediction.label == crate::request_classifier::Label::EquipSword
+                    }))
             && let Some(result) = self.assist_input(&mut d, &mut jobs, &session_id, text, source)
         {
             return result;
@@ -355,11 +366,18 @@ impl Dialogue {
             return json!({"accepted":true,"session_id":session_id,"reason":"smell_query"});
         }
         let s = d.sessions.get_mut(&session_id).unwrap();
-        if (quiet || !workshop_focus::quiet(s))
-            && let Some(event) = s.latest.clone()
+        let classified = super::request_runtime::classification(s, text, source).is_some_and(|r| {
+            r.prediction.label == crate::request_classifier::Label::EnemyInformation
+        });
+        if (quiet || classified || !workshop_focus::quiet(s))
+            && let Some(raw) = s.latest.clone()
         {
-            let classified = super::request_runtime::classification(s, text, source)
-                .map(|r| r.prediction.label == crate::request_classifier::Label::EnemyInformation);
+            // 分類済みの現在モブ質問はドギドの身体観測を使う。戦況・静粛は従来の観測を保つ。
+            let event = if classified && !quiet {
+                super::body_runtime::event(s, &raw)
+            } else {
+                raw
+            };
             let decision = s.combat.input_with_enemy_request(
                 &event,
                 text,
@@ -421,7 +439,7 @@ impl Dialogue {
         }
         if !combat_classified
             && let Some(result) =
-                self.classify_paused_input(&mut d, &mut jobs, &session_id, text, source)
+                self.hold_paused_input(&mut d, &mut jobs, &session_id, text, source)
         {
             return result;
         }

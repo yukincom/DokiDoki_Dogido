@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """会話中の差し替え案が、明示指示後だけ一度の同意で確定することを模擬HTTPで確認する。"""
 from check_dialogue import row, submit, wait_for
-from check_haiku_runtime import LINES, fixture
+from check_haiku_runtime import LINES
+from check_workshop_fixture import fixture
 from check_workshop_runtime import install, ready, step
 from check_workshop_edits import revisions
 

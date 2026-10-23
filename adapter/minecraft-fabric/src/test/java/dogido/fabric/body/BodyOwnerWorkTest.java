@@ -12,6 +12,8 @@ import static org.junit.jupiter.api.Assertions.*;
 /** adapterの送信境界を模擬bridgeで確認する。現在値true/falseは同じ身体世代に送り、行動やモードを変更しない。 */
 class BodyOwnerWorkTest {
     private static final class Bridge implements BodyBridge {
+        public Submission requestRecall(RecallRequest request) { throw new AssertionError("観測で呼び寄せを開始しない"); }
+        public Optional<RecallReceipt> recallReceipt(java.util.UUID actionId) { return Optional.empty(); }
         public Submission observeSpeechGaze(SpeechGazeObservation value) { return Submission.QUEUED; }
         Snapshot value = BodyAutonomyJsonTest.snapshot();
         long age; boolean available = true;

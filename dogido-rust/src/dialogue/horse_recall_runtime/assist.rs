@@ -1,11 +1,12 @@
-//! 戦闘・警告中の入力を既存assistの一件枠で受け、馬の二段判定だけを進める。
+//! BERTで受理した呼び寄せを既存assistの一件枠で受け、一回の個体選択を進める。
+//! BERTへ変更済み。旧判定へ戻さない。
 //! 通常会話のepochや音声serialから独立する一方、新入力・停止による取消と入力世代は共有する。
 use super::*;
 use crate::assist::{Input, InputSource};
 use std::sync::Arc;
 
 impl Dialogue {
-    /// 分類済みの呼び寄せ、または分類器未設定時の戦闘中入力を、既存の候補選択へ渡す。
+    /// 分類済みの呼び寄せだけを、戦闘・通常会話で共通の候補選択へ渡す。
     pub(in super::super) fn horse_assist_input(
         self: &Arc<Self>,
         d: &mut super::super::Data,
@@ -15,26 +16,17 @@ impl Dialogue {
         source: &str,
     ) -> Option<Value> {
         let s = d.sessions.get_mut(sid)?;
-        let classification = super::super::request_runtime::classification(s, text, source);
-        if classification.is_some_and(|r| r.prediction.label != crate::request_classifier::Label::RecallMount) {
+        let classification = super::super::request_runtime::classification(s, text, source)?;
+        if classification.prediction.label != crate::request_classifier::Label::RecallMount {
             return None;
         }
-        if classification.is_some() && !self.config.llm_enabled {
+        if !self.config.llm_enabled {
             return Some(json!({"accepted":false,"reason":"horse_selection_unavailable"}));
         }
-        if !self.config.llm_enabled
-            || !observation_fresh(s)
-            || super::super::workshop_focus::quiet(s)
-            || (classification.is_none() && s.mode == crate::combat::model::Mode::Normal
-                && s.chat_allowed
-                && !s.foreground.combat_active
-                && s.warning.is_none()
-                && s.pending_warning.is_none())
-        {
+        if super::super::workshop_focus::quiet(s) {
             return None;
         }
-        // 分類済みなら依頼判定LLMを省く。候補・capability・観測の検証はcaptureが所有する。
-        let context = capture(s, text, classification)?;
+        let context = capture(s, text, Some(classification))?;
         let request = crate::chat_prompt::Input {
             schema_version: 1,
             kind: "player_chat".into(),
@@ -72,7 +64,7 @@ impl Dialogue {
             "session_id":sid,"session_instance":instance,"category":"assist","text":"",
             "source":source,"player_input_text":text,"created_at":chrono::Utc::now(),
             "reference_ids":[],"output_mode":"text","playback_status":"generating",
-            "assist_status":"extracting","horse_recall_status":"recognizing"}),
+            "assist_status":"selecting","horse_recall_status":"selecting"}),
         );
         d.revision += 1;
         let this = self.clone();
@@ -83,7 +75,7 @@ impl Dialogue {
                 .await;
         }));
         Some(
-            json!({"accepted":true,"session_id":sid,"reason":"horse_assist_intent","turn_id":turn}),
+            json!({"accepted":true,"session_id":sid,"reason":"horse_assist_selection","turn_id":turn}),
         )
     }
 
@@ -96,9 +88,9 @@ impl Dialogue {
         request: GenerationRequest,
         mut cancel: watch::Receiver<bool>,
     ) {
-        // 戦闘警告の音声枠を待たず、同じnative二段契約と同じ命令queueを使う。
+        // 戦闘警告の音声枠を待たず、一回の個体選択と同じ命令queueを使う。
         let generated = render(request, &self.llm, &context, &mut cancel).await;
-        let fallback = {
+        {
             let mut jobs = self.jobs.lock().unwrap();
             jobs.retain(|j| !j.is_finished());
             let mut d = self.data.lock().unwrap();
@@ -120,9 +112,6 @@ impl Dialogue {
             let pending = s.assist_pending.take().unwrap();
             s.horse_recall.checked_generation = Some(pending.generation);
             let mut result = generated.unwrap_or_else(rejected);
-            let requested = result["horse_recall_requested"] == true
-                || result.get("horse_choice").is_some()
-                || result["horse_recall_status"] == "rejected";
             if let Some(choice) = result.get("horse_choice") {
                 let dispatch = (|| -> Result<_> {
                     let choice = serde_json::from_value(choice.clone())?;
@@ -149,7 +138,7 @@ impl Dialogue {
             let text = result["text"].as_str().unwrap_or("").to_owned();
             if let Some(row) = d.rows.iter_mut().find(|r| r["turn_id"] == turn) {
                 row["playback_status"] = "quiet".into();
-                row["assist_status"] = if requested { "handled" } else { "not_handled" }.into();
+                row["assist_status"] = "handled".into();
                 for key in [
                     "horse_recall_status",
                     "horse_recall_reason",
@@ -161,40 +150,17 @@ impl Dialogue {
                         row[key] = value.clone();
                     }
                 }
-                if !requested {
-                    row["horse_recall_status"] = "not_requested".into();
-                }
             }
             d.revision += 1;
-            if requested {
-                if !text.is_empty() {
-                    self.queue_fixed_reply(
-                        &mut d,
-                        &mut jobs,
-                        &sid,
-                        text,
-                        Some(&pending.input.raw_text),
-                    );
-                }
-                None
-            } else {
-                Some((pending.input, pending.generation))
+            if !text.is_empty() {
+                self.queue_fixed_reply(
+                    &mut d,
+                    &mut jobs,
+                    &sid,
+                    text,
+                    Some(&pending.input.raw_text),
+                );
             }
-        };
-        if let Some((input, generation)) = fallback {
-            // 馬ではない本文を戦闘中に発話しない。固定戦況・知識保留・workshopの既存判断へ返す。
-            self.submit_inner(
-                Some(&sid),
-                &input.raw_text,
-                if input.source == InputSource::Voice {
-                    "voice"
-                } else {
-                    "text"
-                },
-                true,
-                Some((generation, None)),
-                false,
-            );
         }
     }
 }

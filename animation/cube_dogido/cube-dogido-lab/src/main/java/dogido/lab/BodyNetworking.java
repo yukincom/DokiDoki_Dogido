@@ -22,7 +22,10 @@ final class BodyNetworking {
             BodyPackets.Message message = JSON.fromJson(payload.json(),BodyPackets.Message.class);
             if (message == null || message.version() != dogido.lab.api.BodyProtocol.VERSION || message.kind() == null) return;
             DogidoEntity body = BodyManager.body(player);
-            if (body != null && player.isAlive() && !player.isSpectator()) {
+            dogido.lab.api.BodyProtocol.RecallReceipt submittedRecall = null;
+            if ("recall".equals(message.kind())) {
+                submittedRecall = BodyRecalls.submit(player,message.recall());
+            } else if (body != null && player.isAlive() && !player.isSpectator()) {
                 switch (message.kind()) {
                     case "state" -> body.applyState(player,message.state());
                     case "action" -> body.requestAction(player,message.action());
@@ -32,8 +35,10 @@ final class BodyNetworking {
                     default -> { return; }
                 }
             }
-            if (ServerPlayNetworking.canSend(player,BodyPackets.Response.ID))
-                ServerPlayNetworking.send(player,new BodyPackets.Response(BodySnapshotPayload.encode(BodyManager.snapshot(player))));
+            if (ServerPlayNetworking.canSend(player,BodyPackets.Response.ID)) {
+                var recall = submittedRecall == null ? BodyRecalls.current(player) : submittedRecall;
+                ServerPlayNetworking.send(player,new BodyPackets.Response(BodySnapshotPayload.encode(BodyManager.snapshot(player),recall)));
+            }
         } catch (JsonParseException | IllegalArgumentException ignored) {
             // A malformed client request cannot mutate another owner's body or stop the server tick.
         }

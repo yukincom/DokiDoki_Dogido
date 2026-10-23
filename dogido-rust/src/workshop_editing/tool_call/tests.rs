@@ -622,3 +622,45 @@ fn model_selected_edit_with_tomoshibi_needs_no_word_exemption() {
         );
     }
 }
+
+#[test]
+fn direct_and_native_edits_keep_literal_punctuation_in_surface_and_reading_separate() {
+    let view = white_sand_fixture();
+    let base: Vec<HaikuLine> = serde_json::from_value(view["current_lines"].clone()).unwrap();
+    for (raw, expected) in [
+        ("しろいしをてらし → さくらいろかな。", "さくらいろかな。"),
+        (
+            "しろいしをてらし → 「さくらいろかな。」",
+            "さくらいろかな。",
+        ),
+        (
+            "しろいしをてらし -> 『さくらいろかな？』",
+            "さくらいろかな？",
+        ),
+    ] {
+        let direct = verbatim_player_edit(&view, raw, 1).unwrap().unwrap();
+        let native =
+            normalize_player_edit_tool(&view, raw, &white_sand_args(raw, expected)).unwrap();
+        for frame in [direct, native] {
+            assert_eq!(frame["proposal"]["replacement_text"], expected, "{raw}");
+            let Output::PlayerEdit(PlayerEditResult::Validated(result)) =
+                engine_for(raw).project(&frame).unwrap()
+            else {
+                panic!("not an edit: {raw}")
+            };
+            assert!(result.failure_reasons.is_empty(), "{raw}: {result:?}");
+            assert_eq!(result.lines[1].surface_text, expected, "{raw}");
+            assert_eq!(result.lines[1].reading_text, "さくらいろかな", "{raw}");
+            assert_eq!(result.lines[0], base[0]);
+            assert_eq!(result.lines[2], base[2]);
+            assert_eq!(result.edits.len(), 1);
+            // 保存差分は既存の確定読み契約を維持し、表示表記は行正本で保持する。
+            assert_eq!(result.edits[0].replacement_text, "さくらいろかな");
+            let pending = Pending::stage(&base, &base, result.lines, 1).unwrap();
+            assert_eq!(pending.lines[1].surface_text, expected);
+            assert_eq!(pending.lines[1].reading_text, "さくらいろかな");
+            assert_eq!(pending.edits(), result.edits);
+            pending.validate(&base).unwrap();
+        }
+    }
+}

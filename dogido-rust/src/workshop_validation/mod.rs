@@ -89,7 +89,7 @@ pub(super) fn validate(frame: &Value, details: &Value) -> Result<Value> {
         if !strings(&details["allowed_actions"]).contains(action) {
             return Ok(reject("action_not_allowed"));
         }
-        let safe = !matches!(action, "confirm_close" | "decline_resume")
+        let safe = action != "confirm_close"
             || raw["evidence"].as_str().is_some_and(|e| {
                 workshop_input_guard::state_change_safe("close_workshop", source, e)
             });

@@ -1,6 +1,6 @@
 //! 支援命令の配送、期限切れ、結果ACKと重複除外を所有する。
 //! 対象選択は各支援ドメインへ渡し、剣と馬の実行結果・案内を発行時の種類で分ける。
-use super::{SELECT_HOTBAR_CAPABILITY, horse_recall, intent, selection::*};
+use super::{SELECT_HOTBAR_CAPABILITY, horse_recall, selection::*};
 use crate::events::{
     AdapterCommandResult, AdapterCommandResultCommandType, AdapterCommandResultStatus, EventTime,
     GameEvent,
@@ -17,20 +17,12 @@ pub enum InputSource {
     Text,
     Voice,
 }
-/// Raw text remains the authority. Interpreted text is accepted only on the voice path.
+/// 呼び寄せの非同期候補選択が保持する原文と入力元。依頼性の再判定には使わない。
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Input {
     pub raw_text: String,
     #[serde(default)]
     pub source: InputSource,
-    #[serde(default)]
-    pub interpreted_text: Option<String>,
-    #[serde(default)]
-    pub knowledge_query: bool,
-    #[serde(default)]
-    pub workshop_open: bool,
-    #[serde(default)]
-    pub workshop_combat_paused: bool,
 }
 #[derive(Clone, Debug, Serialize)]
 pub struct IntentEvidence {
@@ -46,27 +38,11 @@ pub struct Dispatch {
     pub command: Option<SelectHotbarCommand>,
     pub feedback: Option<String>,
 }
-/// Constructed only by submit. The private epoch prevents stale/replayed completions.
-#[derive(Clone, Debug, Serialize)]
-pub struct PreparedIntent {
-    pub player_text: String,
-    pub messages: Vec<intent::Message>,
-    pub schema: Value,
-    pub max_tokens: u32,
-    pub temperature: f64,
-    #[serde(skip)]
-    epoch: u64,
-    #[serde(skip)]
-    owner: uuid::Uuid,
-    #[serde(skip)]
-    input: Input,
-}
 #[derive(Clone, Debug, Serialize)]
 #[serde(tag = "kind", content = "value", rename_all = "snake_case")]
 pub enum Submission {
     NotHandled,
     Handled(Dispatch),
-    NeedsIntent(PreparedIntent),
 }
 #[derive(Clone, Debug, Serialize)]
 pub struct ObservedResult {
@@ -90,8 +66,6 @@ pub struct AssistState {
     last_issued_at: Option<DateTime<Utc>>,
     last_succeeded: bool,
     retired_results: Vec<ObservedResult>,
-    epoch: u64,
-    owner: uuid::Uuid,
     policy: RiskPolicy,
 }
 impl AssistState {
@@ -105,8 +79,6 @@ impl AssistState {
             last_issued_at: None,
             last_succeeded: false,
             retired_results: Vec::new(),
-            epoch: 0,
-            owner: uuid::Uuid::new_v4(),
             policy: RiskPolicy::Auto,
         }
     }
@@ -131,137 +103,29 @@ impl AssistState {
     pub fn set_policy(&mut self, policy: RiskPolicy) {
         self.policy = policy;
     }
-    /// Call on a superseding turn, session reset, or rejected/stale snapshot.
-    pub fn invalidate_intent(&mut self) {
-        self.epoch = self.epoch.wrapping_add(1);
-    }
-    pub fn submit(
-        &mut self,
-        input: Input,
-        event: &GameEvent,
-        now: DateTime<Utc>,
-        has_existing_speech: bool,
-    ) -> Submission {
-        self.invalidate_intent();
-        let expired = self.expire_pending(now);
-        self.retired_results.extend(expired);
-        let normalized = intent::normalize(&input.raw_text);
-        if normalized.starts_with('/') {
-            return Submission::NotHandled;
-        }
-        let repaired = if input.source == InputSource::Voice {
-            input
-                .interpreted_text
-                .as_deref()
-                .filter(|s| !s.trim().is_empty())
-                .map(intent::normalize)
-                .or_else(|| intent::interpret_voice_select_sword_request(&normalized))
-        } else {
-            None
-        };
-        let mut command_text = normalized.clone();
-        let mut source = None;
-        // TODO(request-classifier): equip_sword 接続後は、この語句による即決と
-        // confidence=1.0 の組み立てを分類結果へ置き換える。依頼性の二重判定を残さず、
-        // issue 内のhotbar・capability・期限・実行検証は維持する。
-        if intent::is_explicit_select_sword_request(&normalized) {
-            source = Some("code");
-        } else if let Some(text) = repaired
-            .as_deref()
-            .filter(|s| intent::is_explicit_voice_select_sword_request(s))
-        {
-            command_text = text.into();
-            source = Some("code_voice_asr");
-        }
-        if input.knowledge_query
-            || workshop_owns(&input, &command_text, source == Some("code_voice_asr"))
-        {
-            return Submission::NotHandled;
-        }
-        if let Some(source) = source {
-            return Submission::Handled(self.issue(
-                IntentEvidence {
-                    source: source.into(),
-                    evidence: command_text,
-                    confidence: 1.0,
-                },
-                event,
-                now,
-                has_existing_speech,
-            ));
-        }
-        let player_text = if input.source == InputSource::Voice {
-            repaired.unwrap_or(normalized)
-        } else {
-            normalized
-        };
-        // TODO(request-classifier): 共通の分類入口へ移したら、剣の語を含む入力だけを
-        // NeedsIntent へ送るこの絞り込みと、旧LLM用 PreparedIntent の組み立てを撤去する。
-        // 空入力処理・原文と音声解釈の区別・入力世代の保持は移行先へ引き継ぐ。
-        if player_text.is_empty()
-            || !intent::mentions_sword_target(&player_text)
-            || intent::is_bare_sword_target(&player_text)
-        {
-            return Submission::NotHandled;
-        }
-        Submission::NeedsIntent(PreparedIntent {
-            messages: intent::messages(&player_text),
-            schema: intent::schema(),
-            player_text,
-            max_tokens: 96,
-            temperature: 0.0,
-            epoch: self.epoch,
-            owner: self.owner,
-            input,
-        })
-    }
-    /// The caller checks current snapshot freshness before completion. Model failure is NotHandled.
-    /// Current ownership is checked again because generation runs outside the event worker.
-    pub fn complete_intent(
-        &mut self,
-        prepared: PreparedIntent,
-        payload: &Value,
-        current_input: &Input,
-        event: &GameEvent,
-        now: DateTime<Utc>,
-        has_existing_speech: bool,
-    ) -> Submission {
-        if prepared.epoch != self.epoch || prepared.owner != self.owner {
-            return Submission::NotHandled;
-        }
-        self.invalidate_intent();
-        if prepared.input.raw_text != current_input.raw_text
-            || prepared.input.source != current_input.source
-            || prepared.input.interpreted_text != current_input.interpreted_text
-            || current_input.knowledge_query
-            || workshop_owns(current_input, &prepared.player_text, false)
-        {
-            return Submission::NotHandled;
-        }
-        // TODO(request-classifier): 旧JSONの契約／依頼性検証は分類結果の受理へ置換する。
-        // complete_intent 全体は削除せず、上の入力同一性・owner・epochの検証と
-        // 下の issue への接続を、分類結果を受け取る経路にも引き継ぐ。
-        if !intent::contract_errors(payload).is_empty() {
-            return Submission::NotHandled;
-        }
-        let Some(intent) = intent::validate_payload(payload, &prepared.player_text, 0.90) else {
-            return Submission::NotHandled;
-        };
-        Submission::Handled(self.issue(intent, event, now, has_existing_speech))
-    }
-    /// 共通受付で受理した剣依頼を実測検証へ渡す。確率は診断用で、追加の閾値判定はしない。
+    /// BERTへ変更済み。旧判定へ戻さない。
+    /// 共通受付が原文・入力元・接続・世代を照合した結果だけを実測検証へ渡す。
+    /// 確率は診断用で、追加の閾値判定や語句による依頼性の再判定はしない。
     pub fn submit_classified(
-        &mut self, classification: &crate::request_classifier::Classification,
-        event: &GameEvent, now: DateTime<Utc>, has_speech: bool,
+        &mut self,
+        classification: &crate::request_classifier::Classification,
+        event: &GameEvent,
+        now: DateTime<Utc>,
+        has_speech: bool,
     ) -> Submission {
         if classification.prediction.label != crate::request_classifier::Label::EquipSword {
             return Submission::NotHandled;
         }
-        self.invalidate_intent();
-        Submission::Handled(self.issue(IntentEvidence {
-            source: "modernbert".into(), evidence: classification.text.clone(),
-            confidence: classification.prediction.probabilities[2],
-        }, event, now, has_speech))
+        Submission::Handled(self.issue(
+            IntentEvidence {
+                source: "modernbert".into(),
+                evidence: classification.text.clone(),
+                confidence: classification.prediction.probabilities[2],
+            },
+            event,
+            now,
+            has_speech,
+        ))
     }
     fn issue(
         &mut self,
@@ -502,10 +366,4 @@ impl AssistState {
         commands.sort_by(|a, b| (&a.issued_at, &a.command_id).cmp(&(&b.issued_at, &b.command_id)));
         commands
     }
-}
-fn workshop_owns(input: &Input, command: &str, voice_repaired: bool) -> bool {
-    input.workshop_open
-        && !input.workshop_combat_paused
-        && !(voice_repaired && intent::is_unambiguous_voice_select_sword_request(command))
-        && !intent::is_unambiguous_select_sword_request(command)
 }

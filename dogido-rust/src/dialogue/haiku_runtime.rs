@@ -30,8 +30,6 @@ pub struct Settings {
     pub memory_dir: PathBuf,
     pub screenshot_dir: Option<PathBuf>,
     pub workshop_idle_ms: u64,
-    pub low_threat_resume_delay_ms: u64,
-    pub platform_ai: super::combat_classifier::Settings,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -52,8 +50,6 @@ impl Default for Settings {
             memory_dir: PathBuf::from(".dogido_memory/rust-migration"),
             screenshot_dir: None,
             workshop_idle_ms: crate::haiku_record::DEFAULT_IDLE_TIMEOUT.as_millis() as u64,
-            low_threat_resume_delay_ms: 8_000,
-            platform_ai: super::combat_classifier::Settings::default(),
         }
     }
 }
@@ -64,11 +60,6 @@ pub(super) struct Routes {
 impl Routes {
     pub fn new(c: &DialogueConfig) -> Result<Self> {
         let h = &c.haiku;
-        h.platform_ai.validate()?;
-        ensure!(
-            h.low_threat_resume_delay_ms >= 1000,
-            "invalid workshop resume delay"
-        );
         ensure!(
             h.structured_max_tokens > 0 && h.job_timeout_ms > 0 && h.workshop_idle_ms > 0,
             "invalid haiku settings"
@@ -236,24 +227,11 @@ impl Dialogue {
         };
         let now = Instant::now();
         let observed = observation_fresh(s);
-        let ready = super::workshop_combat_input::ready(
-            s,
-            self.clock.elapsed().as_millis() as u64,
-            &self.config,
-        );
-        let clear = super::workshop_combat_runtime::clear_for_resume(s);
         let workshop_quiet = super::workshop_focus::quiet(s);
         let h = &mut s.haiku;
         if let Some(w) = h.workshop.as_mut() {
             let before = (w.is_open(), w.combat_paused());
-            if clear {
-                w.provisional = None;
-            }
-            let provisional = w.provisional.is_some() && w.provisional == ready;
-            if !provisional
-                && (w.provisional.is_some()
-                    || !workshop_quiet
-                        && (s.mode != crate::combat::model::Mode::Normal || !s.chat_allowed))
+            if !workshop_quiet && (s.mode != crate::combat::model::Mode::Normal || !s.chat_allowed)
             {
                 w.pause(now);
             }
@@ -567,21 +545,54 @@ impl Dialogue {
     /// 前置き生成の直前に、記録用の身体視点を既存撮影台帳へ予約する。
     /// 将来はここで受け取る同じ画像を川柳材料へ加える予定。現在は画像を生成モデルへ渡さない。
     /// 撮影完了か開始期限を待つため、有効な撮影が前置きの出力より後に始まることはない。
-    async fn prepare_haiku_photo(&self, sid: &str, job: &str, observation: &Observation) -> Result<()> {
+    async fn prepare_haiku_photo(
+        &self,
+        sid: &str,
+        job: &str,
+        observation: &Observation,
+    ) -> Result<()> {
         {
-            let mut data=self.data.lock().unwrap();
-            let s=data.sessions.get_mut(sid).context("haiku session closed")?;
-            ensure!(s.haiku.active.as_ref().is_some_and(|active| active.id==job),"haiku cancelled");
-            if !self.config.haiku.memory_enabled || s.preview || s.text_workshop { return Ok(()); }
-            let Some(context)=observation.event.body_origin().and_then(|origin| origin.context.as_ref()) else { return Ok(()); };
-            s.screenshots.prepare(sid,job,context,chrono::Utc::now(),self.config.haiku.job_timeout_ms);
+            let mut data = self.data.lock().unwrap();
+            let s = data.sessions.get_mut(sid).context("haiku session closed")?;
+            ensure!(
+                s.haiku
+                    .active
+                    .as_ref()
+                    .is_some_and(|active| active.id == job),
+                "haiku cancelled"
+            );
+            if !self.config.haiku.memory_enabled || s.preview || s.text_workshop {
+                return Ok(());
+            }
+            let Some(context) = observation
+                .event
+                .body_origin()
+                .and_then(|origin| origin.context.as_ref())
+            else {
+                return Ok(());
+            };
+            s.screenshots.prepare(
+                sid,
+                job,
+                context,
+                chrono::Utc::now(),
+                self.config.haiku.job_timeout_ms,
+            );
         }
         loop {
             {
-                let data=self.data.lock().unwrap();
-                let s=data.sessions.get(sid).context("haiku session closed")?;
-                ensure!(s.haiku.active.as_ref().is_some_and(|active| active.id==job),"haiku cancelled");
-                if s.screenshots.capture_settled(job,chrono::Utc::now()) { return Ok(()); }
+                let data = self.data.lock().unwrap();
+                let s = data.sessions.get(sid).context("haiku session closed")?;
+                ensure!(
+                    s.haiku
+                        .active
+                        .as_ref()
+                        .is_some_and(|active| active.id == job),
+                    "haiku cancelled"
+                );
+                if s.screenshots.capture_settled(job, chrono::Utc::now()) {
+                    return Ok(());
+                }
             }
             tokio::time::sleep(Duration::from_millis(25)).await;
         }
@@ -601,7 +612,7 @@ impl Dialogue {
         let h = &self.config.haiku;
         let corrections = step!(self.reading_overlay());
         let lessons = step!(self.active_lessons());
-        step!(self.prepare_haiku_photo(sid,job,&observation));
+        step!(self.prepare_haiku_photo(sid, job, &observation));
         let (mut preparation, context) = Preparation::capture(haiku::preparation::Start {
             event: observation.event,
             runtime: observation.runtime,

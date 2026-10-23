@@ -78,3 +78,10 @@ def test_missing_shared_runtime_defaults_is_detected_before_update(tmp_path):
     (tmp_path / 'dogido_server/runtime_defaults.json').unlink()
     with pytest.raises(ValueError, match='runtime_defaults.json'):
         runtime.validate_runtime(tmp_path)
+
+
+def test_runtime_manifest_keeps_bert_and_removes_os_ai_helpers():
+    required = set(runtime.runtime_files())
+    assert "dogido-rust/scripts/request_classifier_worker.py" in required
+    assert not {"dogido-rust/scripts/combat_input_helper.py",
+                "dogido_server/platform_ai.py", "dogido_server/combat_input_contract.py"} & required

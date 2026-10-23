@@ -12,7 +12,15 @@ from pathlib import Path
 import sys
 import time
 
-LABELS = ["not_request", "enemy_information", "equip_sword", "recall_mount", "other_request"]
+LABELS = [
+    "not_target", "enemy_information", "equip_sword", "recall_mount", "dogido_recall",
+    "senryu_line_upper", "senryu_line_middle", "senryu_line_lower",
+    "senryu_change_upper", "senryu_change_middle", "senryu_change_lower",
+    "look_direction", "senryu_end", "look_relative_right", "look_target", "look_player",
+    "look_relative_front", "look_relative_back", "look_relative_left",
+    "look_relative_front_left", "look_relative_front_right",
+    "look_relative_back_left", "look_relative_back_right",
+]
 REQUIRED_FILES = {"config.json", "model.safetensors", "tokenizer.json", "tokenizer_config.json"}
 FRAME_LIMIT = 1_000_000
 

@@ -2,7 +2,8 @@
 """実ログ由来の相談とモデル選択の辞書確認を、模擬HTTP・辞書・音声で通す。"""
 import json
 
-from check_haiku_runtime import fixture, LINES
+from check_haiku_runtime import LINES
+from check_workshop_fixture import fixture
 from check_workshop_runtime import install, ready, step
 from check_workshop_edits import finish, revisions, token_fixture
 
@@ -64,10 +65,10 @@ def main():
         passed.append("retained_kanji_idea_applies_and_saves_once_after_player_selection")
 
         result = finish(base, send, sid, "この子はもう完成でいいんじゃないかな")
-        assert result["workshop_action"] == "respond" and hud(sid)["state"] == "open", result
-        assert len(result["llm_reports"]) == 1 and len(revisions(folder, sid)) == 1
-        assert result["text"] == "この句の響き、一緒に考えたな。"
-        passed.append("skipped_close_keeps_original_conversation_without_retry")
+        assert result["workshop_action"] == "close_workshop" and hud(sid)["state"] == "closed", result
+        assert not result["llm_reports"] and len(revisions(folder, sid)) == 1
+        assert result["text"] == "ほな、この句はここまでにしよか。"
+        passed.append("bert_completion_closes_without_generation_or_extra_save")
 
     with token_fixture("unavailable") as (args, token_dir), fixture(extra_args=(*args, "--reading-engine", "off")) as context:
         base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder = context

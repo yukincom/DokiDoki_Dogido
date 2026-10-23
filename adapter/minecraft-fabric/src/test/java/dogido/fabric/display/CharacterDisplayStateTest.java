@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.*;
 final class CharacterDisplayStateTest {
     private static WorkshopDisplayPayload.Snapshot snapshot(long rev, long seq, String scroll, String face) {
         return new WorkshopDisplayPayload.Snapshot("ses_a", null, rev, seq, scroll,
-            List.of(), List.of(), false, null, false, face);
+            List.of(), List.of(), false, null, face);
     }
     @Test void onlyActualGenerationThinksAndNormalReturnsWithoutFade() {
         var model = new CharacterDisplayState();
@@ -53,7 +53,7 @@ final class CharacterDisplayStateTest {
         String json = """
             {"schema_version":1,"session_id":"ses_a","workshop_id":null,"revision":1,
              "observed_sequence":5,"state":"closed","canonical_lines":[],
-             "pending_lines":[],"editing":false,"selected_line":null,"provisional_resume":false}
+             "pending_lines":[],"editing":false,"selected_line":null}
             """;
         assertEquals("normal", WorkshopDisplayPayload.parse(json, "ses_a").characterState());
         String thinking = json.replace("\"state\":", "\"character_state\":\"thinking\",\"state\":");

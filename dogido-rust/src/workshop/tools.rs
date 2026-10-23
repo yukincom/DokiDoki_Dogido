@@ -8,26 +8,24 @@ use serde_json::{Value, json};
 fn player_edit_definition() -> Value {
     json!({"type":"function","function":{
         "name":"stage_player_edit",
-        "description":"本人が今回の発話で頼んだ語句の差し替えをコードへ渡す。部分変更では旧語と新語だけを渡し、変更後の一行を自分で作らない。「AをBに変えて」ならtarget_fragmentはA、replacement_textはB。行の組み立てはコードが行う。現在句（未採用案があればその案）の対象行をline_idとexpected_textで指定し、置換語と行為のevidenceは今回の原文から抜く。コードは指定された対象へ差分を適用し、元句・版・他行が変わらないこと・保存結果を管理する。本人が変更を望んでいるかは、今回の発話と会話の流れから判断する。以前の案を選ぶ場合は、その案の選択actionを使う。",
+        "description":"BERTが決めた行への具体変更について、原文の旧語・新語・根拠だけを渡す。行IDと元句はコードが補完する。変更後の行は作らず、本人の新しい語をそのまま抜く。",
         "parameters":{"type":"object","properties":{
-            "line_id":{"type":"string","enum":["line_1","line_2","line_3"]},
-            "line_reference_evidence":{"type":"string","description":"今回の原文に行の呼び名がある場合だけ、その部分（例: 冒頭の五音）。対象を省略した発話なら省略する。以前の呼び名をコピーしない。"},
-            "expected_text":{"type":"string","description":"変更前の対象一行。表示表記か確定読みをそのまま写す。"},
-            "target_fragment":{"type":"string","description":"差し替える旧語だけ。expected_text内の連続部分。「AをBに変えて」ならA。本人が一行全体の置換を指定したときだけ空文字。"},
-            "replacement_text":{"type":"string","description":"本人が今回指定した新しい語句だけ。「AをBに変えて」ならBだけ。変更後の一行を作って渡さない。一行全体を渡せるのは、その全文が今回の原文にある場合だけ。自分で補作・読み変換しない。"},
-            "evidence":{"type":"string","description":"今回のプレイヤー発話から、変更意思を含む部分をそのまま引用する。「AをBに変えて」ならevidenceも「AをBに変えて」。現在句の行や語、過去の会話から取らない。"},
+            "target_fragment":{"type":"string","description":"差し替える旧語。一行全体の置換なら空文字。"},
+            "replacement_text":{"type":"string","description":"今回原文にある新しい語句だけ。補作・読み変換しない。"},
+            "evidence":{"type":"string","description":"今回の連続した原文根拠。"},
             "confidence":{"type":"number","minimum":0,"maximum":1}},
-            "required":["line_id","expected_text","target_fragment","replacement_text","evidence","confidence"],
+            "required":["target_fragment","replacement_text","evidence","confidence"],
             "additionalProperties":false}
     }})
 }
 
-pub fn definitions(allowed: &[&str]) -> Vec<Value> {
+/// 行・具体変更はBERTへ変更済み。旧判定へ戻さない。対象不明の編集toolは公開しない。
+pub fn definitions_for_target(allowed: &[&str], target: Option<usize>) -> Vec<Value> {
     let mut result = Vec::new();
     if allowed.contains(&"inspect") {
         result.push(inspection_tool::definition());
     }
-    if allowed.contains(&"stage_player_edit") {
+    if allowed.contains(&"stage_player_edit") && target.is_some() {
         result.push(player_edit_definition());
     }
     result
@@ -62,7 +60,12 @@ impl Call {
         }
     }
 
-    pub fn decode(message: Value, workshop: &Value, original: &str) -> Result<Self> {
+    pub fn decode_for_target(
+        message: Value,
+        workshop: &Value,
+        original: &str,
+        target: Option<usize>,
+    ) -> Result<Self> {
         ensure!(
             serde_json::to_vec(&message)?.len() < 32_768,
             "tool_message_too_large"
@@ -81,12 +84,20 @@ impl Call {
         match call["function"]["name"].as_str() {
             Some("inspect_verse") => Ok(Self::Inspect(inspection_tool::Call::decode(message)?)),
             Some("stage_player_edit") => {
-                let args: Value = serde_json::from_str(
+                let mut args: Value = serde_json::from_str(
                     call["function"]["arguments"]
                         .as_str()
                         .context("invalid_tool_arguments")?,
                 )
                 .context("invalid_tool_arguments")?;
+                let index = target.context("bert_edit_target_required")?;
+                ensure!(
+                    ["line_id", "expected_text", "line_reference_evidence"]
+                        .iter()
+                        .all(|name| args.get(*name).is_none()),
+                    "classified_target_fields_are_code_owned"
+                );
+                crate::workshop_editing::fill_classified_edit_target(workshop, index, &mut args)?;
                 let frame = normalize_player_edit_tool(workshop, original, &args)?;
                 Ok(Self::PlayerEdit { message, id, frame })
             }

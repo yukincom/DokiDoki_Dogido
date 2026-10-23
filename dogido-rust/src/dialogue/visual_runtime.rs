@@ -97,7 +97,7 @@ fn parse_image(result: &AdapterCommandResult, pending: &Pending, now: DateTime<U
 }
 
 /// 優先処理が空いた時に最新の変化だけを既存noticeへ渡す。古い画像を待ち列へ蓄積しない。
-/// 共通の変化表へ画像の時刻・hashを添え、物の種類や意味は画像付きモデルが判断する。
+/// ここは画像と撮影情報だけを添える。全観測・変化表・履歴は環境runtimeが一緒に組み立てる。
 pub(super) fn opportunity(s: &mut Session) -> Option<crate::combat::model::Speech> {
     if !s.visual.ready || s.preview || s.foreground.game_paused || s.foreground.combat_active
         || !matches!(s.foreground.route,crate::foreground::Route::None|crate::foreground::Route::Casual) { return None; }
@@ -106,16 +106,11 @@ pub(super) fn opportunity(s: &mut Session) -> Option<crate::combat::model::Speec
     if sample.context != captured.context { return None; }
     let at = DateTime::parse_from_rfc3339(&captured.image.captured_at).ok()?.with_timezone(&Utc);
     if Utc::now()-at > chrono::Duration::seconds(IMAGE_FRESH_SECONDS) { s.visual.ready=false;return None; }
-    let mut context = super::body_runtime::context(s)?;
-    context.changes.push(crate::conversation_observation::Change {kind:"body_view".into(),
-        before:json!({"sha256":captured.change["previous_sha256"]}),
-        now:json!({"sha256":captured.image.sha256,"captured_at":captured.image.captured_at,"motion_sequence":captured.sequence}),
-        observed_at:captured.image.captured_at.clone(),revision:context.revision});
     let mut action = crate::environment::notice::action();
     action.image = Some(Arc::new(captured.image.clone()));
     let details = &mut action.leaf.as_mut().unwrap().details;
-    details["reaction_context"]["world_context"] = json!(context);
-    details["visual_capture"] = json!({"capture_id":captured.capture_id,"captured_at":captured.image.captured_at});
+    details["visual_capture"] = json!({"capture_id":captured.capture_id,"captured_at":captured.image.captured_at,
+        "motion_sequence":captured.sequence,"previous_sha256":captured.change["previous_sha256"]});
     action.text.clear(); // 画像の意味をコード固定文で代弁しない。
     s.visual.ready = false;
     Some(action)

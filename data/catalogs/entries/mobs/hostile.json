@@ -284,6 +284,7 @@
     },
     "ender_dragon": {
       "label": "エンダードラゴン",
+      "spoken_aliases": ["ドラゴン"],
       "threat_class": "tank",
       "priority": "critical",
       "poetic": {
@@ -347,6 +348,7 @@
     },
     "evoker": {
       "label": "エヴォーカー",
+      "spoken_aliases": ["エボーカー"],
       "threat_class": "trickster",
       "priority": "critical",
       "poetic": {
@@ -701,6 +703,7 @@
     },
     "ravager": {
       "label": "ラヴェジャー",
+      "spoken_aliases": ["ラベジャー"],
       "threat_class": "tank",
       "priority": "critical",
       "poetic": {
@@ -1039,6 +1042,7 @@
     },
     "witch": {
       "label": "ウィッチ",
+      "spoken_aliases": ["魔女"],
       "threat_class": "trickster",
       "priority": "high",
       "poetic": {

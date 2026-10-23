@@ -4,12 +4,12 @@ import net.minecraft.client.MinecraftClient;
 import static dogido.fabric.body.BodyInspectProtocol.*;
 
 /**
- * client threadの実身体snapshotと本人の目の位置を向き変更器へ渡す準備済み境界。
- * TODO(BERT): 完成後に生成・呼出・切断時clearを既存session検証下へ接続する。今は登録も送信も行わない。
+ * client threadの実身体snapshotと本人の目の位置を既存向き変更器へ渡す。
  */
 public final class BodyLookRuntime {
     private BodyLookRuntime() {}
-    public static BodyLookController create(BodyConnection connection) {
+    public static BodyLookController create(BodyConnection connection) { return create(connection,connection::lookAt); }
+    public static BodyLookController create(BodyConnection connection,java.util.function.Function<BodyConnection.LookRequest,String> submitter) {
         return new BodyLookController(new BodyLookController.Access() {
             public BodyLookController.Live capture() {
                 MinecraftClient client = MinecraftClient.getInstance();
@@ -24,7 +24,8 @@ public final class BodyLookRuntime {
                     point(pose.getAsJsonObject("eye_position")),pose.get("view_yaw").getAsDouble(),
                     new Point(client.player.getX(),client.player.getEyeY(),client.player.getZ()));
             }
-            public String submit(BodyConnection.LookRequest request) { return connection.lookAt(request); }
+            public long nextSequence(Context context,long prior,long tick,long last) { return connection.nextActionSequence(context,prior,tick); }
+            public String submit(BodyConnection.LookRequest request) { return submitter.apply(request); }
         });
     }
 }

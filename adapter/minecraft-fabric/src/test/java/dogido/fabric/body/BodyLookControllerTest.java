@@ -48,6 +48,22 @@ class BodyLookControllerTest {
         controller.direction(context,id,Direction.RIGHT); assertEquals(original,fake.request);
         assertEquals("action_id_conflict",controller.player(context,id).status()); assertEquals(2,fake.calls);
     }
+    @Test void observedTargetKeepsTheOriginalPointWhenRetried() {
+        Fake fake = new Fake(); var controller = new BodyLookController(fake); UUID id = UUID.randomUUID();
+        Point target = new Point(14,68,22);
+        assertEquals("queued",controller.point(context,id,target).status());
+        var original = fake.request;
+        assertEquals(target,original.target());
+        fake.live = new Live(context,110,0,201,eye,180,new Point(0,66,0));
+        assertEquals("queued",controller.point(context,id,new Point(12,66,24)).status());
+        assertEquals(original,fake.request);
+        assertEquals("action_id_conflict",controller.player(context,id).status());
+    }
+    @Test void pointBeyondTheExistingLookRangeNeverSends() {
+        Fake fake = new Fake(); var controller = new BodyLookController(fake);
+        assertEquals("invalid_target",controller.point(context,UUID.randomUUID(),new Point(100,65,20)).status());
+        assertEquals(0,fake.calls);
+    }
     @Test void staleMissingAndForeignContextNeverSend() {
         Fake fake = new Fake(); var controller = new BodyLookController(fake);
         var foreign = new Context(context.ownerId(),context.bodyId(),UUID.randomUUID(),context.dimension());

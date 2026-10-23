@@ -1,4 +1,4 @@
-//! 学習済みModernBERTの依頼5分類を、既存Python Helper経由で受け取る。
+//! 採用済みModernBERTの依頼23分類を、既存Python Helper経由で受け取る。
 //! 原文履歴の整形・応答検証・取消はRust、重みの検証と数値計算はPythonが担当する。
 //! 本体の共通受付が結果を使い、実際の操作・会話状態と履歴の確定は各runtimeが所有する。
 use crate::python_worker::Helper;
@@ -9,27 +9,59 @@ use sha2::{Digest, Sha256};
 use std::{path::Path, time::Duration};
 use tokio::sync::watch;
 
-// TODO(BERT, 2026-10-22): 分類区分は見直し中。「これ見て」の意図もBERTの分類対象へ追加する。
-// 新しい区分と学習済みモデルの確定後に、Label・確率配列・共通受付の振り分けを合わせて更新する。
-// TODO(BERT): 指定方向（ドギドの現在向き基準の8方向）とプレイヤー注視は、完成後に
-// FabricのBodyLookController.direction / playerへ接続する。LOOK_ATの注視座標送信まで準備し、
-// 現在の5分類や「これ見て」へ暫定接続しない。docs/2026-10-22-body-look-preparation.md参照。
 /// 学習時の整数ID順。確信度の閾値や別分類への読み替えは行わない。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Label {
-    NotRequest,
+    NotTarget,
     EnemyInformation,
     EquipSword,
     RecallMount,
-    OtherRequest,
+    DogidoRecall,
+    SenryuLineUpper,
+    SenryuLineMiddle,
+    SenryuLineLower,
+    SenryuChangeUpper,
+    SenryuChangeMiddle,
+    SenryuChangeLower,
+    LookDirection,
+    SenryuEnd,
+    LookRelativeRight,
+    LookTarget,
+    LookPlayer,
+    LookRelativeFront,
+    LookRelativeBack,
+    LookRelativeLeft,
+    LookRelativeFrontLeft,
+    LookRelativeFrontRight,
+    LookRelativeBackLeft,
+    LookRelativeBackRight,
 }
-const LABELS: [Label; 5] = [
-    Label::NotRequest,
+pub const LABEL_COUNT: usize = 23;
+pub const LABELS: [Label; LABEL_COUNT] = [
+    Label::NotTarget,
     Label::EnemyInformation,
     Label::EquipSword,
     Label::RecallMount,
-    Label::OtherRequest,
+    Label::DogidoRecall,
+    Label::SenryuLineUpper,
+    Label::SenryuLineMiddle,
+    Label::SenryuLineLower,
+    Label::SenryuChangeUpper,
+    Label::SenryuChangeMiddle,
+    Label::SenryuChangeLower,
+    Label::LookDirection,
+    Label::SenryuEnd,
+    Label::LookRelativeRight,
+    Label::LookTarget,
+    Label::LookPlayer,
+    Label::LookRelativeFront,
+    Label::LookRelativeBack,
+    Label::LookRelativeLeft,
+    Label::LookRelativeFrontLeft,
+    Label::LookRelativeFrontRight,
+    Label::LookRelativeBackLeft,
+    Label::LookRelativeBackRight,
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -92,7 +124,7 @@ struct Manifest {
     evaluated_input: Limits,
 }
 
-/// 上限は採用記録の評価条件に従う。旧モデルの256を512へ自動変更しない。
+/// 上限は採用記録の評価条件に従う。今回のモデルは現在発話のみ・128トークン。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Limits {
     pub max_history_utterances: usize,
@@ -103,7 +135,7 @@ pub struct Limits {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Prediction {
     pub label: Label,
-    pub probabilities: [f64; 5],
+    pub probabilities: [f64; LABEL_COUNT],
     pub token_count: usize,
     pub inference_ms: f64,
 }
@@ -169,7 +201,7 @@ impl Classifier {
                 )
                 .await?;
             ensure!(reply["ready"] == true, "classifier did not become ready");
-            let labels: [Label; 5] = serde_json::from_value(reply["labels"].clone())?;
+            let labels: [Label; LABEL_COUNT] = serde_json::from_value(reply["labels"].clone())?;
             let limits: Limits = serde_json::from_value(reply["limits"].clone())?;
             ensure!(
                 labels == LABELS && limits == client.limits,
@@ -276,7 +308,7 @@ impl Prediction {
             "invalid classifier probabilities"
         );
         let mut best = 0;
-        for i in 1..5 {
+        for i in 1..LABEL_COUNT {
             if self.probabilities[i] > self.probabilities[best] {
                 best = i;
             }

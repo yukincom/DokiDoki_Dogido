@@ -22,6 +22,7 @@ public final class BodyClientBridge implements BodyBridge {
     private static ClientWorld world;
     private static ClientPlayNetworkHandler connection;
     private static int pollTick;
+    private static final java.util.LinkedHashMap<java.util.UUID,RecallReceipt> recalls = new java.util.LinkedHashMap<>();
 
     public static void initialize() {
         ClientPlayNetworking.registerGlobalReceiver(BodyPackets.Response.ID,(payload,context) -> {
@@ -31,12 +32,23 @@ public final class BodyClientBridge implements BodyBridge {
                 MinecraftClient client = context.client();
                 if (client.getNetworkHandler() != receivedConnection || client.world != receivedWorld || client.player == null || client.world == null) return;
                 try {
-                    Snapshot next = JSON.fromJson(payload.json(),Snapshot.class);
+                    var envelope = com.google.gson.JsonParser.parseString(payload.json()).getAsJsonObject();
+                    Snapshot next = JSON.fromJson(envelope,Snapshot.class);
                     if (next == null || next.version() != BodyProtocol.VERSION || next.presence() == null
                             || !client.world.getRegistryKey().getValue().toString().equals(next.ownerDimension())) return;
                     if (next.context() != null && !client.player.getUuid().equals(next.context().ownerId())) return;
+                    if (envelope.has("recall_result")) {
+                        RecallReceipt receipt = JSON.fromJson(envelope.get("recall_result"),RecallReceipt.class);
+                        if (receipt != null && receipt.actionId() != null && receipt.result() != null
+                                && receipt.actionId().equals(receipt.result().actionId())
+                                && client.player.getUuid().equals(receipt.ownerId())
+                                && next.ownerDimension().equals(receipt.dimension())) {
+                            recalls.put(receipt.actionId(),receipt);
+                            while (recalls.size() > 32) recalls.remove(recalls.keySet().iterator().next());
+                        }
+                    }
                     Snapshot old = latest;
-                    if (old != null && Objects.equals(old.context(),next.context()) && next.snapshotRevision() <= old.snapshotRevision()) return;
+                    if (old != null && Objects.equals(old.context(),next.context()) && next.snapshotRevision() <= old.snapshotRevision() && next.serverTick() <= old.serverTick()) return;
                     latest = next;
                     receivedAt = System.nanoTime();
                 } catch (RuntimeException ignored) { }
@@ -51,7 +63,7 @@ public final class BodyClientBridge implements BodyBridge {
                 ClientPlayNetworking.send(new BodyPackets.Request(JSON.toJson(new BodyPackets.Message(BodyProtocol.VERSION,"snapshot",null,null))));
         });
     }
-    private static void clear() { latest = null; receivedAt = 0; world = null; connection = null; pollTick = 0; }
+    private static void clear() { latest = null; receivedAt = 0; world = null; connection = null; pollTick = 0; recalls.clear(); }
     @Override public int protocolVersion() { return BodyProtocol.VERSION; }
     @Override public boolean available() {
         MinecraftClient client = MinecraftClient.getInstance();
@@ -79,6 +91,23 @@ public final class BodyClientBridge implements BodyBridge {
         Submission result = ready(request == null ? null : request.context());
         if (result == Submission.QUEUED) ClientPlayNetworking.send(new BodyPackets.Request(JSON.toJson(new BodyPackets.Message(BodyProtocol.VERSION,"action",null,request))));
         return result;
+    }
+    @Override public Submission requestRecall(RecallRequest request) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (!client.isOnThread()) return Submission.WRONG_THREAD;
+        if (!available()) return Submission.UNAVAILABLE;
+        Snapshot current = snapshot().orElse(null);
+        if (request == null || current == null || snapshotAgeMillis() > 750
+                || !client.player.getUuid().equals(request.ownerId())
+                || !client.world.getRegistryKey().getValue().toString().equals(request.dimension())
+                || current.serverTick() != request.observedServerTick()) return Submission.STALE_CONTEXT;
+        ClientPlayNetworking.send(new BodyPackets.Request(JSON.toJson(
+            new BodyPackets.Message(BodyProtocol.VERSION,"recall",null,null,null,null,request))));
+        return Submission.QUEUED;
+    }
+    @Override public Optional<RecallReceipt> recallReceipt(java.util.UUID actionId) {
+        if (!MinecraftClient.getInstance().isOnThread() || !available()) return Optional.empty();
+        return Optional.ofNullable(recalls.get(actionId));
     }
     @Override public Submission observeOwnerWork(OwnerWorkObservation observation) {
         Submission result = ready(observation == null ? null : observation.context());

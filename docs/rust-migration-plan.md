@@ -1,5 +1,7 @@
 # ドギド本体のRust移行計画
 
+**2026-10-23追記:** 本文のOS AI・端末AI接続と旧分類fallbackは当時の記録。現在は共通BERTで意図を分類し、戦闘からの再開・継続はRustが警戒解除を観測して決める。旧経路を復元せず、[現行仕様](2026-10-23-modernbert-23class-integration.md)を参照する。
+
 ## 現在地（2026-10-03）
 
 **旧Python本体・比較oracleの並走運用は終了。実行時正本はRustです。** 通常会話、戦闘・環境、川柳・共同編集・記憶、知識検索・限定国語、音声入力制御と配送をRustが所有します。Pythonは設定、UniDic token、Whisper設定、AEC、端末AI、Chrome/MCPの接続補助に残します。

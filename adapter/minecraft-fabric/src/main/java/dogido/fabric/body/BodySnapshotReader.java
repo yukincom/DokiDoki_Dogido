@@ -4,7 +4,7 @@ import dogido.lab.api.BodyBridge;
 import dogido.lab.api.BodyProtocol;
 import net.fabricmc.loader.api.FabricLoader;
 
-/** API v10導入時だけロードする接続実体。snapshot・MOVE_TO・作業・発話注視を同じbridgeへ接続する。 */
+/** API v11導入時だけロードする接続実体。snapshot・MOVE_TO・作業・発話注視を同じbridgeへ接続する。 */
 final class BodySnapshotReader {
     private BodySnapshotReader() {}
     static BodyConnection.Source open() {
@@ -19,6 +19,21 @@ final class BodySnapshotReader {
                 var value = snapshot.get();
                 var observation = BodyObservationJson.observed(value,bridge.snapshotAgeMillis(),owner,dimension);
                 return new BodyConnection.Frame(observation,hearing(value),autonomy(value,observation));
+            }
+            public String recall(BodyConnection.RecallRequest request) {
+                var snapshot=bridge.snapshot().orElse(null);
+                if (snapshot == null || bridge.snapshotAgeMillis() > 750) return "stale_snapshot";
+                return bridge.requestRecall(new BodyProtocol.RecallRequest(request.ownerId(),request.connectionId(),request.actionId(),
+                    request.dimension(),snapshot.serverTick(),20)).name().toLowerCase(java.util.Locale.ROOT);
+            }
+            public BodyConnection.RecallResult recallResult(java.util.UUID actionId) {
+                var receipt=bridge.recallReceipt(actionId).orElse(null);
+                if (receipt == null || receipt.result() == null || receipt.result().outcome() == null) return null;
+                var c=receipt.resolvedContext();
+                var context=c == null || c.bodyId() == null || c.epoch() == null || c.dimension() == null ? null
+                    : new BodyInspectProtocol.Context(c.ownerId(),c.bodyId(),c.epoch(),c.dimension());
+                return new BodyConnection.RecallResult(receipt.ownerId(),receipt.connectionId(),receipt.actionId(),receipt.dimension(),
+                    context,receipt.result().sequence(),receipt.result().outcome().name().toLowerCase(java.util.Locale.ROOT),wireReason(receipt.result().reason()));
             }
             public String lookAt(BodyConnection.LookRequest request) {
                 var c = request.context(); var p = request.target();

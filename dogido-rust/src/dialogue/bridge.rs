@@ -131,8 +131,7 @@ async fn render_with_budget(
         // The assist fast path needs neither a helper nor a reading dictionary/DB.
         return Ok(
             json!({"knowledge_query":match &input.request_classification {
-                Some(result) if matches!(result.prediction.label,
-                    crate::request_classifier::Label::NotRequest | crate::request_classifier::Label::OtherRequest)
+                Some(result) if result.prediction.label == crate::request_classifier::Label::NotTarget
                     => crate::knowledge::query::extract(&prepared.normalized_text).is_some(),
                 Some(_) => false,
                 None => crate::knowledge::query::from_normalized(&prepared.normalized_text).is_some(),

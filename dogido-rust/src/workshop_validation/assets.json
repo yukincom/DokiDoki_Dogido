@@ -289,9 +289,7 @@
   "followups": [
     "acknowledge_meaning",
     "confirm_close",
-    "continue_workshop",
-    "decline_resume",
-    "resume_workshop"
+    "continue_workshop"
   ],
   "actions": [
     "accept_pending",

@@ -11,12 +11,12 @@ mod assist_runtime;
 mod audio;
 mod body_gaze_runtime;
 mod body_interest_runtime;
+mod body_request_runtime;
 mod body_runtime;
 mod bridge;
 mod chat_context;
 mod chat_leaf_runtime;
 mod chat_runtime;
-mod chat_tools_runtime;
 mod combat_runtime;
 mod environment_runtime;
 mod episode_runtime;
@@ -41,7 +41,6 @@ mod turn;
 mod update;
 mod visual_runtime;
 pub use haiku_runtime::Settings as HaikuSettings;
-mod combat_classifier;
 mod request_runtime;
 pub use request_runtime::Settings as RequestClassifierSettings;
 mod sentences;
@@ -146,6 +145,7 @@ struct Session {
     body_interest_pending: Option<body_interest_runtime::Pending>,
     body_interest_notice: body_interest_runtime::BoundaryNotice,
     body_interest_enabled: bool,
+    body_requests: crate::body::requests::State,
     /// ゲーム観測なしの対話試験か。trueなら通常の観測鮮度条件を免除する。
     preview: bool,
     /// workshop_textが設定する、音声を伴わない共同編集試験の入口。
@@ -190,8 +190,7 @@ struct Session {
     /// 戦闘の出来事を保持する短い文脈。combat_runtimeが更新する。
     combat_digest: VecDeque<String>,
     /// 敵の同一性・接近・被弾を追跡し、workshop暫定再開の安全条件に使う。
-    stable_threat: crate::workshop_combat_input::StableThreat,
-    /// 戦闘中入力の限定分類を待つ要求。workshop_combat_inputが世代付きで管理する。
+    /// 警戒解除を待つ入力。句・版・入力世代を保持する。workshop_combat_inputが世代付きで管理する。
     combat_input: Option<workshop_combat_input::Pending>,
     /// 通常turnの結果を反映できる世代。新turn・取消後の古い生成や再生通知を識別する。
     epoch: u64,
@@ -259,7 +258,6 @@ pub struct Dialogue {
     llm: RigLlm,
     audio: audio::Audio,
     haiku_routes: haiku_runtime::Routes,
-    combat_classifier: combat_classifier::Classifier,
     request_classifier: tokio::sync::Mutex<Option<crate::request_classifier::Classifier>>,
     episodes: Option<Arc<crate::episode_log::Recorder>>,
     /// 状態の短い照合・更新区間だけで保持し、ネットワークや音声の完了待ちへ持ち越さない。
@@ -350,7 +348,6 @@ impl Dialogue {
             .with_enabled(config.llm_enabled),
             audio: audio::Audio::new()?,
             haiku_routes: haiku_runtime::Routes::new(&config)?,
-            combat_classifier: combat_classifier::Classifier::default(),
             request_classifier: tokio::sync::Mutex::new(None),
             episodes: if config.haiku.memory_enabled {
                 match crate::episode_log::Recorder::new(config.haiku.memory_dir.clone()) {
@@ -385,6 +382,7 @@ impl Dialogue {
                 body_interest_pending: None,
                 body_interest_notice: body_interest_runtime::BoundaryNotice::default(),
                 body_interest_enabled: false,
+                body_requests: crate::body::requests::State::default(),
                 preview,
                 text_workshop: false,
                 delivery: text_delivery::State::new(self.config.audio_enabled),
@@ -406,7 +404,6 @@ impl Dialogue {
                 screenshots: crate::screenshot::State::default(),
                 visual: visual_runtime::State::default(),
                 combat_digest: VecDeque::new(),
-                stable_threat: crate::workshop_combat_input::StableThreat::default(),
                 combat_input: None,
                 epoch: 0,
                 current_turn: String::new(),
@@ -539,6 +536,7 @@ impl Dialogue {
         Self::cancel_light(&mut d, session_id);
         if let Some(s) = d.sessions.get_mut(session_id) {
             body_interest_runtime::cancel(s);
+            s.body_requests.cancel();
             s.pending_vocalization = None;
             if !s.foreground.combat_active {
                 s.history.end_danger(
@@ -581,6 +579,7 @@ impl Dialogue {
                 Self::cancel_light(&mut d, &sid);
                 if let Some(s) = d.sessions.get_mut(&sid) {
                     body_interest_runtime::cancel(s);
+                    s.body_requests.cancel();
                 }
             }
         }
@@ -618,7 +617,6 @@ impl Dialogue {
         }
         self.workshop_records.flush().await;
         self.workshop_records.forget_all();
-        self.combat_classifier.close().await;
         if let Some(classifier) = self.request_classifier.lock().await.take() {
             let _ = classifier.close().await;
         }

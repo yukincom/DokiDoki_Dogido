@@ -49,6 +49,18 @@ pub(super) fn playback_started(d: &Data, sid: &str) -> bool {
         })
 }
 
+/// 再送中・戦闘解除待ちも一件として数え、保持した入力の戻り先を予約する。
+pub(super) fn occupied_slots(s: &Session) -> usize {
+    s.reply_queue.len()
+        + usize::from(
+            s.reply_checked
+                .as_ref()
+                .is_some_and(|c| c.original.is_some()),
+        )
+        + usize::from(s.cancel.is_some())
+        + usize::from(s.combat_input.is_some())
+}
+
 fn ready(s: &Session) -> bool {
     if super::workshop_focus::active(s) {
         (s.preview && fresh(s)) || super::workshop_combat_runtime::clear_for_resume(s)
@@ -68,13 +80,8 @@ pub(super) fn ordinary(
         && !crate::haiku_memory::clear_requested(text)
         && !crate::haiku_memory::memory_candidate(text)
         && !crate::combat::core::wants_quiet(text)
-        && classification.is_none_or(|c| {
-            matches!(
-                c.prediction.label,
-                crate::request_classifier::Label::NotRequest
-                    | crate::request_classifier::Label::OtherRequest
-            )
-        })
+        && classification
+            .is_none_or(|c| c.prediction.label == crate::request_classifier::Label::NotTarget)
 }
 
 fn combat_delivery(s: &Session) -> bool {
@@ -152,6 +159,7 @@ impl Dialogue {
             return;
         };
         s.input_generation = s.input_generation.wrapping_add(1);
+        s.body_requests.cancel();
         let after = super::workshop_record::state(s.haiku.workshop.as_ref());
         let mut cancelled = Vec::new();
         if let Some(checked) = s.reply_checked.take()
@@ -202,13 +210,8 @@ impl Dialogue {
         {
             return None;
         }
-        // 分類済みの予約枠と待機中の質問を合わせて上限9件。満杯なら新規受付を断り、先の質問を守る。
-        let reserved = usize::from(
-            s.reply_checked
-                .as_ref()
-                .is_some_and(|c| c.original.is_some()),
-        );
-        if s.reply_queue.len() + reserved + usize::from(s.cancel.is_some()) >= 9 {
+        // 分類済み・戦闘解除待ちの予約枠も合わせて上限9件。先に受けた入力を守る。
+        if occupied_slots(s) >= 9 {
             return Some(json!({"accepted":false,"reason":"reply_queue_full"}));
         }
         let private = s
@@ -417,6 +420,44 @@ impl Dialogue {
         } else {
             self.resume_reply_input(&sid);
         }
+    }
+
+    /// 戦闘側が予約した一件を、同じdataロック下で既存FIFOへ移す。
+    /// 受付時刻で挿入し、保留中に追加された入力に追い越されないようにする。
+    pub(super) fn queue_combat_reply(
+        d: &mut Data,
+        sid: &str,
+        request: Request,
+        audit: super::workshop_record::Attempt,
+    ) -> Value {
+        let s = d.sessions.get_mut(sid).unwrap();
+        let index = s
+            .reply_queue
+            .iter()
+            .position(|p| p.request.input_at > request.input_at)
+            .unwrap_or(s.reply_queue.len());
+        s.reply_queue.insert(
+            index,
+            Pending {
+                request: request.clone(),
+                audit: audit.clone(),
+                ready: true,
+                dispatch_input: false,
+                cancel: watch::channel(false).0,
+            },
+        );
+        if d.rows.len() == 200 {
+            d.rows.pop_front();
+        }
+        d.rows.push_back(
+            json!({"utterance_id":id("utt"),"turn_id":request.turn,"session_id":sid,
+            "player_input_text":request.text,"source":request.source,"text":"","category":"routing",
+            "input_at_ms":request.input_at,"epoch":audit.input.epoch,
+            "workshop_record_private":request.record_private,"created_at":chrono::Utc::now(),
+            "playback_status":"waiting_for_warning","resolution":"reply_queued"}),
+        );
+        json!({"accepted":true,"queued":true,"session_id":sid,"turn_id":request.turn,
+            "reason":"reply_input_routing"})
     }
 
     pub(super) fn resume_reply_input(self: &Arc<Self>, sid: &str) {

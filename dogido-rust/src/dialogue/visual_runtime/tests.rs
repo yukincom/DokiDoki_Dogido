@@ -100,7 +100,9 @@ async fn changed_image_creates_one_existing_notice_with_frozen_image_and_unchang
     let mut data=d.data.lock().unwrap();let s=data.sessions.get_mut("s").unwrap();
     result.command_id=s.visual.commands(Utc::now())[0]["command_id"].as_str().unwrap().into();
     result.body_view.as_mut().unwrap().0["captured_at"]=json!(Utc::now());s.visual.receive(&result,Utc::now());
-    let action=opportunity(s).unwrap();assert!(action.image.is_some());assert!(opportunity(s).is_none());
+    let mut action=opportunity(s).unwrap();assert!(action.image.is_some());assert!(opportunity(s).is_none());
+    assert!(action.leaf.as_ref().unwrap().details["reaction_context"].is_null());
+    assert!(super::super::environment_runtime::refresh_dialogue_context(s, std::slice::from_mut(&mut action)));
     assert!(action.leaf.as_ref().unwrap().details["reaction_context"]["world_context"]["changes"].as_array().unwrap().iter().any(|c|c["kind"]=="body_view"));
     let context=s.visual.context.clone();s.visual.arm("s",context,Utc::now());
     result.command_id=s.visual.commands(Utc::now())[0]["command_id"].as_str().unwrap().into();let view=&mut result.body_view.as_mut().unwrap().0;
@@ -108,6 +110,61 @@ async fn changed_image_creates_one_existing_notice_with_frozen_image_and_unchang
     s.visual.receive(&result,Utc::now());assert!(opportunity(s).is_none());assert_eq!(s.visual.latest.as_ref().unwrap().sequence,2);
     assert_eq!(action.image.as_ref().unwrap().png_base64,PNG);
 }
+// 画像受理から既存の環境入力までを通す。変わらないカメと匂いは現在表に残し、天候だけを差分にする。
+fn environment_with_image() -> (Arc<Dialogue>, crate::combat::model::Speech) {
+    let (d, _) = server(100);
+    let (_, mut result, _) = pending();
+    let mut data = d.data.lock().unwrap();
+    let s = data.sessions.get_mut("s").unwrap();
+    let mut frame = super::super::body_runtime::context(s).unwrap();
+    frame.observations["nearby_mob_types"] = json!([{"id":"turtle","label":"カメ","quantity":3}]);
+    frame.observations["smell"] = json!({"status":"present","components":[{"smell_id":"flower","effective_strength":3}]});
+    frame.observations["weather"] = json!("clear");
+    s.conversation_observation.observe(frame.clone());
+    let revision = s.conversation_observation.context().unwrap().revision;
+    s.conversation_observation.considered(revision);
+    frame.observations["weather"] = json!("rain");
+    s.conversation_observation.observe(frame);
+    s.history.push("previous", "assistant", "カメさん、砂浜でゆっくりしとるなぁ。");
+    result.command_id = s.visual.commands(Utc::now())[0]["command_id"].as_str().unwrap().into();
+    result.body_view.as_mut().unwrap().0["captured_at"] = json!(Utc::now());
+    s.visual.receive(&result, Utc::now());
+    let mut action = opportunity(s).unwrap();
+    action.delivery = crate::combat::model::Delivery::Ambient;
+    let event = super::super::body_runtime::event(s, s.latest.as_ref().unwrap());
+    crate::environment::reaction::attach(&mut action, &event, &json!({}), &d.config.combat);
+    assert!(super::super::environment_runtime::refresh_dialogue_context(s, std::slice::from_mut(&mut action)));
+    drop(data);
+    (d, action)
+}
+
+#[tokio::test]
+async fn image_notice_refreshes_all_current_facts_and_history_in_the_common_context() {
+    let (d, mut action) = environment_with_image();
+    let before = action.leaf.as_ref().unwrap().details["reaction_context"].clone();
+    let image = action.image.clone();
+    let mut data = d.data.lock().unwrap();
+    let s = data.sessions.get_mut("s").unwrap();
+    let mut frame = s.conversation_observation.context().unwrap();
+    frame.observations["weather"] = json!("snow");
+    s.conversation_observation.observe(frame);
+    s.history.silent("last-silence");
+    for _ in 0..2 {
+        assert!(super::super::environment_runtime::refresh_dialogue_context(s, std::slice::from_mut(&mut action)));
+        let current = &action.leaf.as_ref().unwrap().details["reaction_context"];
+        assert_eq!(current["world_context"]["observations"]["weather"], "snow");
+        for key in ["nearby_mob_types", "smell"] {
+            assert_eq!(current["world_context"]["observations"][key], before["world_context"]["observations"][key]);
+        }
+        let changes = current["world_context"]["changes"].as_array().unwrap();
+        assert_eq!(changes.iter().filter(|c| c["kind"] == "body_view").count(), 1);
+        assert!(!changes.iter().any(|c| c["kind"] == "nearby_mob_types" || c["kind"] == "smell"));
+        assert_eq!(current["recent"]["conversation"].as_array().unwrap().last().unwrap()["reaction"], "silent");
+        assert_eq!(current["visual_capture"], before["visual_capture"]);
+        assert!(Arc::ptr_eq(action.image.as_ref().unwrap(), image.as_ref().unwrap()));
+    }
+}
+
 #[tokio::test]
 async fn existing_environment_model_gets_one_image_request_and_can_select_silence() {
     let sent=Arc::new(std::sync::Mutex::new(Vec::<Value>::new()));let recorded=sent.clone();
@@ -119,15 +176,42 @@ async fn existing_environment_model_gets_one_image_request_and_can_select_silenc
     let http=tokio::spawn(async move {axum::serve(socket,app).await.unwrap();});
     let llm=crate::llm::RigLlm::new(&url,None,Duration::from_secs(2)).unwrap();
     let mut config=super::super::DialogueConfig {model:"fixture".into(),..Default::default()};config.reading_engine="off".into();
-    let (mut state,result,now)=pending();state.receive(&result,now);let captured=state.latest.unwrap();
+    let (_d, action) = environment_with_image();
     let input=json!({"kind":"environment_reaction","model":"fixture","max_tokens":200,"fallback_text":"",
-        "details":{"reaction_context":{"topic":"surroundings","visual_capture":{"captured_at":captured.image.captured_at},"world_context":{"observations":{},"changes":[]}}}});
+        "details":action.leaf.as_ref().unwrap().details});
     let (_tx,mut cancel)=watch::channel(false);
-    let result=super::super::reaction_runtime::render_image(&config,&llm,&input,&mut cancel,Some(&captured.image)).await.unwrap();
+    let result=super::super::reaction_runtime::render_image(&config,&llm,&input,&mut cancel,action.image.as_deref()).await.unwrap();
     assert_eq!(result["environment_reaction_outcome"],"silent");assert!(!result.to_string().contains(PNG));
     let requests=sent.lock().unwrap();assert_eq!(requests.len(),1);
     assert_eq!(requests[0]["messages"].as_array().unwrap().last().unwrap()["content"][1]["image_url"]["url"],format!("data:image/png;base64,{PNG}"));
     assert!(requests[0]["messages"][0]["content"].as_str().unwrap().contains(crate::companion_prompt::chat_image()));
+    let content = &requests[0]["messages"].as_array().unwrap().last().unwrap()["content"];
+    let (context, metadata) = content[0]["text"].as_str().unwrap().split_once("\n\nimage_observation: ").unwrap();
+    let context: Value = serde_json::from_str(context).unwrap();
+    let metadata: Value = serde_json::from_str(metadata).unwrap();
+    assert_eq!(metadata["captured_at"], action.image.as_ref().unwrap().captured_at);
+    let observations = &context["world_context"]["observations"];
+    assert_eq!(observations["nearby_mob_types"][0]["id"], "turtle");
+    assert_eq!(observations["nearby_mob_types"][0]["quantity"], 3);
+    assert_eq!(observations["weather"], "rain");
+    assert_eq!(observations["smell"]["components"][0]["effective_strength"], 3);
+    assert_eq!(observations["body_observation"]["status"], "observed");
+    let changes = context["world_context"]["changes"].as_array().unwrap();
+    assert!(changes.iter().any(|c| c["kind"] == "weather"));
+    assert!(changes.iter().any(|c| c["kind"] == "body_view"));
+    assert!(!changes.iter().any(|c| c["kind"] == "nearby_mob_types" || c["kind"] == "smell"));
+    assert_eq!(context["recent"]["conversation"][0]["text"], "カメさん、砂浜でゆっくりしとるなぁ。");
+    let shared = crate::reaction_leaf::context("surroundings_notice", &json!({})).unwrap();
+    assert_eq!(context["situation"], shared["situation"]);
+    assert!(context["situation"].as_str().unwrap().contains("新しく言うことがなければ黙っててええ"));
+    assert_eq!(result["observation_revision"], context["world_context"]["revision"]);
+    assert!(!context.to_string().contains(PNG));
+    // 添付の有無で、共通の状況文・全観測・変化・履歴が削られない。
+    let mut without_image = input.clone();
+    without_image["details"]["reaction_context"].as_object_mut().unwrap().remove("visual_capture");
+    let plain = crate::environment::reaction::Prepared::new(&without_image, "fixture").unwrap();
+    let plain: Value = serde_json::from_str(&plain.request.messages[1].content).unwrap();
+    for key in ["situation", "world_context", "recent"] { assert_eq!(context[key], plain[key]); }
     http.abort();
 }
 #[tokio::test]

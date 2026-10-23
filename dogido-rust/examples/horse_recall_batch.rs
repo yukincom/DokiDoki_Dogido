@@ -1,10 +1,11 @@
-//! 馬呼び戻し二段階の検証境界。productionのprompt/decoder/validatorで検証し、世界操作は行わない。
+//! BERT受理後の一回の個体選択を、本体のprompt/decoder/validatorで検査する。世界操作は行わない。
 use dogido_rust::{
     assist::horse_recall::{
         contracts::{Prepared, Snapshot},
-        intent::{self, Decision, Stage},
+        intent::{self, Decision},
     },
     chat_prompt,
+    request_classifier::Classification,
 };
 use serde_json::{Value, json};
 use std::io::{self, BufRead};
@@ -23,9 +24,10 @@ fn run(row: Value) -> anyhow::Result<Value> {
         return Ok(json!(contexts));
     }
     let snapshot: Snapshot = serde_json::from_value(row["snapshot"].clone())?;
-    let original = row["text"].as_str().unwrap_or("");
-    let prepared = Prepared::new(snapshot, original)?;
-    let stage: Stage = serde_json::from_value(row["stage"].clone())?;
+    // BERTへ変更済み。旧判定へ戻さない。入力には受理済み分類を明示する。
+    let classification: Classification = serde_json::from_value(row["classification"].clone())?;
+    let original = classification.text.as_str();
+    let prepared = Prepared::from_classified(snapshot, &classification)?;
     if row["op"] == "request" {
         let mut details = row["details"].as_object().cloned().unwrap_or_default();
         details.insert("user_text".into(), original.into());
@@ -40,7 +42,7 @@ fn run(row: Value) -> anyhow::Result<Value> {
             enable_thinking: false,
         }
         .into_request()?;
-        let (request, tools) = intent::request(base, &prepared.original, Some(&prepared), stage)?;
+        let (request, tools) = intent::request(base, &prepared)?;
         let mut wire = json!({"model":request.model,"messages":request.messages,"temperature":request.temperature,
             "max_tokens":request.max_tokens,"stream":false,
             "chat_template_kwargs":{"enable_thinking":false,"preserve_thinking":false}});
@@ -52,15 +54,7 @@ fn run(row: Value) -> anyhow::Result<Value> {
     }
     let response = &row["response"]["choices"][0];
     let message = &response["message"];
-    let outcome = match intent::decode(
-        stage,
-        message,
-        response["finish_reason"].as_str().unwrap_or(""),
-    ) {
-        Ok(Decision::List(intent)) => match intent.validate(original) {
-            Ok(()) => json!({"kind":"list","intent":intent,"valid":true}),
-            Err(e) => json!({"kind":"rejected","error":e.to_string(),"valid":false}),
-        },
+    let outcome = match intent::decode(message, response["finish_reason"].as_str().unwrap_or("")) {
         Ok(Decision::Select(choice)) => match prepared.resolve(&choice) {
             Ok(horse) => {
                 json!({"kind":"recall","entity_id":horse.entity_id,"choice":choice,"valid":true})

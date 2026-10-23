@@ -250,10 +250,9 @@ impl Engine {
                 ));
             }
         };
-        let replacement = r
-            .text
-            .trim_matches(space)
-            .trim_matches(|c| "「」『』\"' 。．.!！?？…".contains(c));
+        // 表記は本人の指定語を保つ。対になった引用符と外側の空白だけを除き、
+        // 句読点の読み向け正規化は後段の normalized に任せる。
+        let replacement = parse::unquote(&r.text);
         if replacement.is_empty() || replacement.contains(['\n', '\r']) {
             return Ok(failure("invalid_surface", Some(target)));
         }

@@ -8,10 +8,14 @@
 - Rustは既存の`rust-toolchain.toml`と`Cargo.lock`を使用する。Pythonは専用venvを作り、既存のhash固定pip bootstrapを実行してからテスト依存を入れる。
 - GitHub公式actionは確認したreleaseのcommit SHAに固定し、リポジトリ権限は読取りのみとする。
 
-実機のMinecraft・音声・macOSアプリ、家庭用セットの配布はCIの対象外。既存の実機用opt-inテストも自動では有効にしない。
+## 公開版を現行実装へ統合
 
-初回のCIでは、公開版に残るOSモデル補助で、OS起動から300秒未満だと未実行の初回probeまで再確認間隔の内側と判断していた。未確認状態を時刻0から`None`へ変更し、初回は必ずprobeし、二回目から間隔を適用するよう修正した。時刻0秒・42秒の回帰テストは修正前に失敗し、修正後に成功した。OSを偽装して回避する変更ではない。
+セキュリティ更新だけを公開したPR #46では、開発mainのOSAI撤去が公開mainへ反映されていなかった。公開版も検証済みの開発mainへ揃え、[23分類BERT接続](2026-10-23-modernbert-23class-integration.md)・身体の注意範囲・[画像と共通観測の統合](2026-10-22-stop-vision.md)を反映した。未コミットの本棚作業は含めない。
 
-書類側の開発mainではこのPython補助は撤去済みのため、公開版の補助とそのテストだけを修正し、開発mainへ再導入しない。CI設定とこの記録は両方へ反映する。
+Apple Foundation Models／Foundry LocalのSDK依存・設定・worker・Rust接続・chat分類fallbackと、それらを前提にした旧テストは撤去した。最初のCIで見つかった旧OSAI補助の時刻判定を修正して維持する方針は取りやめ、補助自体を削除した。現行テストは原文ごとのBERT分類fixture、状態・対象・原文・保存・再開条件をコードで検査する経路へ揃える。OSAIを実行するテストや、旧経路へ戻る互換処理は残さない。
 
-ローカルの公開版検証はPython 230件成功・11件skip・38 subtest成功、本棚JavaScript 76件成功。YAMLの起動条件がpushだけであること、shell構文も確認した。UbuntuでのRust全targetは初回CIで成功。反映前に更新ブランチ、反映後にmainへのpushでCIの完了を確認する。
+## 検証範囲
+
+統合後の公開用treeでRust全34 targetは874件成功・実音声1件skip、Python補助は196件成功・11件skip・22 subtest成功、本棚JavaScriptは76件成功。実装・テスト・設定が検証済みの開発mainと一致し、追加差分が依頼されたコメントとdocsだけであることも確認した。読取りレビューで旧経路の残留がないこと、BERT失敗時の非fallback・原文と版の検査・敵観測による再開の回帰テストを確認した。更新ブランチとmainへのpushでもCIを検証する。
+
+実機のMinecraft・音声・macOSアプリ、家庭用セットの配布はCIの対象外。既存の実機用opt-inテストも自動では有効にしない。状況要約の保持案と実機での発話品質は、静止時の視覚仕様に記録した未実装・未確認の範囲を維持する。

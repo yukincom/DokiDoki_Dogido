@@ -1,5 +1,7 @@
 # 現行仕様
 
+**2026-10-23更新:** 戦闘中断後の相談再開・継続は、敵が警戒範囲から消えたことを含む現在観測とRustの安全条件で決める。OS AI分類・旧分類fallback・敵が残る間の暫定復帰は撤去した。[現行の分類と復帰の責務](2026-10-23-modernbert-23class-integration.md)。
+
 この文書は、会話中に固まった方針をまとめた現行仕様です。
 
 - 骨格: 2026-05-24
@@ -9,7 +11,7 @@
 - 川柳workshopの検証付き共同編集agent: 2026-09-12（コード・自動テストとローカルQwen独立step確認済み、実Minecraft／TTS／editor E2E未確認）
 - 本体の同意済み専用Chrome検索: 2026-09-12（コード・自動テスト・利用前提の非起動確認済み、統合後の実Minecraft／TTS／Chrome E2Eは別途確認。Minecraft自動ポーズと川柳カウント停止は2026-09-14にユーザー確認済み）
 
-- 本体の実行時正本: Rust。旧Python本体・比較oracleの運用は終了。Pythonは設定・UniDic token・音声機器／AEC・端末AI・Chrome/MCP接続の補助として残す。残存モジュールと資料は [Rust本体の補助一覧](../dogido-rust/README.md#残すpython補助と資料) を正とし、読みの判定・整形を旧Pythonへ戻さない。
+- 本体の実行時正本: Rust。旧Python本体・比較oracleの運用は終了。Pythonは設定・UniDic token・音声機器／AEC・ModernBERT推論の補助として残す。OS AI接続は撤去済み。残存モジュールと資料は [Rust本体の補助一覧](../dogido-rust/README.md#残すpython補助と資料) を正とし、読みの判定・整形を旧Pythonへ戻さない。
 
 既存のメモより優先して参照する前提です。移植前の検証日付は当時の記録であり、Rust変更後の実Minecraft・実音声の完了を意味しません。起動方法は [Rust本体の案内](../dogido-rust/README.md)、過去の移行段階は [移行記録](rust-migration-plan.md) を参照してください。
 
@@ -175,9 +177,9 @@ Minecraft Java Edition
 ### 現行の限定支援アクション
 
 - プレイヤーの明示的な「剣」「剣に持ち替えて」でだけ動く。非戦闘中でも明示依頼なら可
-- 代表形はコードで即時判定し、剣に触れた曖昧な自然形だけ既存chat route（会話用LLM）の閉じたschemaで抽出する
-- LLMはintent・対象・依頼性・発話中evidence・confidenceまで。実行可否、slot選択、期限・重複・期待item検証はコード
-- ドギドからの自動持ち替えはしない。OS AIの用途も戦闘中断中の小分類から広げない
+- 入力は他の依頼と同じ共通BERTで一度分類する。分類不能時に旧語句判定やLLM限定抽出へ戻さない
+- 分類された意図を受け、実行可否、slot選択、期限・重複・期待item検証をコードで行う
+- ドギドからの自動持ち替えはしない。意図分類は共通BERTで行い、現在hotbarと実行条件はコードで照合する。OS AIは撤去済み
 - 救助、馬、ActionBudget、安全地点は未実装
 
 ### ワールド状態

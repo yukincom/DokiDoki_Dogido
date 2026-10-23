@@ -1,5 +1,5 @@
-//! One model decision at a code-owned environmental reaction opportunity.
-//! Observation, cooldowns, interruption, movement and persistence stay outside.
+//! コードが選んだ環境反応を、共通の状況・観測・履歴から一回のモデル判断へ組み立てる。
+//! 画像は同じ入力への添付。観測の更新・間隔・取消・移動・保存は各runtimeが所有する。
 use crate::{
     combat::model::{Delivery, LeafRequest, Settings, Speech},
     events::GameEvent,
@@ -97,13 +97,9 @@ pub(crate) fn attach(action: &mut Speech, event: &GameEvent, recent: &Value, set
         _ => unreachable!(),
     }
     details["__reaction_guard"] = guard;
-    let visual_world = action.image.as_ref().map(|_| details["reaction_context"]["world_context"].clone());
+    // 現在の全観測と画像の撮影情報は、画像の有無によらず共通runtimeで添える。
     details["reaction_context"] =
         json!({"topic":topic,"observations":observations,"properties":properties,"recent":recent});
-    if let Some(world) = visual_world {
-        details["reaction_context"]["world_context"] = world;
-        details["reaction_context"]["visual_capture"] = details["visual_capture"].clone();
-    }
     action.leaf = Some(LeafRequest {
         kind: KIND.into(),
         details,
@@ -229,7 +225,7 @@ impl Prepared {
             ),
             "unknown reaction topic"
         );
-        if context.get("topic").and_then(Value::as_str) == Some("surroundings") && context.get("visual_capture").is_none() {
+        if context.get("topic").and_then(Value::as_str) == Some("surroundings") {
             let shared = crate::reaction_leaf::context("surroundings_notice", &input["details"])?;
             context.insert("situation".into(), shared["situation"].clone());
         }

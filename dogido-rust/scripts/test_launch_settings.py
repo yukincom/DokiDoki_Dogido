@@ -383,3 +383,28 @@ def test_chat_image_launch_settings_and_bounds(monkeypatch, tmp_path):
     for invalid in (0, 99, 5001):
         with pytest.raises(ValidationError):
             Settings(_env_file=None, chat_image_wait_ms=invalid)
+
+
+def test_os_ai_and_provisional_resume_settings_are_removed(monkeypatch, tmp_path):
+    settings = Settings(_env_file=None)
+    assert not any(name.startswith("platform_ai_") for name in Settings.model_fields)
+    assert "workshop_low_threat_resume_delay_ms" not in Settings.model_fields
+    args, _ = command(monkeypatch, tmp_path, settings)
+    haiku = json.loads(value(args, "--haiku-settings"))
+    assert "platform_ai" not in haiku and "low_threat_resume_delay_ms" not in haiku
+
+
+def test_retired_os_ai_settings_only_warn_by_name(monkeypatch, tmp_path):
+    from dogido_server.runtime_settings import warn_retired_settings
+    monkeypatch.setattr(os, "environ", {})
+    env = tmp_path / ".env"
+    env.write_text("DOGIDO_PLATFORM_AI_PROVIDER=PRIVATE_PROVIDER\n"
+                   "DOGIDO_PLATFORM_AI_ALLOW_MODEL_DOWNLOAD=PRIVATE_VALUE\n"
+                   "DOGIDO_WORKSHOP_LOW_THREAT_RESUME_DELAY_MS=12345\n")
+    with pytest.warns(UserWarning) as records:
+        warn_retired_settings((env,))
+    message = str(records[0].message)
+    assert "DOGIDO_PLATFORM_AI_PROVIDER" in message
+    assert "DOGIDO_PLATFORM_AI_ALLOW_MODEL_DOWNLOAD" in message
+    assert "DOGIDO_WORKSHOP_LOW_THREAT_RESUME_DELAY_MS" in message
+    assert all(value not in message for value in ("PRIVATE_PROVIDER", "PRIVATE_VALUE", "12345"))

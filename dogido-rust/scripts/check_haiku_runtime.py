@@ -51,7 +51,7 @@ def fixture(*, combat_settings=None, extra_args=(), initial_lines=None, **settin
                                   for i, line in enumerate(LINES)]}
             return None  # existing single-call conversation mock
         control["structured_handler"] = structured
-        h = {"interval_ms": 0, "quiet_time_ms": 0, "memory_dir": str(folder / "memory"), "platform_ai": {"provider": "chat"}, **settings}
+        h = {"interval_ms": 0, "quiet_time_ms": 0, "memory_dir": str(folder / "memory"), **settings}
         try:
             binary = Path(os.environ.get("DOGIDO_RUST_BINARY", ROOT / "target/debug/dogido-rust"))
             with running(binary, folder, dep, haiku_settings=h, combat_settings=combat_settings, extra_args=extra_args) as (base, process, log):

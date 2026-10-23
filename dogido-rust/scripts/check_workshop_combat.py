@@ -1,19 +1,33 @@
 #!/usr/bin/env python3
-"""戦闘後の句再掲・確認を、実HTTPと模擬モデル/再生で検査。所有プロセスは回収する。"""
+"""戦闘後の自動再開と保留入力を、実HTTPと模擬モデル/再生で検査。所有プロセスは回収する。"""
 from datetime import datetime, timedelta, timezone
 from contextlib import contextmanager
-from pathlib import Path
-import argparse
 import json
 import time
-import threading
 from check_dialogue import register, request, row, submit, wait_for
-from check_haiku_runtime import fixture, LINES
+from check_haiku_runtime import fixture as haiku_fixture, LINES
+from request_classifier_fixture import mock_request_classifier
 from check_workshop_runtime import ready, session, install, step
-from check_workshop_edits import edit, finish, revisions, adoption, token_fixture
+from check_workshop_edits import edit, finish, revisions, adoption
 
 SETTINGS = {"aftermath_time_ms": 150, "combat_clear_time_ms": 150}
 MOB = {"type": "zombie", "entity_id": "z1", "distance": 6, "direction": {"horizontal": "front"}}
+
+
+# BERTの意味精度はここで代替しない。ケースが選んだ原文と分類結果を共通IPCへ渡す。
+BERT_LABELS = {
+    "終了": "senryu_end", "終了ー": "senryu_end", "お開きー": "senryu_end",
+    "終了でお願いします": "senryu_end", "句の相談はお開きにしよう": "senryu_end",
+    "上五を『さくらいろ』にして": "senryu_change_upper",
+    "もういい": "senryu_end", "続けない": "senryu_end",
+    "この句の相談はここで切り上げよう": "senryu_end",
+}
+
+
+@contextmanager
+def fixture(*, extra_args=(), **settings):
+    with mock_request_classifier(BERT_LABELS, extra_args=extra_args) as (args, _), haiku_fixture(extra_args=args, **settings) as state:
+        yield state
 
 
 def event(name):
@@ -50,98 +64,34 @@ def returned(send, rows, sid, count=1):
     return drive(send, sid, lambda: next((r for r in actions(rows, sid, "workshop_resume")[count-1:] if r["playback_status"] == "completed"), None))
 
 
-@contextmanager
-def platform_fixture():
-    """実workerのIPCとrouterを通し、端末SDKのprobe/生成だけを置き換える。"""
-    with token_fixture("unavailable") as (args, folder):
-        helper = folder / "combat_input_helper.py"
-        helper.unlink()
-        helper.write_text("import sys\nsys.path.insert(0, " + repr(str(Path(__file__).resolve().parent)) + ")\n" + '''
-import json
-from pathlib import Path
-from combat_input_helper import Worker
-from dogido_server.platform_ai import AppleFoundationModelsProvider, PlatformAIProbe, _json_schema_for
-folder = Path(__file__).parent
-AppleFoundationModelsProvider.probe = lambda self: PlatformAIProbe(self.name, True, "fixture")
-def generate(self, request):
-    actions = _json_schema_for(request)["properties"]["action"]["enum"]
-    with (folder / "platform_requests.jsonl").open("a") as out:
-        out.write(json.dumps({"allowed_actions": request.details["allowed_actions"], "schema_actions": actions}) + "\\n")
-    return {**json.loads((folder / "platform_payload.json").read_text()), "evidence": request.details["player_text"]}
-AppleFoundationModelsProvider.generate = generate
-worker = Worker()
-try:
-    for line in sys.stdin:
-        frame = json.loads(line)
-        if frame["op"] == "classify":
-            with (folder / "platform_frames.jsonl").open("a") as out:
-                out.write(json.dumps(frame, ensure_ascii=False) + "\\n")
-        print(json.dumps(worker.handle(frame), ensure_ascii=False), flush=True)
-finally:
-    worker.close()
-''')
-        yield args, folder
-
-
-def main(*, platform_contract_only=False):
-    # Import here: provisional fixtures reuse this module's combat driver.
-    from check_workshop_provisional import classifier, intent
+def main():
+    from check_workshop_provisional import done
     passed = []
-    with platform_fixture() as (args, platform_dir), fixture(extra_args=args, combat_settings=SETTINGS, platform_ai={"provider": "apple"}) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
-        chat_calls = classifier(control, lambda text: intent(text, "uncertain", confidence=0.0))
-        sid = ready(base, send, rows)
-        enter(send, rows, sid)
-        (platform_dir / "platform_payload.json").write_text(json.dumps({"action": "unrelated", "confidence": .95}))
-        turn = submit(base, sid, "少し待っているね")
-        r = wait_for(lambda: row(base, turn, {"quiet"}))
-        result = r["combat_input_result"]
-        assert result["provider"] == "apple_foundation_models" and not result["llm_reports"], r
-        assert not chat_calls
-        frames = [json.loads(line) for line in (platform_dir / "platform_frames.jsonl").read_text().splitlines()]
-        requests = [json.loads(line) for line in (platform_dir / "platform_requests.jsonl").read_text().splitlines()]
-        assert len(frames) == len(requests) == 1
-        for frame, sdk in zip(frames, requests):
-            assert frame["allowed_actions"] == ["resume_workshop", "workshop_input", "close_workshop", "unrelated", "uncertain"]
-            assert sdk["allowed_actions"] == sdk["schema_actions"] == frame["allowed_actions"]
-            prompt = frame["messages"][-1]["content"]
-            assert "許可された action: " + "、".join(frame["allowed_actions"]) + "\n" in prompt
-        passed.append("rust_action_set_reaches_helper_schema_and_prompt_without_live_sdk")
-
-    if platform_contract_only:
-        print(json.dumps({"passed": len(passed), "cases": passed, "live_sdk": False, "all_owned_processes_stopped": True}, indent=2))
-        return
-
     with fixture(combat_settings=SETTINGS) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         calls = install(control, lambda text, prompt, n: step(text,"respond","気に入ってもらえてうれしいわ。"))
         sid = ready(base, send, rows)
         r = finish(base, send, sid, "いい句だね")
         assert r["workshop_action"] == "respond" and len(calls) == 1 and hud(sid)["state"] == "open"
         assert hud(sid)["canonical_lines"] == LINES and not revisions(folder,sid)
-        paused = classifier(control, lambda text: intent(text,"workshop_input"))
         enter(send, rows, sid)
         turn = submit(base,sid,"いい句だね")
-        r = wait_for(lambda: row(base,turn,{"quiet"}))
-        assert len(paused)==1 and r["combat_input_result"]["analysis"]["action"]=="workshop_input",r
-        assert hud(sid)["state"]=="danger" and not revisions(folder,sid)
-        passed.append("praise_alone_uses_model_in_ordinary_and_paused_workshop_without_closing")
-    # 受理時はopen。モデル判断と原文検証後に閉じ、返事を戦闘が消しても復活しない。
+        r = wait_for(lambda: row(base,turn,{"queued"}))
+        assert r["combat_input_result"]["analysis"]["action"] == "deferred_input", r
+        assert len(calls) == 1 and hud(sid)["state"] == "danger" and not revisions(folder,sid)
+        end(send, rows, sid)
+        r = done(base, send, sid, turn, hostile=False)
+        assert r["workshop_action"] == "respond" and len(calls) == 2, r
+        assert hud(sid)["state"] == "open" and not revisions(folder,sid)
+        passed.append("praise_is_held_without_model_until_clear_then_reaches_same_workshop")
+    # 終了はBERTだけで閉じる。本文モデルを呼ばず、返事を戦闘が消しても復活しない。
     for text in ["終了ー", "お開きー"]:
         with fixture(combat_settings=SETTINGS, interval_ms=5000) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
             sid = register(base, preview=False, body=True)
             drive(send, sid, lambda: any(r["turn_id"].endswith(":poem") and r["playback_status"] == "completed" for r in rows(sid)))
             original = stored(sid)
-            entered = threading.Event(); release = threading.Event()
-            def delayed_close(text, prompt, n):
-                entered.set(); release.wait(8)
-                return step(text, "close_workshop")
-            calls = install(control, delayed_close)
+            calls = install(control, lambda text, prompt, n: step(text, "respond", "呼ばれへんはずや"))
             (folder / "player_mode").write_text("slow")
-            try:
-                turn = submit(base, sid, text)
-                wait_for(entered.is_set)
-                assert hud(sid)["state"] == "open" and not row(base, turn, {"started", "completed"})
-            finally:
-                release.set()
+            turn = submit(base, sid, text)
             wait_for(lambda: hud(sid)["state"] == "closed")
             wait_for(lambda: row(base, turn, {"started"}))
             (folder / "player_mode").write_text("ok")
@@ -151,8 +101,8 @@ def main(*, platform_contract_only=False):
             for _ in range(5):
                 send(sid); time.sleep(.1)
             assert hud(sid)["state"] == "closed" and not actions(rows, sid, "workshop_resume")
-            assert len(calls) == 1 and stored(sid) == original and not revisions(folder, sid)
-            passed.append("model_close_before_interrupted_ack:" + text)
+            assert len(calls) == 0 and stored(sid) == original and not revisions(folder, sid)
+            passed.append("bert_close_without_model_before_interrupted_ack:" + text)
     with fixture(combat_settings=SETTINGS) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         sid = ready(base, send, rows); original = stored(sid)
         enter(send, rows, sid)
@@ -162,7 +112,7 @@ def main(*, platform_contract_only=False):
         r = returned(send, rows, sid)
         assert "倒せた" in r["text"] and r["text"].endswith("\n".join(LINES)) and "続ける？" not in r["text"], r
         assert datetime.fromisoformat(r["created_at"]) >= datetime.fromisoformat(aftermath["completed_at"])
-        assert session(base, sid)["workshop_followup"] == "combat_resume_confirmation"
+        assert session(base, sid)["workshop_followup"] == "discussion"
         history = session(base, sid)["history"]
         # 前置き・固定警告・復帰案内も、実再生が終われば共通履歴に残る。
         for spoken in [aftermath, r]:
@@ -173,12 +123,9 @@ def main(*, platform_contract_only=False):
         assert not any(item["role"] == "assistant" and "\n".join(LINES) in item["text"] for item in history)
         for _ in range(3): send(sid)
         assert len(actions(rows, sid, "workshop_resume")) == 1
-        calls = install(control, lambda text, prompt, n: {**step(text,"resume_workshop"),"purpose":"continue_discussion"})
-        r = finish(base, send, sid, "うん")
-        assert r["workshop_action"] == "resume_workshop" and len(r["llm_reports"]) == 1 and len(calls) == 1, r
         assert stored(sid) == original and not revisions(folder, sid)
-        assert len([x for x in seen if x["path"] == "/v1/chat/completions"]) == llm_before + 1
-        passed.append("aftermath_then_one_resume_notice_and_model_assent_without_fake_history")
+        assert len([x for x in seen if x["path"] == "/v1/chat/completions"]) == llm_before
+        passed.append("aftermath_then_one_resume_notice_returns_to_discussion_without_confirmation_model")
 
     with fixture(combat_settings=SETTINGS) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         install(control, lambda text, prompt, n: edit(text))
@@ -193,41 +140,42 @@ def main(*, platform_contract_only=False):
         r = returned(send, rows, sid)
         assert "離れられた" in r["text"] and "さくらいろ" in r["text"] and "倒" not in r["text"], r
         assert hud(sid)["canonical_lines"] == LINES and hud(sid)["pending_lines"][0] == "さくらいろ"
-        install(control, lambda text, prompt, n: {**step(text,"decline_resume"),"purpose":"finish_workshop"})
+        calls = install(control, lambda text, prompt, n: step(text,"ask", speech="残った案を採用するか、破棄するか教えてな。"))
         r = finish(base, send, sid, "もういい")
-        assert r["workshop_action"] == "ask" and hud(sid)["state"] == "open", r
+        # 終了意思はBERT確定済み。未採用案の採否だけ本文モデルが一度確認する。
+        assert r["workshop_action"] == "ask" and hud(sid)["state"] == "open" and len(calls) == 1, r
         assert hud(sid)["pending_lines"] and not revisions(folder, sid)
         install(control, lambda text, prompt, n: adoption(text))
         r = finish(base, send, sid, "採用して")
         assert r["workshop_outcome"] == "pending_saved" and len(revisions(folder, sid)) == 1
-        passed.append("escape_reposts_pending_without_claiming_kill_or_discarding_it_on_decline")
+        passed.append("escape_reposts_pending_and_bert_end_preserves_it")
 
     with fixture(combat_settings=SETTINGS) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         sid = ready(base, send, rows)
         enter(send, rows, sid); end(send, rows, sid)
         returned(send, rows, sid)
-        install(control, lambda text, prompt, n: {**step(text,"decline_resume"),"purpose":"finish_workshop"})
+        calls = install(control, lambda text, prompt, n: step(text,"respond"))
         r = finish(base, send, sid, "続けない")
-        assert r["workshop_action"] == "decline_resume" and hud(sid)["state"] == "closed", r
-        passed.append("decline_completed_resume_confirmation_closes_without_save")
+        assert r["workshop_action"] == "close_workshop" and hud(sid)["state"] == "closed", r
+        assert not calls and not r["llm_reports"] and not revisions(folder, sid), r
+        passed.append("bert_end_after_auto_resume_closes_without_generation_or_save")
 
     with fixture(combat_settings=SETTINGS) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         def choose(text, prompt, n):
-            assert "会話段階: combat_resume_confirmation" in prompt
-            action = "resume_workshop" if n == 1 else "decline_resume"
-            return {"action": action, "purpose": "continue_discussion" if n == 1 else "finish_workshop",
-                    "confidence": .95, "evidence": text, "speech": "", "checks": []}
+            assert "会話段階: discussion" in prompt
+            assert text == "この句についてまた話そうよ"
+            return step(text, "respond", "この句のどこから話そか。")
         calls = install(control, choose)
         sid = ready(base, send, rows)
-        # 「さっきの句」は6hの想起経路が所有するため、現在句の再開を明示する。
-        for text, expected in [("この句についてまた話そうよ", "resume_workshop"),
-                               ("この句の相談はここで切り上げよう", "decline_resume")]:
+        for count, (text, expected, model_calls) in enumerate([
+                ("この句についてまた話そうよ", "respond", 1),
+                ("この句の相談はここで切り上げよう", "close_workshop", 0)], start=1):
             enter(send, rows, sid); end(send, rows, sid)
-            returned(send, rows, sid, count=len(calls) + 1)
+            returned(send, rows, sid, count=count)
             r = finish(base, send, sid, text)
-            assert r["workshop_action"] == expected and len(r["llm_reports"]) == 1, r
-        assert len(calls) == 2 and hud(sid)["state"] == "closed" and not revisions(folder, sid)
-        passed.append("natural_resume_and_decline_use_one_existing_step_each")
+            assert r["workshop_action"] == expected and len(r["llm_reports"]) == model_calls, r
+        assert len(calls) == 1 and hud(sid)["state"] == "closed" and not revisions(folder, sid)
+        passed.append("automatic_resume_uses_ordinary_reply_and_bert_end_uses_no_model")
 
     with fixture(combat_settings=SETTINGS) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         sid = ready(base, send, rows)
@@ -240,7 +188,7 @@ def main(*, platform_contract_only=False):
         assert len(actions(rows, sid, "workshop_resume")) == 1
         (folder / "player_mode").write_text("ok")
         r = returned(send, rows, sid, count=2)
-        assert "倒せた" in r["text"] and session(base, sid)["workshop_followup"] == "combat_resume_confirmation"
+        assert "倒せた" in r["text"] and session(base, sid)["workshop_followup"] == "discussion"
         assert not revisions(folder, sid)
         passed.append("failed_resume_keeps_pin_and_reason_and_retries_after_backoff")
 
@@ -280,13 +228,12 @@ def main(*, platform_contract_only=False):
         (folder / "player_mode").write_text("slow")
         send(sid, visual_threats=[MOB], combat={"combat_active_hint": True})
         warning = wait_for(lambda: next((r for r in rows(sid) if r.get("combat_actions") and r["playback_status"] == "started"), None))
-        paused = classifier(control, lambda text: intent(text,"close_workshop"))
         turn = submit(base,sid,"終了")
         assert row(base, warning["turn_id"], {"started"}) and hud(sid)["state"] == "danger"
         (folder / "player_mode").write_text("ok")
-        from check_workshop_provisional import done
         r = done(base,send,sid,turn)
-        assert r["combat_input_outcome"]=="close_checked" and len(paused)==1,r
+        assert r["combat_input_outcome"]=="close_checked",r
+        assert r["combat_input_result"]["provider"]=="modernbert",r
         assert hud(sid)["state"] == "closed"
         assert row(base, warning["turn_id"], {"completed"})
         assert not actions(rows, sid, "workshop_resume")
@@ -295,10 +242,10 @@ def main(*, platform_contract_only=False):
     with fixture(combat_settings=SETTINGS) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         sid = ready(base, send, rows)
         enter(send, rows, sid)
-        paused = classifier(control, lambda text: intent(text,"close_workshop"))
         turn = submit(base,sid,"終了")
         r = wait_for(lambda: row(base,turn,{"quiet"}))
-        assert r["combat_input_outcome"]=="close_checked" and len(paused)==1,r
+        assert r["combat_input_outcome"]=="close_checked",r
+        assert r["combat_input_result"]["provider"]=="modernbert",r
         assert hud(sid)["state"]=="closed"
         r = wait_for(lambda: next((r for r in actions(rows, sid, "workshop_close_feedback") if r["playback_status"] == "completed"), None))
         assert r["player_input_text"] == "終了" and not revisions(folder, sid)
@@ -315,43 +262,31 @@ def main(*, platform_contract_only=False):
         assert not any(r["playback_status"] == "completed" for r in actions(rows, sid, "workshop_resume"))
         passed.append("stale_snapshot_cancels_return_prompt_and_cannot_confirm_resume")
 
-    # 全AIが不成立の時だけ閉じた規則へ戻す。称賛・否定・引用は閉じない。
+    # not_targetは安全の判定にせず保留し、共通BERT Endだけが終了する。
     with fixture(combat_settings=SETTINGS) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
-        paused=classifier(control,lambda text:intent(text,"uncertain",confidence=0.0))
-        sid=ready(base,send,rows)
-        enter(send,rows,sid)
+        calls = install(control, lambda text, prompt, n: step(text))
+        sid = ready(base, send, rows)
+        enter(send, rows, sid)
+        previous = None
         for text in ["いい句だね", "終了しないよ", "『終了』って言っただけ"]:
-            send(sid,visual_threats=[MOB],combat={"combat_active_hint":True})
-            turn=submit(base,sid,text)
-            r=wait_for(lambda:row(base,turn,{"quiet"}))
-            assert r["combat_input_result"]["analysis"]["action"]=="uncertain" and hud(sid)["state"]=="danger",r
-        send(sid,visual_threats=[MOB],combat={"combat_active_hint":True})
-        turn=submit(base,sid,"終了")
-        r=wait_for(lambda:row(base,turn,{"quiet"}))
-        assert r["combat_input_outcome"]=="close_checked" and hud(sid)["state"]=="closed",r
-        assert len(paused)==4 and not revisions(folder,sid)
-        passed.append("unavailable_combat_classifier_falls_back_only_for_explicit_close")
-
-    # SDK補助が壊れてもchatへ進み、chatも不成立なら辞書なしで明示終了を判定する。
-    for decision in ["close_workshop", "uncertain"]:
-        with token_fixture("unavailable") as (args, token_dir), fixture(extra_args=args,combat_settings=SETTINGS,platform_ai={"provider":"auto"}) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
-            helper=token_dir/"combat_input_helper.py"
-            helper.unlink()
-            helper.write_text("raise OSError('fixture unavailable SDK worker')\n")
-            paused=classifier(control,lambda text:intent(text,decision,confidence=.95 if decision=="close_workshop" else 0.0))
-            sid=ready(base,send,rows);enter(send,rows,sid)
-            turn=submit(base,sid,"終了")
-            r=wait_for(lambda:row(base,turn,{"quiet"}))
-            assert r["combat_input_outcome"]=="close_checked" and hud(sid)["state"]=="closed",r
-            assert len(paused)==1 and not revisions(folder,sid)
-            assert r["combat_input_result"]["provider"] == ("chat" if decision=="close_workshop" else "rule_fallback"),r
-            assert 'event="combat_platform_unavailable"' in log.read_text()
-            passed.append("failed_sdk_worker_then_"+decision)
+            send(sid, visual_threats=[MOB], combat={"combat_active_hint":True})
+            turn = submit(base, sid, text)
+            r = wait_for(lambda: row(base, turn, {"queued"}))
+            assert r["combat_input_result"]["analysis"]["action"] == "deferred_input", r
+            assert r["combat_input_outcome"] == "held" and hud(sid)["state"] == "danger", r
+            if previous: wait_for(lambda: row(base, previous, {"cancelled"}))
+            previous = turn
+        send(sid, visual_threats=[MOB], combat={"combat_active_hint":True})
+        turn = submit(base, sid, "終了")
+        r = done(base, send, sid, turn)
+        assert r["combat_input_outcome"] == "close_checked" and hud(sid)["state"] == "closed", r
+        assert not calls and not revisions(folder, sid)
+        assert r["combat_input_result"]["provider"] == "modernbert", r
+        wait_for(lambda: row(base, previous, {"cancelled"}))
+        passed.append("not_target_remains_held_and_bert_end_cancels_pending_without_model")
 
     print(json.dumps({"passed": len(passed), "cases": passed, "all_owned_processes_stopped": True}, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--platform-contract-only", action="store_true", help="SDKを模擬した許可集合の伝達だけを確認する")
-    main(platform_contract_only=parser.parse_args().platform_contract_only)
+    main()

@@ -21,6 +21,8 @@ import urllib.request
 from urllib.parse import parse_qs, urlsplit
 import wave
 
+from request_classifier_fixture import mock_request_classifier, resolve_input_response
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -63,11 +65,12 @@ def row(base, turn, statuses):
                  if r["turn_id"] == turn and r["playback_status"] in statuses), None)
 
 
-def submit(base, sid, text="こんにちは"):
-    got = request(base, "/api/v1/player-input", {"text": text, "source": "voice", "session_id": sid})
+def submit(base, sid, text="こんにちは", *, source="voice"):
+    got = request(base, "/api/v1/player-input", {"text": text, "source": source, "session_id": sid})
     assert got["accepted"], got
     # 警告中の通常質問/知識は元IDのまま保留・自動再開する。
     # 専用入力へ振り分けられた場合は、明示された配送先を追う。
+    got = resolve_input_response(base, got)
     while got.get("reason") == "reply_input_routing":
         routing = got
         def classified():
@@ -77,7 +80,7 @@ def submit(base, sid, text="こんにちは"):
             if item["playback_status"] in {"waiting_for_warning", "generating", "queued", "started", "completed", "failed", "cancelled"}:
                 return {**routing, "reason":item["playback_status"]}
             return None
-        got = wait_for(classified)
+        got = resolve_input_response(base, wait_for(classified))
         assert got["accepted"], got
     return got["turn_id"]
 
@@ -212,9 +215,7 @@ def running(binary, directory, dependency, *, live=False, player=None, warning_s
 
 
 def submit_text(base, sid, text):
-    result = request(base, "/api/v1/player-input", {"session_id": sid, "source": "text", "text": text})
-    assert result["accepted"], result
-    return result["turn_id"]
+    return submit(base, sid, text, source="text")
 
 
 def display_row(base, turn):
@@ -351,9 +352,9 @@ def main():
     if args.text_only:
         print(json.dumps({"passed": passed, "all_owned_processes_stopped": True}, ensure_ascii=False, indent=2))
         return
-    with tempfile.TemporaryDirectory(prefix="dogido-dialogue-") as temp, dependencies() as (dep, control, seen):
+    with tempfile.TemporaryDirectory(prefix="dogido-dialogue-") as temp, dependencies() as (dep, control, seen), mock_request_classifier({"剣に持ち替えて":"equip_sword"}) as (bert_args, _):
         directory = Path(temp)
-        with running(args.binary.resolve(), directory, dep) as (base, process, log):
+        with running(args.binary.resolve(), directory, dep, extra_args=bert_args) as (base, process, log):
             sid = register(base)
             assert request(base, "/api/v1/voice-input/context")["session_id"] == sid
             turn = submit(base, sid)
@@ -402,9 +403,14 @@ def main():
             wait_for(lambda: row(base, newest, {"completed"}))
             passed.append("duplicate_input_and_superseded_generation")
             control["delay"] = 0
-            turn = submit(base, sid, "剣に持ち替えて")
-            wait_for(lambda: row(base, turn, {"unsupported"}))
-            passed.append("world_operations_not_routed_to_chat")
+            before = len([r for r in seen if r["path"] == "/v1/chat/completions"])
+            accepted = request(base, "/api/v1/player-input", {"session_id":sid, "source":"voice", "text":"剣に持ち替えて"})
+            routed = resolve_input_response(base, accepted)
+            assert routed["reason"] == "assist_input" and routed["assist"]["detail_code"] == "capability_missing", routed
+            assert routed["assist"]["intent"]["source"] == "modernbert" and routed["assist"]["command"] is None, routed
+            assert len([r for r in seen if r["path"] == "/v1/chat/completions"]) == before
+            wait_for(lambda: any(r["playback_status"] == "completed" and r.get("text") == "今のアダプターでは、まだ持ち替え操作が使えへんで。" for r in snapshot(base)["utterances"]))
+            passed.append("bert_sword_request_checks_capability_without_chat_or_world_command")
             control["fail_tts"] = True; control["leaf"] = "そうやな。また話しかけてな。"
             turn = submit(base, sid, "またね")
             wait_for(lambda: row(base, turn, {"failed"}))

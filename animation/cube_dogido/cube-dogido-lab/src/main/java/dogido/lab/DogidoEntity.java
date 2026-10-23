@@ -225,7 +225,7 @@ public final class DogidoEntity extends PathAwareEntity {
             transferringCall = null; transferringFollow = false;
             directedLook.clear();
             if (request.action() == Action.LOOK_AT) {
-                // TODO(BERT): 完成後に明示方向／プレイヤー注視の分類から接続する。移動先には使わない。
+                // BERTへ変更済み。旧判定へ戻さない。明示分類で確定した注視点。移動先には使わない。
                 directedLook.begin(result.actionId(),request.destination(),serverTick());
                 motion = Vec3d.ZERO;
             } else if (request.action() == Action.CALL) {
@@ -310,11 +310,16 @@ public final class DogidoEntity extends PathAwareEntity {
     }
     void localSafe() { localMode(control.mode(),false); }
     void localRetreat() { localMode(control.mode(),true); }
-    ActionResult localCall(ServerPlayerEntity player) {
+    ActionResult localCall(ServerPlayerEntity player) { return localCall(player,UUID.randomUUID()); }
+    ActionResult localCall(ServerPlayerEntity player, UUID actionId) {
         requireOwner(player); prepareLifecycle();
         localMode(Mode.FOLLOW,control.retreat());
         long sequence = Math.max(serverTick(),control.actionResult() == null ? 0 : control.actionResult().sequence()+1);
-        return requestAction(player,new ActionRequest(control.context(),sequence,UUID.randomUUID(),serverTick(),100,Action.CALL));
+        return requestAction(player,new ActionRequest(control.context(),sequence,actionId,serverTick(),100,Action.CALL));
+    }
+    ActionResult recalledResult(ServerPlayerEntity player, UUID actionId) {
+        requireOwner(player); prepareLifecycle();
+        return control.actionResult(actionId);
     }
     ActionResult localAction(ServerPlayerEntity player, Action action, Position destination, String foodId) {
         requireOwner(player); prepareLifecycle();

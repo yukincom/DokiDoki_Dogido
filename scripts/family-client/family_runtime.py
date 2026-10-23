@@ -11,14 +11,12 @@ import sys
 RUST_BINARY = "dogido-rust/target/release/dogido-rust"
 RUNTIME_SCRIPTS = (
     "launch_dialogue.py", "runtime_build.py", "haiku_tokens.py", "tts_tokens_worker.py",
-    "tts_shared_tokens.py", "tts_unidic_adapter.py", "combat_input_helper.py",
+    "tts_shared_tokens.py", "tts_unidic_adapter.py", "request_classifier_worker.py",
 )
 RUNTIME_DATA = (
     "dogido_server/runtime_defaults.json",
     "dogido_server/runtime_settings.py",
     "dogido_server/config.py",
-    "dogido_server/platform_ai.py",
-    "dogido_server/combat_input_contract.py",
     "dogido_server/tls_security.py",
     "dogido_server/voice_settings.py",
     "dogido_server/voice_capture.py",

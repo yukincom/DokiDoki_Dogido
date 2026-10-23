@@ -26,7 +26,6 @@ def check_runtime_files(root):
         "dogido_server/runtime_defaults.json",
         "dogido-rust/scripts/haiku_tokens.py",
         "dogido-rust/scripts/tts_tokens_worker.py",
-        "dogido-rust/scripts/combat_input_helper.py",
         "dogido-rust/scripts/request_classifier_worker.py",
         "reference/language_education_and_poetry/index.json",
     ):
@@ -167,6 +166,7 @@ def main():
     use_model = model_enabled(settings)
     haiku_base = settings.llm_haiku_base_url or settings.llm_base_url or base
     haiku_model = settings.llm_haiku_model or settings.llm_model or model
+    # 再開・継続はRustが敵の警戒解除から判断する。OS AI補助と旧fallbackの起動設定は渡さない。
     haiku_settings = {
         "llm_enabled": use_model, "interval_ms": settings.haiku_interval_ms,
         "quiet_time_ms": settings.haiku_quiet_time_ms,
@@ -177,9 +177,6 @@ def main():
         "max_tokens": settings.llm_haiku_max_tokens or settings.llm_max_tokens,
         "timeout_ms": int(1000 * (settings.llm_haiku_timeout_sec or settings.llm_timeout_sec)),
         "memory_enabled": settings.memory_enabled,
-        "low_threat_resume_delay_ms": settings.workshop_low_threat_resume_delay_ms,
-        "platform_ai": {k: getattr(settings, "platform_ai_" + k) for k in (
-            "provider", "timeout_sec", "refresh_sec", "failure_cooldown_sec", "foundry_model_alias", "allow_model_download")},
         "memory_dir": str(settings.memory_dir.resolve()),
         "screenshot_dir": str(settings.minecraft_screenshots_dir.expanduser().resolve())
             if settings.minecraft_screenshots_dir is not None else None,
@@ -201,8 +198,7 @@ def main():
     if args.check:
         check_runtime_files(ROOT)
         from tts_shared_tokens import handle as tokens_handle
-        from combat_input_helper import Worker as CombatInputWorker
-        print("Rust本体・資料・補助のimportを確認しました。辞書・端末AIの初期化はしていません。モデル生成・録音・サーバー起動は行っていません。")
+        print("Rust本体・資料・補助のimportを確認しました。辞書の初期化はしていません。モデル生成・録音・サーバー起動は行っていません。")
         return
     binary = check_runtime_files(ROOT)
     env = dict(os.environ)

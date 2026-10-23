@@ -223,7 +223,7 @@ impl Dialogue {
         let defer_relief = s.warning.as_ref().is_some_and(warnings::Active::finishing)
             && !decision.actions.is_empty()
             && decision.actions.iter().all(|a| a.kind == "aftermath");
-        if (!decision.chat_allowed && !super::workshop_combat_input::provisional(s))
+        if !decision.chat_allowed
             || !decision.actions.is_empty()
             || decision.stop_audio
             || decision.dimension_changed
@@ -233,11 +233,14 @@ impl Dialogue {
             }
             Self::cancel_haiku(d, sid, reason.unwrap_or("combat_priority"));
             let s = &d.sessions[sid];
-            let ordinary = d.rows.iter().any(|r| r["session_id"] == sid
-                && r["turn_id"] == s.current_turn && r["combat_resumable"] == true);
+            let ordinary = d.rows.iter().any(|r| {
+                r["session_id"] == sid
+                    && r["turn_id"] == s.current_turn
+                    && r["combat_resumable"] == true
+            });
             let urgent = decision.actions.iter().any(interrupts_reply);
-            let reset = decision.dimension_changed
-                || decision.actions.iter().any(|a| a.kind == "death");
+            let reset =
+                decision.dimension_changed || decision.actions.iter().any(|a| a.kind == "death");
             // 通常会話の割込みは、既存警告が持つ緊急性で決める。
             // 敵が居続けるフレームや撃破後の安堵だけでは質問を取り消さない。
             if !ordinary || urgent || reset || input.is_some() {
@@ -285,9 +288,13 @@ impl Dialogue {
         if s.warning.is_some() || jobs.len() >= 16 {
             return;
         }
-        if s.cancel.is_some() && s.pending_warning.as_ref().is_some_and(|actions| {
-            actions.iter().all(|a| a.delivery == crate::combat::model::Delivery::Combat && !interrupts_reply(a))
-        }) {
+        if s.cancel.is_some()
+            && s.pending_warning.as_ref().is_some_and(|actions| {
+                actions.iter().all(|a| {
+                    a.delivery == crate::combat::model::Delivery::Combat && !interrupts_reply(a)
+                })
+            })
+        {
             return;
         }
         let Some(actions) = s.pending_warning.take() else {

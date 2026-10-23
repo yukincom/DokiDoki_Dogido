@@ -517,3 +517,12 @@ fn retired_meter_check_is_not_a_workshop_action_requirement() {
     assert_eq!(result["reason"], "invalid_checks");
     assert!(result["step"].is_null());
 }
+
+#[test]
+fn retired_combat_resume_actions_are_not_accepted_even_if_a_frame_lists_them() {
+    for action in ["resume_workshop", "decline_resume"] {
+        let (frame, mut details) = conversation("続き", "続けよか。", action);
+        details["allowed_actions"] = json!([action]);
+        assert!(validate(&frame, &details).unwrap()["step"].is_null());
+    }
+}

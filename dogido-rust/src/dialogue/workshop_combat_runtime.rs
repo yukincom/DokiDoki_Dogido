@@ -1,4 +1,4 @@
-//! 安全な観測と発声の境界で、保持した一句の再開確認を配送する。
+//! 安全な観測と発声の境界で、保持した一句を自動で再開する。
 use super::*;
 use crate::{
     combat::model::{Delivery, Mode, Scope, Speech},
@@ -6,28 +6,24 @@ use crate::{
     workshop_followup::Stage,
 };
 
+// 意図分類のBERT移行は完了し、旧OSAI・chat分類fallbackの経路は撤去済み。
+// 再開・継続はBERTにも委ねず、敵の現在観測と警戒解除条件でコードが決める。旧AI判定を復活させない。
 pub(super) fn clear_for_resume(s: &Session) -> bool {
-    if !s.preview && super::workshop_focus::quiet(s) {
-        // 敵との戦闘後の安堵は待つ。暗さだけのalertには句の復帰を妨げさせない。
-        return s.mode != Mode::Aftermath;
-    }
     !s.preview
         && fresh(s)
-        && s.mode == Mode::Normal
+        // 敵との戦闘後の安堵は待つ。暗さだけのalertには句の復帰を妨げさせない。
+        && (s.mode == Mode::Normal || s.mode == Mode::Alert && super::workshop_focus::quiet(s))
         && s.latest.as_ref().is_some_and(|e| {
-            warnings::interruption_reason(e).is_none()
+            e.visual_threats.is_empty()
+                && e.auditory_threats.is_empty()
+                && e.combat.combat_active_hint != Some(true)
+                && warnings::interruption_reason(e).is_none()
                 && e.player.health.is_none_or(|h| h > 0.0)
-                && [
-                    e.combat.hostiles_within_7,
-                    e.combat.hostiles_within_10,
-                    e.combat.hostiles_within_scan_ground,
-                ]
-                .iter()
-                .all(|n| n.is_none_or(|n| n == 0))
+                && [e.combat.hostiles_within_7, e.combat.hostiles_within_10, e.combat.hostiles_within_scan_ground]
+                    .iter().all(|n| n.is_none_or(|n| n == 0))
         })
-        && s.audio_latest
-            .as_ref()
-            .is_none_or(|e| warnings::interruption_reason(e).is_none())
+        && s.audio_latest.as_ref().is_none_or(|e| e.auditory_threats.is_empty()
+            && warnings::interruption_reason(e).is_none())
 }
 
 pub(super) fn applicable(s: &Session, id: &str, version: u64) -> bool {
@@ -61,7 +57,7 @@ pub(super) fn finish_notice(s: &mut Session, id: &str, version: u64, status: Not
     let reason = w.recovery.reason;
     w.recovery = Recovery::default();
     if status == NoticeEnd::Completed {
-        w.followup = Stage::CombatResumeConfirmation;
+        w.followup = Stage::Discussion;
         w.record_activity(Instant::now());
     } else if status == NoticeEnd::Retry {
         w.pause(Instant::now());
@@ -72,7 +68,7 @@ pub(super) fn finish_notice(s: &mut Session, id: &str, version: u64, status: Not
 
 impl Dialogue {
     /// 復帰できる観測と発声の空きを待ち、保持した三行を再掲する。
-    /// 句を再開して案内を配送し、案内完了後にfinish_noticeが継続確認へ進める。
+    /// 句を再開して案内を配送し、案内完了後にfinish_noticeが通常相談へ戻す。
     /// 未採用案があればその案を再掲するが、再掲だけで採用・保存は行わない。
     pub(super) fn start_workshop_recovery(
         self: &Arc<Self>,

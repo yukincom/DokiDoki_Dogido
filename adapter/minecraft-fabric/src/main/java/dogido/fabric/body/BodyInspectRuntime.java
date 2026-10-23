@@ -30,6 +30,7 @@ public final class BodyInspectRuntime {
             Consumer<JsonObject> resultSink,Predicate<SessionRef> current,Submission submission) {
         this.senses=senses;
         this.controller=new BodyInspectController(new BodyInspectController.Access() {
+            public long nextSequence(Context context,long prior,long tick,long last) { return connection.nextActionSequence(context,prior,tick); }
             public BodyInspectController.Live capture() {
                 MinecraftClient client=MinecraftClient.getInstance();
                 if (client.player == null || client.world == null) return null;

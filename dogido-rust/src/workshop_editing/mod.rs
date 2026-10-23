@@ -6,7 +6,9 @@ mod edits;
 pub mod materials;
 mod parse;
 mod tool_call;
-pub use tool_call::normalize_player_edit_tool;
+pub use tool_call::{
+    fill_classified_edit_target, normalize_player_edit_tool, verbatim_player_edit,
+};
 #[cfg(test)]
 mod tests;
 use crate::{
@@ -29,7 +31,6 @@ pub enum Output {
     KnowledgeRoute {
         query: Option<crate::knowledge::query::Query>,
     },
-    CombatFallback(crate::workshop_combat_input::Analysis),
     DiscussionCandidate {
         candidate: Option<crate::workshop_candidate::Draft>,
     },
@@ -150,53 +151,6 @@ impl Engine {
         let view = &frame["workshop"];
         let snapshot = Snapshot::from_view(view)?;
         match text(&frame["op"]) {
-            "combat_fallback" => {
-                let source = input.trim_matches(space);
-                let compact = source.split(space).collect::<String>();
-                let resume = crate::workshop_projection::fixed_combat_resume(source)
-                    || [
-                        "句を続け",
-                        "句の続き",
-                        "句に戻",
-                        "川柳を続け",
-                        "川柳の続き",
-                        "ワークショップを続け",
-                        "ワークショップに戻",
-                        "推敲を続け",
-                        "添削を続け",
-                        "さっきの句",
-                    ]
-                    .iter()
-                    .any(|s| compact.contains(s));
-                use crate::workshop_combat_input::{Action, Analysis};
-                let mut action = if source.is_empty() {
-                    Action::Uncertain
-                } else if resume {
-                    Action::ResumeWorkshop
-                } else if self.mentioned_line(&snapshot, source)?.is_some() {
-                    Action::WorkshopInput
-                } else {
-                    Action::Uncertain
-                };
-                let confidence = if action == Action::Uncertain {
-                    0.0
-                } else {
-                    1.0
-                };
-                let evidence = if action == Action::Uncertain {
-                    ""
-                } else {
-                    source
-                };
-                if !crate::workshop_input_guard::combat_safe(action.name(), input, evidence) {
-                    action = Action::Uncertain;
-                }
-                Ok(Output::CombatFallback(Analysis {
-                    action,
-                    confidence,
-                    evidence: evidence.into(),
-                }))
-            }
             "explicit_discussion" => {
                 let candidate = if parse::explicit_discussion(input) {
                     self.discussion(frame, &snapshot, &Value::Null)?

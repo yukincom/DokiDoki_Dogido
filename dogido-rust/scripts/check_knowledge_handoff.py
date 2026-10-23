@@ -3,7 +3,8 @@
 import json
 import time
 from check_dialogue import register, request, row, submit, wait_for
-from check_haiku_runtime import fixture, LINES
+from check_haiku_runtime import LINES
+from check_workshop_fixture import fixture
 from check_workshop_runtime import install, ready, session, step
 from check_workshop_edits import finish, revisions
 from check_workshop_followup import followup
@@ -20,7 +21,9 @@ def enqueue(base, sid, text):
 
 def main():
     passed = []
-    with fixture(combat_settings=SETTINGS) as f:
+    with fixture(combat_settings=SETTINGS, bert_labels={
+        "この句の相談は終了でいいよ": "senryu_end",
+    }) as f:
         base, _, log, control, seen, _, _, _, send, hud, rows, stored, folder = f
         def choose(text, prompt, n):
             if text == "なるほど":
@@ -28,8 +31,6 @@ def main():
                 return followup(text, "acknowledge_meaning")
             if text == "うん":
                 return step(text, "respond", "うん、この句の話を続けよか。")
-            if text == "この句の相談は終了でいいよ":
-                return step(text, "close_workshop")
             return step(text)
         calls = install(control, choose)
         sid = ready(base, send, rows)
@@ -66,8 +67,9 @@ def main():
         assert finish(base, send, sid, "うん")["workshop_action"] == "respond"
         assert len(calls) == 3 and hud(sid)["state"] == "open" and stored(sid) == original
         assert not revisions(folder, sid)
-        assert finish(base, send, sid, "この句の相談は終了でいいよ")["workshop_action"] == "close_workshop"
-        assert hud(sid)["state"] == "closed"
+        closing = finish(base, send, sid, "この句の相談は終了でいいよ")
+        assert closing["workshop_action"] == "close_workshop" and not closing["llm_reports"], closing
+        assert len(calls) == 3 and hud(sid)["state"] == "closed"
         passed.append("failed_knowledge_preserves_meaning_stage_and_model_ack_keeps_workshop_open")
 
         sid = ready(base, send, rows)
@@ -104,10 +106,10 @@ def main():
             r = drive(send, sid, lambda: row(base, turn, {"completed"}))
             assert r["source"] == "voice" and r["workshop_action"] == "knowledge", r
         assert row(base, a, {"completed"})["completed_at"] < row(base, b, {"completed"})["completed_at"]
-        assert session(base, sid)["workshop_followup"] == "combat_resume_confirmation"
+        assert session(base, sid)["workshop_followup"] == "discussion"
         assert hud(sid)["pending_lines"] == before_hud["pending_lines"]
         assert len([r for r in rows(sid) if r["turn_id"] in [a,b]]) == 2
-        passed.append("combat_questions_fifo_deduplicate_reuse_ids_and_preserve_resume_confirmation")
+        passed.append("combat_questions_fifo_deduplicate_reuse_ids_and_resume_discussion_without_confirmation")
 
     with fixture(enabled=False, combat_settings=SETTINGS) as f:
         base, _, log, control, seen, _, _, _, send, hud, rows, stored, folder = f

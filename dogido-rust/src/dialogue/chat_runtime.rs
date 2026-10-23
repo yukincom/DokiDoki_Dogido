@@ -98,16 +98,13 @@ async fn body(
             json!({"op":"result","memory_query_requested":true,"memory_query":query,"llm_reports":[]}),
         );
     }
-    // TODO(request-classifier): 共通分類接続後は requests_sword / asks_hostile_* /
-    // asks_dragon_direction の旧語句フラグで通常会話を再拒否せず、確定した経路を参照する。
-    // 川柳保存・編集の条件は現5分類の対象外なので、このif全体を削除しない。
+    // 剣・モブのフラグは共通分類で置換済み。専用経路から通常会話へ誤流入した場合を扱う。
+    // 完成句の保存・三行編集は23分類とは別の既存経路なので、この分岐を残す。
     if context.requests_sword
         || context.asks_save_last_haiku
         || context.revised_haiku_text.is_some()
         || context.player_haiku_text.is_some()
-        || context.asks_hostile_count
-        || context.asks_hostile_direction
-        || context.asks_dragon_direction
+        || context.asks_mob_information
     {
         return Ok(json!({"op":"result","unsupported":"unexpected_route","llm_reports":[]}));
     }
@@ -168,11 +165,9 @@ async fn body(
                 && let Some(horse_recall) = input.horse_recall.as_ref()
             {
                 let request = reply.request(&config.model, config.max_tokens)?;
-                let mut result = if input.request_classification.is_some() {
-                    super::horse_recall_runtime::render(request, llm, horse_recall, cancel).await?
-                } else {
-                    super::chat_tools_runtime::render(request, llm, input, cancel).await?
-                };
+                // BERTへ変更済み。旧判定へ戻さない。captureが受理した候補選択だけを実行する。
+                let mut result =
+                    super::horse_recall_runtime::render(request, llm, horse_recall, cancel).await?;
                 super::body_runtime::attach_input(&mut result, &reply.details);
                 result["observation_revision"] = reply.details["world_context"]["revision"].clone();
                 return Ok(result);
@@ -292,10 +287,29 @@ mod tests {
         assert_eq!(quiet["text"], "");
         assert_eq!(quiet["spoken_text"], "");
         for text in ["剣に持ち替えて", "今の句を保存して"] {
+            let mut current = input(text);
+            if text == "剣に持ち替えて" {
+                let classification = crate::request_classifier::Classification {
+                    text: text.into(),
+                    source: "text".into(),
+                    manifest_sha256: "fixture".into(),
+                    prediction: crate::request_classifier::Prediction {
+                        label: crate::request_classifier::Label::EquipSword,
+                        probabilities: std::array::from_fn(|i| if i == 2 { 1.0 } else { 0.0 }),
+                        token_count: 8,
+                        inference_ms: 0.1,
+                    },
+                };
+                current
+                    .context
+                    .as_mut()
+                    .unwrap()
+                    .apply_request_classification(&classification);
+            }
             let reply = super::render(
                 &c,
                 &llm,
-                &input(text),
+                &current,
                 &mut rx,
                 |_| Ok(()),
                 Duration::from_secs(1),

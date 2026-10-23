@@ -1,18 +1,43 @@
 #!/usr/bin/env python3
 """戦闘中の会話と緊急警告後の回答を、隔離HTTP・模擬LLM/TTS/playerで検証する。"""
+from contextlib import contextmanager
+from datetime import datetime, timezone
 import json
 import threading
 import time
 
 from check_dialogue import register, request, row, snapshot, wait_for
-from check_haiku_runtime import fixture
+from check_haiku_runtime import fixture as haiku_fixture
+from request_classifier_fixture import mock_request_classifier, resolve_input_response
+
+
+@contextmanager
+def fixture(**settings):
+    labels = {
+        "ドギド、冒険楽しい？": "not_target", "ドギド、ここは何バイオーム？": "not_target",
+        "ドギド、この先も一緒に行こか？": "not_target", "ドギド、空がきれいやね": "not_target",
+        "さっき乗った馬をここに呼んで": "recall_mount",
+    }
+    with mock_request_classifier(labels) as (args, _), haiku_fixture(extra_args=args, **settings) as state:
+        yield state
+
+
+def horses():
+    """一回の個体選択と実行前照合に使う、本人所有の最新候補。"""
+    return {"schema_version": 2, "status": "available", "revision": 1,
+        "world_id": "10000000-0000-0000-0000-000000000001", "observed_at": datetime.now(timezone.utc).isoformat(),
+        "player_uuid": "11111111-1111-4111-8111-111111111111", "dimension": "minecraft:overworld",
+        "candidates": [{"entity_id": "30000000-0000-0000-0000-000000000001", "entity_type": "horse",
+            "custom_name": "ぶち", "owner_uuid": "11111111-1111-4111-8111-111111111111", "tamed": True,
+            "adult": True, "equipped": True, "alive": True, "dimension": "minecraft:overworld",
+            "has_passengers": False, "has_vehicle": False, "leashed": False}]}
 
 
 def say(base, sid, text):
     response = request(base, "/api/v1/player-input", {
         "session_id": sid, "source": "text", "text": text})
     assert response["accepted"], response
-    return response
+    return resolve_input_response(base, response)
 
 
 def session(base, sid):
@@ -123,7 +148,7 @@ def main():
         with fixture(enabled=False) as f:
             base, _, log, control, seen, _, _, _, send, _, rows, _, folder = f
             sid = horse_capable(base)
-            send(sid)
+            send(sid, owned_horses=horses())
             gate = threading.Event()
             started = threading.Event()
             calls = []
@@ -138,29 +163,41 @@ def main():
                     started.set()
                     gate.wait(timeout=12)
                 if not operation:
-                    return {"role":"assistant", "content":"せやな、空がきれいや。", "tool_calls":[]}
+                    assert not incoming.get("tools"), incoming
+                    return {"action":"speak", "speech":"せやな、空がきれいや。"}
+                assert [t["function"]["name"] for t in incoming.get("tools", [])] == ["select_horse"], incoming
                 return {"role":"assistant", "content":None, "tool_calls":[{
-                    "id":"request", "type":"function", "function":{"name":"list_horses",
-                    "arguments":json.dumps({"evidence":text,"confidence":.99},ensure_ascii=False)}}]}
+                    "id":"selection", "type":"function", "function":{"name":"select_horse",
+                    "arguments":json.dumps({"candidate_id":"h1","evidence":text,"confidence":.99},ensure_ascii=False)}}]}
 
             control["structured_handler"] = pending_operation
             try:
                 turn = say(base, sid, text)["turn_id"]
                 wait_for(started.is_set)
-                send(sid, visual_threats=[mob("creeper", "operation-fuse", fuse=True)],
-                     combat={"combat_active_hint":True})
-                wait_for(lambda: row(base, turn, {"cancelled"}))
-                gate.set()
-                result = wait_for(lambda: row(base, turn, {"unsupported" if operation else "completed"}))
+                threat = mob("creeper", "operation-fuse", fuse=True)
+                send(sid, visual_threats=[threat], combat={"combat_active_hint":True}, owned_horses=horses())
                 if operation:
-                    assert result["error"] == "interrupted_operation", result
+                    # BERTで受理した逃走操作は警告の音声枠と独立し、同じ一回の選択を続ける。
+                    wait_for(lambda: any(a["kind"] == "creeper_fuse" for r in rows(sid)
+                                        for a in r.get("combat_actions", [])))
+                    assert row(base, turn, {"generating"}), rows(sid)
+                    gate.set()
+                    commands = wait_for(lambda: send(sid, visual_threats=[threat],
+                        combat={"combat_active_hint":True}, owned_horses=horses()).get("commands"))
+                    assert len(commands) == 1 and commands[0]["type"] == "recall_horse", commands
+                    result = wait_for(lambda: row(base, turn, {"quiet"}))
+                    assert result["horse_recall_status"] == "issued", result
+                    assert len(calls) == 1 and result["horse_command_id"] == commands[0]["command_id"]
                 else:
+                    wait_for(lambda: row(base, turn, {"cancelled"}))
+                    gate.set()
+                    result = wait_for(lambda: row(base, turn, {"completed"}))
                     assert result["delivery_confirmed"] and result["resolution"] == "reply_resumed", result
-                assert len(calls) == 2
-                assert not any(t["function"]["name"] == "select_horse" for c in calls for t in c.get("tools", []))
-                assert not any(r.get("horse_command_id") for r in rows(sid))
-                passed.append("interrupted_unclassified_operation_never_replays_selection_or_execution" if operation
-                              else "unclassified_conversation_with_horse_capability_resumes_after_warning")
+                    assert len(calls) == 2
+                    assert not any(c.get("tools") for c in calls), calls
+                    assert not any(r.get("horse_command_id") for r in rows(sid))
+                passed.append("bert_recall_keeps_single_selection_through_urgent_warning" if operation
+                              else "bert_not_target_conversation_with_horse_capability_resumes_after_warning")
             finally:
                 gate.set()
     print(json.dumps({"passed": len(passed), "cases": passed,

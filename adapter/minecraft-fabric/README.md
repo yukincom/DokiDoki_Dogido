@@ -7,7 +7,7 @@
 ## できること
 
 - 既存の会話snapshotから実再生中の対象を受け、現在観測の座標へ身体を向ける（[発話と視線](../../docs/2026-10-18-body-speech-gaze.md)）。
-- 任意の身体Mod／Body API v10から、自他姿勢・owner視認と身体基準の周辺感覚を`body_observation` v3で送信。取得不能時は理由を送り、playerの感覚で補完しない（[観測移行仕様](../../docs/2026-10-13-body-observation-origin.md)）。FOLLOWの制御状態・候補は`body_autonomy` v2、観察移動は`body.inspect_target.v2`を使う（[移動接続](../../docs/2026-10-16-body-motion-start.md)・[安心度と発話・行動の統合](../../docs/2026-10-20-reassurance.md)）。
+- 任意の身体Mod／Body API v11から、自他姿勢・owner視認と身体基準の周辺感覚を`body_observation` v3で送信。取得不能時は理由を送り、playerの感覚で補完しない（[観測移行仕様](../../docs/2026-10-13-body-observation-origin.md)）。BERTの明示呼び寄せ・注視は`body.request.v1`で受け、実完了だけを結果へ戻す。相対8方向は身体のyaw、同じ方向はplayerの視線、対象注視は現在crosshairを使う。FOLLOWの制御状態・候補は`body_autonomy` v2、観察移動は`body.inspect_target.v2`を使う（[移動接続](../../docs/2026-10-16-body-motion-start.md)・[安心度と発話・行動の統合](../../docs/2026-10-20-reassurance.md)）。
 - 現在の `player.block_breaking_active` を通常観測と身体の立ち位置判断で共有する（[呼び寄せ仕様](../../docs/2026-10-16-body-recall.md)）。
 - プレイヤー本人の `position / yaw / pitch / health / hunger / held_item / inventory`
 - `player.hotbar`（0〜8、選択中slot、item ID、耐久、main-hand攻撃属性、武器候補種別）
@@ -47,7 +47,9 @@
 
 返答は `[ドギド]`、音声入力の認識結果は `[聞き取り]` としてチャットへ表示する。認識ミスは `/dogido` から訂正を伝えられる。音声の選択はサーバー受理後に既存の `config/dogido-fabric-client.properties` へ保存する。入力は1000文字までを検査し、無言で切り詰めない（Minecraft標準入力欄自体の上限は別）。通信失敗時に入力を自動再送しない。
 
-**テキスト会話の関連自動テストは確認済み。全体のRust統合テストには既存の期待値不一致6件が残る。release本体・導入先Mod更新と起動前確認済み。2026-10-11にユーザーが音声ON/OFF・文字入力を実機確認済み。[テスト結果と確認範囲](../../docs/2026-10-09-minecraft-text-dialogue.md)。**
+**2026-10-09時点の記録:** テキスト会話の関連自動テストは確認済み。当時のRust統合テストには期待値不一致6件が残った。release本体・導入先Mod更新と起動前確認済み。2026-10-11にユーザーが音声ON/OFF・文字入力を実機確認済み。[当時のテスト結果と確認範囲](../../docs/2026-10-09-minecraft-text-dialogue.md)。
+
+2026-10-23のBERT 23分類接続ではadapterの286テスト・ビルドとMod配置を確認した。対応Rustは873 passed、0 failed。ゲーム内動作は未確認。[現在の検証・配備記録](../../docs/2026-10-23-modernbert-23class-integration.md)。
 
 ## 左下のドギドとワークショップの掛け軸
 

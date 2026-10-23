@@ -42,16 +42,16 @@ fn renders_training_format_without_shortening_or_normalizing() {
 }
 
 #[test]
-fn rejects_invalid_predictions_instead_of_mapping_to_not_request() {
+fn rejects_invalid_predictions_instead_of_mapping_to_not_target() {
     let valid = || Prediction {
         label: Label::EnemyInformation,
-        probabilities: [0.0, 1.0, 0.0, 0.0, 0.0],
+        probabilities: std::array::from_fn(|i| if i == 1 { 1.0 } else { 0.0 }),
         token_count: 20,
         inference_ms: 1.0,
     };
     assert!(valid().validate(256).is_ok());
     let mut p = valid();
-    p.label = Label::NotRequest;
+    p.label = Label::NotTarget;
     assert!(p.validate(256).is_err());
     let mut p = valid();
     p.probabilities[0] = f64::NAN;
@@ -86,20 +86,25 @@ for line in sys.stdin:
     r = {k:f[k] for k in ('schema_version','request_id','manifest_sha256')}
     if f['op'] == 'load':
         if MODE == 'load_hang': time.sleep(60)
-        r.update(ready=True, labels=['not_request','enemy_information','equip_sword','recall_mount','other_request'], limits={'max_history_utterances':10,'max_length':256,'truncation':False})
+        r.update(ready=True, labels=LABELS, limits={'max_history_utterances':10,'max_length':256,'truncation':False})
         if MODE == 'bad_load': r['limits']['max_length'] = 512
     else:
         base.joinpath('requested').write_text('yes')
         if MODE == 'hang': time.sleep(60)
-        r['prediction'] = {'label':'enemy_information','probabilities':[0,1,0,0,0],'token_count':20,'inference_ms':1}
+        r['prediction'] = {'label':'enemy_information','probabilities':[int(i==1) for i in range(len(LABELS))],'token_count':20,'inference_ms':1}
         if MODE == 'stale_id': r['request_id'] = 'old'
         if MODE == 'wrong_model': r['manifest_sha256'] = 'other'
-        if MODE == 'bad_probabilities': r['prediction']['probabilities'] = [0,0,0,0,0]
+        if MODE == 'bad_probabilities': r['prediction']['probabilities'] = [0]*len(LABELS)
         if MODE == 'unknown_label': r['prediction']['label'] = 'unknown'
         if MODE == 'error': r['error'] = 'inference failure'
     print(json.dumps(r), flush=True)
 "#;
-        fs::write(dir.join("worker.py"), format!("MODE = {mode:?}\n{script}")).unwrap();
+        let labels = serde_json::to_string(&LABELS).unwrap();
+        fs::write(
+            dir.join("worker.py"),
+            format!("LABELS = {labels}\nMODE = {mode:?}\n{script}"),
+        )
+        .unwrap();
         Self { dir }
     }
     async fn start(
