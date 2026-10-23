@@ -32,6 +32,8 @@ pub(super) fn validate(raw: &Value, details: &Value) -> Value {
         let Some(requested) = raw["checks"].as_array() else {
             return reject("inspection_check_required");
         };
+        // 川柳相談で許可する参照はreading/sourceだけ。fixtureのmeterは撤去済み項目の
+        // 拒否入力であり、音数計測や発話内容の棄却条件を復元する根拠にしない。
         for check in requested {
             let Some(check) = check
                 .as_str()

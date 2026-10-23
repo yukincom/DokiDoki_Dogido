@@ -68,6 +68,8 @@ fn praise_evidence_uses_raw_input_without_semantic_or_lexical_reconstruction() {
     let long = "句".repeat(121);
     assert!(contract::feedback(&json!({"kind":"praise","evidence":long}), &long).is_none());
 }
+// fixture内のmeterは、廃止したinspect項目を拒否する入力だけに残す。
+// 許可項目へ加えず、旧音数コードや音数発言を棄却する期待値は保持しない。
 static FIXTURES: LazyLock<Value> =
     LazyLock::new(|| serde_json::from_str(include_str!("fixtures.json")).unwrap());
 // This corpus predates model-owned conversational decisions. Preserve its
@@ -76,6 +78,9 @@ static FIXTURES: LazyLock<Value> =
 fn canonical_corpus_preserves_structural_and_execution_boundaries() {
     let mut accepted = 0;
     let mut structural_rejections = 0;
+    for context in array(&FIXTURES["contexts"]) {
+        assert_eq!(context["details"]["allowed_checks"], json!(["reading", "source"]));
+    }
     for case in array(&FIXTURES["cases"]) {
         let context = &FIXTURES["contexts"][case["context"].as_u64().unwrap() as usize];
         let mut frame = context["frame"].clone();
@@ -86,6 +91,11 @@ fn canonical_corpus_preserves_structural_and_execution_boundaries() {
             continue;
         }
         let actual = actual.unwrap_or_else(|e| panic!("{}: {e}", case["name"]));
+        if array(&case["payload"]["checks"]).iter().any(|check| check == "meter") {
+            assert_eq!(case["payload"]["action"], "inspect");
+            assert!(actual["step"].is_null());
+            assert_eq!(actual, case["expected"], "retired check {}", case["name"]);
+        }
         let legacy_errors = array(&case["expected"]["contract_errors"]);
         let read_only = conversation::handles(text(&frame["payload"]["action"]));
         if !read_only
@@ -135,7 +145,7 @@ fn canonical_corpus_preserves_structural_and_execution_boundaries() {
         assert_eq!(frame["payload"], case["payload"]);
     }
     assert!(accepted > 100 && structural_rejections > 100);
-    assert_eq!(array(&FIXTURES["cases"]).len(), 2819);
+    assert_eq!(array(&FIXTURES["cases"]).len(), 2806);
 }
 
 fn conversation(input: &str, speech: &str, action: &str) -> (Value, Value) {

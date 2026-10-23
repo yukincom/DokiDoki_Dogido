@@ -525,7 +525,7 @@ mod tests {
         }
     }
     #[test]
-    fn meter_unknown_reading_and_repeated_phrases_do_not_block_edits() {
+    fn unknown_reading_and_repeated_phrases_do_not_block_edits() {
         let base = lines();
         for text in ["さくら", "さくらいろの", "あさのいろ", "あいうえお"] {
             let edited = Pending::stage(&base, &base, replace(base.clone(), 0, text), 0).unwrap();

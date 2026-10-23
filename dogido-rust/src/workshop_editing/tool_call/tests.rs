@@ -143,7 +143,7 @@ fn normalization_preserves_original_evidence_and_target_without_intent_veto() {
 }
 
 #[test]
-fn compare_against_pending_and_accept_nonstandard_meter() {
+fn compare_against_pending_and_accept_player_wording() {
     let (mut view, mut args) = fixture();
     let pending = Engine::default()
         .whole_verse("さくらいろ\nくろいおのへと\nあさのいろ", "generated")
@@ -330,7 +330,7 @@ fn raw_phrase_boundaries_preserve_target_and_do_not_classify_intent() {
 }
 
 #[test]
-fn a_phrase_starting_with_dewa_is_preserved_when_meter_changes() {
+fn a_phrase_starting_with_dewa_is_preserved_during_replacement() {
     let lines = Engine::default()
         .whole_verse("ではじめる\nたましいのひが\nゆらゆらと", "generated")
         .unwrap();
