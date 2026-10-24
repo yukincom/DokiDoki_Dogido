@@ -2,7 +2,7 @@
 
 **train 818件 / dev 46件 / test 50件。分類は従来の16分類。** 既存train 482件に、[対照教材336件](../../curation/2026-10-24-four-system-contrast/materials-review.md)を追加した。内訳は新作328件・旧教材の再利用8件。dev/test・ラベルIDは578件版と同一。
 
-[教材ZIP](four-system-training-data.zip)に4系統の学習ファイル、共通教材、出典、説明をまとめた。
+4系統の学習ファイル、共通教材、出典、説明をまとめた教材ZIPは、[公開保存版](https://github.com/yukincom/AI-Curious-Community/blob/main/modernbert-request-classifier-study/full-archive/README.md)の `original-transfer-zips-04.tar.gz` に保存した。公開物との照合後、ローカルのZIPは削除した。以下は教材準備時点の記録。
 
 ## 4系統の学習ファイル
 
