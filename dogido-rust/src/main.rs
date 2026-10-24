@@ -236,6 +236,7 @@ async fn main() -> Result<()> {
             let research = if haiku.memory_enabled {
                 Some(dogido_rust::bookshelf::spawn_research_worker(dogido_rust::bookshelf::store::Store {
                     memory:haiku.memory_dir.clone(),
+                    capture_dir:haiku.capture_dir.clone(),
                     screenshots:haiku.screenshot_dir.clone().unwrap_or_else(dogido_rust::screenshot::default_directory),
                     photos: std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default().join("Pictures/ドギド"),
                 }))

@@ -11,6 +11,7 @@ use std::{
 #[derive(Clone)]
 pub struct Store {
     pub memory: PathBuf,
+    pub capture_dir: Option<PathBuf>,
     pub photos: PathBuf,
     pub screenshots: PathBuf,
 }
@@ -506,7 +507,8 @@ pub(super) fn project_poem(id: &str, original: &Value, current: &Value, history:
         "revised":history.as_array().is_some_and(|rows| !rows.is_empty()),
         "history":history,"catalog":null,"label":lines(current).join(" / "),
         "originalLines":lines(original),"original":original,"current":current,
-        "materials":materials,"dialogue":dialogue,"recordStatus":status})
+        "materials":materials,"dialogue":dialogue,"recordStatus":status,
+        "internalCapture":original["internal_capture"]})
 }
 pub fn catalog() -> Vec<Value> {
     let w = crate::world_catalog::catalog();

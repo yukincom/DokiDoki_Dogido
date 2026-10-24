@@ -23,6 +23,8 @@ def main():
         raise SystemExit("本棚用の実行ファイルがありません。先に本体をビルドしてください。")
     config = {"memory": str(settings.memory_dir.resolve()), "memory_enabled": settings.memory_enabled,
               "photos": str(Path.home() / "Pictures/ドギド"), "ui": str(ROOT / "tools/dogido-library")}
+    if settings.capture_dir is not None:
+        config["capture_dir"] = str(settings.capture_dir.expanduser().resolve())
     if settings.minecraft_screenshots_dir is not None:
         config["screenshots"] = str(settings.minecraft_screenshots_dir.expanduser().resolve())
     if args.research_root is not None and not args.sync_research:

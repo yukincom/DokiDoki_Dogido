@@ -12,6 +12,8 @@ use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 
 mod player_photos;
+mod internal_representations;
+pub use internal_representations::{CaptureFile, local_capture_file};
 pub use player_photos::{ArchivedPlayerPhoto, PlayerPhoto, PlayerPhotoTarget};
 
 const VERSION: u32 = 1;
@@ -750,6 +752,9 @@ mod safe {
         }
         pub(super) fn existing_file(&self, name: &str) -> Result<File> {
             self.fd(name, libc::O_RDONLY)
+        }
+        pub(super) fn new_file(&self, name: &str) -> Result<File> {
+            self.fd(name, libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL)
         }
         pub(super) fn lock(&self, name: &str, create: bool) -> Result<File> {
             let file = self.fd(name, libc::O_RDWR | if create { libc::O_CREAT } else { 0 })?;

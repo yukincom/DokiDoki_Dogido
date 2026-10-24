@@ -132,14 +132,23 @@ impl Store {
                 failures.push(format!("{error:#}"));
             }
             let records = super::research::archive_records(self, &source)?;
-            for record in records {
-                let id = record["id"].as_str().context("archive_missing_poem_id")?;
-                match created(&record["original"])
-                    .and_then(|at| archive.for_poem(id, at))
-                    .and_then(|poem| poem.snapshot(&record))
-                {
+            for mut record in records {
+                let id = record["id"].as_str().context("archive_missing_poem_id")?.to_string();
+                let saved = (|| -> Result<archive::ArchivedSnapshot> {
+                    let poem = archive.for_poem(&id, created(&record["original"])?)?;
+                    if record["original"]["internal_capture"].is_object() {
+                        let head = &source["researchSnapshots"][&id];
+                        let previous = if head["archive_id"] == config.archive_id {
+                            archive.read_snapshot(&serde_json::from_value(head.clone())?)?
+                        } else { Value::Null };
+                        record["internalCaptureStorage"] = super::internal_capture::archive_requests(
+                            self, &poem, &record, &previous, &config.archive_id, &mut failures);
+                    }
+                    poem.snapshot(&record)
+                })();
+                match saved {
                     Ok(saved) => {
-                        snapshots.insert(id.to_string(), json!(saved));
+                        snapshots.insert(id.clone(), json!(saved));
                     }
                     Err(error) => failures.push(format!("{id}: {error:#}")),
                 }

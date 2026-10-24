@@ -60,6 +60,7 @@ impl Dialogue {
                     let command_id = result.command_id.clone();
                     let store = crate::bookshelf::store::Store {
                         memory: self.config.haiku.memory_dir.clone(),
+                        capture_dir: self.config.haiku.capture_dir.clone(),
                         screenshots: self
                             .config
                             .haiku

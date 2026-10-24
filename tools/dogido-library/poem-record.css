@@ -18,6 +18,7 @@
 .workshop-dialogue time{font-size:13px;color:var(--muted)}.workshop-dialogue p{display:grid;grid-template-columns:90px minmax(0,1fr);gap:10px;margin:7px 0}
 .workshop-dialogue b{font-size:14px;font-weight:500}.workshop-dialogue p>span,.record-prose{white-space:pre-wrap;overflow-wrap:anywhere}
 .poem-record h4{font-size:16px;margin:18px 0 6px}.poem-record ul{padding-left:22px;margin:8px 0}.line-sources li{margin-bottom:12px}.line-sources p,.record-missing{color:var(--muted)}.record-missing{margin-top:12px}
+.capture-records{padding-left:24px}.capture-records>li{padding:4px 0 14px}.capture-records h4 span{font-size:14px;font-weight:400;color:var(--muted)}.capture-records p{margin:8px 0;overflow-wrap:anywhere}.capture-downloads{display:flex;flex-wrap:wrap;gap:12px}.capture-downloads a{color:var(--ink);text-underline-offset:3px}.capture-identifiers dl{font-size:13px}.capture-identifiers dt{margin-top:10px;color:var(--muted)}.capture-identifiers dd{margin:4px 0;overflow-wrap:anywhere}
 .poem-export-button{margin-top:12px;padding:8px 12px;border:1px solid #c5b593;background:#f8f0dd;color:var(--ink);font-size:16px}
 .poem-export-dialog{max-width:500px;width:calc(100% - 32px);padding:24px;border:2px solid #8d7c5a;background:var(--paper)}
 .poem-export-dialog h2{font-size:23px;margin-bottom:12px}.poem-export-dialog p{font-size:16px;margin:12px 0}.poem-export-dialog label{display:block;margin:12px 0}.poem-export-dialog input{display:block;max-width:100%;padding:8px;border:1px solid #c5b593;background:#fff9e9}

@@ -1,6 +1,7 @@
 //! ゲーム非依存の本棚。loopback専用で、他のUIへの導線は作らない。
 mod research;
 mod research_storage;
+mod internal_capture;
 mod library_view;
 mod player_photos;
 pub mod research_archive;
@@ -34,6 +35,8 @@ struct App {
 #[derive(Clone, serde::Deserialize)]
 pub struct Config {
     pub memory: PathBuf,
+    #[serde(default)]
+    pub capture_dir: Option<PathBuf>,
     pub photos: PathBuf,
     #[serde(default = "crate::screenshot::default_directory")]
     pub screenshots: PathBuf,
@@ -265,6 +268,18 @@ async fn photo_image(
     let bytes = blocking(move || app.store.image_bytes(&id)).await?;
     Ok(([(header::CONTENT_TYPE, "image/png")], bytes).into_response())
 }
+async fn internal_capture_file(
+    State(app): State<Arc<App>>,
+    Path((id, index, kind)): Path<(String, usize, String)>,
+) -> Result<Response, ApiError> {
+    let result = blocking(move || app.store.internal_capture_file(&id, index, &kind)).await?;
+    let mime = if result.name == "manifest.json" { "application/json" } else { "application/octet-stream" };
+    let stream = tokio_util::io::ReaderStream::new(tokio::fs::File::from_std(result.file));
+    Ok(([(header::CONTENT_TYPE, mime.to_string()),
+        (header::CONTENT_LENGTH, result.bytes.to_string()),
+        (header::CONTENT_DISPOSITION, format!("attachment; filename=\"{}\"", result.name))],
+        Body::from_stream(stream)).into_response())
+}
 const PUBLIC: &[&str] = &[
     "research-settings.js",
     "research-settings.css",
@@ -334,6 +349,7 @@ fn router(app: Arc<App>) -> Router {
         .route("/api/readings", put(reading).delete(remove_reading))
         .route("/api/trash", get(trash_list).put(trash_change))
         .route("/api/photos/{id}/image", get(photo_image))
+        .route("/api/poems/{id}/internal-capture/{index}/{kind}", get(internal_capture_file))
         .fallback(static_file)
         .layer(DefaultBodyLimit::max(128 * 1024))
         .layer(middleware::from_fn_with_state(app.clone(), guard))
@@ -353,6 +369,7 @@ pub async fn run(config: Config, port: u16) -> Result<()> {
         );
     }
     let store = store::Store {
+        capture_dir: config.capture_dir,
         screenshots: config.screenshots,
         memory: config.memory,
         photos: config.photos,
@@ -418,7 +435,7 @@ pub fn spawn_research_worker(store: store::Store) -> tokio::task::JoinHandle<()>
 /// 明示的な初回保全と保全再確認。通常起動と同じ設定／同じ保存経路を使う。
 pub fn sync_research(config: Config, root: Option<PathBuf>) -> Result<Value> {
     ensure!(config.memory_enabled, "memory_disabled");
-    let store = store::Store { memory:config.memory,photos:config.photos,screenshots:config.screenshots };
+    let store = store::Store { memory:config.memory,capture_dir:config.capture_dir,photos:config.photos,screenshots:config.screenshots };
     if let Some(root) = root {
         let current = research_archive::load_config(&store.memory)?;
         let status = store.select_research_storage(research_storage::Selection {

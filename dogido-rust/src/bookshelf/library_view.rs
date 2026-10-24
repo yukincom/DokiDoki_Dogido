@@ -58,6 +58,9 @@ impl Store {
                             if player["poems"].get(id).is_none() {
                                 player["poems"][id] = record["player"].clone();
                             }
+                            if poem["original"]["internal_capture"] == record["original"]["internal_capture"] {
+                                poem["internalCaptureStorage"] = record["internalCaptureStorage"].clone();
+                            }
                             result.push(poem);
                             archived += 1;
                         }

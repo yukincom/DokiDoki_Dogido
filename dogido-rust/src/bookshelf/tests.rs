@@ -5,6 +5,8 @@ use std::fs;
 
 #[path = "player_photos_tests.rs"]
 mod player_photos_tests;
+#[path = "internal_capture_tests.rs"]
+mod internal_capture_tests;
 
 fn poem_edit_request(id: &str, parent: Option<&str>, expected: &[&str], lines: [&str; 3]) -> Value {
     json!({"id":id,"requestId":uuid::Uuid::new_v4().to_string(),
@@ -414,6 +416,7 @@ impl Fixture {
     fn store(&self) -> store::Store {
         store::Store {
             memory: self.root.join("memory"),
+            capture_dir: Some(self.root.join("internal-capture")),
             photos: self.root.join("photos"),
             screenshots: self.root.join("screenshots"),
         }
