@@ -8,14 +8,14 @@
 
 前回の890件版から川柳7分類359件と既存の対象外58件を抽出した417件を保持し、対象外4件と終了3件をtrainへ追加した。新たな合成例は作っていない。
 
-- [今回の424件](../dev_tools/request_classifier/releases/2026-10-24-senryu-only-424/README.md)：train 349 / dev 39 / test 36。
-- [表示・正解指定の記録](../dev_tools/request_classifier/curation/2026-10-24-live-feedback/README.md)：確率・推論時間・取消状態を提示どおり保持。`松松がいっぱいだね`を補正していない。取消表示は同じ学習行に重ねていない。
+- [今回の424件](https://github.com/yukincom/AI-Curious-Community/blob/main/modernbert-request-classifier-study/updates/2026-10-24/dev_tools/request_classifier/releases/2026-10-24-senryu-only-424/README.md)：train 349 / dev 39 / test 36。
+- [表示・正解指定の記録](https://github.com/yukincom/AI-Curious-Community/blob/main/modernbert-request-classifier-study/updates/2026-10-24/dev_tools/request_classifier/curation/2026-10-24-live-feedback/README.md)：確率・推論時間・取消状態を提示どおり保持。`松松がいっぱいだね`を補正していない。取消表示は同じ学習行に重ねていない。
 - 終了への追加はユーザーが指定した3文に限る。称賛一般を終了へ変更したり、終了分類だけで保存・未採用案の採用を実行したりする仕様変更は行っていない。
 - 元417件の本文・分類・ID・注釈・順序・分割、8分類のID対応を保持。教材の固定commitは `3f0250cdb1838d231ca5f7411db8ded23a997be8`。
 
 ## Colabで実行
 
-[ModernBERT_Ja_30M_川柳8分類424件_2026-10-24.ipynb](../dev_tools/request_classifier/experiments/2026-10-24-senryu-colab/ModernBERT_Ja_30M_川柳8分類424件_2026-10-24.ipynb) をColabへアップロードする。
+[ModernBERT_Ja_30M_川柳8分類424件_2026-10-24.ipynb](https://github.com/yukincom/AI-Curious-Community/blob/main/modernbert-request-classifier-study/updates/2026-10-24/dev_tools/request_classifier/experiments/2026-10-24-senryu-colab/ModernBERT_Ja_30M_%E5%B7%9D%E6%9F%B38%E5%88%86%E9%A1%9E424%E4%BB%B6_2026-10-24.ipynb) をColabへアップロードする。
 
 1. 「ランタイム」→「ランタイムのタイプを変更」でGPUを選ぶ。
 2. 「すべてのセルを実行」。教材・学習コードはノートブックに同梱済み。
@@ -45,7 +45,7 @@
 
 [公開保存版](https://github.com/yukincom/AI-Curious-Community/releases/tag/modernbert-research-2026-10-24) の `source-evaluation-records-01.tar.gz` から、前回の `dataset.py`、`evaluation.py`、`train.py`、既定 `labels.json`、固定依存ファイルの5個をバイト単位で変更せず同梱した。既存の `--material-release` で今回の8分類を読むため、学習処理の新設はしていない。
 
-前回のノートブックを基に、入力・出力名と教材commitを更新。結果表示は川柳8分類へ揃え、今回の7件の学習内確認と、Markdown改行の整形を加えた。学習コード自体は同一。出典とSHA-256は [source-provenance.json](../dev_tools/request_classifier/experiments/2026-10-24-senryu-colab/source-provenance.json)、条件は [training-protocol.json](../dev_tools/request_classifier/experiments/2026-10-24-senryu-colab/training-protocol.json) に保存した。
+前回のノートブックを基に、入力・出力名と教材commitを更新。結果表示は川柳8分類へ揃え、今回の7件の学習内確認と、Markdown改行の整形を加えた。学習コード自体は同一。出典とSHA-256は [source-provenance.json](https://github.com/yukincom/AI-Curious-Community/blob/main/modernbert-request-classifier-study/updates/2026-10-24/dev_tools/request_classifier/experiments/2026-10-24-senryu-colab/source-provenance.json)、条件は [training-protocol.json](https://github.com/yukincom/AI-Curious-Community/blob/main/modernbert-request-classifier-study/updates/2026-10-24/dev_tools/request_classifier/experiments/2026-10-24-senryu-colab/training-protocol.json) に保存した。
 
 準備時に次を確認した。モデル学習・推論・実装テストは実行していない。
 
@@ -54,7 +54,7 @@
 - 5つのコードセルの構文、入力と結果保存の対象、8分類の表示、学習用7件の参照先。
 - 保存済みtokenizerだけで入力長を計測。trainは16–35、devは19–28、testは16–24 token。128を超える入力は0件。
 
-[local-preparation.json](../dev_tools/request_classifier/experiments/2026-10-24-senryu-colab/local-preparation.json) に確認範囲を記録した。
+[local-preparation.json](https://github.com/yukincom/AI-Curious-Community/blob/main/modernbert-request-classifier-study/updates/2026-10-24/dev_tools/request_classifier/experiments/2026-10-24-senryu-colab/local-preparation.json) に確認範囲を記録した。
 
 再生成はリポジトリルートで次を実行する。公開保存版は事前に取得し、引数へそのファイルを指定する。教材が固定commitと異なる場合は停止する。
 
@@ -67,4 +67,4 @@ python3 dev_tools/request_classifier/experiments/2026-10-24-senryu-colab/build_n
 
 testはseed42が36/36、seed43・44が35/36。devはすべて38/39、追加7件はすべて学習内で7/7正解。予測1,272件の再集計、教材・入力コード・モデルのhash、devによるepoch選択を照合した。受領確認の後、ユーザー指定のseed42をローカルで再推論し、424件すべてで受領時の予測を再現して本体へ採用した。
 
-成績の範囲、残った誤分類、保存場所は [学習結果の確認記録](../dev_tools/request_classifier/experiments/2026-10-24-senryu-colab/results-review.md) にまとめた。準備時の `training-protocol.json` とノートブックは当時の入力記録として保持している。
+成績の範囲、残った誤分類、保存場所は [学習結果の確認記録](https://github.com/yukincom/AI-Curious-Community/blob/main/modernbert-request-classifier-study/updates/2026-10-24/dev_tools/request_classifier/experiments/2026-10-24-senryu-colab/results-review.md) にまとめた。準備時の `training-protocol.json` とノートブックは当時の入力記録として保持している。

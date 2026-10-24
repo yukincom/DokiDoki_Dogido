@@ -54,7 +54,7 @@ F1、メニュー／チャット画面、`/dogidoscrollhide`、表示アニメ�
 - IDは0=`not_target`、1–3=行指定の上／中／下、4–6=具体変更の上／中／下、7=`senryu_end`。旧23分類のIDとは異なるため、モデルごとの契約を検証する。
 - 本体採用先: `models/dogido-senryu424-seed42/`。元の4ファイルを変更せずコピーし、`adopted-model.json` にmode・ID順・hash・採用根拠を保存した。
 - ローカルCPUでRust診断CLIから424件を再推論し、受領時の予測と424/424一致。train 349/349、dev 38/39、test 36/36。成績は教材設計で参照済みの診断値で、未知の実機精度ではない。
-- 既知の「これはこのまま保存しましょう」→`not_target` を再現。追加10例では剣・馬・視線の依頼が対象外となった一方、「句の相談はここで終わろう」も対象外だった。モデルの誤分類をコードの語句補正で隠していない。成績と元の誤分類は [受領記録](../dev_tools/request_classifier/experiments/2026-10-24-senryu-colab/results-review.md) を参照。
+- 既知の「これはこのまま保存しましょう」→`not_target` を再現。追加10例では剣・馬・視線の依頼が対象外となった一方、「句の相談はここで終わろう」も対象外だった。モデルの誤分類をコードの語句補正で隠していない。成績と元の誤分類は [受領記録](https://github.com/yukincom/AI-Curious-Community/blob/main/modernbert-request-classifier-study/updates/2026-10-24/dev_tools/request_classifier/experiments/2026-10-24-senryu-colab/results-review.md) を参照。
 
 ### 通常seed48-mobの引継ぎ
 
@@ -63,7 +63,7 @@ F1、メニュー／チャット画面、`/dogidoscrollhide`、表示アニメ�
 - 重みSHA-256: `51c5aaf94c1b6f71cbd38e6d3b57b3aa0bfab0bad2f60408d3e488b2e6481b04`。seed48、epoch 2、float32。
 - 共有trainは818種類、モブ情報と関連対比例の再提示を含む学習ストリームは942件／epoch。通常側はこの一つの全16分類モデルを使う。
 - testを開く前に固定したdev規則で総合・単体ともseed48-mobを選択。保存された成績はtrain 811/818、dev 42/46、test 45/50。教材設計で参照済みの診断値であり、未知の実機精度ではない。
-- 残るtestの5誤分類と合成候補との違いは[受領記録](../dev_tools/request_classifier/experiments/2026-10-24-four-system-colab/results-review.md)を参照。固定語句の意味補正や別分類器は追加しない。
+- 残るtestの5誤分類と合成候補との違いは[受領記録](https://github.com/yukincom/AI-Curious-Community/blob/main/modernbert-request-classifier-study/updates/2026-10-24/dev_tools/request_classifier/experiments/2026-10-24-four-system-colab/results-review.md)を参照。固定語句の意味補正や別分類器は追加しない。
 
 ## 初回の切替実装と確認
 
