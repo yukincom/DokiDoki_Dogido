@@ -21,7 +21,7 @@
 
 既存の `haiku_irony / haiku_scene / haiku_draft / haiku_line_regeneration` のHTTP本文へ `dogido_capture: true` を追加する。要求本文のプロンプトとモデル呼出回数は変えない。通常雑談と川柳相談の編集はこの採取指定の対象外。
 
-`irony / scene` は既存の会話用接続先、`draft / line_regeneration` は既存の川柳用接続先を使う。接続先を分けている場合は、両方を採取対応サーバーへ接続する。片方だけ対応している場合は、未採取の要求を欠落として残す。本体の一般起動は `python dogido-rust/scripts/launch_dialogue.py --settings-dir .` のまま。常用サーバーの実行ファイルやユーザー設定を自動で変更しない。
+`irony / scene` は既存の会話用接続先、`draft / line_regeneration` は既存の川柳用接続先を使う。接続先を分けている場合は、両方を採取対応サーバーへ接続する。片方だけ対応している場合は、未採取の要求を欠落として残す。本体の一般起動は `python dogido-rust/scripts/launch_dialogue.py --settings-dir .` のまま。採取有効時は起動ログに保存先を表示する。一般起動処理は常用サーバーの実行ファイルやユーザー設定を自動で変更しない。
 
 保存句には、セッション・発句job・要求順・生成kind・応答IDと採取記録の検査結果を観測用のmetadataとして関連付ける。完成句の文字列と生成token列の直接対応は主張しない。読みの変換や複数回の生成・行置換を経た句も、元になった各要求から追跡する。
 
@@ -88,4 +88,29 @@ MLXの先頭4位置は既存 `measure.Capture` でも独立に計算し、native
 - 模擬通信は採取・保存・取消・期限切れ・保存失敗の6ケースと、既存発句16ケース成功。旧LLM終了actionを返していた模擬テストを、現行のBERT `senryu_end` に合わせた。
 - `clippy -D warnings` は変更行外の26箇所の警告で未通過。今回追加した採取処理の警告は修正済み。
 
-常用8080のプロセス・起動設定は切り替えていない。実Minecraftからの入力、実TTS、priority wrapper併用、長時間連続運転は未確認。
+上記の実装検証時点では常用8080を切り替えていない。その後の明示依頼による常用設定は次節のとおり。実Minecraftからの入力、実TTS、MLXのpriority wrapper併用、長時間連続運転は未確認。
+
+## 常用8080への適用と他クライアントとの境界
+
+2026-10-24、ユーザーの明示依頼により、常用Gemma 4 GGUFを採取対応版へ切り替えた。境界はHTTP要求ごとの `dogido_capture: true`。サーバーの採取先設定だけでは、要求の採取は始まらない。
+
+| 要求元と用途 | 内部表現の採取 |
+|---|---|
+| ドギドの自動発句4種（irony / scene / draft / line_regeneration） | ドギド側の採取設定が有効なときだけ指定を送る |
+| ドギドの通常雑談・川柳相談の編集 | 指定を送らない |
+| ヘルメス・にゃむる等の通常API要求 | 指定がないため採取しない |
+
+これは要求の用途を分ける仕組みで、アプリの身元を認証するアクセス制御ではない。他のクライアントが明示的に同じ採取指定を送れば採取される。通常のOpenAI互換クライアントにこの独自項目を追加する変更は行っていない。
+
+- 常用の実行ファイルは `/Users/yukin_co/mlx-server/gguf/runtime-capture-20261024-e6235ad/bin/llama-server`。元の `runtime/bin/llama-server` は保持する。
+- 既存の管理アプリと `gguf/profiles.json` を使って切り替えた。重み、MTP、context、batch、alias、reasoning offは切替前と同じ。管理アプリによるプロセス識別も有効。
+- `profiles.json` のGemmaプロファイルだけに採取先・重み等の識別ファイル・256位置の上限を設定した。Qwenプロファイルには採取環境変数を追加していない。現在の設定はGGUFのGemma用で、管理アプリでMLXへ切り替えた場合の採取を有効にするものではない。
+- ドギドのローカル `.env` に `DOGIDO_HAIKU_INTERNAL_CAPTURE_ENABLED=true` と絶対パスの `DOGIDO_CAPTURE_DIR` を設定した。公開既定値は無効のまま。
+- 採取先は `/Users/yukin_co/Documents/DokiDoki-Dogido/.dogido_memory/internal-capture`。句の保存先は既存の `.dogido_memory/rust-migration`。Git追跡外で、自動削除しない。
+- 配備時の設定・実行識別・確認結果は `.dogido_tools/haiku-internal-gguf/deployment-20261024/` に保持する。元の管理設定は `profiles.previous.json`、ドギドの元設定は読み取り権限を限定した `dogido.env.previous`。重み・実行ファイル・起動引数を後から変更する場合は、対応する識別記録も再作成する。
+
+常用8080に通常要求→採取要求→通常要求→ストリーミング要求を順に送り、採取要求だけ `[16, 30, 2816]` のcomplete記録が作られた。通常要求と採取要求の本文は一致し、採取後の要求へ採取状態が持ち越されないことを確認した。ヘルメス・にゃむるのアプリそのものを操作した結合試験ではなく、同じ共有APIで独自指定のない要求を検査した結果。
+
+常用8080を使った隔離済みの模擬プレイでは、irony 145位置・scene 192位置・draft 46位置がすべてcompleteで、数値を検査済みの参照が保存句へ付いた。記録は配備フォルダ内の `live-haiku/result.json` と `entry.json`。試験の句は常用の句・記憶へ追記していない。これは実Minecraftや実音声の検証ではない。
+
+ドギド本体は通常の管理アプリから起動し、「稼働中」と起動ログの「発句の内部表現採取: 有効」を確認した。マイクは停止状態。Minecraftへ通常どおり接続し、自動発句が行われると採取される。音声を使う場合は管理アプリでマイクを起動する。採取確認には、保存句の `internal_capture.requests` の状態・応答IDと、対応する採取先の `manifest.json` を照合する。

@@ -198,6 +198,8 @@ def main():
     print(f"表示: {base_url}/rust-chat", flush=True)
     print("会話・川柳・戦闘・環境反応の判断と音声配送はRustで処理します。", flush=True)
     print(f"自動川柳: {haiku_model} / 保存先: {haiku_settings['memory_dir']}（セッションごと）", flush=True)
+    if settings.haiku_internal_capture_enabled:
+        print(f"発句の内部表現採取: 有効 / 保存先: {haiku_settings['capture_dir']}（自動発句の要求だけ）", flush=True)
     print("情景発話・発句・保存・掛け軸、句の共同編集・採否・読み訂正・保存した句の検索、詩とMinecraftの知識回答に対応。", flush=True)
     print(f"マイクは同じ設定・ポート {settings.bind_port} の起動指定に --voice を付け、別のターミナルで開始してください。", flush=True)
     print("終了はこのターミナルで Ctrl+C。共有MLXとVOICEVOX本体は停止しません。", flush=True)
