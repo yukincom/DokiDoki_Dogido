@@ -1,0 +1,172 @@
+{
+  "gaze": {
+    "target_labels": [
+      "look_direction",
+      "look_relative_right",
+      "look_target",
+      "look_player",
+      "look_relative_front",
+      "look_relative_back",
+      "look_relative_left",
+      "look_relative_front_left",
+      "look_relative_front_right",
+      "look_relative_back_left",
+      "look_relative_back_right"
+    ],
+    "target_count": 99,
+    "replay_count": 99,
+    "total": 198,
+    "replay_label_counts": {
+      "not_target": 49,
+      "enemy_information": 25,
+      "equip_sword": 9,
+      "recall_mount": 8,
+      "dogido_recall": 8
+    },
+    "label_counts": {
+      "look_direction": 25,
+      "look_target": 8,
+      "not_target": 49,
+      "dogido_recall": 8,
+      "recall_mount": 8,
+      "look_relative_back": 7,
+      "look_relative_back_left": 6,
+      "look_relative_back_right": 6,
+      "look_relative_front": 6,
+      "look_relative_front_left": 6,
+      "look_relative_front_right": 6,
+      "look_relative_left": 7,
+      "look_player": 15,
+      "enemy_information": 25,
+      "equip_sword": 9,
+      "look_relative_right": 7
+    },
+    "source_counts": {
+      "synthetic": 153,
+      "user_example": 29,
+      "observed_text": 16
+    },
+    "group_count": 109
+  },
+  "recall": {
+    "target_labels": [
+      "recall_mount",
+      "dogido_recall"
+    ],
+    "target_count": 144,
+    "replay_count": 144,
+    "total": 288,
+    "replay_label_counts": {
+      "not_target": 72,
+      "enemy_information": 36,
+      "equip_sword": 3,
+      "look_direction": 3,
+      "look_relative_right": 3,
+      "look_target": 3,
+      "look_player": 3,
+      "look_relative_front": 3,
+      "look_relative_back": 3,
+      "look_relative_left": 3,
+      "look_relative_front_left": 3,
+      "look_relative_front_right": 3,
+      "look_relative_back_left": 3,
+      "look_relative_back_right": 3
+    },
+    "label_counts": {
+      "dogido_recall": 47,
+      "look_target": 3,
+      "recall_mount": 97,
+      "not_target": 72,
+      "look_relative_back": 3,
+      "look_relative_back_left": 3,
+      "look_relative_back_right": 3,
+      "look_relative_front": 3,
+      "look_relative_front_left": 3,
+      "look_relative_front_right": 3,
+      "look_relative_left": 3,
+      "look_direction": 3,
+      "look_player": 3,
+      "enemy_information": 36,
+      "equip_sword": 3,
+      "look_relative_right": 3
+    },
+    "source_counts": {
+      "synthetic": 219,
+      "user_example": 34,
+      "observed_text": 35
+    },
+    "group_count": 133
+  },
+  "sword": {
+    "target_labels": [
+      "equip_sword"
+    ],
+    "target_count": 75,
+    "replay_count": 75,
+    "total": 150,
+    "replay_label_counts": {
+      "not_target": 37,
+      "enemy_information": 19,
+      "recall_mount": 2,
+      "dogido_recall": 2,
+      "look_direction": 2,
+      "look_relative_right": 2,
+      "look_target": 2,
+      "look_player": 2,
+      "look_relative_front": 1,
+      "look_relative_back": 1,
+      "look_relative_left": 1,
+      "look_relative_front_left": 1,
+      "look_relative_front_right": 1,
+      "look_relative_back_left": 1,
+      "look_relative_back_right": 1
+    },
+    "label_counts": {
+      "look_target": 2,
+      "not_target": 37,
+      "dogido_recall": 2,
+      "look_relative_back": 1,
+      "look_relative_back_left": 1,
+      "look_relative_back_right": 1,
+      "look_relative_front": 1,
+      "look_relative_front_left": 1,
+      "look_relative_front_right": 1,
+      "look_relative_left": 1,
+      "look_player": 2,
+      "enemy_information": 19,
+      "equip_sword": 75,
+      "recall_mount": 2,
+      "look_direction": 2,
+      "look_relative_right": 2
+    },
+    "source_counts": {
+      "synthetic": 118,
+      "user_example": 20,
+      "observed_text": 12
+    },
+    "group_count": 102
+  },
+  "joint": {
+    "total_occurrences": 636,
+    "unique_rows": 426,
+    "label_counts": {
+      "look_direction": 30,
+      "look_target": 13,
+      "not_target": 158,
+      "dogido_recall": 57,
+      "recall_mount": 107,
+      "look_relative_back": 11,
+      "look_relative_back_left": 10,
+      "look_relative_back_right": 10,
+      "look_relative_front": 10,
+      "look_relative_front_left": 10,
+      "look_relative_front_right": 10,
+      "look_relative_left": 11,
+      "look_player": 20,
+      "enemy_information": 80,
+      "equip_sword": 87,
+      "look_relative_right": 12
+    },
+    "purpose": "same aggregate training row occurrences as all three specialists"
+  }
+}

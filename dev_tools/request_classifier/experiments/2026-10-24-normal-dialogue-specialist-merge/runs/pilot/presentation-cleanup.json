@@ -1,0 +1,16 @@
+{
+  "operation": "remove only extra trailing blank lines from generated Markdown",
+  "files": [
+    "reports/arithmetic-one/misclassifications.md",
+    "reports/arithmetic-third/misclassifications.md",
+    "reports/arithmetic-two-thirds/misclassifications.md",
+    "reports/base-seed43/misclassifications.md",
+    "reports/gaze/misclassifications.md",
+    "reports/joint/misclassifications.md",
+    "reports/recall/misclassifications.md",
+    "reports/sword/misclassifications.md",
+    "reports/ties20-half/misclassifications.md",
+    "reports/ties20-one/misclassifications.md"
+  ],
+  "predictions_or_metrics_changed": false
+}

@@ -1,0 +1,13 @@
+{
+  "started_at_utc": "2026-10-24T08:07:16.460133+00:00",
+  "protocol_sha256": "37a80d65760953bcb950000781aee81c04d2ddb03d7bd954ec0a942f9cb55b0b",
+  "python": "3.11.14 (main, Apr 10 2026, 10:07:43) [Clang 17.0.0 (clang-1700.0.13.5)]",
+  "versions": {
+    "torch": "2.14.1",
+    "transformers": "5.19.0",
+    "accelerate": "1.15.0",
+    "safetensors": "0.8.0",
+    "numpy": "2.4.6",
+    "tokenizers": "0.23.3"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "verified_at_utc": "2026-10-24T08:10:20.083418+00:00",
+  "prediction_rows": 960,
+  "training_rows_unchanged": true,
+  "heldout_ids_groups_in_training": 0,
+  "joint_occurrences_match_all_experts": true,
+  "joint_unique_rows": 426,
+  "trained_models": 4,
+  "merged_models": 5,
+  "merged_tensors_checked": 330,
+  "all_saved_merges_match_independent_formulas": true,
+  "all_prediction_metrics_recomputed": true,
+  "selection_frozen_before_test": true,
+  "base_predictions_identical_to_colab": true,
+  "base_max_probability_difference_vs_colab": {
+    "dev": 4.649162292480469e-06,
+    "test": 4.708766937255859e-06
+  },
+  "source_models_and_materials_unchanged": true,
+  "verifier_sha256": "d1b3b2fe1c554f6251f84a70b7c2aab2889a2f437d0cea04e836554833e46034"
+}

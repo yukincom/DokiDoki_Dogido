@@ -1,0 +1,2397 @@
+{
+  "n": 50,
+  "replicate_order": [
+    "base-seed43",
+    "gaze",
+    "recall",
+    "sword",
+    "joint",
+    "arithmetic-third",
+    "arithmetic-two-thirds",
+    "arithmetic-one",
+    "ties20-half",
+    "ties20-one"
+  ],
+  "baseline": {
+    "correct": 41,
+    "accuracy": 0.82,
+    "macro_f1": 0.7105769230769231,
+    "not_target.precision": 0.75,
+    "not_target.recall": 0.75,
+    "not_target.f1": 0.75,
+    "enemy_information.precision": 0.8333333333333334,
+    "enemy_information.recall": 0.8333333333333334,
+    "enemy_information.f1": 0.8333333333333334,
+    "equip_sword.precision": 1.0,
+    "equip_sword.recall": 1.0,
+    "equip_sword.f1": 1.0,
+    "recall_mount.precision": 0.875,
+    "recall_mount.recall": 1.0,
+    "recall_mount.f1": 0.9333333333333333,
+    "dogido_recall.precision": 0.6666666666666666,
+    "dogido_recall.recall": 0.6666666666666666,
+    "dogido_recall.f1": 0.6666666666666666,
+    "look_direction.precision": 0.625,
+    "look_direction.recall": 1.0,
+    "look_direction.f1": 0.7692307692307693,
+    "look_relative_right.precision": 1.0,
+    "look_relative_right.recall": 1.0,
+    "look_relative_right.f1": 1.0,
+    "look_target.precision": 1.0,
+    "look_target.recall": 0.5,
+    "look_target.f1": 0.6666666666666666,
+    "look_player.precision": 0.75,
+    "look_player.recall": 0.75,
+    "look_player.f1": 0.75,
+    "look_relative_front.precision": 0.0,
+    "look_relative_front.recall": 0.0,
+    "look_relative_front.f1": 0.0,
+    "look_relative_back.precision": 0.0,
+    "look_relative_back.recall": 0.0,
+    "look_relative_back.f1": 0.0,
+    "look_relative_left.precision": 0.0,
+    "look_relative_left.recall": 0.0,
+    "look_relative_left.f1": 0.0,
+    "look_relative_front_left.precision": 1.0,
+    "look_relative_front_left.recall": 1.0,
+    "look_relative_front_left.f1": 1.0,
+    "look_relative_front_right.precision": 1.0,
+    "look_relative_front_right.recall": 1.0,
+    "look_relative_front_right.f1": 1.0,
+    "look_relative_back_left.precision": 1.0,
+    "look_relative_back_left.recall": 1.0,
+    "look_relative_back_left.f1": 1.0,
+    "look_relative_back_right.precision": 1.0,
+    "look_relative_back_right.recall": 1.0,
+    "look_relative_back_right.f1": 1.0
+  },
+  "aggregate": {
+    "correct": {
+      "values": [
+        41,
+        41,
+        38,
+        40,
+        39,
+        40,
+        38,
+        27,
+        40,
+        40
+      ],
+      "mean": 38.4,
+      "sample_stddev": 4.141926551202418,
+      "min": 27,
+      "max": 41
+    },
+    "accuracy": {
+      "values": [
+        0.82,
+        0.82,
+        0.76,
+        0.8,
+        0.78,
+        0.8,
+        0.76,
+        0.54,
+        0.8,
+        0.8
+      ],
+      "mean": 0.768,
+      "sample_stddev": 0.08283853102404835,
+      "min": 0.54,
+      "max": 0.82
+    },
+    "macro_f1": {
+      "values": [
+        0.7105769230769231,
+        0.7105040792540793,
+        0.5600675366300367,
+        0.6734890109890109,
+        0.6372023809523809,
+        0.7031364468864469,
+        0.5781536172161172,
+        0.2819784382284382,
+        0.7031364468864469,
+        0.7031364468864469
+      ],
+      "mean": 0.6261381327006327,
+      "sample_stddev": 0.1331298444606706,
+      "min": 0.2819784382284382,
+      "max": 0.7105769230769231
+    },
+    "not_target.precision": {
+      "values": [
+        0.75,
+        0.75,
+        0.7142857142857143,
+        0.7142857142857143,
+        0.7142857142857143,
+        0.7142857142857143,
+        0.7142857142857143,
+        0.25925925925925924,
+        0.7142857142857143,
+        0.7142857142857143
+      ],
+      "mean": 0.6759259259259259,
+      "sample_stddev": 0.1471527405838453,
+      "min": 0.25925925925925924,
+      "max": 0.75
+    },
+    "not_target.recall": {
+      "values": [
+        0.75,
+        0.75,
+        0.625,
+        0.625,
+        0.625,
+        0.625,
+        0.625,
+        0.875,
+        0.625,
+        0.625
+      ],
+      "mean": 0.675,
+      "sample_stddev": 0.08740073734751262,
+      "min": 0.625,
+      "max": 0.875
+    },
+    "not_target.f1": {
+      "values": [
+        0.75,
+        0.75,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.39999999999999997,
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "mean": 0.6566666666666666,
+      "sample_stddev": 0.0966091783079296,
+      "min": 0.39999999999999997,
+      "max": 0.75
+    },
+    "enemy_information.precision": {
+      "values": [
+        0.8333333333333334,
+        1.0,
+        0.8333333333333334,
+        0.7142857142857143,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.8333333333333334,
+        1.0,
+        0.8333333333333334,
+        0.8333333333333334
+      ],
+      "mean": 0.8547619047619048,
+      "sample_stddev": 0.08507255362451818,
+      "min": 0.7142857142857143,
+      "max": 1.0
+    },
+    "enemy_information.recall": {
+      "values": [
+        0.8333333333333334,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.8333333333333334
+      ],
+      "mean": 0.8333333333333334,
+      "sample_stddev": 0.0,
+      "min": 0.8333333333333334,
+      "max": 0.8333333333333334
+    },
+    "enemy_information.f1": {
+      "values": [
+        0.8333333333333334,
+        0.9090909090909091,
+        0.8333333333333334,
+        0.7692307692307692,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.9090909090909091,
+        0.8333333333333334,
+        0.8333333333333334
+      ],
+      "mean": 0.8420745920745921,
+      "sample_stddev": 0.04058388192652715,
+      "min": 0.7692307692307692,
+      "max": 0.9090909090909091
+    },
+    "equip_sword.precision": {
+      "values": [
+        1.0,
+        0.8571428571428571,
+        0.8571428571428571,
+        0.8571428571428571,
+        0.75,
+        0.75,
+        0.8571428571428571,
+        0.7142857142857143,
+        0.75,
+        0.75
+      ],
+      "mean": 0.8142857142857143,
+      "sample_stddev": 0.08715716770344345,
+      "min": 0.7142857142857143,
+      "max": 1.0
+    },
+    "equip_sword.recall": {
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.8333333333333334,
+        1.0,
+        1.0
+      ],
+      "mean": 0.9833333333333334,
+      "sample_stddev": 0.052704627669472974,
+      "min": 0.8333333333333334,
+      "max": 1.0
+    },
+    "equip_sword.f1": {
+      "values": [
+        1.0,
+        0.923076923076923,
+        0.923076923076923,
+        0.923076923076923,
+        0.8571428571428571,
+        0.8571428571428571,
+        0.923076923076923,
+        0.7692307692307692,
+        0.8571428571428571,
+        0.8571428571428571
+      ],
+      "mean": 0.889010989010989,
+      "sample_stddev": 0.06268982230094221,
+      "min": 0.7692307692307692,
+      "max": 1.0
+    },
+    "recall_mount.precision": {
+      "values": [
+        0.875,
+        0.875,
+        0.7777777777777778,
+        0.875,
+        0.875,
+        0.875,
+        0.7777777777777778,
+        0.875,
+        0.875,
+        0.875
+      ],
+      "mean": 0.8555555555555555,
+      "sample_stddev": 0.04099248818736787,
+      "min": 0.7777777777777778,
+      "max": 0.875
+    },
+    "recall_mount.recall": {
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "mean": 1.0,
+      "sample_stddev": 0.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "recall_mount.f1": {
+      "values": [
+        0.9333333333333333,
+        0.9333333333333333,
+        0.8750000000000001,
+        0.9333333333333333,
+        0.9333333333333333,
+        0.9333333333333333,
+        0.8750000000000001,
+        0.9333333333333333,
+        0.9333333333333333,
+        0.9333333333333333
+      ],
+      "mean": 0.9216666666666667,
+      "sample_stddev": 0.024595492912420688,
+      "min": 0.8750000000000001,
+      "max": 0.9333333333333333
+    },
+    "dogido_recall.precision": {
+      "values": [
+        0.6666666666666666,
+        0.6666666666666666,
+        0.75,
+        0.75,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.75,
+        1.0,
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "mean": 0.725,
+      "sample_stddev": 0.10430546308621438,
+      "min": 0.6666666666666666,
+      "max": 1.0
+    },
+    "dogido_recall.recall": {
+      "values": [
+        0.6666666666666666,
+        0.6666666666666666,
+        1.0,
+        1.0,
+        0.6666666666666666,
+        0.6666666666666666,
+        1.0,
+        0.3333333333333333,
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "mean": 0.7333333333333333,
+      "sample_stddev": 0.21081851067789198,
+      "min": 0.3333333333333333,
+      "max": 1.0
+    },
+    "dogido_recall.f1": {
+      "values": [
+        0.6666666666666666,
+        0.6666666666666666,
+        0.8571428571428571,
+        0.8571428571428571,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.8571428571428571,
+        0.5,
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "mean": 0.7071428571428571,
+      "sample_stddev": 0.11558455069683127,
+      "min": 0.5,
+      "max": 0.8571428571428571
+    },
+    "look_direction.precision": {
+      "values": [
+        0.625,
+        0.625,
+        0.5,
+        0.625,
+        0.5555555555555556,
+        0.625,
+        0.4444444444444444,
+        1.0,
+        0.625,
+        0.625
+      ],
+      "mean": 0.625,
+      "sample_stddev": 0.14669425479402648,
+      "min": 0.4444444444444444,
+      "max": 1.0
+    },
+    "look_direction.recall": {
+      "values": [
+        1.0,
+        1.0,
+        0.8,
+        1.0,
+        1.0,
+        1.0,
+        0.8,
+        0.2,
+        1.0,
+        1.0
+      ],
+      "mean": 0.88,
+      "sample_stddev": 0.25298221281347033,
+      "min": 0.2,
+      "max": 1.0
+    },
+    "look_direction.f1": {
+      "values": [
+        0.7692307692307693,
+        0.7692307692307693,
+        0.6153846153846154,
+        0.7692307692307693,
+        0.7142857142857143,
+        0.7692307692307693,
+        0.5714285714285714,
+        0.33333333333333337,
+        0.7692307692307693,
+        0.7692307692307693
+      ],
+      "mean": 0.684981684981685,
+      "sample_stddev": 0.14331038584733782,
+      "min": 0.33333333333333337,
+      "max": 0.7692307692307693
+    },
+    "look_relative_right.precision": {
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "mean": 1.0,
+      "sample_stddev": 0.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "look_relative_right.recall": {
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.5,
+        1.0,
+        1.0
+      ],
+      "mean": 0.95,
+      "sample_stddev": 0.15811388300841897,
+      "min": 0.5,
+      "max": 1.0
+    },
+    "look_relative_right.f1": {
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.6666666666666666,
+        1.0,
+        1.0
+      ],
+      "mean": 0.9666666666666667,
+      "sample_stddev": 0.10540925533894599,
+      "min": 0.6666666666666666,
+      "max": 1.0
+    },
+    "look_target.precision": {
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0,
+        1.0
+      ],
+      "mean": 0.8,
+      "sample_stddev": 0.4216370213557839,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "look_target.recall": {
+      "values": [
+        0.5,
+        0.5,
+        0.5,
+        0.0,
+        0.5,
+        0.5,
+        0.5,
+        0.0,
+        0.5,
+        0.5
+      ],
+      "mean": 0.4,
+      "sample_stddev": 0.21081851067789195,
+      "min": 0.0,
+      "max": 0.5
+    },
+    "look_target.f1": {
+      "values": [
+        0.6666666666666666,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.0,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.0,
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "mean": 0.5333333333333333,
+      "sample_stddev": 0.28109134757052257,
+      "min": 0.0,
+      "max": 0.6666666666666666
+    },
+    "look_player.precision": {
+      "values": [
+        0.75,
+        0.75,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0,
+        1.0
+      ],
+      "mean": 0.85,
+      "sample_stddev": 0.31622776601683794,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "look_player.recall": {
+      "values": [
+        0.75,
+        0.75,
+        0.75,
+        0.75,
+        0.75,
+        0.75,
+        0.75,
+        0.0,
+        0.75,
+        0.75
+      ],
+      "mean": 0.675,
+      "sample_stddev": 0.23717082451262844,
+      "min": 0.0,
+      "max": 0.75
+    },
+    "look_player.f1": {
+      "values": [
+        0.75,
+        0.75,
+        0.8571428571428571,
+        0.8571428571428571,
+        0.8571428571428571,
+        0.8571428571428571,
+        0.8571428571428571,
+        0.0,
+        0.8571428571428571,
+        0.8571428571428571
+      ],
+      "mean": 0.75,
+      "sample_stddev": 0.2672612419124244,
+      "min": 0.0,
+      "max": 0.8571428571428571
+    },
+    "look_relative_front.precision": {
+      "values": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mean": 0.0,
+      "sample_stddev": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "look_relative_front.recall": {
+      "values": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mean": 0.0,
+      "sample_stddev": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "look_relative_front.f1": {
+      "values": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mean": 0.0,
+      "sample_stddev": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "look_relative_back.precision": {
+      "values": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mean": 0.0,
+      "sample_stddev": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "look_relative_back.recall": {
+      "values": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mean": 0.0,
+      "sample_stddev": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "look_relative_back.f1": {
+      "values": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mean": 0.0,
+      "sample_stddev": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "look_relative_left.precision": {
+      "values": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mean": 0.0,
+      "sample_stddev": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "look_relative_left.recall": {
+      "values": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mean": 0.0,
+      "sample_stddev": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "look_relative_left.f1": {
+      "values": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mean": 0.0,
+      "sample_stddev": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "look_relative_front_left.precision": {
+      "values": [
+        1.0,
+        1.0,
+        0.5,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0,
+        1.0
+      ],
+      "mean": 0.85,
+      "sample_stddev": 0.3374742788552764,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "look_relative_front_left.recall": {
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0,
+        1.0
+      ],
+      "mean": 0.9,
+      "sample_stddev": 0.31622776601683794,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "look_relative_front_left.f1": {
+      "values": [
+        1.0,
+        1.0,
+        0.6666666666666666,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0,
+        1.0
+      ],
+      "mean": 0.8666666666666667,
+      "sample_stddev": 0.3220305943597653,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "look_relative_front_right.precision": {
+      "values": [
+        1.0,
+        1.0,
+        0.0,
+        1.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        1.0,
+        1.0
+      ],
+      "mean": 0.6,
+      "sample_stddev": 0.5163977794943223,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "look_relative_front_right.recall": {
+      "values": [
+        1.0,
+        1.0,
+        0.0,
+        1.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        1.0,
+        1.0
+      ],
+      "mean": 0.6,
+      "sample_stddev": 0.5163977794943223,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "look_relative_front_right.f1": {
+      "values": [
+        1.0,
+        1.0,
+        0.0,
+        1.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        1.0,
+        1.0
+      ],
+      "mean": 0.6,
+      "sample_stddev": 0.5163977794943223,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "look_relative_back_left.precision": {
+      "values": [
+        1.0,
+        1.0,
+        0.0,
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        0.0,
+        1.0,
+        1.0
+      ],
+      "mean": 0.7,
+      "sample_stddev": 0.48304589153964794,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "look_relative_back_left.recall": {
+      "values": [
+        1.0,
+        1.0,
+        0.0,
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        0.0,
+        1.0,
+        1.0
+      ],
+      "mean": 0.7,
+      "sample_stddev": 0.48304589153964794,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "look_relative_back_left.f1": {
+      "values": [
+        1.0,
+        1.0,
+        0.0,
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        0.0,
+        1.0,
+        1.0
+      ],
+      "mean": 0.7,
+      "sample_stddev": 0.48304589153964794,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "look_relative_back_right.precision": {
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0,
+        1.0
+      ],
+      "mean": 0.9,
+      "sample_stddev": 0.31622776601683794,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "look_relative_back_right.recall": {
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0,
+        1.0
+      ],
+      "mean": 0.9,
+      "sample_stddev": 0.31622776601683794,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "look_relative_back_right.f1": {
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0,
+        1.0
+      ],
+      "mean": 0.9,
+      "sample_stddev": 0.31622776601683794,
+      "min": 0.0,
+      "max": 1.0
+    }
+  },
+  "transitions": {
+    "base-seed43": {
+      "fixed": {
+        "count": 0,
+        "ids": []
+      },
+      "new_errors": {
+        "count": 0,
+        "ids": []
+      },
+      "still_wrong": {
+        "count": 9,
+        "ids": [
+          "legacy__train-012",
+          "legacy__train-013",
+          "legacy__train-205",
+          "user_addition__user_20261022_066",
+          "contrast__contrast_029",
+          "contrast__contrast_030",
+          "gaze_variant__gaze_direction_10_front",
+          "gaze_variant__gaze_direction_10_back",
+          "gaze_variant__gaze_direction_10_left"
+        ]
+      },
+      "still_correct": {
+        "count": 41,
+        "ids": [
+          "legacy__train-011",
+          "legacy__train-018",
+          "legacy__train-061",
+          "legacy__train-062",
+          "legacy__train-065",
+          "legacy__train-082",
+          "legacy__train-083",
+          "legacy__train-085",
+          "legacy__train-089",
+          "legacy__train-090",
+          "legacy__train-141",
+          "legacy__train-144",
+          "legacy__train-184",
+          "legacy__train-185",
+          "legacy__train-525",
+          "legacy__train-526",
+          "legacy__train-736",
+          "legacy__train-770",
+          "live__short_runtime_005",
+          "live__short_runtime_046",
+          "live__short_runtime_147",
+          "live__short_runtime_174",
+          "live__short_runtime_175",
+          "user_addition__user_20261022_008",
+          "user_addition__user_20261022_048",
+          "user_addition__user_20261022_058",
+          "user_addition__user_20261022_064",
+          "user_addition__user_20261022_072",
+          "contrast__contrast_032",
+          "contrast__contrast_045",
+          "contrast__contrast_046",
+          "contrast__contrast_048",
+          "gaze_variant__gaze_direction_10_front_left",
+          "gaze_variant__gaze_direction_10_front_right",
+          "gaze_variant__gaze_direction_10_back_left",
+          "gaze_variant__gaze_direction_10_back_right",
+          "gaze_variant__gaze_player_04_variant_01",
+          "gaze_variant__gaze_player_04_variant_02",
+          "gaze_variant__gaze_far_sky_shared_01",
+          "gaze_variant__gaze_far_sky_shared_02",
+          "gaze_variant__gaze_far_sky_shared_03"
+        ]
+      }
+    },
+    "gaze": {
+      "fixed": {
+        "count": 1,
+        "ids": [
+          "legacy__train-013"
+        ]
+      },
+      "new_errors": {
+        "count": 1,
+        "ids": [
+          "legacy__train-018"
+        ]
+      },
+      "still_wrong": {
+        "count": 8,
+        "ids": [
+          "legacy__train-012",
+          "legacy__train-205",
+          "user_addition__user_20261022_066",
+          "contrast__contrast_029",
+          "contrast__contrast_030",
+          "gaze_variant__gaze_direction_10_front",
+          "gaze_variant__gaze_direction_10_back",
+          "gaze_variant__gaze_direction_10_left"
+        ]
+      },
+      "still_correct": {
+        "count": 40,
+        "ids": [
+          "legacy__train-011",
+          "legacy__train-061",
+          "legacy__train-062",
+          "legacy__train-065",
+          "legacy__train-082",
+          "legacy__train-083",
+          "legacy__train-085",
+          "legacy__train-089",
+          "legacy__train-090",
+          "legacy__train-141",
+          "legacy__train-144",
+          "legacy__train-184",
+          "legacy__train-185",
+          "legacy__train-525",
+          "legacy__train-526",
+          "legacy__train-736",
+          "legacy__train-770",
+          "live__short_runtime_005",
+          "live__short_runtime_046",
+          "live__short_runtime_147",
+          "live__short_runtime_174",
+          "live__short_runtime_175",
+          "user_addition__user_20261022_008",
+          "user_addition__user_20261022_048",
+          "user_addition__user_20261022_058",
+          "user_addition__user_20261022_064",
+          "user_addition__user_20261022_072",
+          "contrast__contrast_032",
+          "contrast__contrast_045",
+          "contrast__contrast_046",
+          "contrast__contrast_048",
+          "gaze_variant__gaze_direction_10_front_left",
+          "gaze_variant__gaze_direction_10_front_right",
+          "gaze_variant__gaze_direction_10_back_left",
+          "gaze_variant__gaze_direction_10_back_right",
+          "gaze_variant__gaze_player_04_variant_01",
+          "gaze_variant__gaze_player_04_variant_02",
+          "gaze_variant__gaze_far_sky_shared_01",
+          "gaze_variant__gaze_far_sky_shared_02",
+          "gaze_variant__gaze_far_sky_shared_03"
+        ]
+      }
+    },
+    "recall": {
+      "fixed": {
+        "count": 1,
+        "ids": [
+          "contrast__contrast_030"
+        ]
+      },
+      "new_errors": {
+        "count": 4,
+        "ids": [
+          "legacy__train-018",
+          "user_addition__user_20261022_048",
+          "gaze_variant__gaze_direction_10_front_right",
+          "gaze_variant__gaze_direction_10_back_left"
+        ]
+      },
+      "still_wrong": {
+        "count": 8,
+        "ids": [
+          "legacy__train-012",
+          "legacy__train-013",
+          "legacy__train-205",
+          "user_addition__user_20261022_066",
+          "contrast__contrast_029",
+          "gaze_variant__gaze_direction_10_front",
+          "gaze_variant__gaze_direction_10_back",
+          "gaze_variant__gaze_direction_10_left"
+        ]
+      },
+      "still_correct": {
+        "count": 37,
+        "ids": [
+          "legacy__train-011",
+          "legacy__train-061",
+          "legacy__train-062",
+          "legacy__train-065",
+          "legacy__train-082",
+          "legacy__train-083",
+          "legacy__train-085",
+          "legacy__train-089",
+          "legacy__train-090",
+          "legacy__train-141",
+          "legacy__train-144",
+          "legacy__train-184",
+          "legacy__train-185",
+          "legacy__train-525",
+          "legacy__train-526",
+          "legacy__train-736",
+          "legacy__train-770",
+          "live__short_runtime_005",
+          "live__short_runtime_046",
+          "live__short_runtime_147",
+          "live__short_runtime_174",
+          "live__short_runtime_175",
+          "user_addition__user_20261022_008",
+          "user_addition__user_20261022_058",
+          "user_addition__user_20261022_064",
+          "user_addition__user_20261022_072",
+          "contrast__contrast_032",
+          "contrast__contrast_045",
+          "contrast__contrast_046",
+          "contrast__contrast_048",
+          "gaze_variant__gaze_direction_10_front_left",
+          "gaze_variant__gaze_direction_10_back_right",
+          "gaze_variant__gaze_player_04_variant_01",
+          "gaze_variant__gaze_player_04_variant_02",
+          "gaze_variant__gaze_far_sky_shared_01",
+          "gaze_variant__gaze_far_sky_shared_02",
+          "gaze_variant__gaze_far_sky_shared_03"
+        ]
+      }
+    },
+    "sword": {
+      "fixed": {
+        "count": 1,
+        "ids": [
+          "contrast__contrast_030"
+        ]
+      },
+      "new_errors": {
+        "count": 2,
+        "ids": [
+          "legacy__train-018",
+          "user_addition__user_20261022_064"
+        ]
+      },
+      "still_wrong": {
+        "count": 8,
+        "ids": [
+          "legacy__train-012",
+          "legacy__train-013",
+          "legacy__train-205",
+          "user_addition__user_20261022_066",
+          "contrast__contrast_029",
+          "gaze_variant__gaze_direction_10_front",
+          "gaze_variant__gaze_direction_10_back",
+          "gaze_variant__gaze_direction_10_left"
+        ]
+      },
+      "still_correct": {
+        "count": 39,
+        "ids": [
+          "legacy__train-011",
+          "legacy__train-061",
+          "legacy__train-062",
+          "legacy__train-065",
+          "legacy__train-082",
+          "legacy__train-083",
+          "legacy__train-085",
+          "legacy__train-089",
+          "legacy__train-090",
+          "legacy__train-141",
+          "legacy__train-144",
+          "legacy__train-184",
+          "legacy__train-185",
+          "legacy__train-525",
+          "legacy__train-526",
+          "legacy__train-736",
+          "legacy__train-770",
+          "live__short_runtime_005",
+          "live__short_runtime_046",
+          "live__short_runtime_147",
+          "live__short_runtime_174",
+          "live__short_runtime_175",
+          "user_addition__user_20261022_008",
+          "user_addition__user_20261022_048",
+          "user_addition__user_20261022_058",
+          "user_addition__user_20261022_072",
+          "contrast__contrast_032",
+          "contrast__contrast_045",
+          "contrast__contrast_046",
+          "contrast__contrast_048",
+          "gaze_variant__gaze_direction_10_front_left",
+          "gaze_variant__gaze_direction_10_front_right",
+          "gaze_variant__gaze_direction_10_back_left",
+          "gaze_variant__gaze_direction_10_back_right",
+          "gaze_variant__gaze_player_04_variant_01",
+          "gaze_variant__gaze_player_04_variant_02",
+          "gaze_variant__gaze_far_sky_shared_01",
+          "gaze_variant__gaze_far_sky_shared_02",
+          "gaze_variant__gaze_far_sky_shared_03"
+        ]
+      }
+    },
+    "joint": {
+      "fixed": {
+        "count": 0,
+        "ids": []
+      },
+      "new_errors": {
+        "count": 2,
+        "ids": [
+          "legacy__train-018",
+          "gaze_variant__gaze_direction_10_front_right"
+        ]
+      },
+      "still_wrong": {
+        "count": 9,
+        "ids": [
+          "legacy__train-012",
+          "legacy__train-013",
+          "legacy__train-205",
+          "user_addition__user_20261022_066",
+          "contrast__contrast_029",
+          "contrast__contrast_030",
+          "gaze_variant__gaze_direction_10_front",
+          "gaze_variant__gaze_direction_10_back",
+          "gaze_variant__gaze_direction_10_left"
+        ]
+      },
+      "still_correct": {
+        "count": 39,
+        "ids": [
+          "legacy__train-011",
+          "legacy__train-061",
+          "legacy__train-062",
+          "legacy__train-065",
+          "legacy__train-082",
+          "legacy__train-083",
+          "legacy__train-085",
+          "legacy__train-089",
+          "legacy__train-090",
+          "legacy__train-141",
+          "legacy__train-144",
+          "legacy__train-184",
+          "legacy__train-185",
+          "legacy__train-525",
+          "legacy__train-526",
+          "legacy__train-736",
+          "legacy__train-770",
+          "live__short_runtime_005",
+          "live__short_runtime_046",
+          "live__short_runtime_147",
+          "live__short_runtime_174",
+          "live__short_runtime_175",
+          "user_addition__user_20261022_008",
+          "user_addition__user_20261022_048",
+          "user_addition__user_20261022_058",
+          "user_addition__user_20261022_064",
+          "user_addition__user_20261022_072",
+          "contrast__contrast_032",
+          "contrast__contrast_045",
+          "contrast__contrast_046",
+          "contrast__contrast_048",
+          "gaze_variant__gaze_direction_10_front_left",
+          "gaze_variant__gaze_direction_10_back_left",
+          "gaze_variant__gaze_direction_10_back_right",
+          "gaze_variant__gaze_player_04_variant_01",
+          "gaze_variant__gaze_player_04_variant_02",
+          "gaze_variant__gaze_far_sky_shared_01",
+          "gaze_variant__gaze_far_sky_shared_02",
+          "gaze_variant__gaze_far_sky_shared_03"
+        ]
+      }
+    },
+    "arithmetic-third": {
+      "fixed": {
+        "count": 0,
+        "ids": []
+      },
+      "new_errors": {
+        "count": 1,
+        "ids": [
+          "legacy__train-018"
+        ]
+      },
+      "still_wrong": {
+        "count": 9,
+        "ids": [
+          "legacy__train-012",
+          "legacy__train-013",
+          "legacy__train-205",
+          "user_addition__user_20261022_066",
+          "contrast__contrast_029",
+          "contrast__contrast_030",
+          "gaze_variant__gaze_direction_10_front",
+          "gaze_variant__gaze_direction_10_back",
+          "gaze_variant__gaze_direction_10_left"
+        ]
+      },
+      "still_correct": {
+        "count": 40,
+        "ids": [
+          "legacy__train-011",
+          "legacy__train-061",
+          "legacy__train-062",
+          "legacy__train-065",
+          "legacy__train-082",
+          "legacy__train-083",
+          "legacy__train-085",
+          "legacy__train-089",
+          "legacy__train-090",
+          "legacy__train-141",
+          "legacy__train-144",
+          "legacy__train-184",
+          "legacy__train-185",
+          "legacy__train-525",
+          "legacy__train-526",
+          "legacy__train-736",
+          "legacy__train-770",
+          "live__short_runtime_005",
+          "live__short_runtime_046",
+          "live__short_runtime_147",
+          "live__short_runtime_174",
+          "live__short_runtime_175",
+          "user_addition__user_20261022_008",
+          "user_addition__user_20261022_048",
+          "user_addition__user_20261022_058",
+          "user_addition__user_20261022_064",
+          "user_addition__user_20261022_072",
+          "contrast__contrast_032",
+          "contrast__contrast_045",
+          "contrast__contrast_046",
+          "contrast__contrast_048",
+          "gaze_variant__gaze_direction_10_front_left",
+          "gaze_variant__gaze_direction_10_front_right",
+          "gaze_variant__gaze_direction_10_back_left",
+          "gaze_variant__gaze_direction_10_back_right",
+          "gaze_variant__gaze_player_04_variant_01",
+          "gaze_variant__gaze_player_04_variant_02",
+          "gaze_variant__gaze_far_sky_shared_01",
+          "gaze_variant__gaze_far_sky_shared_02",
+          "gaze_variant__gaze_far_sky_shared_03"
+        ]
+      }
+    },
+    "arithmetic-two-thirds": {
+      "fixed": {
+        "count": 1,
+        "ids": [
+          "contrast__contrast_030"
+        ]
+      },
+      "new_errors": {
+        "count": 4,
+        "ids": [
+          "legacy__train-018",
+          "user_addition__user_20261022_048",
+          "gaze_variant__gaze_direction_10_front_right",
+          "gaze_variant__gaze_direction_10_back_left"
+        ]
+      },
+      "still_wrong": {
+        "count": 8,
+        "ids": [
+          "legacy__train-012",
+          "legacy__train-013",
+          "legacy__train-205",
+          "user_addition__user_20261022_066",
+          "contrast__contrast_029",
+          "gaze_variant__gaze_direction_10_front",
+          "gaze_variant__gaze_direction_10_back",
+          "gaze_variant__gaze_direction_10_left"
+        ]
+      },
+      "still_correct": {
+        "count": 37,
+        "ids": [
+          "legacy__train-011",
+          "legacy__train-061",
+          "legacy__train-062",
+          "legacy__train-065",
+          "legacy__train-082",
+          "legacy__train-083",
+          "legacy__train-085",
+          "legacy__train-089",
+          "legacy__train-090",
+          "legacy__train-141",
+          "legacy__train-144",
+          "legacy__train-184",
+          "legacy__train-185",
+          "legacy__train-525",
+          "legacy__train-526",
+          "legacy__train-736",
+          "legacy__train-770",
+          "live__short_runtime_005",
+          "live__short_runtime_046",
+          "live__short_runtime_147",
+          "live__short_runtime_174",
+          "live__short_runtime_175",
+          "user_addition__user_20261022_008",
+          "user_addition__user_20261022_058",
+          "user_addition__user_20261022_064",
+          "user_addition__user_20261022_072",
+          "contrast__contrast_032",
+          "contrast__contrast_045",
+          "contrast__contrast_046",
+          "contrast__contrast_048",
+          "gaze_variant__gaze_direction_10_front_left",
+          "gaze_variant__gaze_direction_10_back_right",
+          "gaze_variant__gaze_player_04_variant_01",
+          "gaze_variant__gaze_player_04_variant_02",
+          "gaze_variant__gaze_far_sky_shared_01",
+          "gaze_variant__gaze_far_sky_shared_02",
+          "gaze_variant__gaze_far_sky_shared_03"
+        ]
+      }
+    },
+    "arithmetic-one": {
+      "fixed": {
+        "count": 1,
+        "ids": [
+          "legacy__train-013"
+        ]
+      },
+      "new_errors": {
+        "count": 15,
+        "ids": [
+          "legacy__train-090",
+          "legacy__train-185",
+          "user_addition__user_20261022_048",
+          "user_addition__user_20261022_058",
+          "user_addition__user_20261022_064",
+          "user_addition__user_20261022_072",
+          "gaze_variant__gaze_direction_10_front_left",
+          "gaze_variant__gaze_direction_10_front_right",
+          "gaze_variant__gaze_direction_10_back_left",
+          "gaze_variant__gaze_direction_10_back_right",
+          "gaze_variant__gaze_player_04_variant_01",
+          "gaze_variant__gaze_player_04_variant_02",
+          "gaze_variant__gaze_far_sky_shared_01",
+          "gaze_variant__gaze_far_sky_shared_02",
+          "gaze_variant__gaze_far_sky_shared_03"
+        ]
+      },
+      "still_wrong": {
+        "count": 8,
+        "ids": [
+          "legacy__train-012",
+          "legacy__train-205",
+          "user_addition__user_20261022_066",
+          "contrast__contrast_029",
+          "contrast__contrast_030",
+          "gaze_variant__gaze_direction_10_front",
+          "gaze_variant__gaze_direction_10_back",
+          "gaze_variant__gaze_direction_10_left"
+        ]
+      },
+      "still_correct": {
+        "count": 26,
+        "ids": [
+          "legacy__train-011",
+          "legacy__train-018",
+          "legacy__train-061",
+          "legacy__train-062",
+          "legacy__train-065",
+          "legacy__train-082",
+          "legacy__train-083",
+          "legacy__train-085",
+          "legacy__train-089",
+          "legacy__train-141",
+          "legacy__train-144",
+          "legacy__train-184",
+          "legacy__train-525",
+          "legacy__train-526",
+          "legacy__train-736",
+          "legacy__train-770",
+          "live__short_runtime_005",
+          "live__short_runtime_046",
+          "live__short_runtime_147",
+          "live__short_runtime_174",
+          "live__short_runtime_175",
+          "user_addition__user_20261022_008",
+          "contrast__contrast_032",
+          "contrast__contrast_045",
+          "contrast__contrast_046",
+          "contrast__contrast_048"
+        ]
+      }
+    },
+    "ties20-half": {
+      "fixed": {
+        "count": 0,
+        "ids": []
+      },
+      "new_errors": {
+        "count": 1,
+        "ids": [
+          "legacy__train-018"
+        ]
+      },
+      "still_wrong": {
+        "count": 9,
+        "ids": [
+          "legacy__train-012",
+          "legacy__train-013",
+          "legacy__train-205",
+          "user_addition__user_20261022_066",
+          "contrast__contrast_029",
+          "contrast__contrast_030",
+          "gaze_variant__gaze_direction_10_front",
+          "gaze_variant__gaze_direction_10_back",
+          "gaze_variant__gaze_direction_10_left"
+        ]
+      },
+      "still_correct": {
+        "count": 40,
+        "ids": [
+          "legacy__train-011",
+          "legacy__train-061",
+          "legacy__train-062",
+          "legacy__train-065",
+          "legacy__train-082",
+          "legacy__train-083",
+          "legacy__train-085",
+          "legacy__train-089",
+          "legacy__train-090",
+          "legacy__train-141",
+          "legacy__train-144",
+          "legacy__train-184",
+          "legacy__train-185",
+          "legacy__train-525",
+          "legacy__train-526",
+          "legacy__train-736",
+          "legacy__train-770",
+          "live__short_runtime_005",
+          "live__short_runtime_046",
+          "live__short_runtime_147",
+          "live__short_runtime_174",
+          "live__short_runtime_175",
+          "user_addition__user_20261022_008",
+          "user_addition__user_20261022_048",
+          "user_addition__user_20261022_058",
+          "user_addition__user_20261022_064",
+          "user_addition__user_20261022_072",
+          "contrast__contrast_032",
+          "contrast__contrast_045",
+          "contrast__contrast_046",
+          "contrast__contrast_048",
+          "gaze_variant__gaze_direction_10_front_left",
+          "gaze_variant__gaze_direction_10_front_right",
+          "gaze_variant__gaze_direction_10_back_left",
+          "gaze_variant__gaze_direction_10_back_right",
+          "gaze_variant__gaze_player_04_variant_01",
+          "gaze_variant__gaze_player_04_variant_02",
+          "gaze_variant__gaze_far_sky_shared_01",
+          "gaze_variant__gaze_far_sky_shared_02",
+          "gaze_variant__gaze_far_sky_shared_03"
+        ]
+      }
+    },
+    "ties20-one": {
+      "fixed": {
+        "count": 0,
+        "ids": []
+      },
+      "new_errors": {
+        "count": 1,
+        "ids": [
+          "legacy__train-018"
+        ]
+      },
+      "still_wrong": {
+        "count": 9,
+        "ids": [
+          "legacy__train-012",
+          "legacy__train-013",
+          "legacy__train-205",
+          "user_addition__user_20261022_066",
+          "contrast__contrast_029",
+          "contrast__contrast_030",
+          "gaze_variant__gaze_direction_10_front",
+          "gaze_variant__gaze_direction_10_back",
+          "gaze_variant__gaze_direction_10_left"
+        ]
+      },
+      "still_correct": {
+        "count": 40,
+        "ids": [
+          "legacy__train-011",
+          "legacy__train-061",
+          "legacy__train-062",
+          "legacy__train-065",
+          "legacy__train-082",
+          "legacy__train-083",
+          "legacy__train-085",
+          "legacy__train-089",
+          "legacy__train-090",
+          "legacy__train-141",
+          "legacy__train-144",
+          "legacy__train-184",
+          "legacy__train-185",
+          "legacy__train-525",
+          "legacy__train-526",
+          "legacy__train-736",
+          "legacy__train-770",
+          "live__short_runtime_005",
+          "live__short_runtime_046",
+          "live__short_runtime_147",
+          "live__short_runtime_174",
+          "live__short_runtime_175",
+          "user_addition__user_20261022_008",
+          "user_addition__user_20261022_048",
+          "user_addition__user_20261022_058",
+          "user_addition__user_20261022_064",
+          "user_addition__user_20261022_072",
+          "contrast__contrast_032",
+          "contrast__contrast_045",
+          "contrast__contrast_046",
+          "contrast__contrast_048",
+          "gaze_variant__gaze_direction_10_front_left",
+          "gaze_variant__gaze_direction_10_front_right",
+          "gaze_variant__gaze_direction_10_back_left",
+          "gaze_variant__gaze_direction_10_back_right",
+          "gaze_variant__gaze_player_04_variant_01",
+          "gaze_variant__gaze_player_04_variant_02",
+          "gaze_variant__gaze_far_sky_shared_01",
+          "gaze_variant__gaze_far_sky_shared_02",
+          "gaze_variant__gaze_far_sky_shared_03"
+        ]
+      }
+    }
+  },
+  "consensus": {
+    "fixed_all": [],
+    "new_errors_all": [],
+    "still_wrong_all": [
+      "legacy__train-012",
+      "legacy__train-205",
+      "user_addition__user_20261022_066",
+      "contrast__contrast_029",
+      "gaze_variant__gaze_direction_10_front",
+      "gaze_variant__gaze_direction_10_back",
+      "gaze_variant__gaze_direction_10_left"
+    ],
+    "variable": [
+      "legacy__train-013",
+      "legacy__train-018",
+      "legacy__train-090",
+      "legacy__train-185",
+      "user_addition__user_20261022_048",
+      "user_addition__user_20261022_058",
+      "user_addition__user_20261022_064",
+      "user_addition__user_20261022_072",
+      "contrast__contrast_030",
+      "gaze_variant__gaze_direction_10_front_left",
+      "gaze_variant__gaze_direction_10_front_right",
+      "gaze_variant__gaze_direction_10_back_left",
+      "gaze_variant__gaze_direction_10_back_right",
+      "gaze_variant__gaze_player_04_variant_01",
+      "gaze_variant__gaze_player_04_variant_02",
+      "gaze_variant__gaze_far_sky_shared_01",
+      "gaze_variant__gaze_far_sky_shared_02",
+      "gaze_variant__gaze_far_sky_shared_03"
+    ]
+  },
+  "cases": [
+    {
+      "id": "legacy__train-012",
+      "text": "馬はさっき自分で連れてきた。",
+      "context": [],
+      "gold": "not_target",
+      "tags": [
+        "statement",
+        "past"
+      ],
+      "needs_clarification": false,
+      "source": "synthetic",
+      "group_id": "material_36c00c19ba3c",
+      "baseline": "recall_mount",
+      "predictions": {
+        "base-seed43": "recall_mount",
+        "gaze": "recall_mount",
+        "recall": "recall_mount",
+        "sword": "recall_mount",
+        "joint": "recall_mount",
+        "arithmetic-third": "recall_mount",
+        "arithmetic-two-thirds": "recall_mount",
+        "arithmetic-one": "recall_mount",
+        "ties20-half": "recall_mount",
+        "ties20-one": "recall_mount"
+      },
+      "correct_seeds": 0
+    },
+    {
+      "id": "legacy__train-013",
+      "text": "敵が三体見えたから逃げたよ。",
+      "context": [],
+      "gold": "not_target",
+      "tags": [
+        "statement",
+        "past"
+      ],
+      "needs_clarification": false,
+      "source": "synthetic",
+      "group_id": "material_36c00c19ba3c",
+      "baseline": "enemy_information",
+      "predictions": {
+        "base-seed43": "enemy_information",
+        "gaze": "not_target",
+        "recall": "enemy_information",
+        "sword": "enemy_information",
+        "joint": "enemy_information",
+        "arithmetic-third": "enemy_information",
+        "arithmetic-two-thirds": "enemy_information",
+        "arithmetic-one": "not_target",
+        "ties20-half": "enemy_information",
+        "ties20-one": "enemy_information"
+      },
+      "correct_seeds": 2
+    },
+    {
+      "id": "legacy__train-018",
+      "text": "手持ちの剣が壊れちゃった。",
+      "context": [],
+      "gold": "not_target",
+      "tags": [
+        "statement",
+        "past"
+      ],
+      "needs_clarification": false,
+      "source": "synthetic",
+      "group_id": "material_36c00c19ba3c",
+      "baseline": "not_target",
+      "predictions": {
+        "base-seed43": "not_target",
+        "gaze": "equip_sword",
+        "recall": "equip_sword",
+        "sword": "equip_sword",
+        "joint": "equip_sword",
+        "arithmetic-third": "equip_sword",
+        "arithmetic-two-thirds": "equip_sword",
+        "arithmetic-one": "not_target",
+        "ties20-half": "equip_sword",
+        "ties20-one": "equip_sword"
+      },
+      "correct_seeds": 2
+    },
+    {
+      "id": "legacy__train-090",
+      "text": "つるぎ装備、お願い。",
+      "context": [],
+      "gold": "equip_sword",
+      "tags": [
+        "direct"
+      ],
+      "needs_clarification": false,
+      "source": "synthetic",
+      "group_id": "material_3c51efc69f31",
+      "baseline": "equip_sword",
+      "predictions": {
+        "base-seed43": "equip_sword",
+        "gaze": "equip_sword",
+        "recall": "equip_sword",
+        "sword": "equip_sword",
+        "joint": "equip_sword",
+        "arithmetic-third": "equip_sword",
+        "arithmetic-two-thirds": "equip_sword",
+        "arithmetic-one": "not_target",
+        "ties20-half": "equip_sword",
+        "ties20-one": "equip_sword"
+      },
+      "correct_seeds": 9
+    },
+    {
+      "id": "legacy__train-185",
+      "text": "ドギド、僕のところへ来て。",
+      "context": [],
+      "gold": "dogido_recall",
+      "tags": [
+        "direct"
+      ],
+      "needs_clarification": false,
+      "source": "synthetic",
+      "group_id": "material_04453daa98fc",
+      "baseline": "dogido_recall",
+      "predictions": {
+        "base-seed43": "dogido_recall",
+        "gaze": "dogido_recall",
+        "recall": "dogido_recall",
+        "sword": "dogido_recall",
+        "joint": "dogido_recall",
+        "arithmetic-third": "dogido_recall",
+        "arithmetic-two-thirds": "dogido_recall",
+        "arithmetic-one": "not_target",
+        "ties20-half": "dogido_recall",
+        "ties20-one": "dogido_recall"
+      },
+      "correct_seeds": 9
+    },
+    {
+      "id": "legacy__train-205",
+      "text": "今は替えなくていい。それより敵の数を教えて。",
+      "context": [],
+      "gold": "enemy_information",
+      "tags": [
+        "context",
+        "negation",
+        "correction",
+        "count"
+      ],
+      "needs_clarification": false,
+      "source": "synthetic",
+      "group_id": "material_fb03b563633b",
+      "baseline": "not_target",
+      "predictions": {
+        "base-seed43": "not_target",
+        "gaze": "not_target",
+        "recall": "not_target",
+        "sword": "not_target",
+        "joint": "not_target",
+        "arithmetic-third": "not_target",
+        "arithmetic-two-thirds": "not_target",
+        "arithmetic-one": "not_target",
+        "ties20-half": "not_target",
+        "ties20-one": "not_target"
+      },
+      "correct_seeds": 0
+    },
+    {
+      "id": "user_addition__user_20261022_048",
+      "text": "一緒に空を見ようよ！",
+      "context": [],
+      "gold": "look_direction",
+      "tags": [
+        "direct"
+      ],
+      "needs_clarification": false,
+      "source": "user_example",
+      "group_id": "material_5e1515c2258e",
+      "baseline": "look_direction",
+      "predictions": {
+        "base-seed43": "look_direction",
+        "gaze": "look_direction",
+        "recall": "recall_mount",
+        "sword": "look_direction",
+        "joint": "look_direction",
+        "arithmetic-third": "look_direction",
+        "arithmetic-two-thirds": "recall_mount",
+        "arithmetic-one": "not_target",
+        "ties20-half": "look_direction",
+        "ties20-one": "look_direction"
+      },
+      "correct_seeds": 7
+    },
+    {
+      "id": "user_addition__user_20261022_058",
+      "text": "何かの気配を右から感じるような気がする",
+      "context": [],
+      "gold": "look_relative_right",
+      "tags": [
+        "direct"
+      ],
+      "needs_clarification": false,
+      "source": "user_example",
+      "group_id": "material_b6d38bab5333",
+      "baseline": "look_relative_right",
+      "predictions": {
+        "base-seed43": "look_relative_right",
+        "gaze": "look_relative_right",
+        "recall": "look_relative_right",
+        "sword": "look_relative_right",
+        "joint": "look_relative_right",
+        "arithmetic-third": "look_relative_right",
+        "arithmetic-two-thirds": "look_relative_right",
+        "arithmetic-one": "not_target",
+        "ties20-half": "look_relative_right",
+        "ties20-one": "look_relative_right"
+      },
+      "correct_seeds": 9
+    },
+    {
+      "id": "user_addition__user_20261022_064",
+      "text": "おっ！いいもの見つけた！",
+      "context": [],
+      "gold": "look_target",
+      "tags": [
+        "direct"
+      ],
+      "needs_clarification": false,
+      "source": "user_example",
+      "group_id": "material_f2491b44033f",
+      "baseline": "look_target",
+      "predictions": {
+        "base-seed43": "look_target",
+        "gaze": "look_target",
+        "recall": "look_target",
+        "sword": "enemy_information",
+        "joint": "look_target",
+        "arithmetic-third": "look_target",
+        "arithmetic-two-thirds": "look_target",
+        "arithmetic-one": "not_target",
+        "ties20-half": "look_target",
+        "ties20-one": "look_target"
+      },
+      "correct_seeds": 8
+    },
+    {
+      "id": "user_addition__user_20261022_066",
+      "text": "このブロックは何でできているんだろう？",
+      "context": [],
+      "gold": "look_target",
+      "tags": [
+        "direct"
+      ],
+      "needs_clarification": false,
+      "source": "user_example",
+      "group_id": "material_c14c79230b40",
+      "baseline": "not_target",
+      "predictions": {
+        "base-seed43": "not_target",
+        "gaze": "not_target",
+        "recall": "not_target",
+        "sword": "not_target",
+        "joint": "not_target",
+        "arithmetic-third": "not_target",
+        "arithmetic-two-thirds": "not_target",
+        "arithmetic-one": "not_target",
+        "ties20-half": "not_target",
+        "ties20-one": "not_target"
+      },
+      "correct_seeds": 0
+    },
+    {
+      "id": "user_addition__user_20261022_072",
+      "text": "ドギド！こっちこっち！",
+      "context": [],
+      "gold": "look_player",
+      "tags": [
+        "direct"
+      ],
+      "needs_clarification": false,
+      "source": "user_example",
+      "group_id": "material_e69376066a95",
+      "baseline": "look_player",
+      "predictions": {
+        "base-seed43": "look_player",
+        "gaze": "look_player",
+        "recall": "look_player",
+        "sword": "look_player",
+        "joint": "look_player",
+        "arithmetic-third": "look_player",
+        "arithmetic-two-thirds": "look_player",
+        "arithmetic-one": "not_target",
+        "ties20-half": "look_player",
+        "ties20-one": "look_player"
+      },
+      "correct_seeds": 9
+    },
+    {
+      "id": "contrast__contrast_029",
+      "text": "顔だけこちらへ向けてもらえるかな。",
+      "context": [],
+      "gold": "look_player",
+      "tags": [
+        "direct",
+        "politeness"
+      ],
+      "needs_clarification": false,
+      "source": "synthetic",
+      "group_id": "material_bb0a897709e5",
+      "baseline": "dogido_recall",
+      "predictions": {
+        "base-seed43": "dogido_recall",
+        "gaze": "dogido_recall",
+        "recall": "dogido_recall",
+        "sword": "dogido_recall",
+        "joint": "dogido_recall",
+        "arithmetic-third": "dogido_recall",
+        "arithmetic-two-thirds": "dogido_recall",
+        "arithmetic-one": "equip_sword",
+        "ties20-half": "dogido_recall",
+        "ties20-one": "dogido_recall"
+      },
+      "correct_seeds": 0
+    },
+    {
+      "id": "contrast__contrast_030",
+      "text": "私が立っているところへ、もう少し近寄ってもらえる？",
+      "context": [],
+      "gold": "dogido_recall",
+      "tags": [
+        "direct",
+        "politeness"
+      ],
+      "needs_clarification": false,
+      "source": "synthetic",
+      "group_id": "material_bb0a897709e5",
+      "baseline": "look_player",
+      "predictions": {
+        "base-seed43": "look_player",
+        "gaze": "look_player",
+        "recall": "dogido_recall",
+        "sword": "dogido_recall",
+        "joint": "equip_sword",
+        "arithmetic-third": "equip_sword",
+        "arithmetic-two-thirds": "dogido_recall",
+        "arithmetic-one": "equip_sword",
+        "ties20-half": "equip_sword",
+        "ties20-one": "equip_sword"
+      },
+      "correct_seeds": 3
+    },
+    {
+      "id": "gaze_variant__gaze_direction_10_front",
+      "text": "何かの気配を前から感じるような気がする",
+      "context": [],
+      "gold": "look_relative_front",
+      "tags": [
+        "direct"
+      ],
+      "needs_clarification": false,
+      "source": "synthetic",
+      "group_id": "material_b6d38bab5333",
+      "baseline": "look_direction",
+      "predictions": {
+        "base-seed43": "look_direction",
+        "gaze": "look_direction",
+        "recall": "look_direction",
+        "sword": "look_direction",
+        "joint": "look_direction",
+        "arithmetic-third": "look_direction",
+        "arithmetic-two-thirds": "look_direction",
+        "arithmetic-one": "not_target",
+        "ties20-half": "look_direction",
+        "ties20-one": "look_direction"
+      },
+      "correct_seeds": 0
+    },
+    {
+      "id": "gaze_variant__gaze_direction_10_back",
+      "text": "何かの気配を後ろから感じるような気がする",
+      "context": [],
+      "gold": "look_relative_back",
+      "tags": [
+        "direct"
+      ],
+      "needs_clarification": false,
+      "source": "synthetic",
+      "group_id": "material_b6d38bab5333",
+      "baseline": "look_direction",
+      "predictions": {
+        "base-seed43": "look_direction",
+        "gaze": "look_direction",
+        "recall": "look_direction",
+        "sword": "look_direction",
+        "joint": "look_direction",
+        "arithmetic-third": "look_direction",
+        "arithmetic-two-thirds": "look_direction",
+        "arithmetic-one": "not_target",
+        "ties20-half": "look_direction",
+        "ties20-one": "look_direction"
+      },
+      "correct_seeds": 0
+    },
+    {
+      "id": "gaze_variant__gaze_direction_10_left",
+      "text": "何かの気配を左から感じるような気がする",
+      "context": [],
+      "gold": "look_relative_left",
+      "tags": [
+        "direct"
+      ],
+      "needs_clarification": false,
+      "source": "synthetic",
+      "group_id": "material_b6d38bab5333",
+      "baseline": "look_direction",
+      "predictions": {
+        "base-seed43": "look_direction",
+        "gaze": "look_direction",
+        "recall": "look_direction",
+        "sword": "look_direction",
+        "joint": "look_direction",
+        "arithmetic-third": "look_direction",
+        "arithmetic-two-thirds": "look_direction",
+        "arithmetic-one": "not_target",
+        "ties20-half": "look_direction",
+        "ties20-one": "look_direction"
+      },
+      "correct_seeds": 0
+    },
+    {
+      "id": "gaze_variant__gaze_direction_10_front_left",
+      "text": "何かの気配を左斜め前から感じるような気がする",
+      "context": [],
+      "gold": "look_relative_front_left",
+      "tags": [
+        "direct"
+      ],
+      "needs_clarification": false,
+      "source": "synthetic",
+      "group_id": "material_b6d38bab5333",
+      "baseline": "look_relative_front_left",
+      "predictions": {
+        "base-seed43": "look_relative_front_left",
+        "gaze": "look_relative_front_left",
+        "recall": "look_relative_front_left",
+        "sword": "look_relative_front_left",
+        "joint": "look_relative_front_left",
+        "arithmetic-third": "look_relative_front_left",
+        "arithmetic-two-thirds": "look_relative_front_left",
+        "arithmetic-one": "not_target",
+        "ties20-half": "look_relative_front_left",
+        "ties20-one": "look_relative_front_left"
+      },
+      "correct_seeds": 9
+    },
+    {
+      "id": "gaze_variant__gaze_direction_10_front_right",
+      "text": "何かの気配を右斜め前から感じるような気がする",
+      "context": [],
+      "gold": "look_relative_front_right",
+      "tags": [
+        "direct"
+      ],
+      "needs_clarification": false,
+      "source": "synthetic",
+      "group_id": "material_b6d38bab5333",
+      "baseline": "look_relative_front_right",
+      "predictions": {
+        "base-seed43": "look_relative_front_right",
+        "gaze": "look_relative_front_right",
+        "recall": "look_direction",
+        "sword": "look_relative_front_right",
+        "joint": "look_direction",
+        "arithmetic-third": "look_relative_front_right",
+        "arithmetic-two-thirds": "look_direction",
+        "arithmetic-one": "not_target",
+        "ties20-half": "look_relative_front_right",
+        "ties20-one": "look_relative_front_right"
+      },
+      "correct_seeds": 6
+    },
+    {
+      "id": "gaze_variant__gaze_direction_10_back_left",
+      "text": "何かの気配を左斜め後ろから感じるような気がする",
+      "context": [],
+      "gold": "look_relative_back_left",
+      "tags": [
+        "direct"
+      ],
+      "needs_clarification": false,
+      "source": "synthetic",
+      "group_id": "material_b6d38bab5333",
+      "baseline": "look_relative_back_left",
+      "predictions": {
+        "base-seed43": "look_relative_back_left",
+        "gaze": "look_relative_back_left",
+        "recall": "look_relative_front_left",
+        "sword": "look_relative_back_left",
+        "joint": "look_relative_back_left",
+        "arithmetic-third": "look_relative_back_left",
+        "arithmetic-two-thirds": "look_direction",
+        "arithmetic-one": "not_target",
+        "ties20-half": "look_relative_back_left",
+        "ties20-one": "look_relative_back_left"
+      },
+      "correct_seeds": 7
+    },
+    {
+      "id": "gaze_variant__gaze_direction_10_back_right",
+      "text": "何かの気配を右斜め後ろから感じるような気がする",
+      "context": [],
+      "gold": "look_relative_back_right",
+      "tags": [
+        "direct"
+      ],
+      "needs_clarification": false,
+      "source": "synthetic",
+      "group_id": "material_b6d38bab5333",
+      "baseline": "look_relative_back_right",
+      "predictions": {
+        "base-seed43": "look_relative_back_right",
+        "gaze": "look_relative_back_right",
+        "recall": "look_relative_back_right",
+        "sword": "look_relative_back_right",
+        "joint": "look_relative_back_right",
+        "arithmetic-third": "look_relative_back_right",
+        "arithmetic-two-thirds": "look_relative_back_right",
+        "arithmetic-one": "not_target",
+        "ties20-half": "look_relative_back_right",
+        "ties20-one": "look_relative_back_right"
+      },
+      "correct_seeds": 9
+    },
+    {
+      "id": "gaze_variant__gaze_player_04_variant_01",
+      "text": "ドギド、ここ！私の方だよ！",
+      "context": [],
+      "gold": "look_player",
+      "tags": [
+        "direct"
+      ],
+      "needs_clarification": false,
+      "source": "synthetic",
+      "group_id": "material_e69376066a95",
+      "baseline": "look_player",
+      "predictions": {
+        "base-seed43": "look_player",
+        "gaze": "look_player",
+        "recall": "look_player",
+        "sword": "look_player",
+        "joint": "look_player",
+        "arithmetic-third": "look_player",
+        "arithmetic-two-thirds": "look_player",
+        "arithmetic-one": "not_target",
+        "ties20-half": "look_player",
+        "ties20-one": "look_player"
+      },
+      "correct_seeds": 9
+    },
+    {
+      "id": "gaze_variant__gaze_player_04_variant_02",
+      "text": "おーいドギド、こっち見てる？",
+      "context": [],
+      "gold": "look_player",
+      "tags": [
+        "direct"
+      ],
+      "needs_clarification": false,
+      "source": "synthetic",
+      "group_id": "material_e69376066a95",
+      "baseline": "look_player",
+      "predictions": {
+        "base-seed43": "look_player",
+        "gaze": "look_player",
+        "recall": "look_player",
+        "sword": "look_player",
+        "joint": "look_player",
+        "arithmetic-third": "look_player",
+        "arithmetic-two-thirds": "look_player",
+        "arithmetic-one": "not_target",
+        "ties20-half": "look_player",
+        "ties20-one": "look_player"
+      },
+      "correct_seeds": 9
+    },
+    {
+      "id": "gaze_variant__gaze_far_sky_shared_01",
+      "text": "ドギド、夕焼けがきれいだよ。一緒に見よう。",
+      "context": [],
+      "gold": "look_direction",
+      "tags": [
+        "location"
+      ],
+      "needs_clarification": false,
+      "source": "synthetic",
+      "group_id": "material_9a692d4d9cf1",
+      "baseline": "look_direction",
+      "predictions": {
+        "base-seed43": "look_direction",
+        "gaze": "look_direction",
+        "recall": "look_direction",
+        "sword": "look_direction",
+        "joint": "look_direction",
+        "arithmetic-third": "look_direction",
+        "arithmetic-two-thirds": "look_direction",
+        "arithmetic-one": "not_target",
+        "ties20-half": "look_direction",
+        "ties20-one": "look_direction"
+      },
+      "correct_seeds": 9
+    },
+    {
+      "id": "gaze_variant__gaze_far_sky_shared_02",
+      "text": "今夜は星がよく見えるね。空を見上げてみようよ。",
+      "context": [],
+      "gold": "look_direction",
+      "tags": [
+        "location"
+      ],
+      "needs_clarification": false,
+      "source": "synthetic",
+      "group_id": "material_9a692d4d9cf1",
+      "baseline": "look_direction",
+      "predictions": {
+        "base-seed43": "look_direction",
+        "gaze": "look_direction",
+        "recall": "look_direction",
+        "sword": "look_direction",
+        "joint": "look_direction",
+        "arithmetic-third": "look_direction",
+        "arithmetic-two-thirds": "look_direction",
+        "arithmetic-one": "not_target",
+        "ties20-half": "look_direction",
+        "ties20-one": "look_direction"
+      },
+      "correct_seeds": 9
+    },
+    {
+      "id": "gaze_variant__gaze_far_sky_shared_03",
+      "text": "あの雲の形、おもしろいね。ドギドにも見える？",
+      "context": [],
+      "gold": "look_direction",
+      "tags": [
+        "location"
+      ],
+      "needs_clarification": false,
+      "source": "synthetic",
+      "group_id": "material_9a692d4d9cf1",
+      "baseline": "look_direction",
+      "predictions": {
+        "base-seed43": "look_direction",
+        "gaze": "look_direction",
+        "recall": "look_direction",
+        "sword": "look_direction",
+        "joint": "look_direction",
+        "arithmetic-third": "look_direction",
+        "arithmetic-two-thirds": "look_direction",
+        "arithmetic-one": "not_target",
+        "ties20-half": "look_direction",
+        "ties20-one": "look_direction"
+      },
+      "correct_seeds": 9
+    }
+  ]
+}
