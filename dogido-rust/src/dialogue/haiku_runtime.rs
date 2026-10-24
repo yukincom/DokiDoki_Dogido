@@ -29,6 +29,8 @@ pub struct Settings {
     pub memory_enabled: bool,
     pub memory_dir: PathBuf,
     pub screenshot_dir: Option<PathBuf>,
+    pub internal_capture_enabled: bool,
+    pub capture_dir: Option<PathBuf>,
     pub workshop_idle_ms: u64,
 }
 impl Default for Settings {
@@ -49,6 +51,13 @@ impl Default for Settings {
             memory_enabled: true,
             memory_dir: PathBuf::from(".dogido_memory/rust-migration"),
             screenshot_dir: None,
+            internal_capture_enabled: crate::runtime_settings::defaults("haiku_capture")["enabled"]
+                .as_bool()
+                .expect("capture enabled default"),
+            capture_dir: serde_json::from_value(
+                crate::runtime_settings::defaults("haiku_capture")["dir"].clone(),
+            )
+            .expect("capture dir default"),
             workshop_idle_ms: crate::haiku_record::DEFAULT_IDLE_TIMEOUT.as_millis() as u64,
         }
     }
@@ -68,6 +77,10 @@ impl Routes {
             ["whole_poem", "three_slot", "one_plus_two", "two_plus_one"]
                 .contains(&h.generation_strategy.as_str()),
             "invalid haiku strategy"
+        );
+        ensure!(
+            !h.internal_capture_enabled || h.capture_dir.as_ref().is_some_and(|p| p.is_absolute()),
+            "internal capture requires an absolute capture_dir"
         );
         let key = std::env::var("DOGIDO_LLM_API_KEY").ok();
         let haiku_key = std::env::var("DOGIDO_LLM_HAIKU_API_KEY")
@@ -633,6 +646,13 @@ impl Dialogue {
             haiku: &self.haiku_routes.haiku,
             requests: vec![],
             reports: vec![],
+            capture: h.internal_capture_enabled.then(|| {
+                crate::haiku_capture::Capture::new(
+                    h.capture_dir.clone().expect("validated capture directory"),
+                    sid,
+                    job,
+                )
+            }),
         };
         let generated = if let Some(fixed) = context.fixed_text.as_deref() {
             haiku::GroundedHaikuResult {
@@ -673,7 +693,12 @@ impl Dialogue {
             return Ok(());
         }
         let prepared: PreparedEmission = step!(preparation.emission(&generated, backend.helper));
-        let emission = prepared.complete(completed_at)?;
+        let mut emission = prepared.complete(completed_at)?;
+        // このjobの採取だけを既存保存へ渡す。以降のcurrent検査に失敗すればentryは作られない。
+        emission.internal_capture = backend
+            .capture
+            .take()
+            .map(crate::haiku_capture::Capture::into_observation);
         let text = emission.prepared.surface_text.clone().unwrap_or_default();
         let spoken = format!(
             "{} {}",

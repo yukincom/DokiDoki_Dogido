@@ -732,6 +732,7 @@ impl Dialogue {
                         haiku: &self.haiku_routes.haiku,
                         requests: vec![],
                         reports: vec![],
+                        capture: None,
                     };
                     let revision = crate::haiku::revision::generate(&mut backend, prepared).await?;
                     reports.extend(backend.reports);

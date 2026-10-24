@@ -47,6 +47,27 @@ def test_screenshot_root_is_optional_and_shared_with_bookshelf(monkeypatch, tmp_
     assert haiku["screenshot_dir"] == (str((tmp_path / custom).resolve()) if custom else None)
 
 
+def test_internal_capture_is_opt_in_and_preserves_the_shared_directory(monkeypatch, tmp_path):
+    monkeypatch.delenv("DOGIDO_CAPTURE_DIR", raising=False)
+    monkeypatch.delenv("DOGIDO_HAIKU_INTERNAL_CAPTURE_ENABLED", raising=False)
+    args, _ = command(monkeypatch, tmp_path, Settings(_env_file=None))
+    haiku = json.loads(value(args, "--haiku-settings"))
+    assert not haiku["internal_capture_enabled"] and haiku["capture_dir"] is None
+    monkeypatch.setenv("DOGIDO_HAIKU_INTERNAL_CAPTURE_ENABLED", "true")
+    monkeypatch.setenv("DOGIDO_CAPTURE_DIR", "captures/raw")
+    args, _ = command(monkeypatch, tmp_path, Settings(_env_file=None))
+    haiku = json.loads(value(args, "--haiku-settings"))
+    assert haiku["internal_capture_enabled"] is True
+    assert haiku["capture_dir"] == str(tmp_path / "captures/raw")
+    assert not (tmp_path / "captures").exists()
+
+
+def test_internal_capture_enabled_without_directory_is_an_explicit_error(monkeypatch, tmp_path):
+    with pytest.raises(ValueError, match="DOGIDO_CAPTURE_DIR"):
+        command(monkeypatch, tmp_path, Settings(_env_file=None,
+                haiku_internal_capture_enabled=True, capture_dir=None))
+
+
 def test_optional_cue_disabled_features_and_voice_profiles_reach_rust(monkeypatch, tmp_path):
     settings = Settings(_env_file=None, cue_audio_dir=None, audio_enabled=False,
                         llm_enabled=False,

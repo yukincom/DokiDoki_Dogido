@@ -1,0 +1,234 @@
+diff --git a/src/llama-context.cpp b/src/llama-context.cpp
+index 97c8ffa..1e9a578 100644
+--- a/src/llama-context.cpp
++++ b/src/llama-context.cpp
+@@ -2091,7 +2091,7 @@ int llama_context::decode(const llama_batch_ext & batch_inp) {
+         }
+ 
+         // [TAG_EXTRACT_TARGET_EMBEDDINGS]
+-        bool extract_all_idxs = extract_layer_inputs(res, n_tokens_prev, ubatch.n_tokens);
++        bool extract_all_idxs = extract_layer_inputs(res, n_tokens_prev, ubatch);
+ 
+         // extract nextn embeddings before
+         // only meaningful in LLAMA_POOLING_TYPE_NONE (per-token); other pooling modes are ignored.
+@@ -2356,7 +2356,8 @@ uint32_t llama_context::output_reserve(int32_t n_outputs) {
+     return n_outputs_max;
+ }
+ 
+-bool llama_context::extract_layer_inputs(const llm_graph_result * res, size_t token_offset, size_t n_tokens) {
++bool llama_context::extract_layer_inputs(const llm_graph_result * res, size_t token_offset, const llama_ubatch & ubatch) {
++    const size_t n_tokens = ubatch.n_tokens;
+     bool extracted = false;
+     for (uint32_t il = 0; il < cparams.embeddings_layer_inp.size(); ++il) {
+         if (!cparams.embeddings_layer_inp[il]) {
+@@ -2370,6 +2371,39 @@ bool llama_context::extract_layer_inputs(const llm_graph_result * res, size_t to
+             GGML_ABORT("layer input tensor not found");
+         }
+ 
++        // Gemma's final block may select only output rows. Scatter those rows back
++        // to the same batch indexing used by all other layer-input buffers.
++        // Uncomputed rows are NaN, never fabricated zero activations.
++        if (il == model.hparams.n_layer() && (size_t) t->ne[1] != n_tokens) {
++            const size_t width = model.hparams.n_embd;
++            GGML_ASSERT(t->type == GGML_TYPE_F32 && ggml_is_contiguous(t));
++            GGML_ASSERT((size_t) t->ne[0] == width && t->ne[2] == 1 && t->ne[3] == 1);
++            size_t selected = 0;
++            for (size_t i = 0; i < n_tokens; ++i) {
++                selected += ubatch.output[i] != 0;
++            }
++            GGML_ASSERT((size_t) t->ne[1] == selected);
++            GGML_ASSERT((token_offset + n_tokens) * width <= embd_layer_inp[il].size);
++            std::vector<float> rows(selected * width);
++            ggml_backend_t backend = ggml_backend_sched_get_tensor_backend(sched.get(), t);
++            GGML_ASSERT(backend != nullptr);
++            if (!rows.empty()) {
++                ggml_backend_tensor_get_async(backend, t, rows.data(), 0, ggml_nbytes(t));
++                // Keep the temporary alive until the asynchronous transfer completes.
++                ggml_backend_synchronize(backend);
++            }
++            float * dst = embd_layer_inp[il].data + token_offset * width;
++            std::fill_n(dst, n_tokens * width, std::numeric_limits<float>::quiet_NaN());
++            size_t row = 0;
++            for (size_t i = 0; i < n_tokens; ++i) {
++                if (ubatch.output[i]) {
++                    std::copy_n(rows.data() + row++ * width, width, dst + i * width);
++                }
++            }
++            extracted = true;
++            continue;
++        }
++
+         const size_t nbytes = ggml_nbytes(t);
+         const size_t nfloats = nbytes / sizeof(float);
+         GGML_ASSERT(n_tokens > 0);
+diff --git a/src/llama-context.h b/src/llama-context.h
+index d07894a..fc796c5 100644
+--- a/src/llama-context.h
++++ b/src/llama-context.h
+@@ -241,7 +241,7 @@ private:
+ 
+     // async-copy enabled layer-input tensors (per cparams.output_layer_inp)
+     // from backend into host-side embd_layer_inp buffers
+-    bool extract_layer_inputs(const llm_graph_result * res, size_t token_offset, size_t n_tokens);
++    bool extract_layer_inputs(const llm_graph_result * res, size_t token_offset, const llama_ubatch & ubatch);
+ 
+     //
+     // graph
+diff --git a/src/models/gemma4.cpp b/src/models/gemma4.cpp
+index d883384..402e6cf 100644
+--- a/src/models/gemma4.cpp
++++ b/src/models/gemma4.cpp
+@@ -408,6 +408,8 @@ llama_model_gemma4::graph::graph(const llama_model & model, const llm_graph_para
+         // input for next layer
+         inpL = cur;
+     }
++    // The terminal layer-input slot is the final decoder residual, before output_norm.
++    res->t_layer_inp[n_layer] = inpL;
+     cur = inpL;
+ 
+     cur = build_norm(cur,
+diff --git a/tools/server/CMakeLists.txt b/tools/server/CMakeLists.txt
+index 70b8d7d..bfeb04c 100644
+--- a/tools/server/CMakeLists.txt
++++ b/tools/server/CMakeLists.txt
+@@ -33,7 +33,7 @@ endif()
+ 
+ target_include_directories(${TARGET} PRIVATE ../mtmd)
+ target_include_directories(${TARGET} PRIVATE ${PROJECT_SOURCE_DIR})
+-target_link_libraries(${TARGET} PUBLIC llama-common mtmd ${CMAKE_THREAD_LIBS_INIT})
++target_link_libraries(${TARGET} PUBLIC llama-common mtmd vendor::hash ${CMAKE_THREAD_LIBS_INIT})
+ 
+ # llama-server-impl: server logic, reusable by app
+ 
+diff --git a/tools/server/server-context.cpp b/tools/server/server-context.cpp
+index 9a9c0c9..b1f2954 100644
+--- a/tools/server/server-context.cpp
++++ b/tools/server/server-context.cpp
+@@ -7,6 +7,7 @@
+ #include "server-queue.h"
+ #include "server-schema.h"
+ #include "server-stream.h"
++#include "dogido-capture.h"
+ 
+ #include "build-info.h"
+ #include "common.h"
+@@ -269,6 +270,7 @@ struct server_slot {
+ 
+     // TODO: move members that belong to the task (such as `generated`, `has_new_line`) to task_results_state
+     //       see https://github.com/ggml-org/llama.cpp/pull/18283#issuecomment-3710175837
++    std::unique_ptr<dogido_capture> capture;
+     std::unique_ptr<const server_task> task;
+     std::unique_ptr<const server_task> task_prev; // used for debugging
+ 
+@@ -930,6 +932,7 @@ static bool add_mtmd_chunk(const server_slot & slot, const mtmd_input_chunk * ch
+ //
+ 
+ struct server_context_impl {
++    bool dogido_capture_layers_enabled = false;
+     friend struct server_context;
+ 
+ public:
+@@ -1046,6 +1049,7 @@ private:
+         llama_init.reset();
+ 
+         ctx_tgt = nullptr;
++        dogido_capture_layers_enabled = false;
+         model_tgt = nullptr;
+ 
+         mtmd_free(mctx);
+@@ -1437,6 +1441,9 @@ private:
+             };
+ 
+             slot.callback_on_reset = [this](const server_slot & slot) {
++                if (slot.capture) {
++                    slot.capture->finish(slot.generated.text, "cancelled_or_error", false);
++                }
+                 // flush the generated token stats before reset()
+                 if (slot.stats.n_gen > 0) {
+                     metrics_on_prediction(slot);
+@@ -1950,6 +1957,15 @@ private:
+         // the per-request limit takes priority over the global one
+         slot.n_predict_max = task.params.n_predict != -1 ? task.params.n_predict : params_base.n_predict;
+ 
++        slot.capture = dogido_capture::begin(task, params_base, model_tgt,
++                spec && !common_speculative_get_synth_probs(spec.get()).empty());
++        const bool capture_layers = slot.capture && slot.capture->active;
++        if (capture_layers != dogido_capture_layers_enabled) {
++            for (int il = 1; il <= llama_model_n_layer(model_tgt); ++il) {
++                llama_set_embeddings_layer_inp(ctx_tgt, il, capture_layers);
++            }
++            dogido_capture_layers_enabled = capture_layers;
++        }
+         slot.task = std::make_unique<const server_task>(std::move(task));
+ 
+         slot.state = slot.task->is_child()
+@@ -2218,6 +2234,10 @@ private:
+     }
+ 
+     void send_final_response(server_slot & slot) {
++        if (slot.capture) {
++            slot.capture->finish(slot.generated.text,
++                    slot.stop == STOP_TYPE_LIMIT ? "length" : "stop", true);
++        }
+         auto res = std::make_unique<server_task_result_cmpl_final>();
+ 
+         res->id      = slot.task->id;
+@@ -4376,6 +4396,11 @@ private:
+                 populate_token_probs(slot, result, slot.task->params.post_sampling_probs, params_base.special, tok_idx);
+             }
+ 
++            if (slot.capture) {
++                slot.capture->append(slot.ctx_tgt, tok_idx, batch.view.size(),
++                        batch.tokens[tok_idx + off].pos[0], id, slot.stats.n_gen - 1);
++            }
++
+             if (!process_token(result, slot)) {
+                 // release slot because of stop condition
+                 slot.print_timings();
+@@ -4395,6 +4420,8 @@ private:
+                 return;
+             }
+ 
++            // Keep target batch rows before verification clears spec_i_batch.
++            const auto capture_rows = slot.spec_i_batch;
+             // save the original draft size
+             const size_t n_draft = slot.spec_draft.size();
+ 
+@@ -4514,6 +4541,11 @@ private:
+                 // TODO: set result.probs
+ 
+                 slot.stats.n_gen += 1;
++                if (slot.capture) {
++                    const int row = capture_rows[i];
++                    slot.capture->append(slot.ctx_tgt, row - off, batch.view.size(),
++                            batch.tokens[row].pos[0], ids[i], slot.stats.n_gen - 1);
++                }
+ 
+                 if (!process_token(result, slot)) {
+                     slot.print_timings();
+diff --git a/tools/server/server-schema.cpp b/tools/server/server-schema.cpp
+index 54e126a..dc36daf 100644
+--- a/tools/server/server-schema.cpp
++++ b/tools/server/server-schema.cpp
+@@ -14,6 +14,9 @@ std::vector<std::unique_ptr<field>> make_llama_cmpl_schema(const common_params &
+         fields.emplace_back(f);
+     };
+ 
++    add((new field_bool("dogido_capture", params.dogido_capture))
++        ->set_desc("Record bounded decoder residuals to the server-configured capture directory"));
++
+     add((new field_bool("verbose", params.verbose))
+         ->set_desc("Include __verbose field in the response with additional debug information"));
+ 
+diff --git a/tools/server/server-task.h b/tools/server/server-task.h
+index b8d6a3b..d807994 100644
+--- a/tools/server/server-task.h
++++ b/tools/server/server-task.h
+@@ -54,6 +54,7 @@ struct task_params {
+     bool cache_prompt    = true; // remember the prompt to avoid reprocessing all prompt
+     bool return_tokens   = false;
+     bool return_progress = false;
++    bool dogido_capture  = false; // opt-in decoder residual recording
+ 
+     int32_t sse_ping_interval = 30; // seconds between SSE comment pings while the stream stays silent, -1 disables
+ 

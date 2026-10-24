@@ -24,6 +24,8 @@ from mlx_lm.models.cache import make_prompt_cache
 from mlx_lm.models.gemma4_text import DecoderLayer, Router
 from mlx_lm.sample_utils import make_sampler
 
+from native_decoder_capture import observe_decoder_outputs
+
 
 def write_json(path, value):
     path.write_text(json.dumps(value, ensure_ascii=False, indent=2))
@@ -51,7 +53,8 @@ def implementation_identity():
     """実際に使うnative計算・ロード・採取器の実装も再開時に照合する。"""
     sources = {Path(inspect.getsourcefile(obj)) for obj in
                [gemma4, DecoderLayer, Router, make_sampler, make_prompt_cache, load]}
-    sources.update({Path(__file__), Path(__file__).with_name("jacobian_check.py")})
+    sources.update({Path(__file__), Path(__file__).with_name("jacobian_check.py"),
+                    Path(inspect.getsourcefile(observe_decoder_outputs))})
     return {str(p): digest(p) for p in sorted(sources)}
 
 
@@ -76,11 +79,9 @@ class Capture:
 
     @contextmanager
     def active(self):
-        original_layer, original_router = DecoderLayer.__call__, Router.__call__
-        def layer_call(layer, *args, **kwargs):
-            result = original_layer(layer, *args, **kwargs)
-            self.h[layer.layer_idx] = result[0][0, -1, :]
-            return result
+        original_router = Router.__call__
+        def layer_output(index, result):
+            self.h[index] = result[0][0, -1, :]
         def router_call(router, x):
             indices, weights = original_router(router, x)
             # 8位と9位の境界の余裕も記録。順位番号に意味ラベルは付けない。
@@ -91,11 +92,12 @@ class Capture:
             self.routes[self.router_layers[id(router)]] = (
                 indices[0, -1], weights[0, -1], ordered[-k] - ordered[-k-1])
             return indices, weights
-        DecoderLayer.__call__, Router.__call__ = layer_call, router_call
+        Router.__call__ = router_call
         try:
-            yield
+            with observe_decoder_outputs(self.core, DecoderLayer, layer_output):
+                yield
         finally:
-            DecoderLayer.__call__, Router.__call__ = original_layer, original_router
+            Router.__call__ = original_router
 
     def arrays(self):
         hidden = mx.stack([self.h[i].astype(mx.float32) for i in range(len(self.h))])

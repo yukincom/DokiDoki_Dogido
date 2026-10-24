@@ -170,6 +170,8 @@ def main():
     haiku_base = settings.llm_haiku_base_url or settings.llm_base_url or base
     haiku_model = settings.llm_haiku_model or settings.llm_model or model
     # 再開・継続はRustが敵の警戒解除から判断する。OS AI補助と旧fallbackの起動設定は渡さない。
+    if settings.haiku_internal_capture_enabled and settings.capture_dir is None:
+        raise ValueError("内部表現の採取にはDOGIDO_CAPTURE_DIRを指定してください。")
     haiku_settings = {
         "llm_enabled": use_model, "interval_ms": settings.haiku_interval_ms,
         "quiet_time_ms": settings.haiku_quiet_time_ms,
@@ -179,6 +181,8 @@ def main():
         "base_url": haiku_base, "model": haiku_model,
         "max_tokens": settings.llm_haiku_max_tokens or settings.llm_max_tokens,
         "timeout_ms": int(1000 * (settings.llm_haiku_timeout_sec or settings.llm_timeout_sec)),
+        "internal_capture_enabled": settings.haiku_internal_capture_enabled,
+        "capture_dir": str(settings.capture_dir.expanduser().resolve()) if settings.capture_dir is not None else None,
         "memory_enabled": settings.memory_enabled,
         "memory_dir": str(settings.memory_dir.resolve()),
         "screenshot_dir": str(settings.minecraft_screenshots_dir.expanduser().resolve())

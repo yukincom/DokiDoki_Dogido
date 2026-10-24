@@ -22,6 +22,7 @@ pub mod episode_log;
 pub mod events;
 pub mod foreground;
 pub mod haiku;
+pub mod haiku_capture;
 pub mod haiku_memory;
 pub mod haiku_prompt;
 pub mod haiku_record;

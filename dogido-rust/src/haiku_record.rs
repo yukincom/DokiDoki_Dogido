@@ -64,6 +64,9 @@ pub struct Emission {
     pub created_at: DateTime<Utc>,
     #[serde(flatten)]
     pub prepared: PreparedEmission,
+    /// raw生成の観測記録。材料・意味・最終句のtoken対応へ昇格させない。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub internal_capture: Option<crate::haiku_capture::Observation>,
 }
 
 impl PreparedEmission {
@@ -92,6 +95,7 @@ impl PreparedEmission {
         Ok(Emission {
             created_at,
             prepared: self,
+            internal_capture: None,
         })
     }
 }
@@ -118,7 +122,7 @@ impl Emission {
         let e = &self.prepared;
         let surface = e.surface_text.as_deref().unwrap_or(&e.text).trim();
         let reading = e.reading_text.as_deref().unwrap_or(&e.text).trim();
-        json!({
+        let mut entry = json!({
             "id":self.entry_id(),"created_at":self.created_at_json(),
             "author":"dogido","kind":"agent_haiku","text":surface,
             "surface_text":surface,"reading_text":reading,"lines":e.lines,
@@ -126,7 +130,11 @@ impl Emission {
             "world":{"biome":e.biome,"structure":e.structure,"time_phase":e.time_phase,"dimension":e.dimension},
             "trigger":{"event_sequence":e.event_sequence,"route":e.route},
             "materials_snapshot":e.materials,
-        })
+        });
+        if let Some(capture) = &self.internal_capture {
+            entry["internal_capture"] = json!(capture);
+        }
+        entry
     }
     pub fn short_term_entry(&self, session_id: &str) -> Value {
         let e = &self.prepared;

@@ -238,6 +238,9 @@ class Settings(BaseSettings):
     haiku_interval_ms: int = 600000
     haiku_quiet_time_ms: int = 30000
     haiku_structured_max_tokens: int = 192
+    # 採取は既存の自動発句要求だけ。backendと同じ保存先を明示する。
+    haiku_internal_capture_enabled: bool = DEFAULTS["haiku_capture"]["enabled"]
+    capture_dir: Path | None = DEFAULTS["haiku_capture"]["dir"]
     # 4方式は一つずつ固定して比較する。材料からの自動選択はまだ行わない。
     haiku_generation_strategy: HAIKU_GENERATION_STRATEGY = "three_slot"
     haiku_max_regeneration_rounds: int = Field(default=6, ge=0, le=8)

@@ -16,6 +16,7 @@ import time
 from check_dialogue import dependencies, running, register, request, snapshot, wait_for
 
 from body_senses_fixture import attach_body
+from request_classifier_fixture import mock_request_classifier
 
 ROOT = Path(__file__).resolve().parents[1]
 LINES = ["さくらのは", "くろいおのへと", "あさのいろ"]
@@ -197,7 +198,7 @@ def main():
         assert checks["regenerations"] == 2, checks
         passed.append("invalid_meter_exhausts_only_configured_generation_attempts_without_save")
 
-    with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
+    with mock_request_classifier({"終了": "senryu_end"}) as (bert_args, _), fixture(extra_args=bert_args) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         control["fail_sentence"] = "ここで一句。"
         sid = register(base, preview=False, body=True); send(sid)
         wait_for(lambda: any(r["turn_id"].endswith(":poem") and r["playback_status"] == "failed" for r in rows(sid)))
@@ -207,13 +208,13 @@ def main():
         assert inspiration["playback_status"] == "completed"
         assert len(history) == 1 and history[0]["text"] == inspiration["text"], history
         assert not any(p.get("reaction") == "story" for p in history), history
-        from check_workshop_runtime import install, step
-        calls = install(control, lambda text, prompt, n: step(text,"close_workshop"))
+        model_calls = len([r for r in seen if r["path"] == "/v1/chat/completions"])
         original = stored(sid)
         got = request(base, "/api/v1/player-input", {"session_id": sid, "text": "終了", "source": "voice"})
         assert got["accepted"], got
         wait_for(lambda: hud(sid)["state"] == "closed")
-        assert len(calls) == 1 and stored(sid) == original
+        assert len([r for r in seen if r["path"] == "/v1/chat/completions"]) == model_calls
+        assert stored(sid) == original
         passed.append("completed_poem_survives_tts_failure_and_explicit_close")
 
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):

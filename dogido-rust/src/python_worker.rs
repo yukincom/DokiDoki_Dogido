@@ -322,6 +322,7 @@ pub struct LiveBackend<'a> {
     pub haiku: &'a Route,
     pub requests: Vec<Value>,
     pub reports: Vec<Value>,
+    pub capture: Option<crate::haiku_capture::Capture>,
 }
 
 impl Backend for LiveBackend<'_> {
@@ -354,8 +355,21 @@ impl Backend for LiveBackend<'_> {
             max_tokens: request.max_tokens.unwrap_or(route.max_tokens),
             enable_thinking: false,
         };
-        match route.llm.generate(&input).await {
+        let capture_slot = self
+            .capture
+            .as_mut()
+            .filter(|_| crate::haiku_capture::supports(&request.kind))
+            .map(|capture| capture.begin(self.requests.len(), &request, &input))
+            .transpose()?;
+        match route
+            .llm
+            .generate_with_capture(&input, capture_slot.is_some())
+            .await
+        {
             Ok(report) => {
+                if let (Some(capture), Some(slot)) = (&mut self.capture, capture_slot) {
+                    capture.finish(slot, &report).await;
+                }
                 let parsed = haiku_response::parse(
                     &request.kind,
                     &report.generated,
@@ -377,6 +391,9 @@ impl Backend for LiveBackend<'_> {
                 parsed
             }
             Err(error) => {
+                if let (Some(capture), Some(slot)) = (&mut self.capture, capture_slot) {
+                    capture.failed(slot, &error);
+                }
                 tracing::error!(event="haiku_llm_failed",kind=request.kind,phase="generation",%error);
                 self.reports
                     .push(json!({"kind":request.kind,"error":error.to_string()}));
@@ -431,6 +448,7 @@ pub async fn run(
         haiku: config.haiku,
         requests: Vec::new(),
         reports: Vec::new(),
+        capture: None,
     };
     let result = tokio::select! {
         _ = cancelled(cancel) => Err(anyhow::anyhow!("haiku cancelled")),

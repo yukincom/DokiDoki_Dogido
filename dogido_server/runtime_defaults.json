@@ -107,6 +107,10 @@
     "load_timeout_ms": 60000,
     "timeout_ms": 5000
   },
+  "haiku_capture": {
+    "enabled": false,
+    "dir": null
+  },
   "chat_image": {
     "enabled": false,
     "wait_ms": 2500,

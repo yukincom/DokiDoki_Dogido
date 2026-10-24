@@ -61,7 +61,7 @@ impl RigLlm {
     }
 
     pub async fn generate(&self, input: &GenerationRequest) -> Result<GenerationReport> {
-        Ok(self.complete(input, &[], &[], false, None).await?.0)
+        Ok(self.complete(input, &[], &[], false, None, false).await?.0)
     }
 
     /// 検証した画像一枚を同じ通常会話の要求へ添え、一回だけ送信する。
@@ -71,7 +71,10 @@ impl RigLlm {
         input: &GenerationRequest,
         image: &crate::chat_image::Attachment,
     ) -> Result<GenerationReport> {
-        Ok(self.complete(input, &[], &[], false, Some(image)).await?.0)
+        Ok(self
+            .complete(input, &[], &[], false, Some(image), false)
+            .await?
+            .0)
     }
 
     /// 許可された道具定義と、直前の呼出し・実行結果を既存Chat Completionsへ載せる。
@@ -83,8 +86,24 @@ impl RigLlm {
         tool_messages: &[Value],
         allow_call: bool,
     ) -> Result<(GenerationReport, Option<Value>)> {
-        self.complete(input, tools, tool_messages, allow_call, None)
+        self.complete(input, tools, tool_messages, allow_call, None, false)
             .await
+    }
+
+    /// 自動発句だけに任意の採取フラグを付け、同じ要求を一回だけ送る。
+    pub(crate) async fn generate_with_capture(
+        &self,
+        input: &GenerationRequest,
+        capture: bool,
+    ) -> Result<GenerationReport> {
+        ensure!(
+            !capture || crate::haiku_capture::supports(&input.kind),
+            "unsupported_capture_kind"
+        );
+        Ok(self
+            .complete(input, &[], &[], false, None, capture)
+            .await?
+            .0)
     }
 
     async fn complete(
@@ -94,10 +113,14 @@ impl RigLlm {
         tool_messages: &[Value],
         allow_call: bool,
         image: Option<&crate::chat_image::Attachment>,
+        capture: bool,
     ) -> Result<(GenerationReport, Option<Value>)> {
         ensure!(self.enabled, "LLM disabled by configuration");
         input.validate()?;
         let mut request = request_with_image(input, image)?;
+        if capture {
+            request.additional_params.as_mut().unwrap()["dogido_capture"] = true.into();
+        }
         if !tools.is_empty() {
             let params = request.additional_params.as_mut().unwrap();
             params["tools"] = json!(tools);
@@ -261,6 +284,58 @@ pub fn decode_response(body: &Value) -> Result<GeneratedText> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn capture_flag_uses_one_existing_request_and_never_changes_messages() {
+        use std::sync::{Arc, Mutex};
+        let seen = Arc::new(Mutex::new(Vec::<Value>::new()));
+        let state = seen.clone();
+        let app = axum::Router::new().route("/chat/completions", axum::routing::post(
+            move |axum::Json(body): axum::Json<Value>| {
+                let state = state.clone();
+                async move {
+                    state.lock().unwrap().push(body);
+                    axum::Json(json!({"id":"fixture-response","object":"chat.completion","created":0,
+                        "model":"fixture","choices":[{"index":0,"message":{"role":"assistant","content":"返答"},"finish_reason":"stop"}],
+                        "usage":{"prompt_tokens":4,"completion_tokens":1,"total_tokens":5}}))
+                }
+            }
+        ));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+        let llm = RigLlm::new(&format!("http://{address}"), None, Duration::from_secs(2)).unwrap();
+        for kind in [
+            "haiku_irony",
+            "haiku_scene",
+            "haiku_draft",
+            "haiku_line_regeneration",
+        ] {
+            let mut input = chat_request();
+            input.kind = kind.into();
+            llm.generate(&input).await.unwrap();
+            llm.generate_with_capture(&input, true).await.unwrap();
+        }
+        for kind in ["player_chat", "haiku_workshop_revision"] {
+            let mut input = chat_request();
+            input.kind = kind.into();
+            assert!(llm.generate_with_capture(&input, true).await.is_err());
+        }
+        let rows = seen.lock().unwrap();
+        assert_eq!(rows.len(), 8);
+        for pair in rows.as_chunks::<2>().0 {
+            assert!(pair[0].get("dogido_capture").is_none());
+            let mut captured = pair[1].clone();
+            assert_eq!(
+                captured.as_object_mut().unwrap().remove("dogido_capture"),
+                Some(json!(true))
+            );
+            assert_eq!(pair[0], captured);
+        }
+        server.abort();
+    }
 
     fn chat_request() -> GenerationRequest {
         GenerationRequest {

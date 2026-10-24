@@ -1,6 +1,8 @@
-# 発句の内部表現を観測する独立実験
+# 発句の内部表現採取と独立実験
 
-本体と同じ要求を使い、Gemma 4 QATの生成時活性と転用J-lensを比較する。サーバー・音声・記憶には接続しない。感情の同定や本体への接続は未実施。
+Gemma 4 26B A4Bの生成時活性をMLX／GGUFで採取する。本体の自動発句は明示設定で有効にし、生成要求と保存句の記録へ関連付ける。[接続仕様・起動・検証範囲](../../docs/2026-10-24-haiku-internal-capture.md)。数値から感情ラベルを推定する処理は持たない。
+
+`measure.py` 以下のJ-lens比較は独立実験として維持する。本体の採取にレンズ学習・Jacobian計算を挟まず、モデル・形式・採取位置が変わった場合は分析用bindingを別に検証する。
 
 [実測・限界・モデル変更時の方針](https://github.com/yukincom/AI-Curious-Community/blob/main/j-lens-study/docs/2026-10-16-haiku-internal-representations.md)
 
