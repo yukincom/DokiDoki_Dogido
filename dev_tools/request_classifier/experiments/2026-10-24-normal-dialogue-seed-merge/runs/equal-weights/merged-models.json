@@ -1,0 +1,26 @@
+{
+  "mean-42-43": {
+    "config.json": "bd1ebcc8a20a6a5b158a77e4df4031a3274e4a62e6982ad4780b10bbdbeb8f3f",
+    "model.safetensors": "c3725f8e66092374c92a0ab68c965ab079144c48f2f2600cf6e054faed8fac87",
+    "tokenizer.json": "6a0734cf21c802169defaffe719bc2ef12bb9d0be37e54b61ed27aa89394723d",
+    "tokenizer_config.json": "930dd278b2f45e3fdb6814699eaa23297a8ba534e0756ce0d194ec7dd4deccec"
+  },
+  "mean-42-44": {
+    "config.json": "bd1ebcc8a20a6a5b158a77e4df4031a3274e4a62e6982ad4780b10bbdbeb8f3f",
+    "model.safetensors": "7547db5ccf0380dbf7b2083324ce55f1f62d2d68250473866e46015d775444f5",
+    "tokenizer.json": "6a0734cf21c802169defaffe719bc2ef12bb9d0be37e54b61ed27aa89394723d",
+    "tokenizer_config.json": "930dd278b2f45e3fdb6814699eaa23297a8ba534e0756ce0d194ec7dd4deccec"
+  },
+  "mean-43-44": {
+    "config.json": "bd1ebcc8a20a6a5b158a77e4df4031a3274e4a62e6982ad4780b10bbdbeb8f3f",
+    "model.safetensors": "29c7ddfd5845b7da6730fdae20989161c95ee49fbd93885115039fc5b2a5d394",
+    "tokenizer.json": "6a0734cf21c802169defaffe719bc2ef12bb9d0be37e54b61ed27aa89394723d",
+    "tokenizer_config.json": "930dd278b2f45e3fdb6814699eaa23297a8ba534e0756ce0d194ec7dd4deccec"
+  },
+  "mean-42-43-44": {
+    "config.json": "bd1ebcc8a20a6a5b158a77e4df4031a3274e4a62e6982ad4780b10bbdbeb8f3f",
+    "model.safetensors": "c85b9b13dd13e1b1efa85338d53f97134ff94149d4d160e7e08cd40bd0006f03",
+    "tokenizer.json": "6a0734cf21c802169defaffe719bc2ef12bb9d0be37e54b61ed27aa89394723d",
+    "tokenizer_config.json": "930dd278b2f45e3fdb6814699eaa23297a8ba534e0756ce0d194ec7dd4deccec"
+  }
+}

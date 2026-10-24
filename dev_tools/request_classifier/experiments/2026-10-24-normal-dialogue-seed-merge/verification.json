@@ -1,0 +1,77 @@
+{
+  "schema": "seed_weight_merge_verification.v1",
+  "date": "2026-10-24",
+  "models_checked": 13,
+  "models": [
+    "mean-42-43",
+    "mean-42-43-classifier-42",
+    "mean-42-43-classifier-43",
+    "mean-42-44",
+    "mean-42-44-classifier-42",
+    "mean-42-44-classifier-44",
+    "mean-43-44",
+    "mean-43-44-classifier-43",
+    "mean-43-44-classifier-44",
+    "mean-42-43-44",
+    "mean-42-43-44-classifier-42",
+    "mean-42-43-44-classifier-43",
+    "mean-42-43-44-classifier-44"
+  ],
+  "all_saved_tensors_match_recipes": true,
+  "source_model_hashes_unchanged": true,
+  "material_hashes_unchanged": true,
+  "prediction_rows_independently_verified": 2288,
+  "per_class_metrics_confusion_matrices_and_counts_match": true,
+  "dev_selection_recomputed": true,
+  "dev_selection_frozen_before_test": true,
+  "baseline_cpu_labels_match_colab": true,
+  "baseline_dev_probability_differences": {
+    "seed-42": {
+      "changed_prediction_ids": [],
+      "max_absolute_probability_difference": 1.4230608940124512e-06
+    },
+    "seed-43": {
+      "changed_prediction_ids": [],
+      "max_absolute_probability_difference": 4.649162292480469e-06
+    },
+    "seed-44": {
+      "changed_prediction_ids": [],
+      "max_absolute_probability_difference": 5.066394805908203e-06
+    }
+  },
+  "baseline_test_probability_differences": {
+    "seed-42": {
+      "changed_prediction_ids": [],
+      "max_absolute_probability_difference": 1.0192394256591797e-05
+    },
+    "seed-43": {
+      "changed_prediction_ids": [],
+      "max_absolute_probability_difference": 4.708766937255859e-06
+    },
+    "seed-44": {
+      "changed_prediction_ids": [],
+      "max_absolute_probability_difference": 8.285045623779297e-06
+    }
+  },
+  "parameter_cosine_similarity": {
+    "42-43": {
+      "head.dense.weight": 0.9991792462484039,
+      "classifier.weight": 0.03509212071174757
+    },
+    "42-44": {
+      "head.dense.weight": 0.9992142827815341,
+      "classifier.weight": 0.021083093240603253
+    },
+    "43-44": {
+      "head.dense.weight": 0.9992268177705173,
+      "classifier.weight": -0.05904731349069633
+    }
+  },
+  "note": "Cosine similarity describes these learned tensors; it does not establish the cause of merging degradation.",
+  "training_runs": 0,
+  "runtime_adoption": false,
+  "presentation_only_cleanup": {
+    "markdown_files": 23,
+    "change": "Removed trailing blank lines from generated misclassification Markdown; prediction JSONL and metrics are unchanged."
+  }
+}

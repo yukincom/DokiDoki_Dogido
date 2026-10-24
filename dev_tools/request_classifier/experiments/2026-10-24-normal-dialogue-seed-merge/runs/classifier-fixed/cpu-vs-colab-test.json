@@ -1,0 +1,14 @@
+{
+  "seed-42": {
+    "changed_prediction_ids": [],
+    "max_absolute_probability_difference": 1.0192394256591797e-05
+  },
+  "seed-43": {
+    "changed_prediction_ids": [],
+    "max_absolute_probability_difference": 4.708766937255859e-06
+  },
+  "seed-44": {
+    "changed_prediction_ids": [],
+    "max_absolute_probability_difference": 8.285045623779297e-06
+  }
+}

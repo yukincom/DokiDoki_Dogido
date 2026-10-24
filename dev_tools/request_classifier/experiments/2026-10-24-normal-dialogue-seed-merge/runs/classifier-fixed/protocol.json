@@ -1,0 +1,215 @@
+{
+  "started_at_utc": "2026-10-24T07:52:45.322280+00:00",
+  "source_git_head": "a437e650c07eeddef8c257d617b7f194fa192c4d",
+  "driver_sha256": "b704f455e6dda56cacb653c2da5e211549aaf70b2b785745e95060cd609aedbf",
+  "recipes": [
+    {
+      "id": "seed-42",
+      "seeds": [
+        42
+      ]
+    },
+    {
+      "id": "seed-43",
+      "seeds": [
+        43
+      ]
+    },
+    {
+      "id": "seed-44",
+      "seeds": [
+        44
+      ]
+    },
+    {
+      "id": "mean-42-43",
+      "seeds": [
+        42,
+        43
+      ]
+    },
+    {
+      "id": "mean-42-44",
+      "seeds": [
+        42,
+        44
+      ]
+    },
+    {
+      "id": "mean-43-44",
+      "seeds": [
+        43,
+        44
+      ]
+    },
+    {
+      "id": "mean-42-43-44",
+      "seeds": [
+        42,
+        43,
+        44
+      ]
+    }
+  ],
+  "merge_formula": "Reuse the exact whole-model equal mean; replace only classifier.weight and classifier.bias with one constituent seed's original tensors",
+  "merge_scope": "all floating tensors including head and classifier; equal nonfloating buffers copied",
+  "source_models": {
+    "42": {
+      "path": "dev_tools/request_classifier/experiments/2026-10-24-normal-dialogue-colab/artifacts/colab-results/weights/trial-1/best",
+      "sha256": {
+        "config.json": "bd1ebcc8a20a6a5b158a77e4df4031a3274e4a62e6982ad4780b10bbdbeb8f3f",
+        "model.safetensors": "4ab2baef8382663b65916eca027cb4f2dede736253c031c5dce982a302b13771",
+        "tokenizer.json": "6a0734cf21c802169defaffe719bc2ef12bb9d0be37e54b61ed27aa89394723d",
+        "tokenizer_config.json": "930dd278b2f45e3fdb6814699eaa23297a8ba534e0756ce0d194ec7dd4deccec"
+      }
+    },
+    "43": {
+      "path": "dev_tools/request_classifier/experiments/2026-10-24-normal-dialogue-colab/artifacts/colab-results/weights/trial-2/best",
+      "sha256": {
+        "config.json": "bd1ebcc8a20a6a5b158a77e4df4031a3274e4a62e6982ad4780b10bbdbeb8f3f",
+        "model.safetensors": "0e8142045166ffea465ffaef6c5742fbd93949cec71641b5bfdb288aa49b813d",
+        "tokenizer.json": "6a0734cf21c802169defaffe719bc2ef12bb9d0be37e54b61ed27aa89394723d",
+        "tokenizer_config.json": "930dd278b2f45e3fdb6814699eaa23297a8ba534e0756ce0d194ec7dd4deccec"
+      }
+    },
+    "44": {
+      "path": "dev_tools/request_classifier/experiments/2026-10-24-normal-dialogue-colab/artifacts/colab-results/weights/trial-3/best",
+      "sha256": {
+        "config.json": "bd1ebcc8a20a6a5b158a77e4df4031a3274e4a62e6982ad4780b10bbdbeb8f3f",
+        "model.safetensors": "a854ddcf3dc01cf36053d69cdd5b86cc50b28f5caf964ae7a1220ca03a1fdaba",
+        "tokenizer.json": "6a0734cf21c802169defaffe719bc2ef12bb9d0be37e54b61ed27aa89394723d",
+        "tokenizer_config.json": "930dd278b2f45e3fdb6814699eaa23297a8ba534e0756ce0d194ec7dd4deccec"
+      }
+    }
+  },
+  "data_sha256": {
+    "train": "f5c157688c2aaf2b3c86fc3bfce742240a02cc2738dc36e5e74f98c4031001d4",
+    "dev": "fcac4d822b7280f09aacf8700ef65a80613a380e6753826ba919b9421d1d21e6",
+    "test": "5638ba8990b6d666e1babb8d5e24b50ea0a0b30acae75e2b320daddb8be8ad35"
+  },
+  "evaluation_source_sha256": {
+    "dev_tools/request_classifier/dataset.py": "083c91f132502bf397ad9bb66c23a48623c02033335a68fb26f17e6529a58e23",
+    "dev_tools/request_classifier/evaluation.py": "3300083a0b94d682ad05525b9fb066f93143b6d0de40adc842f81f0f87bb97cf",
+    "dev_tools/request_classifier/train.py": "76cc522e8dea62089b48ef678585e9d928894eb21ddc195b6d67adf5651efa80",
+    "dev_tools/request_classifier/labels.json": "237c708a4c5401ec03371ee7bb15b744fd0d6af08cb1f7b53f8864e8988eba9c",
+    "dev_tools/request_classifier/requirements-train.txt": "f45782d28fe9ac8e4123aaf8a8878fbf17d8b38782a8bda21958f0a6cf407ff1"
+  },
+  "label_to_id": {
+    "not_target": 0,
+    "enemy_information": 1,
+    "equip_sword": 2,
+    "recall_mount": 3,
+    "dogido_recall": 4,
+    "look_direction": 5,
+    "look_relative_right": 6,
+    "look_target": 7,
+    "look_player": 8,
+    "look_relative_front": 9,
+    "look_relative_back": 10,
+    "look_relative_left": 11,
+    "look_relative_front_left": 12,
+    "look_relative_front_right": 13,
+    "look_relative_back_left": 14,
+    "look_relative_back_right": 15
+  },
+  "device": "cpu",
+  "dtype": "float32",
+  "attention": "sdpa",
+  "batch_size": 16,
+  "max_length": 128,
+  "max_context": 0,
+  "torch_threads": 4,
+  "torch_interop_threads": 1,
+  "deterministic_algorithms": true,
+  "selection": "All sixteen candidates: dev macro F1 descending, dev loss ascending, fixed candidate order; freeze before test",
+  "test_policy": "After freezing all choices, evaluate all sixteen fixed candidates on test and the 47 added training examples; no tuning using test",
+  "evaluation_scope": "Known material-design-referenced dev/test; exploratory merge comparison, not unknown live-input accuracy",
+  "training_runs": 0,
+  "runtime_adoption": false,
+  "python": "3.11.14 (main, Apr 10 2026, 10:07:43) [Clang 17.0.0 (clang-1700.0.13.5)]",
+  "platform": "macOS-26.6.1-arm64-arm-64bit",
+  "versions": {
+    "torch": "2.14.1",
+    "transformers": "5.19.0",
+    "accelerate": "1.15.0",
+    "numpy": "2.4.6",
+    "safetensors": "0.8.0",
+    "tokenizers": "0.23.3"
+  },
+  "first_stage": "dev_tools/request_classifier/experiments/2026-10-24-normal-dialogue-seed-merge/runs/equal-weights",
+  "first_stage_sha256": {
+    "protocol.json": "87cba302761b6408fb5b15d054c9ca4cc68954aca64ba95bcacf2c733ab653b7",
+    "selection.json": "70eba165339add9b9ac1a8d37db42871e79c02cbad551a96d3ca3f910c332ed6",
+    "merged-models.json": "6e22f28b17270b08b6dfb1877db4f530e5d7906dff147ccb83e05361ae309759"
+  },
+  "design": "Exploratory follow-up after four whole-model equal means degraded dev; no merged test results observed before designing these nine candidates",
+  "extra_recipes": [
+    {
+      "id": "mean-42-43-classifier-42",
+      "mean": "mean-42-43",
+      "classifier_seed": 42
+    },
+    {
+      "id": "mean-42-43-classifier-43",
+      "mean": "mean-42-43",
+      "classifier_seed": 43
+    },
+    {
+      "id": "mean-42-44-classifier-42",
+      "mean": "mean-42-44",
+      "classifier_seed": 42
+    },
+    {
+      "id": "mean-42-44-classifier-44",
+      "mean": "mean-42-44",
+      "classifier_seed": 44
+    },
+    {
+      "id": "mean-43-44-classifier-43",
+      "mean": "mean-43-44",
+      "classifier_seed": 43
+    },
+    {
+      "id": "mean-43-44-classifier-44",
+      "mean": "mean-43-44",
+      "classifier_seed": 44
+    },
+    {
+      "id": "mean-42-43-44-classifier-42",
+      "mean": "mean-42-43-44",
+      "classifier_seed": 42
+    },
+    {
+      "id": "mean-42-43-44-classifier-43",
+      "mean": "mean-42-43-44",
+      "classifier_seed": 43
+    },
+    {
+      "id": "mean-42-43-44-classifier-44",
+      "mean": "mean-42-43-44",
+      "classifier_seed": 44
+    }
+  ],
+  "all_candidate_order": [
+    "seed-42",
+    "seed-43",
+    "seed-44",
+    "mean-42-43",
+    "mean-42-44",
+    "mean-43-44",
+    "mean-42-43-44",
+    "mean-42-43-classifier-42",
+    "mean-42-43-classifier-43",
+    "mean-42-44-classifier-42",
+    "mean-42-44-classifier-44",
+    "mean-43-44-classifier-43",
+    "mean-43-44-classifier-44",
+    "mean-42-43-44-classifier-42",
+    "mean-42-43-44-classifier-43",
+    "mean-42-43-44-classifier-44"
+  ],
+  "fixed_keys": [
+    "classifier.weight",
+    "classifier.bias"
+  ]
+}

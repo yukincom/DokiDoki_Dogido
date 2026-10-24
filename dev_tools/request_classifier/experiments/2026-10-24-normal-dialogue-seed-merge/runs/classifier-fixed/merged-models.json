@@ -1,0 +1,56 @@
+{
+  "mean-42-43-classifier-42": {
+    "config.json": "bd1ebcc8a20a6a5b158a77e4df4031a3274e4a62e6982ad4780b10bbdbeb8f3f",
+    "model.safetensors": "793f2a6584fd778c7a9ae547f7823c74116e4c5db58f773095a651cd8349864a",
+    "tokenizer.json": "6a0734cf21c802169defaffe719bc2ef12bb9d0be37e54b61ed27aa89394723d",
+    "tokenizer_config.json": "930dd278b2f45e3fdb6814699eaa23297a8ba534e0756ce0d194ec7dd4deccec"
+  },
+  "mean-42-43-classifier-43": {
+    "config.json": "bd1ebcc8a20a6a5b158a77e4df4031a3274e4a62e6982ad4780b10bbdbeb8f3f",
+    "model.safetensors": "54034a9fdfe6459d5d0a67c5ee462c9d9d05831c064fbe6766553249c5a97653",
+    "tokenizer.json": "6a0734cf21c802169defaffe719bc2ef12bb9d0be37e54b61ed27aa89394723d",
+    "tokenizer_config.json": "930dd278b2f45e3fdb6814699eaa23297a8ba534e0756ce0d194ec7dd4deccec"
+  },
+  "mean-42-44-classifier-42": {
+    "config.json": "bd1ebcc8a20a6a5b158a77e4df4031a3274e4a62e6982ad4780b10bbdbeb8f3f",
+    "model.safetensors": "e18f8bae8880d3f1a9ee20926dac29a0d7d021832c13c34528b4aa0550399d2e",
+    "tokenizer.json": "6a0734cf21c802169defaffe719bc2ef12bb9d0be37e54b61ed27aa89394723d",
+    "tokenizer_config.json": "930dd278b2f45e3fdb6814699eaa23297a8ba534e0756ce0d194ec7dd4deccec"
+  },
+  "mean-42-44-classifier-44": {
+    "config.json": "bd1ebcc8a20a6a5b158a77e4df4031a3274e4a62e6982ad4780b10bbdbeb8f3f",
+    "model.safetensors": "e240ecb24daaa4a1b3b63066f2591eea0d61e029dd0f6ea626dfc9305fff4896",
+    "tokenizer.json": "6a0734cf21c802169defaffe719bc2ef12bb9d0be37e54b61ed27aa89394723d",
+    "tokenizer_config.json": "930dd278b2f45e3fdb6814699eaa23297a8ba534e0756ce0d194ec7dd4deccec"
+  },
+  "mean-43-44-classifier-43": {
+    "config.json": "bd1ebcc8a20a6a5b158a77e4df4031a3274e4a62e6982ad4780b10bbdbeb8f3f",
+    "model.safetensors": "341f908902524192bbb2342cec13e8fe3f8523e96aab8a588bded803277500aa",
+    "tokenizer.json": "6a0734cf21c802169defaffe719bc2ef12bb9d0be37e54b61ed27aa89394723d",
+    "tokenizer_config.json": "930dd278b2f45e3fdb6814699eaa23297a8ba534e0756ce0d194ec7dd4deccec"
+  },
+  "mean-43-44-classifier-44": {
+    "config.json": "bd1ebcc8a20a6a5b158a77e4df4031a3274e4a62e6982ad4780b10bbdbeb8f3f",
+    "model.safetensors": "6b3a570197c176f29a3942651d5231b800190e56a20bc2cd916a2ee8e00d1105",
+    "tokenizer.json": "6a0734cf21c802169defaffe719bc2ef12bb9d0be37e54b61ed27aa89394723d",
+    "tokenizer_config.json": "930dd278b2f45e3fdb6814699eaa23297a8ba534e0756ce0d194ec7dd4deccec"
+  },
+  "mean-42-43-44-classifier-42": {
+    "config.json": "bd1ebcc8a20a6a5b158a77e4df4031a3274e4a62e6982ad4780b10bbdbeb8f3f",
+    "model.safetensors": "2613ce32b6bf0cf183c7f5be0147c69a211aee1b9e018d4f0b40b3e5a23bc031",
+    "tokenizer.json": "6a0734cf21c802169defaffe719bc2ef12bb9d0be37e54b61ed27aa89394723d",
+    "tokenizer_config.json": "930dd278b2f45e3fdb6814699eaa23297a8ba534e0756ce0d194ec7dd4deccec"
+  },
+  "mean-42-43-44-classifier-43": {
+    "config.json": "bd1ebcc8a20a6a5b158a77e4df4031a3274e4a62e6982ad4780b10bbdbeb8f3f",
+    "model.safetensors": "9f46da4fc8490bad499734220f5d9431cf9417792c054af662aa5213256ef3c3",
+    "tokenizer.json": "6a0734cf21c802169defaffe719bc2ef12bb9d0be37e54b61ed27aa89394723d",
+    "tokenizer_config.json": "930dd278b2f45e3fdb6814699eaa23297a8ba534e0756ce0d194ec7dd4deccec"
+  },
+  "mean-42-43-44-classifier-44": {
+    "config.json": "bd1ebcc8a20a6a5b158a77e4df4031a3274e4a62e6982ad4780b10bbdbeb8f3f",
+    "model.safetensors": "1efc2020173d8f0126c258ee51dab5baceaf48240757319129f2ca8bfa74f65b",
+    "tokenizer.json": "6a0734cf21c802169defaffe719bc2ef12bb9d0be37e54b61ed27aa89394723d",
+    "tokenizer_config.json": "930dd278b2f45e3fdb6814699eaa23297a8ba534e0756ce0d194ec7dd4deccec"
+  }
+}

@@ -1,0 +1,2070 @@
+{
+  "n": 46,
+  "replicate_order": [
+    "seed-42",
+    "seed-43",
+    "seed-44",
+    "mean-42-43",
+    "mean-42-44",
+    "mean-43-44",
+    "mean-42-43-44"
+  ],
+  "baseline": {
+    "correct": 39,
+    "accuracy": 0.8478260869565217,
+    "macro_f1": 0.8930115635997988,
+    "not_target.precision": 0.6666666666666666,
+    "not_target.recall": 0.3333333333333333,
+    "not_target.f1": 0.4444444444444444,
+    "enemy_information.precision": 0.8888888888888888,
+    "enemy_information.recall": 1.0,
+    "enemy_information.f1": 0.9411764705882353,
+    "equip_sword.precision": 0.625,
+    "equip_sword.recall": 1.0,
+    "equip_sword.f1": 0.7692307692307693,
+    "recall_mount.precision": 1.0,
+    "recall_mount.recall": 1.0,
+    "recall_mount.f1": 1.0,
+    "dogido_recall.precision": 0.6666666666666666,
+    "dogido_recall.recall": 0.6666666666666666,
+    "dogido_recall.f1": 0.6666666666666666,
+    "look_direction.precision": 1.0,
+    "look_direction.recall": 0.6666666666666666,
+    "look_direction.f1": 0.8,
+    "look_relative_right.precision": 1.0,
+    "look_relative_right.recall": 1.0,
+    "look_relative_right.f1": 1.0,
+    "look_target.precision": 1.0,
+    "look_target.recall": 1.0,
+    "look_target.f1": 1.0,
+    "look_player.precision": 1.0,
+    "look_player.recall": 1.0,
+    "look_player.f1": 1.0,
+    "look_relative_front.precision": 1.0,
+    "look_relative_front.recall": 1.0,
+    "look_relative_front.f1": 1.0,
+    "look_relative_back.precision": 0.5,
+    "look_relative_back.recall": 1.0,
+    "look_relative_back.f1": 0.6666666666666666,
+    "look_relative_left.precision": 1.0,
+    "look_relative_left.recall": 1.0,
+    "look_relative_left.f1": 1.0,
+    "look_relative_front_left.precision": 1.0,
+    "look_relative_front_left.recall": 1.0,
+    "look_relative_front_left.f1": 1.0,
+    "look_relative_front_right.precision": 1.0,
+    "look_relative_front_right.recall": 1.0,
+    "look_relative_front_right.f1": 1.0,
+    "look_relative_back_left.precision": 1.0,
+    "look_relative_back_left.recall": 1.0,
+    "look_relative_back_left.f1": 1.0,
+    "look_relative_back_right.precision": 1.0,
+    "look_relative_back_right.recall": 1.0,
+    "look_relative_back_right.f1": 1.0
+  },
+  "aggregate": {
+    "correct": {
+      "values": [
+        38,
+        39,
+        39,
+        20,
+        26,
+        26,
+        18
+      ],
+      "mean": 29.428571428571427,
+      "sample_stddev": 9.126100716391107,
+      "min": 18,
+      "max": 39
+    },
+    "accuracy": {
+      "values": [
+        0.8260869565217391,
+        0.8478260869565217,
+        0.8478260869565217,
+        0.43478260869565216,
+        0.5652173913043478,
+        0.5652173913043478,
+        0.391304347826087
+      ],
+      "mean": 0.639751552795031,
+      "sample_stddev": 0.1983934938345893,
+      "min": 0.391304347826087,
+      "max": 0.8478260869565217
+    },
+    "macro_f1": {
+      "values": [
+        0.870376559714795,
+        0.8930115635997988,
+        0.8822813216195569,
+        0.38671875,
+        0.5142045454545454,
+        0.4904901960784314,
+        0.23353174603174603
+      ],
+      "mean": 0.6100878117855534,
+      "sample_stddev": 0.2698983720152983,
+      "min": 0.23353174603174603,
+      "max": 0.8930115635997988
+    },
+    "not_target.precision": {
+      "values": [
+        1.0,
+        0.6666666666666666,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mean": 0.38095238095238093,
+      "sample_stddev": 0.4879500364742666,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "not_target.recall": {
+      "values": [
+        0.3333333333333333,
+        0.3333333333333333,
+        0.5,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mean": 0.16666666666666666,
+      "sample_stddev": 0.2151657414559676,
+      "min": 0.0,
+      "max": 0.5
+    },
+    "not_target.f1": {
+      "values": [
+        0.5,
+        0.4444444444444444,
+        0.6666666666666666,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mean": 0.23015873015873015,
+      "sample_stddev": 0.2947213432956689,
+      "min": 0.0,
+      "max": 0.6666666666666666
+    },
+    "enemy_information.precision": {
+      "values": [
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        1.0,
+        0.32,
+        0.8888888888888888,
+        0.6666666666666666
+      ],
+      "mean": 0.7917460317460318,
+      "sample_stddev": 0.23068948108724713,
+      "min": 0.32,
+      "max": 1.0
+    },
+    "enemy_information.recall": {
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "mean": 1.0,
+      "sample_stddev": 0.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "enemy_information.f1": {
+      "values": [
+        0.9411764705882353,
+        0.9411764705882353,
+        0.9411764705882353,
+        1.0,
+        0.48484848484848486,
+        0.9411764705882353,
+        0.8
+      ],
+      "mean": 0.8642220524573466,
+      "sample_stddev": 0.17803199934303005,
+      "min": 0.48484848484848486,
+      "max": 1.0
+    },
+    "equip_sword.precision": {
+      "values": [
+        0.8333333333333334,
+        0.625,
+        0.8333333333333334,
+        0.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "mean": 0.7559523809523809,
+      "sample_stddev": 0.3603854124442962,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "equip_sword.recall": {
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0,
+        1.0,
+        0.2
+      ],
+      "mean": 0.7428571428571429,
+      "sample_stddev": 0.4429339411136566,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "equip_sword.f1": {
+      "values": [
+        0.9090909090909091,
+        0.7692307692307693,
+        0.9090909090909091,
+        0.0,
+        1.0,
+        1.0,
+        0.33333333333333337
+      ],
+      "mean": 0.7029637029637029,
+      "sample_stddev": 0.38656907007563657,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "recall_mount.precision": {
+      "values": [
+        0.8333333333333334,
+        1.0,
+        0.8333333333333334,
+        1.0,
+        0.8333333333333334,
+        1.0,
+        1.0
+      ],
+      "mean": 0.9285714285714286,
+      "sample_stddev": 0.08908708063747478,
+      "min": 0.8333333333333334,
+      "max": 1.0
+    },
+    "recall_mount.recall": {
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.8
+      ],
+      "mean": 0.9714285714285714,
+      "sample_stddev": 0.07559289460184543,
+      "min": 0.8,
+      "max": 1.0
+    },
+    "recall_mount.f1": {
+      "values": [
+        0.9090909090909091,
+        1.0,
+        0.9090909090909091,
+        1.0,
+        0.9090909090909091,
+        1.0,
+        0.888888888888889
+      ],
+      "mean": 0.9451659451659452,
+      "sample_stddev": 0.051787470259527735,
+      "min": 0.888888888888889,
+      "max": 1.0
+    },
+    "dogido_recall.precision": {
+      "values": [
+        1.0,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "mean": 0.47619047619047616,
+      "sample_stddev": 0.4657587540038479,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "dogido_recall.recall": {
+      "values": [
+        1.0,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.0,
+        0.3333333333333333,
+        0.0,
+        0.0
+      ],
+      "mean": 0.38095238095238093,
+      "sample_stddev": 0.4049952641959706,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "dogido_recall.f1": {
+      "values": [
+        1.0,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.0,
+        0.5,
+        0.0,
+        0.0
+      ],
+      "mean": 0.40476190476190477,
+      "sample_stddev": 0.40662503039522213,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "look_direction.precision": {
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mean": 0.42857142857142855,
+      "sample_stddev": 0.5345224838248488,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "look_direction.recall": {
+      "values": [
+        0.3333333333333333,
+        0.6666666666666666,
+        0.5,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mean": 0.21428571428571427,
+      "sample_stddev": 0.2840560344154489,
+      "min": 0.0,
+      "max": 0.6666666666666666
+    },
+    "look_direction.f1": {
+      "values": [
+        0.5,
+        0.8,
+        0.6666666666666666,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mean": 0.28095238095238095,
+      "sample_stddev": 0.3609950973593136,
+      "min": 0.0,
+      "max": 0.8
+    },
+    "look_relative_right.precision": {
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "mean": 0.8571428571428571,
+      "sample_stddev": 0.37796447300922725,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "look_relative_right.recall": {
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "mean": 0.8571428571428571,
+      "sample_stddev": 0.37796447300922725,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "look_relative_right.f1": {
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "mean": 0.8571428571428571,
+      "sample_stddev": 0.37796447300922725,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "look_target.precision": {
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0
+      ],
+      "mean": 0.5714285714285714,
+      "sample_stddev": 0.5345224838248488,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "look_target.recall": {
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        0.0,
+        0.5,
+        0.0
+      ],
+      "mean": 0.5,
+      "sample_stddev": 0.5,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "look_target.f1": {
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        0.0,
+        0.6666666666666666,
+        0.0
+      ],
+      "mean": 0.5238095238095238,
+      "sample_stddev": 0.5039526306789697,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "look_player.precision": {
+      "values": [
+        0.5,
+        1.0,
+        0.75,
+        0.10344827586206896,
+        0.6666666666666666,
+        0.13636363636363635,
+        0.12
+      ],
+      "mean": 0.468068368413196,
+      "sample_stddev": 0.3575437150388405,
+      "min": 0.10344827586206896,
+      "max": 1.0
+    },
+    "look_player.recall": {
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.6666666666666666,
+        1.0,
+        1.0
+      ],
+      "mean": 0.9523809523809523,
+      "sample_stddev": 0.12598815766974242,
+      "min": 0.6666666666666666,
+      "max": 1.0
+    },
+    "look_player.f1": {
+      "values": [
+        0.6666666666666666,
+        1.0,
+        0.8571428571428571,
+        0.1875,
+        0.6666666666666666,
+        0.24000000000000002,
+        0.21428571428571425
+      ],
+      "mean": 0.5474659863945578,
+      "sample_stddev": 0.3327221914185278,
+      "min": 0.1875,
+      "max": 1.0
+    },
+    "look_relative_front.precision": {
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mean": 0.42857142857142855,
+      "sample_stddev": 0.5345224838248488,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "look_relative_front.recall": {
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mean": 0.42857142857142855,
+      "sample_stddev": 0.5345224838248488,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "look_relative_front.f1": {
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mean": 0.42857142857142855,
+      "sample_stddev": 0.5345224838248488,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "look_relative_back.precision": {
+      "values": [
+        0.3333333333333333,
+        0.5,
+        0.3333333333333333,
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "mean": 0.5952380952380952,
+      "sample_stddev": 0.4066250303952222,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "look_relative_back.recall": {
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "mean": 0.8571428571428571,
+      "sample_stddev": 0.37796447300922725,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "look_relative_back.f1": {
+      "values": [
+        0.5,
+        0.6666666666666666,
+        0.5,
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "mean": 0.6666666666666666,
+      "sample_stddev": 0.37267799624996495,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "look_relative_left.precision": {
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0,
+        0.0
+      ],
+      "mean": 0.7142857142857143,
+      "sample_stddev": 0.4879500364742666,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "look_relative_left.recall": {
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0,
+        0.0
+      ],
+      "mean": 0.7142857142857143,
+      "sample_stddev": 0.4879500364742666,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "look_relative_left.f1": {
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0,
+        0.0
+      ],
+      "mean": 0.7142857142857143,
+      "sample_stddev": 0.4879500364742666,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "look_relative_front_left.precision": {
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "mean": 0.5714285714285714,
+      "sample_stddev": 0.5345224838248488,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "look_relative_front_left.recall": {
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "mean": 0.5714285714285714,
+      "sample_stddev": 0.5345224838248488,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "look_relative_front_left.f1": {
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "mean": 0.5714285714285714,
+      "sample_stddev": 0.5345224838248488,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "look_relative_front_right.precision": {
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mean": 0.5714285714285714,
+      "sample_stddev": 0.5345224838248488,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "look_relative_front_right.recall": {
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mean": 0.5714285714285714,
+      "sample_stddev": 0.5345224838248488,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "look_relative_front_right.f1": {
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mean": 0.5714285714285714,
+      "sample_stddev": 0.5345224838248488,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "look_relative_back_left.precision": {
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "mean": 0.5714285714285714,
+      "sample_stddev": 0.5345224838248488,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "look_relative_back_left.recall": {
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "mean": 0.5714285714285714,
+      "sample_stddev": 0.5345224838248488,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "look_relative_back_left.f1": {
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "mean": 0.5714285714285714,
+      "sample_stddev": 0.5345224838248488,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "look_relative_back_right.precision": {
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.5,
+        1.0,
+        0.3333333333333333
+      ],
+      "mean": 0.8333333333333334,
+      "sample_stddev": 0.28867513459481287,
+      "min": 0.3333333333333333,
+      "max": 1.0
+    },
+    "look_relative_back_right.recall": {
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "mean": 1.0,
+      "sample_stddev": 0.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "look_relative_back_right.f1": {
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.6666666666666666,
+        1.0,
+        0.5
+      ],
+      "mean": 0.8809523809523809,
+      "sample_stddev": 0.20892772350933625,
+      "min": 0.5,
+      "max": 1.0
+    }
+  },
+  "transitions": {
+    "seed-42": {
+      "fixed": {
+        "count": 2,
+        "ids": [
+          "live__short_runtime_045",
+          "live__short_runtime_059"
+        ]
+      },
+      "new_errors": {
+        "count": 3,
+        "ids": [
+          "contrast__contrast_011",
+          "contrast__contrast_040",
+          "gaze_variant__gaze_far_align_view_02"
+        ]
+      },
+      "still_wrong": {
+        "count": 5,
+        "ids": [
+          "live__short_runtime_014",
+          "contrast__contrast_038",
+          "contrast__contrast_042",
+          "contrast__contrast_044",
+          "gaze_variant__gaze_far_align_view_01"
+        ]
+      },
+      "still_correct": {
+        "count": 36,
+        "ids": [
+          "legacy__train-042",
+          "legacy__train-044",
+          "legacy__train-045",
+          "legacy__train-101",
+          "legacy__train-105",
+          "legacy__train-107",
+          "legacy__train-151",
+          "legacy__train-152",
+          "legacy__train-156",
+          "legacy__train-160",
+          "legacy__train-576",
+          "live__short_runtime_033",
+          "live__short_runtime_040",
+          "live__short_runtime_041",
+          "live__short_runtime_243",
+          "user_addition__user_20261022_016",
+          "user_addition__user_20261022_017",
+          "user_addition__user_20261022_018",
+          "user_addition__user_20261022_055",
+          "user_addition__user_20261022_063",
+          "user_addition__user_20261022_067",
+          "user_addition__user_20261022_071",
+          "contrast__contrast_010",
+          "contrast__contrast_037",
+          "contrast__contrast_041",
+          "contrast__contrast_043",
+          "gaze_variant__gaze_direction_07_front",
+          "gaze_variant__gaze_direction_07_back",
+          "gaze_variant__gaze_direction_07_left",
+          "gaze_variant__gaze_direction_07_front_left",
+          "gaze_variant__gaze_direction_07_front_right",
+          "gaze_variant__gaze_direction_07_back_left",
+          "gaze_variant__gaze_direction_07_back_right",
+          "gaze_variant__gaze_player_03_variant_01",
+          "gaze_variant__gaze_player_03_variant_02",
+          "gaze_variant__gaze_far_align_view_03"
+        ]
+      }
+    },
+    "seed-43": {
+      "fixed": {
+        "count": 0,
+        "ids": []
+      },
+      "new_errors": {
+        "count": 0,
+        "ids": []
+      },
+      "still_wrong": {
+        "count": 7,
+        "ids": [
+          "live__short_runtime_014",
+          "live__short_runtime_045",
+          "live__short_runtime_059",
+          "contrast__contrast_038",
+          "contrast__contrast_042",
+          "contrast__contrast_044",
+          "gaze_variant__gaze_far_align_view_01"
+        ]
+      },
+      "still_correct": {
+        "count": 39,
+        "ids": [
+          "legacy__train-042",
+          "legacy__train-044",
+          "legacy__train-045",
+          "legacy__train-101",
+          "legacy__train-105",
+          "legacy__train-107",
+          "legacy__train-151",
+          "legacy__train-152",
+          "legacy__train-156",
+          "legacy__train-160",
+          "legacy__train-576",
+          "live__short_runtime_033",
+          "live__short_runtime_040",
+          "live__short_runtime_041",
+          "live__short_runtime_243",
+          "user_addition__user_20261022_016",
+          "user_addition__user_20261022_017",
+          "user_addition__user_20261022_018",
+          "user_addition__user_20261022_055",
+          "user_addition__user_20261022_063",
+          "user_addition__user_20261022_067",
+          "user_addition__user_20261022_071",
+          "contrast__contrast_010",
+          "contrast__contrast_011",
+          "contrast__contrast_037",
+          "contrast__contrast_040",
+          "contrast__contrast_041",
+          "contrast__contrast_043",
+          "gaze_variant__gaze_direction_07_front",
+          "gaze_variant__gaze_direction_07_back",
+          "gaze_variant__gaze_direction_07_left",
+          "gaze_variant__gaze_direction_07_front_left",
+          "gaze_variant__gaze_direction_07_front_right",
+          "gaze_variant__gaze_direction_07_back_left",
+          "gaze_variant__gaze_direction_07_back_right",
+          "gaze_variant__gaze_player_03_variant_01",
+          "gaze_variant__gaze_player_03_variant_02",
+          "gaze_variant__gaze_far_align_view_02",
+          "gaze_variant__gaze_far_align_view_03"
+        ]
+      }
+    },
+    "seed-44": {
+      "fixed": {
+        "count": 2,
+        "ids": [
+          "live__short_runtime_059",
+          "contrast__contrast_042"
+        ]
+      },
+      "new_errors": {
+        "count": 2,
+        "ids": [
+          "contrast__contrast_037",
+          "contrast__contrast_040"
+        ]
+      },
+      "still_wrong": {
+        "count": 5,
+        "ids": [
+          "live__short_runtime_014",
+          "live__short_runtime_045",
+          "contrast__contrast_038",
+          "contrast__contrast_044",
+          "gaze_variant__gaze_far_align_view_01"
+        ]
+      },
+      "still_correct": {
+        "count": 37,
+        "ids": [
+          "legacy__train-042",
+          "legacy__train-044",
+          "legacy__train-045",
+          "legacy__train-101",
+          "legacy__train-105",
+          "legacy__train-107",
+          "legacy__train-151",
+          "legacy__train-152",
+          "legacy__train-156",
+          "legacy__train-160",
+          "legacy__train-576",
+          "live__short_runtime_033",
+          "live__short_runtime_040",
+          "live__short_runtime_041",
+          "live__short_runtime_243",
+          "user_addition__user_20261022_016",
+          "user_addition__user_20261022_017",
+          "user_addition__user_20261022_018",
+          "user_addition__user_20261022_055",
+          "user_addition__user_20261022_063",
+          "user_addition__user_20261022_067",
+          "user_addition__user_20261022_071",
+          "contrast__contrast_010",
+          "contrast__contrast_011",
+          "contrast__contrast_041",
+          "contrast__contrast_043",
+          "gaze_variant__gaze_direction_07_front",
+          "gaze_variant__gaze_direction_07_back",
+          "gaze_variant__gaze_direction_07_left",
+          "gaze_variant__gaze_direction_07_front_left",
+          "gaze_variant__gaze_direction_07_front_right",
+          "gaze_variant__gaze_direction_07_back_left",
+          "gaze_variant__gaze_direction_07_back_right",
+          "gaze_variant__gaze_player_03_variant_01",
+          "gaze_variant__gaze_player_03_variant_02",
+          "gaze_variant__gaze_far_align_view_02",
+          "gaze_variant__gaze_far_align_view_03"
+        ]
+      }
+    },
+    "mean-42-43": {
+      "fixed": {
+        "count": 0,
+        "ids": []
+      },
+      "new_errors": {
+        "count": 19,
+        "ids": [
+          "legacy__train-101",
+          "legacy__train-105",
+          "legacy__train-107",
+          "legacy__train-576",
+          "live__short_runtime_033",
+          "live__short_runtime_040",
+          "live__short_runtime_041",
+          "user_addition__user_20261022_055",
+          "user_addition__user_20261022_063",
+          "user_addition__user_20261022_067",
+          "contrast__contrast_011",
+          "contrast__contrast_037",
+          "contrast__contrast_040",
+          "contrast__contrast_041",
+          "gaze_variant__gaze_direction_07_front",
+          "gaze_variant__gaze_direction_07_front_left",
+          "gaze_variant__gaze_direction_07_back_left",
+          "gaze_variant__gaze_far_align_view_02",
+          "gaze_variant__gaze_far_align_view_03"
+        ]
+      },
+      "still_wrong": {
+        "count": 7,
+        "ids": [
+          "live__short_runtime_014",
+          "live__short_runtime_045",
+          "live__short_runtime_059",
+          "contrast__contrast_038",
+          "contrast__contrast_042",
+          "contrast__contrast_044",
+          "gaze_variant__gaze_far_align_view_01"
+        ]
+      },
+      "still_correct": {
+        "count": 20,
+        "ids": [
+          "legacy__train-042",
+          "legacy__train-044",
+          "legacy__train-045",
+          "legacy__train-151",
+          "legacy__train-152",
+          "legacy__train-156",
+          "legacy__train-160",
+          "live__short_runtime_243",
+          "user_addition__user_20261022_016",
+          "user_addition__user_20261022_017",
+          "user_addition__user_20261022_018",
+          "user_addition__user_20261022_071",
+          "contrast__contrast_010",
+          "contrast__contrast_043",
+          "gaze_variant__gaze_direction_07_back",
+          "gaze_variant__gaze_direction_07_left",
+          "gaze_variant__gaze_direction_07_front_right",
+          "gaze_variant__gaze_direction_07_back_right",
+          "gaze_variant__gaze_player_03_variant_01",
+          "gaze_variant__gaze_player_03_variant_02"
+        ]
+      }
+    },
+    "mean-42-44": {
+      "fixed": {
+        "count": 0,
+        "ids": []
+      },
+      "new_errors": {
+        "count": 13,
+        "ids": [
+          "live__short_runtime_033",
+          "live__short_runtime_041",
+          "user_addition__user_20261022_063",
+          "user_addition__user_20261022_067",
+          "contrast__contrast_011",
+          "contrast__contrast_037",
+          "contrast__contrast_040",
+          "gaze_variant__gaze_direction_07_front",
+          "gaze_variant__gaze_direction_07_left",
+          "gaze_variant__gaze_direction_07_front_right",
+          "gaze_variant__gaze_player_03_variant_02",
+          "gaze_variant__gaze_far_align_view_02",
+          "gaze_variant__gaze_far_align_view_03"
+        ]
+      },
+      "still_wrong": {
+        "count": 7,
+        "ids": [
+          "live__short_runtime_014",
+          "live__short_runtime_045",
+          "live__short_runtime_059",
+          "contrast__contrast_038",
+          "contrast__contrast_042",
+          "contrast__contrast_044",
+          "gaze_variant__gaze_far_align_view_01"
+        ]
+      },
+      "still_correct": {
+        "count": 26,
+        "ids": [
+          "legacy__train-042",
+          "legacy__train-044",
+          "legacy__train-045",
+          "legacy__train-101",
+          "legacy__train-105",
+          "legacy__train-107",
+          "legacy__train-151",
+          "legacy__train-152",
+          "legacy__train-156",
+          "legacy__train-160",
+          "legacy__train-576",
+          "live__short_runtime_040",
+          "live__short_runtime_243",
+          "user_addition__user_20261022_016",
+          "user_addition__user_20261022_017",
+          "user_addition__user_20261022_018",
+          "user_addition__user_20261022_055",
+          "user_addition__user_20261022_071",
+          "contrast__contrast_010",
+          "contrast__contrast_041",
+          "contrast__contrast_043",
+          "gaze_variant__gaze_direction_07_back",
+          "gaze_variant__gaze_direction_07_front_left",
+          "gaze_variant__gaze_direction_07_back_left",
+          "gaze_variant__gaze_direction_07_back_right",
+          "gaze_variant__gaze_player_03_variant_01"
+        ]
+      }
+    },
+    "mean-43-44": {
+      "fixed": {
+        "count": 0,
+        "ids": []
+      },
+      "new_errors": {
+        "count": 13,
+        "ids": [
+          "live__short_runtime_033",
+          "live__short_runtime_040",
+          "live__short_runtime_041",
+          "user_addition__user_20261022_067",
+          "contrast__contrast_011",
+          "contrast__contrast_037",
+          "contrast__contrast_040",
+          "gaze_variant__gaze_direction_07_front",
+          "gaze_variant__gaze_direction_07_front_left",
+          "gaze_variant__gaze_direction_07_front_right",
+          "gaze_variant__gaze_direction_07_back_left",
+          "gaze_variant__gaze_far_align_view_02",
+          "gaze_variant__gaze_far_align_view_03"
+        ]
+      },
+      "still_wrong": {
+        "count": 7,
+        "ids": [
+          "live__short_runtime_014",
+          "live__short_runtime_045",
+          "live__short_runtime_059",
+          "contrast__contrast_038",
+          "contrast__contrast_042",
+          "contrast__contrast_044",
+          "gaze_variant__gaze_far_align_view_01"
+        ]
+      },
+      "still_correct": {
+        "count": 26,
+        "ids": [
+          "legacy__train-042",
+          "legacy__train-044",
+          "legacy__train-045",
+          "legacy__train-101",
+          "legacy__train-105",
+          "legacy__train-107",
+          "legacy__train-151",
+          "legacy__train-152",
+          "legacy__train-156",
+          "legacy__train-160",
+          "legacy__train-576",
+          "live__short_runtime_243",
+          "user_addition__user_20261022_016",
+          "user_addition__user_20261022_017",
+          "user_addition__user_20261022_018",
+          "user_addition__user_20261022_055",
+          "user_addition__user_20261022_063",
+          "user_addition__user_20261022_071",
+          "contrast__contrast_010",
+          "contrast__contrast_041",
+          "contrast__contrast_043",
+          "gaze_variant__gaze_direction_07_back",
+          "gaze_variant__gaze_direction_07_left",
+          "gaze_variant__gaze_direction_07_back_right",
+          "gaze_variant__gaze_player_03_variant_01",
+          "gaze_variant__gaze_player_03_variant_02"
+        ]
+      }
+    },
+    "mean-42-43-44": {
+      "fixed": {
+        "count": 0,
+        "ids": []
+      },
+      "new_errors": {
+        "count": 21,
+        "ids": [
+          "legacy__train-105",
+          "legacy__train-107",
+          "legacy__train-160",
+          "legacy__train-576",
+          "live__short_runtime_033",
+          "live__short_runtime_040",
+          "live__short_runtime_041",
+          "user_addition__user_20261022_063",
+          "user_addition__user_20261022_067",
+          "contrast__contrast_011",
+          "contrast__contrast_037",
+          "contrast__contrast_040",
+          "contrast__contrast_041",
+          "gaze_variant__gaze_direction_07_front",
+          "gaze_variant__gaze_direction_07_back",
+          "gaze_variant__gaze_direction_07_left",
+          "gaze_variant__gaze_direction_07_front_left",
+          "gaze_variant__gaze_direction_07_front_right",
+          "gaze_variant__gaze_direction_07_back_left",
+          "gaze_variant__gaze_far_align_view_02",
+          "gaze_variant__gaze_far_align_view_03"
+        ]
+      },
+      "still_wrong": {
+        "count": 7,
+        "ids": [
+          "live__short_runtime_014",
+          "live__short_runtime_045",
+          "live__short_runtime_059",
+          "contrast__contrast_038",
+          "contrast__contrast_042",
+          "contrast__contrast_044",
+          "gaze_variant__gaze_far_align_view_01"
+        ]
+      },
+      "still_correct": {
+        "count": 18,
+        "ids": [
+          "legacy__train-042",
+          "legacy__train-044",
+          "legacy__train-045",
+          "legacy__train-101",
+          "legacy__train-151",
+          "legacy__train-152",
+          "legacy__train-156",
+          "live__short_runtime_243",
+          "user_addition__user_20261022_016",
+          "user_addition__user_20261022_017",
+          "user_addition__user_20261022_018",
+          "user_addition__user_20261022_055",
+          "user_addition__user_20261022_071",
+          "contrast__contrast_010",
+          "contrast__contrast_043",
+          "gaze_variant__gaze_direction_07_back_right",
+          "gaze_variant__gaze_player_03_variant_01",
+          "gaze_variant__gaze_player_03_variant_02"
+        ]
+      }
+    }
+  },
+  "consensus": {
+    "fixed_all": [],
+    "new_errors_all": [],
+    "still_wrong_all": [
+      "live__short_runtime_014",
+      "contrast__contrast_038",
+      "contrast__contrast_044",
+      "gaze_variant__gaze_far_align_view_01"
+    ],
+    "variable": [
+      "legacy__train-101",
+      "legacy__train-105",
+      "legacy__train-107",
+      "legacy__train-160",
+      "legacy__train-576",
+      "live__short_runtime_033",
+      "live__short_runtime_040",
+      "live__short_runtime_041",
+      "live__short_runtime_045",
+      "live__short_runtime_059",
+      "user_addition__user_20261022_055",
+      "user_addition__user_20261022_063",
+      "user_addition__user_20261022_067",
+      "contrast__contrast_011",
+      "contrast__contrast_037",
+      "contrast__contrast_040",
+      "contrast__contrast_041",
+      "contrast__contrast_042",
+      "gaze_variant__gaze_direction_07_front",
+      "gaze_variant__gaze_direction_07_back",
+      "gaze_variant__gaze_direction_07_left",
+      "gaze_variant__gaze_direction_07_front_left",
+      "gaze_variant__gaze_direction_07_front_right",
+      "gaze_variant__gaze_direction_07_back_left",
+      "gaze_variant__gaze_player_03_variant_02",
+      "gaze_variant__gaze_far_align_view_02",
+      "gaze_variant__gaze_far_align_view_03"
+    ]
+  },
+  "cases": [
+    {
+      "id": "legacy__train-101",
+      "text": "斧じゃなくて剣にして。",
+      "context": [],
+      "gold": "equip_sword",
+      "tags": [
+        "correction",
+        "negation"
+      ],
+      "needs_clarification": false,
+      "source": "synthetic",
+      "group_id": "material_aefbb08bd4ce",
+      "baseline": "equip_sword",
+      "predictions": {
+        "seed-42": "equip_sword",
+        "seed-43": "equip_sword",
+        "seed-44": "equip_sword",
+        "mean-42-43": "look_player",
+        "mean-42-44": "equip_sword",
+        "mean-43-44": "equip_sword",
+        "mean-42-43-44": "equip_sword"
+      },
+      "correct_seeds": 6
+    },
+    {
+      "id": "legacy__train-105",
+      "text": "馬を呼ばなくていい、今は剣を装備して。",
+      "context": [],
+      "gold": "equip_sword",
+      "tags": [
+        "correction",
+        "negation"
+      ],
+      "needs_clarification": false,
+      "source": "synthetic",
+      "group_id": "material_aefbb08bd4ce",
+      "baseline": "equip_sword",
+      "predictions": {
+        "seed-42": "equip_sword",
+        "seed-43": "equip_sword",
+        "seed-44": "equip_sword",
+        "mean-42-43": "look_player",
+        "mean-42-44": "equip_sword",
+        "mean-43-44": "equip_sword",
+        "mean-42-43-44": "enemy_information"
+      },
+      "correct_seeds": 5
+    },
+    {
+      "id": "legacy__train-107",
+      "text": "木の剣じゃなくて鉄の剣を持って。",
+      "context": [],
+      "gold": "equip_sword",
+      "tags": [
+        "correction",
+        "negation"
+      ],
+      "needs_clarification": false,
+      "source": "synthetic",
+      "group_id": "material_aefbb08bd4ce",
+      "baseline": "equip_sword",
+      "predictions": {
+        "seed-42": "equip_sword",
+        "seed-43": "equip_sword",
+        "seed-44": "equip_sword",
+        "mean-42-43": "look_player",
+        "mean-42-44": "equip_sword",
+        "mean-43-44": "equip_sword",
+        "mean-42-43-44": "look_player"
+      },
+      "correct_seeds": 5
+    },
+    {
+      "id": "legacy__train-160",
+      "text": "さっきは不要って言ったけど、今はラマを呼び戻して。",
+      "context": [],
+      "gold": "recall_mount",
+      "tags": [
+        "correction",
+        "negation"
+      ],
+      "needs_clarification": false,
+      "source": "synthetic",
+      "group_id": "material_2fea79c7cea4",
+      "baseline": "recall_mount",
+      "predictions": {
+        "seed-42": "recall_mount",
+        "seed-43": "recall_mount",
+        "seed-44": "recall_mount",
+        "mean-42-43": "recall_mount",
+        "mean-42-44": "recall_mount",
+        "mean-43-44": "recall_mount",
+        "mean-42-43-44": "look_player"
+      },
+      "correct_seeds": 6
+    },
+    {
+      "id": "legacy__train-576",
+      "text": "敵が出てくる前に備えたいから、今、剣に持ち替えて。",
+      "context": [],
+      "gold": "equip_sword",
+      "tags": [
+        "context",
+        "direct"
+      ],
+      "needs_clarification": false,
+      "source": "synthetic",
+      "group_id": "material_812d0f07ebf7",
+      "baseline": "equip_sword",
+      "predictions": {
+        "seed-42": "equip_sword",
+        "seed-43": "equip_sword",
+        "seed-44": "equip_sword",
+        "mean-42-43": "look_player",
+        "mean-42-44": "equip_sword",
+        "mean-43-44": "equip_sword",
+        "mean-42-43-44": "enemy_information"
+      },
+      "correct_seeds": 5
+    },
+    {
+      "id": "live__short_runtime_014",
+      "text": "ゾンビ出たら泣いちゃう？",
+      "context": [],
+      "gold": "not_target",
+      "tags": [
+        "casual",
+        "question",
+        "hypothetical"
+      ],
+      "needs_clarification": false,
+      "source": "observed_text",
+      "group_id": "material_292c56a51b58",
+      "baseline": "enemy_information",
+      "predictions": {
+        "seed-42": "enemy_information",
+        "seed-43": "enemy_information",
+        "seed-44": "enemy_information",
+        "mean-42-43": "look_player",
+        "mean-42-44": "enemy_information",
+        "mean-43-44": "enemy_information",
+        "mean-42-43-44": "enemy_information"
+      },
+      "correct_seeds": 0
+    },
+    {
+      "id": "live__short_runtime_033",
+      "text": "ドギドー何してるの?",
+      "context": [],
+      "gold": "not_target",
+      "tags": [
+        "casual",
+        "question"
+      ],
+      "needs_clarification": false,
+      "source": "observed_text",
+      "group_id": "material_6378b0f577bd",
+      "baseline": "not_target",
+      "predictions": {
+        "seed-42": "not_target",
+        "seed-43": "not_target",
+        "seed-44": "not_target",
+        "mean-42-43": "look_player",
+        "mean-42-44": "enemy_information",
+        "mean-43-44": "look_player",
+        "mean-42-43-44": "look_player"
+      },
+      "correct_seeds": 3
+    },
+    {
+      "id": "live__short_runtime_040",
+      "text": "こっちにおいで",
+      "context": [],
+      "gold": "dogido_recall",
+      "tags": [
+        "direct",
+        "location"
+      ],
+      "needs_clarification": false,
+      "source": "observed_text",
+      "group_id": "material_070e95002ec4",
+      "baseline": "dogido_recall",
+      "predictions": {
+        "seed-42": "dogido_recall",
+        "seed-43": "dogido_recall",
+        "seed-44": "dogido_recall",
+        "mean-42-43": "look_player",
+        "mean-42-44": "dogido_recall",
+        "mean-43-44": "look_player",
+        "mean-42-43-44": "look_player"
+      },
+      "correct_seeds": 4
+    },
+    {
+      "id": "live__short_runtime_041",
+      "text": "どぎど私の隣においで",
+      "context": [],
+      "gold": "dogido_recall",
+      "tags": [
+        "direct",
+        "location"
+      ],
+      "needs_clarification": false,
+      "source": "observed_text",
+      "group_id": "material_070e95002ec4",
+      "baseline": "dogido_recall",
+      "predictions": {
+        "seed-42": "dogido_recall",
+        "seed-43": "dogido_recall",
+        "seed-44": "dogido_recall",
+        "mean-42-43": "look_player",
+        "mean-42-44": "enemy_information",
+        "mean-43-44": "look_player",
+        "mean-42-43-44": "look_player"
+      },
+      "correct_seeds": 3
+    },
+    {
+      "id": "live__short_runtime_045",
+      "text": "こっちで一緒にしようよ",
+      "context": [],
+      "gold": "dogido_recall",
+      "tags": [
+        "casual",
+        "direct"
+      ],
+      "needs_clarification": false,
+      "source": "observed_text",
+      "group_id": "material_070e95002ec4",
+      "baseline": "not_target",
+      "predictions": {
+        "seed-42": "dogido_recall",
+        "seed-43": "not_target",
+        "seed-44": "look_player",
+        "mean-42-43": "look_player",
+        "mean-42-44": "look_player",
+        "mean-43-44": "look_player",
+        "mean-42-43-44": "look_player"
+      },
+      "correct_seeds": 1
+    },
+    {
+      "id": "live__short_runtime_059",
+      "text": "今日の冒険は終了しましょうか",
+      "context": [],
+      "gold": "not_target",
+      "tags": [
+        "casual",
+        "question"
+      ],
+      "needs_clarification": false,
+      "source": "observed_text",
+      "group_id": "material_a7821ffa0f66",
+      "baseline": "equip_sword",
+      "predictions": {
+        "seed-42": "not_target",
+        "seed-43": "equip_sword",
+        "seed-44": "not_target",
+        "mean-42-43": "look_player",
+        "mean-42-44": "enemy_information",
+        "mean-43-44": "look_player",
+        "mean-42-43-44": "enemy_information"
+      },
+      "correct_seeds": 2
+    },
+    {
+      "id": "user_addition__user_20261022_055",
+      "text": "右手を確認して！",
+      "context": [],
+      "gold": "look_relative_right",
+      "tags": [
+        "direct"
+      ],
+      "needs_clarification": false,
+      "source": "user_example",
+      "group_id": "material_f63c1f76728d",
+      "baseline": "look_relative_right",
+      "predictions": {
+        "seed-42": "look_relative_right",
+        "seed-43": "look_relative_right",
+        "seed-44": "look_relative_right",
+        "mean-42-43": "look_player",
+        "mean-42-44": "look_relative_right",
+        "mean-43-44": "look_relative_right",
+        "mean-42-43-44": "look_relative_right"
+      },
+      "correct_seeds": 6
+    },
+    {
+      "id": "user_addition__user_20261022_063",
+      "text": "わー！なんか変なものがあるぞー！これはなんだろう？",
+      "context": [],
+      "gold": "look_target",
+      "tags": [
+        "direct"
+      ],
+      "needs_clarification": false,
+      "source": "user_example",
+      "group_id": "material_0fa80575c338",
+      "baseline": "look_target",
+      "predictions": {
+        "seed-42": "look_target",
+        "seed-43": "look_target",
+        "seed-44": "look_target",
+        "mean-42-43": "look_player",
+        "mean-42-44": "enemy_information",
+        "mean-43-44": "look_target",
+        "mean-42-43-44": "look_player"
+      },
+      "correct_seeds": 4
+    },
+    {
+      "id": "user_addition__user_20261022_067",
+      "text": "こいつはどういうものだ？",
+      "context": [],
+      "gold": "look_target",
+      "tags": [
+        "direct"
+      ],
+      "needs_clarification": false,
+      "source": "user_example",
+      "group_id": "material_4107f67dcefa",
+      "baseline": "look_target",
+      "predictions": {
+        "seed-42": "look_target",
+        "seed-43": "look_target",
+        "seed-44": "look_target",
+        "mean-42-43": "look_player",
+        "mean-42-44": "enemy_information",
+        "mean-43-44": "look_player",
+        "mean-42-43-44": "look_player"
+      },
+      "correct_seeds": 3
+    },
+    {
+      "id": "contrast__contrast_011",
+      "text": "ドギド、あっちのクリーパーのほうをみて！",
+      "context": [],
+      "gold": "look_direction",
+      "tags": [
+        "direct"
+      ],
+      "needs_clarification": false,
+      "source": "user_example",
+      "group_id": "material_c521c6439d28",
+      "baseline": "look_direction",
+      "predictions": {
+        "seed-42": "look_player",
+        "seed-43": "look_direction",
+        "seed-44": "look_direction",
+        "mean-42-43": "look_player",
+        "mean-42-44": "enemy_information",
+        "mean-43-44": "look_player",
+        "mean-42-43-44": "look_player"
+      },
+      "correct_seeds": 2
+    },
+    {
+      "id": "contrast__contrast_037",
+      "text": "頭上の明るいところ、見上げてみて。",
+      "context": [],
+      "gold": "look_direction",
+      "tags": [
+        "direct"
+      ],
+      "needs_clarification": false,
+      "source": "synthetic",
+      "group_id": "material_14b9abf6753d",
+      "baseline": "look_direction",
+      "predictions": {
+        "seed-42": "look_direction",
+        "seed-43": "look_direction",
+        "seed-44": "equip_sword",
+        "mean-42-43": "look_player",
+        "mean-42-44": "enemy_information",
+        "mean-43-44": "look_player",
+        "mean-42-43-44": "look_player"
+      },
+      "correct_seeds": 2
+    },
+    {
+      "id": "contrast__contrast_038",
+      "text": "後ろを振り向いて、私が見てる方を見て。",
+      "context": [],
+      "gold": "look_direction",
+      "tags": [
+        "direct"
+      ],
+      "needs_clarification": false,
+      "source": "synthetic",
+      "group_id": "material_14b9abf6753d",
+      "baseline": "look_relative_back",
+      "predictions": {
+        "seed-42": "look_relative_back",
+        "seed-43": "look_relative_back",
+        "seed-44": "look_relative_back",
+        "mean-42-43": "look_player",
+        "mean-42-44": "enemy_information",
+        "mean-43-44": "look_player",
+        "mean-42-43-44": "look_player"
+      },
+      "correct_seeds": 0
+    },
+    {
+      "id": "contrast__contrast_040",
+      "text": "私はさっき後ろを振り向いたよ。",
+      "context": [],
+      "gold": "not_target",
+      "tags": [
+        "statement"
+      ],
+      "needs_clarification": false,
+      "source": "synthetic",
+      "group_id": "material_14b9abf6753d",
+      "baseline": "not_target",
+      "predictions": {
+        "seed-42": "look_relative_back",
+        "seed-43": "not_target",
+        "seed-44": "look_relative_back",
+        "mean-42-43": "look_player",
+        "mean-42-44": "enemy_information",
+        "mean-43-44": "look_player",
+        "mean-42-43-44": "look_player"
+      },
+      "correct_seeds": 1
+    },
+    {
+      "id": "contrast__contrast_041",
+      "text": "松明を持つのはやめて、鉄の剣へ持ち替えて。",
+      "context": [],
+      "gold": "equip_sword",
+      "tags": [
+        "direct"
+      ],
+      "needs_clarification": false,
+      "source": "synthetic",
+      "group_id": "material_253ae2ad7526",
+      "baseline": "equip_sword",
+      "predictions": {
+        "seed-42": "equip_sword",
+        "seed-43": "equip_sword",
+        "seed-44": "equip_sword",
+        "mean-42-43": "look_player",
+        "mean-42-44": "equip_sword",
+        "mean-43-44": "equip_sword",
+        "mean-42-43-44": "look_player"
+      },
+      "correct_seeds": 5
+    },
+    {
+      "id": "contrast__contrast_042",
+      "text": "この松明を壁に設置してくれる？",
+      "context": [],
+      "gold": "not_target",
+      "tags": [
+        "direct"
+      ],
+      "needs_clarification": false,
+      "source": "synthetic",
+      "group_id": "material_253ae2ad7526",
+      "baseline": "equip_sword",
+      "predictions": {
+        "seed-42": "equip_sword",
+        "seed-43": "equip_sword",
+        "seed-44": "not_target",
+        "mean-42-43": "look_player",
+        "mean-42-44": "enemy_information",
+        "mean-43-44": "look_player",
+        "mean-42-43-44": "look_player"
+      },
+      "correct_seeds": 1
+    },
+    {
+      "id": "contrast__contrast_044",
+      "text": "ラクダを呼ぶつもりだったけど、今日は歩くことにした。",
+      "context": [],
+      "gold": "not_target",
+      "tags": [
+        "statement"
+      ],
+      "needs_clarification": false,
+      "source": "synthetic",
+      "group_id": "material_253ae2ad7526",
+      "baseline": "equip_sword",
+      "predictions": {
+        "seed-42": "recall_mount",
+        "seed-43": "equip_sword",
+        "seed-44": "recall_mount",
+        "mean-42-43": "look_player",
+        "mean-42-44": "recall_mount",
+        "mean-43-44": "look_player",
+        "mean-42-43-44": "look_player"
+      },
+      "correct_seeds": 0
+    },
+    {
+      "id": "gaze_variant__gaze_direction_07_front",
+      "text": "正面を確認して！",
+      "context": [],
+      "gold": "look_relative_front",
+      "tags": [
+        "direct"
+      ],
+      "needs_clarification": false,
+      "source": "synthetic",
+      "group_id": "material_f63c1f76728d",
+      "baseline": "look_relative_front",
+      "predictions": {
+        "seed-42": "look_relative_front",
+        "seed-43": "look_relative_front",
+        "seed-44": "look_relative_front",
+        "mean-42-43": "look_player",
+        "mean-42-44": "enemy_information",
+        "mean-43-44": "look_player",
+        "mean-42-43-44": "look_player"
+      },
+      "correct_seeds": 3
+    },
+    {
+      "id": "gaze_variant__gaze_direction_07_back",
+      "text": "後ろを確認して！",
+      "context": [],
+      "gold": "look_relative_back",
+      "tags": [
+        "direct"
+      ],
+      "needs_clarification": false,
+      "source": "synthetic",
+      "group_id": "material_f63c1f76728d",
+      "baseline": "look_relative_back",
+      "predictions": {
+        "seed-42": "look_relative_back",
+        "seed-43": "look_relative_back",
+        "seed-44": "look_relative_back",
+        "mean-42-43": "look_relative_back",
+        "mean-42-44": "look_relative_back",
+        "mean-43-44": "look_relative_back",
+        "mean-42-43-44": "look_relative_back_right"
+      },
+      "correct_seeds": 6
+    },
+    {
+      "id": "gaze_variant__gaze_direction_07_left",
+      "text": "左手を確認して！",
+      "context": [],
+      "gold": "look_relative_left",
+      "tags": [
+        "direct"
+      ],
+      "needs_clarification": false,
+      "source": "synthetic",
+      "group_id": "material_f63c1f76728d",
+      "baseline": "look_relative_left",
+      "predictions": {
+        "seed-42": "look_relative_left",
+        "seed-43": "look_relative_left",
+        "seed-44": "look_relative_left",
+        "mean-42-43": "look_relative_left",
+        "mean-42-44": "look_relative_back_right",
+        "mean-43-44": "look_relative_left",
+        "mean-42-43-44": "look_relative_back_right"
+      },
+      "correct_seeds": 5
+    },
+    {
+      "id": "gaze_variant__gaze_direction_07_front_left",
+      "text": "左斜め前を確認して！",
+      "context": [],
+      "gold": "look_relative_front_left",
+      "tags": [
+        "direct"
+      ],
+      "needs_clarification": false,
+      "source": "synthetic",
+      "group_id": "material_f63c1f76728d",
+      "baseline": "look_relative_front_left",
+      "predictions": {
+        "seed-42": "look_relative_front_left",
+        "seed-43": "look_relative_front_left",
+        "seed-44": "look_relative_front_left",
+        "mean-42-43": "look_player",
+        "mean-42-44": "look_relative_front_left",
+        "mean-43-44": "look_player",
+        "mean-42-43-44": "look_player"
+      },
+      "correct_seeds": 4
+    },
+    {
+      "id": "gaze_variant__gaze_direction_07_front_right",
+      "text": "右斜め前を確認して！",
+      "context": [],
+      "gold": "look_relative_front_right",
+      "tags": [
+        "direct"
+      ],
+      "needs_clarification": false,
+      "source": "synthetic",
+      "group_id": "material_f63c1f76728d",
+      "baseline": "look_relative_front_right",
+      "predictions": {
+        "seed-42": "look_relative_front_right",
+        "seed-43": "look_relative_front_right",
+        "seed-44": "look_relative_front_right",
+        "mean-42-43": "look_relative_front_right",
+        "mean-42-44": "enemy_information",
+        "mean-43-44": "look_player",
+        "mean-42-43-44": "look_player"
+      },
+      "correct_seeds": 4
+    },
+    {
+      "id": "gaze_variant__gaze_direction_07_back_left",
+      "text": "左斜め後ろを確認して！",
+      "context": [],
+      "gold": "look_relative_back_left",
+      "tags": [
+        "direct"
+      ],
+      "needs_clarification": false,
+      "source": "synthetic",
+      "group_id": "material_f63c1f76728d",
+      "baseline": "look_relative_back_left",
+      "predictions": {
+        "seed-42": "look_relative_back_left",
+        "seed-43": "look_relative_back_left",
+        "seed-44": "look_relative_back_left",
+        "mean-42-43": "look_player",
+        "mean-42-44": "look_relative_back_left",
+        "mean-43-44": "look_player",
+        "mean-42-43-44": "look_player"
+      },
+      "correct_seeds": 4
+    },
+    {
+      "id": "gaze_variant__gaze_player_03_variant_02",
+      "text": "ねえねえ、私を見てよー。",
+      "context": [],
+      "gold": "look_player",
+      "tags": [
+        "direct"
+      ],
+      "needs_clarification": false,
+      "source": "synthetic",
+      "group_id": "material_2623644741ec",
+      "baseline": "look_player",
+      "predictions": {
+        "seed-42": "look_player",
+        "seed-43": "look_player",
+        "seed-44": "look_player",
+        "mean-42-43": "look_player",
+        "mean-42-44": "enemy_information",
+        "mean-43-44": "look_player",
+        "mean-42-43-44": "look_player"
+      },
+      "correct_seeds": 6
+    },
+    {
+      "id": "gaze_variant__gaze_far_align_view_01",
+      "text": "今わたしが見てる方、ドギドも見てみて。",
+      "context": [],
+      "gold": "look_direction",
+      "tags": [
+        "location"
+      ],
+      "needs_clarification": false,
+      "source": "synthetic",
+      "group_id": "material_15b5e96a30ea",
+      "baseline": "dogido_recall",
+      "predictions": {
+        "seed-42": "look_player",
+        "seed-43": "dogido_recall",
+        "seed-44": "dogido_recall",
+        "mean-42-43": "look_player",
+        "mean-42-44": "enemy_information",
+        "mean-43-44": "look_player",
+        "mean-42-43-44": "look_player"
+      },
+      "correct_seeds": 0
+    },
+    {
+      "id": "gaze_variant__gaze_far_align_view_02",
+      "text": "私と同じ方を向いてみて。遠くにおもしろいものがあるよ。",
+      "context": [],
+      "gold": "look_direction",
+      "tags": [
+        "location"
+      ],
+      "needs_clarification": false,
+      "source": "synthetic",
+      "group_id": "material_15b5e96a30ea",
+      "baseline": "look_direction",
+      "predictions": {
+        "seed-42": "look_player",
+        "seed-43": "look_direction",
+        "seed-44": "look_direction",
+        "mean-42-43": "look_player",
+        "mean-42-44": "enemy_information",
+        "mean-43-44": "look_player",
+        "mean-42-43-44": "look_player"
+      },
+      "correct_seeds": 2
+    },
+    {
+      "id": "gaze_variant__gaze_far_align_view_03",
+      "text": "ほら、私が眺めてるあたり。あそこに何か見えるでしょ？",
+      "context": [],
+      "gold": "look_direction",
+      "tags": [
+        "location"
+      ],
+      "needs_clarification": false,
+      "source": "synthetic",
+      "group_id": "material_15b5e96a30ea",
+      "baseline": "look_direction",
+      "predictions": {
+        "seed-42": "look_direction",
+        "seed-43": "look_direction",
+        "seed-44": "look_direction",
+        "mean-42-43": "look_player",
+        "mean-42-44": "enemy_information",
+        "mean-43-44": "look_player",
+        "mean-42-43-44": "look_player"
+      },
+      "correct_seeds": 3
+    }
+  ]
+}

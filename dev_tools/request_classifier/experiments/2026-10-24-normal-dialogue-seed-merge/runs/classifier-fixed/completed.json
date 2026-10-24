@@ -1,0 +1,10 @@
+{
+  "finished_at_utc": "2026-10-24T07:53:19.145126+00:00",
+  "selection_sha256": "f00001d2bd1c503531685061dfd38f90154f300caec5beb9cc51cfb4ba697a1a",
+  "candidates": 16,
+  "dev_predictions": 736,
+  "test_predictions": 800,
+  "training_addition_predictions": 752,
+  "training_runs": 0,
+  "runtime_adoption": false
+}
