@@ -21,4 +21,6 @@ Git LFSを導入した環境で `git lfs pull` を実行し、本体の `.venv` 
 - Python全体検証: 206 passed、11 skipped、22 subtests passed。モデル完全性、LFSポインターの案内、通常導入・家庭用配布の接続を含む。
 - `launch_dialogue.py --settings-dir . --check` 成功。実環境の設定も本体内のモデルと既存の推論用Pythonへ接続した。
 - 同じCPU環境で移設前後を8発話・全23確率で比較し、最大絶対差0。採用モデル4ファイルのSHA-256も一致した。精度の再評価ではない。
-- Minecraftでの操作・実音声は今回の確認対象外。公開先からの再取得は公開後の検証として別途行う。
+- 公開commit `7ddc1ee` を別の空ディレクトリへ新規cloneし、Git LFSから重みを再取得。4ファイルのSHA-256、リンクを使わない配置を確認した。取得先のworkerとモデルでも同じ8発話・全23確率が完全一致。Python依存は既存の検証済み環境を利用し、新規環境への依存インストールは再実行していない。
+- 同commitの [GitHub CI](https://github.com/yukincom/DokiDoki_Dogido/actions/runs/40047090626) 成功。
+- Minecraftでの操作・実音声は今回の確認対象外。
