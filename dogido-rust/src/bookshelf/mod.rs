@@ -1,5 +1,9 @@
 //! ゲーム非依存の本棚。loopback専用で、他のUIへの導線は作らない。
 mod research;
+mod research_storage;
+mod library_view;
+mod player_photos;
+pub mod research_archive;
 mod poem_edit;
 pub mod captures;
 pub mod store;
@@ -50,6 +54,7 @@ impl<E: Into<anyhow::Error>> From<E> for ApiError {
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let reason = self.0.to_string();
+        let diagnostic = (reason == "research_storage_connection_failed").then(|| format!("{:#}", self.0));
         let (status, detail) = match reason.as_str() {
             "changed" | "reading_changed" | "saved_poem_changed" | "source_poem_changed"
             | "parent_revision_mismatch" | "revision_id_conflict" => (
@@ -61,9 +66,15 @@ impl IntoResponse for ApiError {
                 StatusCode::NOT_FOUND,
                 "写真ファイルが見つからないため復元できません。",
             ),
+            "player_photo_unavailable" => (StatusCode::SERVICE_UNAVAILABLE, "写真を読めません。保存先SSDの接続を確認してください。"),
+            "player_photo_changed" => (StatusCode::CONFLICT, "選択後に元画像が変わりました。写真を選び直してください。"),
             "memory_disabled" => (
                 StatusCode::CONFLICT,
                 "本体設定で記憶が無効になっています。保存できません。",
+            ),
+            "research_original_protected" => (
+                StatusCode::CONFLICT,
+                "ドギドから届いた研究原本は変更・削除できません。",
             ),
             _ => (
                 StatusCode::BAD_REQUEST,
@@ -71,7 +82,7 @@ impl IntoResponse for ApiError {
             ),
         };
         tracing::warn!(event="bookshelf_request_failed",error=%self.0);
-        (status, Json(json!({"detail":detail}))).into_response()
+        (status, Json(json!({"detail":detail,"diagnostic":diagnostic}))).into_response()
     }
 }
 async fn blocking<T: Send + 'static>(
@@ -123,6 +134,7 @@ async fn guard(State(app): State<Arc<App>>, req: Request, next: Next) -> Respons
     response
 }
 fn bootstrap(app: &App) -> Result<Value> {
+    let view = app.store.library_view()?;
     let catalog = store::catalog();
     let mut biomes = serde_json::Map::new();
     let mut english = serde_json::Map::new();
@@ -146,7 +158,7 @@ fn bootstrap(app: &App) -> Result<Value> {
         );
     }
     Ok(
-        json!({"catalog":catalog,"poems":store::poems(&app.store.memory,false)?,"player":app.store.player()?,"photos":app.store.photo_snapshot_now()?,"corrections":crate::haiku_record::MemoryStore::new(&app.store.memory).reading_corrections()?,"status":{"active":false,"memoryEnabled":app.memory_enabled,"message":"Minecraftを閉じた状態でも閲覧・編集できます。"},"csrf":app.csrf,"biomes":biomes,"biomeEnglish":english}),
+        json!({"catalog":catalog,"poems":view["poems"],"player":view["player"],"photos":view["photos"],"corrections":crate::haiku_record::MemoryStore::new(&app.store.memory).reading_corrections()?,"status":{"active":false,"memoryEnabled":app.memory_enabled,"message":"Minecraftを閉じた状態でも閲覧・編集できます。"},"csrf":app.csrf,"biomes":biomes,"biomeEnglish":english}),
     )
 }
 async fn boot(State(app): State<Arc<App>>) -> Result<Response, ApiError> {
@@ -174,7 +186,18 @@ async fn edit_poem(State(app): State<Arc<App>>, Json(edit): Json<poem_edit::Edit
     }).await?))
 }
 async fn photos(State(app): State<Arc<App>>, Json(value): Json<Value>) -> ApiResult {
-    Ok(Json(blocking(move || app.store.photo_edit(&value)).await?))
+    Ok(Json(blocking(move || {
+        ensure!(app.memory_enabled, "memory_disabled");
+        app.store.photo_edit(&value)
+    }).await?))
+}
+async fn research_storage(
+    State(app): State<Arc<App>>, Json(selection): Json<research_storage::Selection>,
+) -> ApiResult {
+    Ok(Json(blocking(move || {
+        ensure!(app.memory_enabled, "memory_disabled");
+        Ok(json!({"researchStorage":app.store.select_research_storage(selection).context("research_storage_connection_failed")?}))
+    }).await?))
 }
 async fn export_poems(
     State(app): State<Arc<App>>,
@@ -216,11 +239,7 @@ async fn trash_list(State(app): State<Arc<App>>) -> ApiResult {
     Ok(Json(blocking(move || app.store.trash(Utc::now())).await?))
 }
 async fn library_snapshot(State(app): State<Arc<App>>) -> ApiResult {
-    Ok(Json(blocking(move || Ok(json!({
-        "poems": store::poems(&app.store.memory, false)?,
-        "player": app.store.player()?,
-        "photos": app.store.photo_snapshot_now()?,
-    }))).await?))
+    Ok(Json(blocking(move || app.store.library_view()).await?))
 }
 async fn trash_change(State(app): State<Arc<App>>, Json(v): Json<Value>) -> ApiResult {
     Ok(Json(
@@ -247,6 +266,8 @@ async fn photo_image(
     Ok(([(header::CONTENT_TYPE, "image/png")], bytes).into_response())
 }
 const PUBLIC: &[&str] = &[
+    "research-settings.js",
+    "research-settings.css",
     "poem-editor.js",
     "poem-editor.css",
     "index.html",
@@ -309,6 +330,7 @@ fn router(app: Arc<App>) -> Router {
         .route("/api/poems/current", put(edit_poem))
         .route("/api/poems/export", axum::routing::post(export_poems))
         .route("/api/photos", put(photos))
+        .route("/api/research-storage", put(research_storage))
         .route("/api/readings", put(reading).delete(remove_reading))
         .route("/api/trash", get(trash_list).put(trash_change))
         .route("/api/photos/{id}/image", get(photo_image))
@@ -335,6 +357,7 @@ pub async fn run(config: Config, port: u16) -> Result<()> {
         memory: config.memory,
         photos: config.photos,
     };
+    let research = spawn_research_worker(store.clone());
     let upkeep = store.clone();
     if let Err(e) = blocking(move || upkeep.purge(Utc::now())).await {
         tracing::warn!(event="bookshelf_cleanup_failed",error=%e.0);
@@ -370,6 +393,38 @@ pub async fn run(config: Config, port: u16) -> Result<()> {
         })
         .await;
     cleanup.abort();
+    research.abort();
     result?;
     Ok(())
+}
+
+/// 本棚と本体で共有する保全worker。保存判断やゲーム処理から独立し、設定無しは何もしない。
+pub fn spawn_research_worker(store: store::Store) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let mut timer = tokio::time::interval(std::time::Duration::from_secs(30));
+        timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            timer.tick().await;
+            let worker = store.clone();
+            match tokio::task::spawn_blocking(move || worker.sync_research_storage()).await {
+                Ok(Ok(_)) => {},
+                Ok(Err(error)) => tracing::warn!(event="research_archive_pending",error=%error),
+                Err(error) => tracing::warn!(event="research_archive_worker_failed",error=%error),
+            }
+        }
+    })
+}
+
+/// 明示的な初回保全と保全再確認。通常起動と同じ設定／同じ保存経路を使う。
+pub fn sync_research(config: Config, root: Option<PathBuf>) -> Result<Value> {
+    ensure!(config.memory_enabled, "memory_disabled");
+    let store = store::Store { memory:config.memory,photos:config.photos,screenshots:config.screenshots };
+    if let Some(root) = root {
+        let current = research_archive::load_config(&store.memory)?;
+        let status = store.select_research_storage(research_storage::Selection {
+            root, expected_archive_id:current.map(|c| c.archive_id),
+        })?;
+        ensure!(status["state"] == "ready", "research_archive_pending: {status}");
+        Ok(status)
+    } else { store.sync_research_storage() }
 }

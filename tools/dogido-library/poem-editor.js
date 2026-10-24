@@ -47,7 +47,7 @@
     if(!poem||!card||card.querySelector('.poem-edit-button'))return;
     const draft=getDraft(poem),button=document.createElement('button'),help=document.createElement('p');
     card.classList.add('poem-current-card');
-    button.type='button';button.className='poem-edit-button';button.disabled=boot.status.active;
+    button.type='button';button.className='poem-edit-button';button.disabled=boot.status.active||poem.readOnly===true;
     button.innerHTML='<svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true" focusable="false"><path d="m7 21 4 4L4 28Zm2-2L22 6l5 5-13 13Zm15-15 2-2a2 2 0 0 1 3 0l1 1a2 2 0 0 1 0 3l-2 2Z"/></svg>';
     help.className='poem-edit-help';help.textContent='改行で三行 · ⌘S 保存';
     const update=()=>{

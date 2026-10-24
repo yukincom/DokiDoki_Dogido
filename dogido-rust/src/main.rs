@@ -32,6 +32,13 @@ enum Command {
         #[arg(long, default_value_t = 0)]
         port: u16,
     },
+    /// 設定済みの研究保全を一回実行する。--rootは明示的な保存先変更。
+    SyncBookshelfResearch {
+        #[arg(long)]
+        config: String,
+        #[arg(long)]
+        root: Option<PathBuf>,
+    },
     /// 既存AEC・whisper.cppを使う音声入力。設定JSONに認証値は含めない。
     VoiceInput {
         #[arg(long)]
@@ -135,6 +142,9 @@ async fn main() -> Result<()> {
         Command::ServeBookshelf { config, port } => {
             dogido_rust::bookshelf::run(serde_json::from_str(&config)?, port).await?;
         }
+        Command::SyncBookshelfResearch { config, root } => {
+            println!("{}", dogido_rust::bookshelf::sync_research(serde_json::from_str(&config)?, root)?);
+        }
         Command::BuildChatPrompt { request } => {
             let details = serde_json::from_str(&std::fs::read_to_string(request)?)?;
             println!(
@@ -222,6 +232,14 @@ async fn main() -> Result<()> {
             output_sampling_rate,
         } => {
             let server_settings = ServerSettings::merged(&serde_json::from_str(&server_settings)?)?;
+            let haiku: dogido_rust::dialogue::HaikuSettings = serde_json::from_str(&haiku_settings)?;
+            let research = if haiku.memory_enabled {
+                Some(dogido_rust::bookshelf::spawn_research_worker(dogido_rust::bookshelf::store::Store {
+                    memory:haiku.memory_dir.clone(),
+                    screenshots:haiku.screenshot_dir.clone().unwrap_or_else(dogido_rust::screenshot::default_directory),
+                    photos: std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default().join("Pictures/ドギド"),
+                }))
+            } else { None };
             let dialogue = Dialogue::new(DialogueConfig {
                 python,
                 helper: helper.unwrap_or_else(|| DialogueConfig::default().helper),
@@ -235,7 +253,7 @@ async fn main() -> Result<()> {
                 combat: dogido_rust::combat::model::Settings::merged(&serde_json::from_str(
                     &combat_settings,
                 )?)?,
-                haiku: serde_json::from_str(&haiku_settings)?,
+                haiku,
                 request_classifier: serde_json::from_str(&request_classifier_settings)?,
                 chat_image: serde_json::from_str(&chat_image_settings)?,
                 player: audio_player,
@@ -250,7 +268,9 @@ async fn main() -> Result<()> {
                 output_sampling_rate,
             })?;
             dialogue.prepare_request_classifier().await?;
-            serve(listen, Some(dialogue), server_settings).await?;
+            let result = serve(listen, Some(dialogue), server_settings).await;
+            if let Some(worker) = research { worker.abort(); }
+            result?;
         }
         Command::Check { request } => {
             let input = read_request(&request)?;

@@ -157,6 +157,14 @@ pub(super) fn export(
         if at < start || at >= end {
             continue;
         }
+        rows.push(record(&poem, &player, &photos));
+    }
+    Ok(json!({"schemaVersion":1,"exportedAt":now.to_rfc3339(),
+        "period":{"startMonth":period.start_month,"endMonth":period.end_month,"timezone":"Asia/Tokyo","basis":"original_created_at","startInclusive":start.to_rfc3339(),"endExclusive":end.to_rfc3339()},
+        "historyScope":"all_saved_history_read_at_export","deletedPoemsIncluded":false,"poems":rows}))
+}
+
+fn record(poem: &Value, player: &Value, photos: &Value) -> Value {
         let id = poem["id"].as_str().unwrap();
         let note = &player["poems"][id];
         let slots = photos["placements"][format!("poems:{id}")]
@@ -167,12 +175,26 @@ pub(super) fn export(
             "id":p["id"],"filename":p["filename"],"title":p["title"],"width":p["width"],"height":p["height"],
             "source":p["source"],"sha256":p["sha256"],"poemId":p["poemId"],"requestId":p["requestId"]
         })).collect();
-        rows.push(json!({"id":id,"original":poem["original"],"current":poem["current"],
+        json!({"id":id,"original":poem["original"],"current":poem["current"],
             "revisions":poem["history"],"materials":poem["materials"],"dialogue":poem["dialogue"],
             "recordStatus":poem["recordStatus"],"player":{"favorite":note["favorite"].as_bool().unwrap_or(false),"note":note["note"].as_str().unwrap_or("")},
-            "photos":{"slots":slots,"references":images,"imageDataIncluded":false}}));
+            "photos":{"slots":slots,"references":images,"imageDataIncluded":false}})
+}
+
+/// 通常の月範囲書出しと同じ正本投影。研究保全ではごみ箱に残る句も取りこぼさない。
+pub(super) fn archive_records(store: &super::store::Store, state: &Value) -> Result<Vec<Value>> {
+    // メモと写真は同じ保存時点のstateから投影し、存在しなかった組合せを固定しない。
+    let player = json!({"poems":state["poems"]});
+    let photos = store.photo_snapshot(state)?;
+    let mut result = Vec::new();
+    for deleted in [false, true] {
+        for poem in super::store::poems(&store.memory, deleted)? {
+            let mut value = record(&poem, &player, &photos);
+            value["schemaVersion"] = 1.into();
+            value["deletedFromBookshelf"] = deleted.into();
+            value["photos"]["originalId"] = photos["originals"][format!("poems:{}", poem["id"].as_str().unwrap())].clone();
+            result.push(value);
+        }
     }
-    Ok(json!({"schemaVersion":1,"exportedAt":now.to_rfc3339(),
-        "period":{"startMonth":period.start_month,"endMonth":period.end_month,"timezone":"Asia/Tokyo","basis":"original_created_at","startInclusive":start.to_rfc3339(),"endExclusive":end.to_rfc3339()},
-        "historyScope":"all_saved_history_read_at_export","deletedPoemsIncluded":false,"poems":rows}))
+    Ok(result)
 }

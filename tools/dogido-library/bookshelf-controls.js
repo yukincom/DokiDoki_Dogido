@@ -23,11 +23,17 @@
     else $('categories').append(restoreButton);
   }
   const originalNavigation=renderNavigation;
+  const originalDetail=renderDetail;
+  renderDetail=function(){
+    if(window.DogidoResearchSettings?.isOpen())return window.DogidoResearchSettings.renderPage();
+    return originalDetail();
+  };
   renderNavigation=function(){
     originalNavigation();
     if(state.book==='catalog'){
       allButton.setAttribute('aria-pressed',String(readingPageOpen()));
       $('categories').append(allButton);
+      window.DogidoResearchSettings?.placeMenu(allButton);
     }
     placeMenuActions();
   };

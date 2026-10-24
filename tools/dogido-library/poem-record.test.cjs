@@ -21,6 +21,13 @@ test('original and current verses sit together next to the photo, before records
  assert.match(layout,/\.poem-pair>\.verse-card:last-child\{grid-column:1;grid-row:1\}/);
  assert(html.indexOf('poem-overview')<html.indexOf('poem-record'));assert(html.indexOf('poem-record')<html.indexOf('id="player-note"'));assert.equal((html.match(/datetime="2026-10-19"/g)||[]).length,1);
 });
+test('internal representations have a collapsed disclosure after materials and do not invent measurements',()=>{
+ const html=record.render({materials:{interpretation:'これは発句の解釈'}});
+ assert.match(html,/<details class="poem-internal-representations"><summary>内部表現<\/summary>/);
+ assert(html.indexOf('発句の材料')<html.indexOf('<summary>内部表現'));
+ assert.match(html,/内部表現の記録はありません/);assert.match(html,/数値データはまだ採取していません/);
+ assert.equal((html.match(/これは発句の解釈/g)||[]).length,1);
+});
 test('list toolbar keeps clear above count beside icons and bookmark aligns right in the metadata header',()=>{
  const controls=fs.readFileSync(__dirname+'/bookshelf-controls.css','utf8'),metadata=fs.readFileSync(__dirname+'/poem-metadata.css','utf8');
  assert.match(controls,/\.poem-menu-actions>\.result-meta\{[^}]*flex-direction:column;[^}]*margin:0 0 0 auto/);

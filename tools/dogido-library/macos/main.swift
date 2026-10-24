@@ -12,6 +12,7 @@ final class Bookshelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavi
     private var mayClose = false
     private var closing = false
     private var baseURL: URL?
+    private var choosingResearchDirectory = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
@@ -39,6 +40,7 @@ final class Bookshelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavi
         config.websiteDataStore = .nonPersistent()
         config.userContentController.add(self, name: "dogidoPhotoFolder")
         config.userContentController.addScriptMessageHandler(self, contentWorld: .page, name: "dogidoExport")
+        config.userContentController.addScriptMessageHandler(self, contentWorld: .page, name: "dogidoResearchDirectory")
         web = WKWebView(frame: .zero, configuration: config)
         web.navigationDelegate = self
         web.uiDelegate = self
@@ -140,6 +142,9 @@ final class Bookshelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavi
     }
     // 保存先はユーザーが選択する。Web側からパスを受け取らない。
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage, replyHandler: @escaping (Any?, String?) -> Void) {
+        if message.name == "dogidoResearchDirectory" {
+            chooseResearchDirectory(message, replyHandler: replyHandler); return
+        }
         let origin = message.frameInfo.securityOrigin
         guard message.name == "dogidoExport", message.webView === web, message.frameInfo.isMainFrame,
               let port = baseURL?.port, origin.protocol == "http", origin.host == "127.0.0.1", origin.port == port,
@@ -155,6 +160,37 @@ final class Bookshelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavi
             guard response == .OK, let url = panel.url else { replyHandler("cancelled", nil); return }
             do { try data.write(to: url, options: .atomic); replyHandler("saved", nil) }
             catch { replyHandler(nil, "JSONを保存できませんでした。保存先を確認してください。") }
+        }
+    }
+    // 本棚の主フレームからの固定要求だけを受け、選ばれたディレクトリのパスだけを返す。
+    // ファイルの作成・移動・削除や設定保存はしない。Web側の明示保存へ分ける。
+    private func chooseResearchDirectory(_ message: WKScriptMessage, replyHandler: @escaping (Any?, String?) -> Void) {
+        let origin = message.frameInfo.securityOrigin
+        guard message.webView === web, message.frameInfo.isMainFrame,
+              message.body as? String == "chooseResearchDirectory",
+              let port = baseURL?.port, origin.protocol == "http", origin.host == "127.0.0.1", origin.port == port else {
+            replyHandler(nil, "本棚からのフォルダ選択要求を確認できませんでした。"); return
+        }
+        guard !choosingResearchDirectory else {
+            replyHandler(nil, "保存先フォルダはすでに選択中です。"); return
+        }
+        choosingResearchDirectory = true
+        let panel = NSOpenPanel()
+        panel.title = "研究データの保存先"
+        panel.message = "研究データを保存する最後のフォルダそのものを選んでください。"
+        panel.prompt = "このフォルダを選択"
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = true
+        panel.beginSheetModal(for: window) { [weak self] response in
+            guard let self = self else { replyHandler(nil, "本棚が閉じられました。"); return }
+            self.choosingResearchDirectory = false
+            guard self.web.url?.scheme == "http", self.web.url?.host == "127.0.0.1", self.web.url?.port == port else {
+                replyHandler(nil, "本棚のページが変わったため、選択を取り消しました。"); return
+            }
+            guard response == .OK, let url = panel.url, url.isFileURL else { replyHandler(NSNull(), nil); return }
+            replyHandler(url.path, nil)
         }
     }
     func webView(_ webView: WKWebView, runOpenPanelWith parameters: WKOpenPanelParameters, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping ([URL]?) -> Void) {

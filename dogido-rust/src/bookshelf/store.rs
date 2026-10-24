@@ -49,10 +49,12 @@ impl Store {
         crate::haiku_record::locked_file(&path)
     }
     fn save(&self, data: &mut Value) -> Result<()> {
+        super::research_storage::mark_pending(data);
         data["revision"] = (data["revision"].as_u64().context("invalid_revision")? + 1).into();
         trash::atomic(&self.path(), &serde_json::to_vec(data)?)
     }
     pub(super) fn save_photos(&self, data: &mut Value) -> Result<()> {
+        super::research_storage::mark_pending(data);
         data["photoRevision"] = (data["photoRevision"]
             .as_u64()
             .context("invalid_photo_revision")?
@@ -114,6 +116,7 @@ impl Store {
     fn photo_rows(&self, d: &Value) -> Result<Vec<Value>> {
         self.check_photo_directory()?;
         let mut result = self.minecraft_rows(d);
+        result.extend(self.player_photo_rows(d)?);
         let entries = match fs::read_dir(&self.photos) {
             Ok(e) => e,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -152,9 +155,10 @@ impl Store {
         result.sort_by(|a, b| b["filename"].as_str().cmp(&a["filename"].as_str()));
         Ok(result)
     }
-    fn photo_snapshot(&self, d: &Value) -> Result<Value> {
+    pub(super) fn photo_snapshot(&self, d: &Value) -> Result<Value> {
         let mut items = self.photo_rows(d)?;
-        items.retain(|p| d["photoTrash"].get(p["id"].as_str().unwrap()).is_none());
+        items.retain(|p| super::research_storage::protected(d, p["id"].as_str().unwrap())
+            || d["photoTrash"].get(p["id"].as_str().unwrap()).is_none());
         for p in &mut items {
             p["title"] = d["photoTitles"][p["id"].as_str().unwrap()]
                 .as_str()
@@ -171,7 +175,8 @@ impl Store {
                 }
             }
         }
-        Ok(json!({"revision":d["photoRevision"],"items":items,"placements":placements}))
+        Ok(json!({"revision":d["photoRevision"],"items":items,"placements":placements,
+            "originals":super::research_storage::originals(d),"researchStorage":self.research_status(d)?}))
     }
     pub fn photo_snapshot_now(&self) -> Result<Value> {
         self.photo_snapshot(&self.read()?)
@@ -199,6 +204,7 @@ impl Store {
         let known = |id: &Value| ids.iter().any(|p| p["id"] == *id);
         let poems = poems(&self.memory, false)?;
         for (id, title) in edit["titles"].as_object().context("invalid_titles")? {
+            ensure!(!super::research_storage::protected(&d, id), "research_original_protected");
             ensure!(
                 known(&json!(id)) && title.as_str().is_some_and(|s| s.chars().count() <= 200),
                 "invalid_title"
@@ -218,6 +224,7 @@ impl Store {
                         .any(|e| e["id"] == id)
                 });
             let slots = slots.as_array().context("invalid_slots")?;
+            self.validate_original_slots(&d, target, slots)?;
             ensure!(
                 valid_target
                     && slots.len() == 3
@@ -252,12 +259,19 @@ impl Store {
                 .collect();
             d["placements"][target] = json!(merged);
         }
+        self.stage_player_photos(&mut d, &snapshot)?;
         self.save_photos(&mut d)?;
-        self.photo_snapshot(&d)
+        drop(_lock);
+        // 既存の貼付け保存で確定してから移す。失敗時も貼付けと元画像は保持しworkerが再試行する。
+        if let Err(error) = self.sync_player_photos_now() {
+            tracing::warn!(event="player_photo_transfer_pending",error=%error);
+        }
+        self.photo_snapshot_now()
     }
     pub fn photo_change(&self, id: &str, restore: bool, now: DateTime<Utc>) -> Result<()> {
         let _lock = self.write_lock()?;
         let mut d = self.read()?;
+        ensure!(!super::research_storage::protected(&d, id), "research_original_protected");
         if restore {
             let row = d["photoTrash"].get(id).context("not_in_trash")?;
             let at =
@@ -272,6 +286,9 @@ impl Store {
                     row["filename"].as_str().context("invalid_filename")?,
                     row["sha256"].as_str().context("invalid_capture_hash")?,
                 )?;
+            } else if row["source"] == "minecraft_f2" {
+                use sha2::{Digest, Sha256};
+                ensure!(format!("{:x}", Sha256::digest(self.player_photo_image(&d, id)?)) == row["sha256"], "photo_file_changed");
             } else {
                 ensure!(
                     hash(
@@ -295,6 +312,9 @@ impl Store {
                     .as_str()
                     .context("invalid_capture_hash")?
                     .to_owned()
+            } else if row["source"] == "minecraft_f2" {
+                use sha2::{Digest, Sha256};
+                format!("{:x}", Sha256::digest(self.player_photo_image(&d, id)?))
             } else {
                 hash(&path)?
             };
@@ -314,6 +334,11 @@ impl Store {
         Ok(())
     }
     pub fn purge(&self, now: DateTime<Utc>) -> Result<()> {
+        self.protect_research_captures()?;
+        // 保全先を設定した後は、未保全のまま期限切れ正本や個人メモを消さない。
+        if super::research_archive::load_config(&self.memory)?.is_some() {
+            self.sync_research_storage()?;
+        }
         trash::purge(&self.memory, now)?;
         if !self.path().exists() {
             return Ok(());
@@ -351,6 +376,9 @@ impl Store {
             self.check_photo_directory()?;
         }
         for id in ids {
+            if super::research_storage::protected(&d, &id) {
+                continue;
+            }
             let r = &d["photoTrash"][&id];
             let at = DateTime::parse_from_rfc3339(r["expiresAt"].as_str().context("trash_time")?)?;
             if now < at || r["purged"] == true {
@@ -358,7 +386,7 @@ impl Store {
             }
             let filename = r["filename"].as_str().context("invalid_filename")?;
             // Minecraft所有の原本には触れない。本棚の登録・タイトル・貼付けだけを消す。
-            if r["source"] != "minecraft" {
+            if r["source"] != "minecraft" && r["source"] != "minecraft_f2" {
                 ensure!(
                     filename == format!("{id}.png")
                         && !filename.contains(['/', '\\'])
@@ -447,27 +475,11 @@ pub fn poems(root: &Path, deleted: bool) -> Result<Vec<Value>> {
             }
             let history: Vec<_> = revisions.iter().filter(|r| r["haiku_id"] == id).collect();
             let latest = history.last().copied().unwrap_or(&row);
-            let created = row["created_at"].as_str().unwrap_or("");
-            let biome = row["world"]["biome"].as_str().map(|s| {
-                if s.contains(':') {
-                    s.into()
-                } else {
-                    format!("minecraft:{s}")
-                }
-            });
-            // 句のきっかけとして伝えた見どころを元の発句記録から読む。
-            // prefaceは朗読の合図、interpretationは未発話の説明も含むため代用しない。
-            let preface = row["materials_snapshot"]["preface_spoken"]
-                .as_str()
-                .filter(|text| !text.trim().is_empty());
-            let mut item = json!({"id":format!("{}:{id}",trash::source(root,&dir)),"kind":"poem","lines":lines(latest),"author":if row["author"]=="player"{"プレイヤー"}else{"ドギド"},"date":created.get(..10).unwrap_or(""),"createdAt":created,"biomeId":biome,"timeOfDay":row["world"]["time_phase"],"preface":preface,"revised":!history.is_empty(),"history":history,"catalog":null,"label":lines(latest).join(" / ")});
-            item["originalLines"] = json!(lines(&row));
-            item["original"] = row.clone();
-            item["current"] = latest.clone();
-            item["materials"] = row["materials_snapshot"].clone();
-            item["dialogue"] = json!(dialogue.get(id).cloned().unwrap_or_default());
-            item["recordStatus"] = json!({"materials":if row["materials_snapshot"].is_object(){"recorded"}else{"missing"},
-                "dialogue":if dialogue.contains_key(id){"recorded"}else{"not_found"}});
+            let mut item = project_poem(&format!("{}:{id}", trash::source(root, &dir)), &row, latest,
+                &json!(history), &row["materials_snapshot"],
+                &json!(dialogue.get(id).cloned().unwrap_or_default()),
+                &json!({"materials":if row["materials_snapshot"].is_object(){"recorded"}else{"missing"},
+                    "dialogue":if dialogue.contains_key(id){"recorded"}else{"not_found"}}));
             if let Some(d) = deletion {
                 item["deletedAt"] = d["deletedAt"].clone();
                 item["expiresAt"] = d["expiresAt"].clone();
@@ -477,6 +489,24 @@ pub fn poems(root: &Path, deleted: bool) -> Result<Vec<Value>> {
     }
     out.sort_by(|a, b| b["createdAt"].as_str().cmp(&a["createdAt"].as_str()));
     Ok(out)
+}
+
+/// ローカル正本と検証済みSSD snapshotで共通の表示投影。
+pub(super) fn project_poem(id: &str, original: &Value, current: &Value, history: &Value,
+    materials: &Value, dialogue: &Value, status: &Value) -> Value {
+    let created = original["created_at"].as_str().unwrap_or("");
+    let biome = original["world"]["biome"].as_str().map(|s|
+        if s.contains(':') { s.into() } else { format!("minecraft:{s}") });
+    // 未発話の解釈を導入文へ代用しない。
+    let preface = materials["preface_spoken"].as_str().filter(|s| !s.trim().is_empty());
+    json!({"id":id,"kind":"poem","lines":lines(current),
+        "author":if original["author"] == "player" {"プレイヤー"} else {"ドギド"},
+        "date":created.get(..10).unwrap_or(""),"createdAt":created,"biomeId":biome,
+        "timeOfDay":original["world"]["time_phase"],"preface":preface,
+        "revised":history.as_array().is_some_and(|rows| !rows.is_empty()),
+        "history":history,"catalog":null,"label":lines(current).join(" / "),
+        "originalLines":lines(original),"original":original,"current":current,
+        "materials":materials,"dialogue":dialogue,"recordStatus":status})
 }
 pub fn catalog() -> Vec<Value> {
     let w = crate::world_catalog::catalog();

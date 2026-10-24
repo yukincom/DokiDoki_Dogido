@@ -1,0 +1,27 @@
+/* 既存の紙面とサイドバーに合わせた環境設定。パスは折り返して全文を選択できる。 */
+#categories .catalog-settings-menu{color:#f3eddc}
+#categories .catalog-settings-menu[aria-pressed=true]{background:#ffffff1a;border-left:3px solid #e1c279;color:#fff5df}
+.research-settings{max-width:900px;margin:0 auto}
+.research-settings .entry-heading{padding-bottom:6px}
+.research-settings>p{line-height:1.8}
+.research-storage-card,.research-storage-pending{padding:20px 22px;margin-block:24px;border:1px solid var(--line);border-radius:8px;background:#fffdf6}
+.research-storage-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.research-settings h3{margin:0;font-size:17px}
+.research-storage-state,.research-storage-pending h3>span{font-size:12px;font-weight:400;color:var(--muted)}
+.research-storage-state[data-state=ready]{color:#46643f}
+.research-storage-state[data-state=offline],.research-storage-state[data-state=error]{color:#913c30}
+.research-storage-path{margin:14px 0 0;font-family:ui-monospace,monospace;font-size:15px;line-height:1.8;overflow-wrap:anywhere;user-select:text}
+.research-storage-detail,.research-storage-summary{font-size:13px;color:var(--muted);line-height:1.8}
+.research-storage-pending{border-style:dashed;background:#fff9e8}
+.research-storage-pending h3>span{margin-left:10px;color:#806128}
+.research-settings-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.research-settings-actions button{padding:10px 14px;border:1px solid #b8a788;border-radius:6px;background:#fffef9;color:inherit;font:inherit;font-size:14px;cursor:pointer}
+.research-settings-actions .research-save-button{background:#596d48;border-color:#596d48;color:#fffdf6}
+.research-settings-actions button:disabled{opacity:.55;cursor:default}
+.research-settings-actions button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.research-settings-notice{min-height:1.6em;font-size:14px;line-height:1.8}
+.research-settings-notice[data-kind=error]{color:#913c30}
+.research-settings-notice[data-kind=success]{color:#46643f}
+.research-settings-help{margin-top:22px;color:var(--muted);font-size:13px;line-height:1.9}
+.research-settings-help code{font-size:12px;overflow-wrap:anywhere;user-select:text}
+@media(max-width:650px){.research-storage-card,.research-storage-pending{padding:16px}.research-settings-actions{align-items:stretch;flex-direction:column}.research-settings-actions button{width:100%;text-align:center}}

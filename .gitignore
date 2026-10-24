@@ -6,6 +6,8 @@ __pycache__/
 .env.shared
 .dogido_tmp/
 .dogido_memory/
+# SSD研究データを一時的にrepo内へ戻しても追跡しない。
+/dokidoki_dogido/
 .dogido_training/
 .dogido_reference/
 .dogido_tools/

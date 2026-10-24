@@ -30,7 +30,7 @@
   const photoDirty=()=>Boolean(window.DogidoPhotos?.hasChanges());
   const readingDirty=()=>Boolean(window.DogidoReadings?.hasChanges());
   const poemDirty=()=>Boolean(window.DogidoPoemEditor?.hasChanges());
-  window.dogidoLibraryHasUnsaved=()=>saving||changes().length>0||Boolean(unadded())||photoDirty()||readingDirty()||poemDirty()||Boolean(window.DogidoReadings?.hasInput())||Boolean(window.DogidoReadings?.busy());
+  window.dogidoLibraryHasUnsaved=(options={})=>saving||changes().length>0||Boolean(unadded())||photoDirty()||readingDirty()||poemDirty()||Boolean(window.DogidoReadings?.hasInput())||Boolean(window.DogidoReadings?.busy())||(!options.ignoreResearchSettings&&(Boolean(window.DogidoResearchSettings?.hasChanges())||Boolean(window.DogidoResearchSettings?.busy())));
   function dirtyStatus(){
     if(saving)return;
     const dirty=changes().length>0||photoDirty()||readingDirty()||poemDirty();
@@ -119,6 +119,7 @@
       if(!canRefresh()||next.player.revision<revision||next.photos.revision<boot.photos.revision)return;
       const nextSignature=JSON.stringify(next);if(nextSignature===signature)return;
       if(!window.DogidoPhotos?.refresh(next.photos))return;
+      window.DogidoResearchSettings?.refresh(next.photos.researchStorage);
       M.poems.splice(0,M.poems.length,...next.poems.map(p=>({...p,biome:M.biomes[p.biomeId]})));
       boot.poems=M.poems;boot.player=next.player;revision=next.player.revision;
       state.favorites.clear();

@@ -1,4 +1,4 @@
-//! Minecraft所有のPNGは移動・複製・削除せず、検証済みの参照だけを本棚へ登録する。
+//! 既存の撮影結果を登録し、初回画像の出自を通常の貼付けとは独立して固定する。
 use super::store::Store;
 use crate::{poem_trash as trash, screenshot::Receipt};
 use anyhow::{Context, Result, ensure};
@@ -46,7 +46,7 @@ impl Store {
         Ok(bytes)
     }
     /// 状態→対象句の固定ロック順で、削除と自動貼付けの競合を直列化する。
-    /// 再送は登録済みIDを見るだけで、手動で外した枠やごみ箱を復活させない。
+    /// 登録の再送は元のreceiptを照合し、原本画像・初回対応・貼付けを変更しない。
     pub fn register_capture(&self, command: &str, receipt: &Receipt) -> Result<()> {
         let uuid = command
             .strip_prefix("shot_")
@@ -71,11 +71,10 @@ impl Store {
         }
         let (root, poem_id) = trash::resolve(&self.memory, &receipt.poem_id)?;
         let _poem_lock = trash::lock(&root)?;
+        let original_poem = trash::raw_rows(&root, "haiku_entries.jsonl")?
+            .into_iter().find(|p| p["id"] == poem_id);
         ensure!(
-            !trash::is_deleted(&root, &poem_id)?
-                && trash::raw_rows(&root, "haiku_entries.jsonl")?
-                    .iter()
-                    .any(|p| p["id"] == poem_id),
+            !trash::is_deleted(&root, &poem_id)? && original_poem.is_some(),
             "capture_target_missing"
         );
         ensure!(
@@ -84,6 +83,9 @@ impl Store {
         );
         let bytes = self.minecraft_bytes(&receipt.filename, &receipt.sha256)?;
         let (width, height) = dimensions(&bytes)?;
+        d["researchOriginals"] = super::research_storage::originals(&d);
+        let has_prior = d["minecraftPhotos"].as_object().into_iter().flatten()
+            .any(|(_, photo)| photo["poemId"] == receipt.poem_id);
         if !d["minecraftPhotos"].is_object() {
             d["minecraftPhotos"] = json!({});
         }
@@ -92,7 +94,12 @@ impl Store {
             "capturedAt":receipt.captured_at,"poemId":receipt.poem_id,"requestId":command,
             "width":width,"height":height,"kind":"haiku","title":"",
             "url":format!("/api/photos/{id}/image")});
+        d["minecraftPhotos"][&id]["researchRecord"] = super::research_storage::provenance(
+            &d["minecraftPhotos"][&id], original_poem.unwrap());
         let target = format!("poems:{}", receipt.poem_id);
+        if !has_prior {
+            d["researchOriginals"][&target] = json!(id);
+        }
         if d["placements"].get(&target).is_none() {
             d["placements"][&target] = json!([null, null, null]);
         }
@@ -104,42 +111,50 @@ impl Store {
         if let Some(slot) = slots.iter_mut().find(|s| s.is_null()) {
             *slot = json!(id);
         }
-        self.save_photos(&mut d)
+        self.save_photos(&mut d)?;
+        let row = d["minecraftPhotos"][&id].clone();
+        drop(_poem_lock);
+        drop(_state_lock);
+        self.archive_capture_now(&id, &row, &bytes);
+        Ok(())
     }
     pub(super) fn minecraft_rows(&self, d: &Value) -> Vec<Value> {
         d["minecraftPhotos"]
             .as_object()
             .into_iter()
             .flat_map(|m| m.values())
-            .filter(|row| {
-                let id = row["id"].as_str().unwrap_or("");
-                d["photoTrash"][id]["purged"] != true
-                    && row["filename"].as_str().is_some_and(|name| {
-                        crate::screenshot::valid_filename(name)
-                            && fs::symlink_metadata(self.screenshots.join(name))
-                                .is_ok_and(|m| m.is_file() && !m.file_type().is_symlink())
-                    })
-            })
             .map(|row| {
                 let mut row = row.clone();
                 row.as_object_mut().unwrap().remove("receipt");
+                row.as_object_mut().unwrap().remove("researchRecord");
+                row["protected"] = true.into();
                 row
             })
             .collect()
     }
     pub fn image_bytes(&self, id: &str) -> Result<Vec<u8>> {
         let d = self.read()?;
-        ensure!(d["photoTrash"].get(id).is_none(), "photo_deleted");
+        ensure!(super::research_storage::protected(&d, id) || d["photoTrash"].get(id).is_none(), "photo_deleted");
         if let Some(row) = d["minecraftPhotos"].get(id) {
+            if let Some(config) = super::research_archive::load_config(&self.memory)?
+                && row["archiveStatus"]["archiveId"] == config.archive_id
+                && (row["archiveStatus"]["state"] == "saved"
+                    || row["archiveStatus"]["record"]["archive_id"] == config.archive_id) {
+                // 設定済み保存先を優先する。切断・破損をMac画像の成功で隠さない。
+                return self.archived_image(row);
+            }
             return self.minecraft_bytes(
                 row["filename"].as_str().context("invalid_filename")?,
                 row["sha256"].as_str().context("invalid_capture_hash")?,
-            );
+            ).or_else(|_| self.archived_image(row));
+        }
+        if id.starts_with("f2-") {
+            return self.player_photo_image(&d, id);
         }
         Ok(fs::read(self.image(id)?)?)
     }
 }
-fn dimensions(bytes: &[u8]) -> Result<(u32, u32)> {
+pub(super) fn dimensions(bytes: &[u8]) -> Result<(u32, u32)> {
     ensure!(
         bytes.len() >= 24 && &bytes[..8] == b"\x89PNG\r\n\x1a\n" && &bytes[12..16] == b"IHDR",
         "invalid_image"

@@ -3,6 +3,9 @@ use crate::haiku_record::MemoryStore;
 use serde_json::json;
 use std::fs;
 
+#[path = "player_photos_tests.rs"]
+mod player_photos_tests;
+
 fn poem_edit_request(id: &str, parent: Option<&str>, expected: &[&str], lines: [&str; 3]) -> Value {
     json!({"id":id,"requestId":uuid::Uuid::new_v4().to_string(),
         "expectedRevisionId":parent,"expectedLines":expected,"lines":lines})
@@ -405,6 +408,7 @@ impl Fixture {
         let root =
             std::env::temp_dir().join(format!("dogido-bookshelf-tests-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(&root).unwrap();
+        let root = fs::canonicalize(root).unwrap();
         Self { root }
     }
     fn store(&self) -> store::Store {
@@ -449,9 +453,22 @@ fn capture(f: &Fixture) -> (String, crate::screenshot::Receipt) {
     f.poem("s", "hk_new");
     let s = f.store();
     fs::create_dir_all(&s.screenshots).unwrap();
-    let mut bytes = b"\x89PNG\r\n\x1a\n\0\0\0\x0dIHDR".to_vec();
-    bytes.extend(2u32.to_be_bytes());
-    bytes.extend(3u32.to_be_bytes());
+    // CRC・終端まで含む1x1 RGB PNG。研究原本の完全性検査にも同じfixtureを使う。
+    fn chunk(bytes: &mut Vec<u8>, kind: &[u8], body: &[u8]) {
+        bytes.extend((body.len() as u32).to_be_bytes());
+        let start = bytes.len();
+        bytes.extend(kind); bytes.extend(body);
+        let mut crc = !0u32;
+        for byte in &bytes[start..] {
+            crc ^= u32::from(*byte);
+            for _ in 0..8 { crc = (crc >> 1) ^ (0xedb88320 & 0u32.wrapping_sub(crc & 1)); }
+        }
+        bytes.extend((!crc).to_be_bytes());
+    }
+    let mut bytes = b"\x89PNG\r\n\x1a\n".to_vec();
+    chunk(&mut bytes, b"IHDR", &[0,0,0,1,0,0,0,1,8,2,0,0,0]);
+    chunk(&mut bytes, b"IDAT", &[0x78,1,1,4,0,0xfb,0xff,0,0,0,0,0,4,0,1]);
+    chunk(&mut bytes, b"IEND", &[]);
     let filename = "dogido_2026-10-20_12.00.00.png".to_owned();
     fs::write(s.screenshots.join(&filename), &bytes).unwrap();
     (
@@ -475,7 +492,7 @@ fn capture(f: &Fixture) -> (String, crate::screenshot::Receipt) {
     )
 }
 #[test]
-fn minecraft_capture_registers_once_without_copying_or_changing_notes() {
+fn minecraft_capture_registers_once_and_protects_original_without_changing_notes() {
     let f = Fixture::new();
     let (id, r) = capture(&f);
     let s = f.store();
@@ -499,11 +516,12 @@ fn minecraft_capture_registers_once_without_copying_or_changing_notes() {
         s.image_bytes(&photo).unwrap(),
         fs::read(r.directory.join(&r.filename)).unwrap()
     );
-    s.photo_edit(&json!({"revision":p["revision"],"titles":{},"placements":{"poems:session:s:hk_new":[null,null,null]}})).unwrap();
+    assert!(s.photo_edit(&json!({"revision":p["revision"],"titles":{},"placements":{"poems:session:s:hk_new":[null,null,null]}})).is_err());
+    assert!(s.photo_edit(&json!({"revision":p["revision"],"titles":{photo.clone():"changed"},"placements":{}})).is_err());
     s.register_capture(&id, &r).unwrap();
     assert_eq!(
         s.photo_snapshot_now().unwrap()["placements"]["poems:session:s:hk_new"],
-        json!([null, null, null])
+        json!([photo, null, null])
     );
 }
 #[test]
@@ -536,36 +554,26 @@ fn historical_minecraft_photo_without_capture_view_stays_readable_and_idempotent
     assert_eq!(reopened.read().unwrap(), before);
 }
 #[test]
-fn minecraft_trash_restore_and_expiry_never_delete_original() {
+fn minecraft_original_rejects_trash_restore_and_survives_expiry() {
     let f = Fixture::new();
     let (id, r) = capture(&f);
     let s = f.store();
     s.register_capture(&id, &r).unwrap();
     let photo = format!("minecraft-{id}");
-    s.photo_change(&photo, false, now()).unwrap();
-    assert!(s.image_bytes(&photo).is_err());
+    assert!(s.photo_change(&photo, false, now()).is_err());
+    assert!(s.image_bytes(&photo).is_ok());
     s.register_capture(&id, &r).unwrap();
-    assert!(
-        s.photo_snapshot_now().unwrap()["items"]
-            .as_array()
-            .unwrap()
-            .is_empty()
-    );
-    s.photo_change(&photo, true, now()).unwrap();
+    assert_eq!(s.photo_snapshot_now().unwrap()["items"].as_array().unwrap().len(), 1);
+    assert!(s.photo_change(&photo, true, now()).is_err());
     assert_eq!(
         s.photo_snapshot_now().unwrap()["placements"]["poems:session:s:hk_new"][0],
         photo
     );
-    s.photo_change(&photo, false, now()).unwrap();
+    assert!(s.photo_change(&photo, false, now()).is_err());
     s.purge(now() + chrono::Duration::days(30)).unwrap();
     assert!(r.directory.join(&r.filename).is_file());
     s.register_capture(&id, &r).unwrap();
-    assert!(
-        s.photo_snapshot_now().unwrap()["items"]
-            .as_array()
-            .unwrap()
-            .is_empty()
-    );
+    assert_eq!(s.photo_snapshot_now().unwrap()["items"].as_array().unwrap().len(), 1);
     assert!(
         s.photo_change(&photo, true, now() + chrono::Duration::days(30))
             .is_err()
@@ -597,7 +605,7 @@ fn minecraft_changed_original_is_not_served_or_restored() {
     let photo = format!("minecraft-{id}");
     fs::write(r.directory.join(&r.filename), b"changed").unwrap();
     assert!(s.image_bytes(&photo).is_err());
-    s.photo_change(&photo, false, now()).unwrap();
+    assert!(s.photo_change(&photo, false, now()).is_err());
     assert!(s.photo_change(&photo, true, now()).is_err());
     s.purge(now() + chrono::Duration::days(31)).unwrap();
     assert_eq!(fs::read(r.directory.join(&r.filename)).unwrap(), b"changed");
@@ -651,6 +659,215 @@ async fn library_refresh_uses_existing_read_guard_and_reports_new_capture() {
     )
     .await;
     assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+#[test]
+fn research_storage_copies_existing_records_once_and_keeps_changed_snapshots() {
+    let f = Fixture::new();
+    let (command, receipt) = capture(&f);
+    let s = f.store();
+    s.register_capture(&command, &receipt).unwrap();
+    let original = fs::read(receipt.directory.join(&receipt.filename)).unwrap();
+    let canonical = s.memory.join("sessions/s/long_term/haiku_entries.jsonl");
+    let canonical_bytes = fs::read(&canonical).unwrap();
+    let root = f.root.join("archive"); fs::create_dir(&root).unwrap();
+    let status = s.select_research_storage(research_storage::Selection { root:root.clone(),expected_archive_id:None }).unwrap();
+    assert_eq!(status["state"], "ready"); assert_eq!(status["poems"],1); assert_eq!(status["captures"],1);
+    let folder = root.join("2026/10130900");
+    assert!(folder.join("identity.json").is_file());
+    assert!(folder.join("internal-representations").is_dir());
+    let snapshot = fs::read_dir(folder.join("snapshots")).unwrap().next().unwrap().unwrap().path();
+    let before_snapshot = fs::read(&snapshot).unwrap();
+    let before_state = s.read().unwrap();
+    s.sync_research_storage().unwrap();
+    assert_eq!(s.read().unwrap(), before_state);
+    s.edit(&json!({"revision":0,"section":"poems","key":receipt.poem_id,
+        "value":{"favorite":true,"note":"研究メモ"}})).unwrap();
+    s.sync_research_storage().unwrap();
+    assert_eq!(fs::read_dir(folder.join("snapshots")).unwrap().count(),2);
+    assert_eq!(fs::read(snapshot).unwrap(),before_snapshot);
+    assert_eq!(fs::read(canonical).unwrap(),canonical_bytes);
+    assert_eq!(fs::read(receipt.directory.join(&receipt.filename)).unwrap(),original);
+    fs::remove_file(receipt.directory.join(&receipt.filename)).unwrap();
+    assert_eq!(s.image_bytes(&format!("minecraft-{command}")).unwrap(),original);
+    s.sync_research_storage().unwrap();
+}
+
+#[test]
+fn research_storage_offline_blocks_expiry_and_reconnects_without_new_directory() {
+    let f = Fixture::new(); let (command, receipt) = capture(&f); let s=f.store();
+    s.register_capture(&command,&receipt).unwrap();
+    let root=f.root.join("archive"); fs::create_dir(&root).unwrap();
+    let status=s.select_research_storage(research_storage::Selection {root:root.clone(),expected_archive_id:None}).unwrap();
+    assert_eq!(status["state"],"ready");
+    crate::poem_trash::change(&s.memory,&receipt.poem_id,false,now()).unwrap();
+    let detached=f.root.join("detached"); fs::rename(&root,&detached).unwrap();
+    assert!(s.purge(now()+chrono::Duration::days(31)).is_err());
+    assert!(!root.exists());
+    assert_eq!(s.photo_snapshot_now().unwrap()["researchStorage"]["state"],"offline");
+    assert_eq!(store::poems(&s.memory,true).unwrap().len(),1);
+    fs::rename(&detached,&root).unwrap();
+    assert_eq!(s.sync_research_storage().unwrap()["state"],"ready");
+    s.purge(now()+chrono::Duration::days(31)).unwrap();
+    assert!(store::poems(&s.memory,true).unwrap().is_empty());
+    assert!(s.image_bytes(&format!("minecraft-{command}")).is_ok());
+    assert!(root.join("2026/10130900/identity.json").is_file());
+}
+
+#[test]
+fn research_storage_selection_uses_cas_and_keeps_previous_archive() {
+    let f=Fixture::new(); let (command, receipt)=capture(&f); let s=f.store();
+    s.register_capture(&command,&receipt).unwrap();
+    let first=f.root.join("first"); let second=f.root.join("second");
+    fs::create_dir(&first).unwrap(); fs::create_dir(&second).unwrap();
+    let status=s.select_research_storage(research_storage::Selection {root:first.clone(),expected_archive_id:None}).unwrap();
+    assert!(s.select_research_storage(research_storage::Selection {root:second.clone(),expected_archive_id:None}).is_err());
+    assert_eq!(fs::read_dir(&second).unwrap().count(),0);
+    let status2=s.select_research_storage(research_storage::Selection {root:second.clone(),expected_archive_id:Some(status["archiveId"].as_str().unwrap().into())}).unwrap();
+    assert_eq!(status2["state"],"ready"); assert_ne!(status2["archiveId"],status["archiveId"]);
+    assert!(first.join("2026/10130900/identity.json").is_file());
+    let back=s.select_research_storage(research_storage::Selection {root:first,expected_archive_id:Some(status2["archiveId"].as_str().unwrap().into())}).unwrap();
+    assert_eq!(back["archiveId"],status["archiveId"]);
+}
+
+#[test]
+fn research_storage_new_capture_is_copied_before_registration_returns() {
+    let f=Fixture::new(); let s=f.store();
+    fs::create_dir_all(&s.memory).unwrap();
+    let root=f.root.join("archive"); fs::create_dir(&root).unwrap();
+    s.select_research_storage(research_storage::Selection {root:root.clone(),expected_archive_id:None}).unwrap();
+    let (command,receipt)=capture(&f);
+    s.register_capture(&command,&receipt).unwrap();
+    let photo=format!("minecraft-{command}"); let state=s.read().unwrap();
+    assert_eq!(state["minecraftPhotos"][&photo]["archiveStatus"]["state"],"saved");
+    assert_eq!(state["photoRevision"],1);
+    assert_eq!(state["researchStorage"]["state"],"pending");
+    let image=root.join("2026/10130900/original-images").join(command.strip_prefix("shot_").unwrap()).join("image.png");
+    assert_eq!(fs::read(image).unwrap(),fs::read(receipt.directory.join(receipt.filename)).unwrap());
+    s.sync_research_storage().unwrap();
+    assert_eq!(s.read().unwrap()["photoRevision"],1);
+}
+
+#[test]
+fn library_view_reads_verified_ssd_poems_and_images_without_local_originals() {
+    let f = Fixture::new(); let (command, receipt) = capture(&f); let s = f.store();
+    s.register_capture(&command, &receipt).unwrap();
+    let root = f.root.join("archive"); fs::create_dir(&root).unwrap();
+    s.select_research_storage(research_storage::Selection {root: root.clone(), expected_archive_id: None}).unwrap();
+    let original = s.library_view().unwrap();
+    assert_eq!(original["photos"]["researchStorage"]["displaySource"], "archive");
+    assert_eq!(original["poems"][0]["storageSource"], "archive");
+    let png = fs::read(receipt.directory.join(&receipt.filename)).unwrap();
+    // 試験fixtureだけのローカル句・画像を除き、SSD実読込であることを確認。
+    fs::remove_file(s.memory.join("sessions/s/long_term/haiku_entries.jsonl")).unwrap();
+    fs::remove_file(receipt.directory.join(&receipt.filename)).unwrap();
+    let before = fs::read(s.memory.join("bookshelf/state.json")).unwrap();
+    let view = s.library_view().unwrap();
+    for key in ["original", "current", "history", "materials", "dialogue", "lines"] {
+        assert_eq!(view["poems"][0][key], original["poems"][0][key]);
+    }
+    assert_eq!(view["poems"][0]["readOnly"], true);
+    assert_eq!(s.image_bytes(&format!("minecraft-{command}")).unwrap(), png);
+    assert_eq!(fs::read(s.memory.join("bookshelf/state.json")).unwrap(), before);
+}
+
+#[test]
+fn library_view_keeps_pending_edits_and_deletions_until_ssd_sync() {
+    let f = Fixture::new(); f.poem("root", "p"); let s = f.store();
+    let root = f.root.join("archive"); fs::create_dir(&root).unwrap();
+    s.select_research_storage(research_storage::Selection {root, expected_archive_id: None}).unwrap();
+    save_poem(&s, poem_edit_request("root:p", Some("r1"),
+        &["ひるのやま", "とりのこえする", "もりのみち"], ["編集した句", "元へ戻さない", "保存待ち"])).unwrap();
+    let view = s.library_view().unwrap();
+    assert_eq!(view["photos"]["researchStorage"]["displaySource"], "mixed");
+    assert_eq!(view["poems"][0]["lines"][0], "編集した句");
+    s.sync_research_storage().unwrap();
+    assert_eq!(s.library_view().unwrap()["poems"][0]["storageSource"], "archive");
+    crate::poem_trash::change(&s.memory, "root:p", false, now()).unwrap();
+    assert!(s.library_view().unwrap()["poems"].as_array().unwrap().is_empty());
+    s.sync_research_storage().unwrap();
+    s.purge(now() + chrono::Duration::days(31)).unwrap();
+    assert!(s.library_view().unwrap()["poems"].as_array().unwrap().is_empty());
+}
+
+#[test]
+fn library_view_reports_corrupt_snapshot_and_never_masks_corrupt_ssd_image() {
+    let f = Fixture::new(); let (command, receipt) = capture(&f); let s = f.store();
+    s.register_capture(&command, &receipt).unwrap();
+    let root = f.root.join("archive"); fs::create_dir(&root).unwrap();
+    s.select_research_storage(research_storage::Selection {root:root.clone(), expected_archive_id: None}).unwrap();
+    let data = s.read().unwrap();
+    let path = data["researchSnapshots"][&receipt.poem_id]["relative_path"].as_str().unwrap();
+    fs::write(root.join(path), b"{}").unwrap();
+    let view = s.library_view().unwrap();
+    assert_eq!(view["photos"]["researchStorage"]["displaySource"], "unavailable");
+    assert!(view["photos"]["researchStorage"]["readError"].as_str().unwrap().contains("archive_snapshot_changed"));
+    assert_eq!(view["poems"][0]["storageSource"], "local_fallback");
+    fs::write(root.join("2026/10130900/original-images").join(command.strip_prefix("shot_").unwrap()).join("image.png"), b"broken").unwrap();
+    assert!(receipt.directory.join(&receipt.filename).is_file());
+    assert!(s.image_bytes(&format!("minecraft-{command}")).is_err());
+    assert!(s.sync_research_storage().is_err());
+    assert!(s.image_bytes(&format!("minecraft-{command}")).is_err());
+    fs::rename(&root, f.root.join("detached")).unwrap();
+    assert_eq!(s.library_view().unwrap()["photos"]["researchStorage"]["displaySource"], "unavailable");
+    assert!(!root.exists());
+}
+
+#[test]
+fn archive_reconnect_preserves_semantically_identical_pretty_config() {
+    let f = Fixture::new(); f.poem("root", "p"); let s = f.store();
+    let root = f.root.join("archive"); fs::create_dir(&root).unwrap();
+    let status = s.select_research_storage(research_storage::Selection {root: root.clone(), expected_archive_id: None}).unwrap();
+    let config = research_archive::load_config(&s.memory).unwrap().unwrap();
+    let path = s.memory.join("bookshelf/research-archive.json");
+    let pretty = serde_json::to_vec_pretty(&config).unwrap(); fs::write(&path, &pretty).unwrap();
+    s.select_research_storage(research_storage::Selection {root, expected_archive_id: Some(status["archiveId"].as_str().unwrap().into())}).unwrap();
+    assert_eq!(fs::read(path).unwrap(), pretty);
+}
+
+#[test]
+fn never_archived_capture_remains_visible_locally_after_initial_copy_failure() {
+    let f = Fixture::new(); let s = f.store(); f.poem("s", "hk_new");
+    let root = f.root.join("archive"); fs::create_dir(&root).unwrap();
+    s.select_research_storage(research_storage::Selection {root:root.clone(), expected_archive_id:None}).unwrap();
+    // 原本画像の保存用directoryを作れないfixture。句snapshotは保存できる。
+    fs::write(root.join("2026/10130900/original-images"), b"blocked").unwrap();
+    let (command, receipt) = capture(&f); s.register_capture(&command, &receipt).unwrap();
+    assert!(s.sync_research_storage().is_err());
+    let photo = format!("minecraft-{command}");
+    assert_eq!(s.read().unwrap()["minecraftPhotos"][&photo]["archiveStatus"]["state"], "error");
+    assert_eq!(s.image_bytes(&photo).unwrap(), fs::read(receipt.directory.join(&receipt.filename)).unwrap());
+}
+
+#[test]
+fn archive_snapshot_rejects_wrong_identity_and_unsafe_index_paths() {
+    let f = Fixture::new(); f.poem("root", "p"); let s = f.store();
+    let root = f.root.join("archive"); fs::create_dir(&root).unwrap();
+    s.select_research_storage(research_storage::Selection {root, expected_archive_id: None}).unwrap();
+    let archive = research_archive::load(&s.memory).unwrap().unwrap();
+    let head: research_archive::ArchivedSnapshot = serde_json::from_value(s.read().unwrap()["researchSnapshots"]["root:p"].clone()).unwrap();
+    assert!(archive.read_snapshot(&head).is_ok());
+    let mut wrong = head.clone(); wrong.poem_id = "other:p".into();
+    assert!(archive.read_snapshot(&wrong).is_err());
+    let mut wrong = head.clone(); wrong.relative_path = format!("2026/../../snapshots/{}.json", head.sha256);
+    assert!(archive.read_snapshot(&wrong).is_err());
+    let mut wrong = head; wrong.sha256 = "../bad".into();
+    assert!(archive.read_snapshot(&wrong).is_err());
+}
+
+#[tokio::test]
+async fn research_storage_http_requires_same_host_token_and_enabled_memory() {
+    let f=Fixture::new(); f.poem("root","p");
+    let app=test_app(&f); let root=f.root.join("archive"); fs::create_dir(&root).unwrap();
+    let value=json!({"root":root,"expectedArchiveId":null});
+    for (host,token,origin) in [("evil.invalid","secret-test-token",None),("127.0.0.1:45678","",None),("127.0.0.1:45678","secret-test-token",Some("https://evil.invalid"))] {
+        assert_eq!(call(app.clone(),"/api/research-storage",Some(value.clone()),host,token,origin).await.0,StatusCode::FORBIDDEN);
+    }
+    assert_eq!(fs::read_dir(&root).unwrap().count(),0);
+    let mut disabled=(*app).clone(); disabled.memory_enabled=false;
+    assert_eq!(call(Arc::new(disabled),"/api/research-storage",Some(value.clone()),"127.0.0.1:45678","secret-test-token",None).await.0,StatusCode::CONFLICT);
+    let (status,body)=call(app,"/api/research-storage",Some(value),"127.0.0.1:45678","secret-test-token",None).await;
+    assert_eq!(status,StatusCode::OK); assert_eq!(body["researchStorage"]["state"],"ready");
 }
 #[cfg(unix)]
 #[test]

@@ -1,4 +1,4 @@
-/* Shared photo identities: one title, several page placements. Originals are never removed. */
+/* Shared photo identities. Dogido's research originals are separate from editable placements. */
 (function(){
   'use strict';
   const boot=window.DOGIDO_BOOTSTRAP;
@@ -17,14 +17,21 @@
     window.webkit?.messageHandlers?.dogidoPhotoFolder?.postMessage('showMinecraftScreenshots');
   }
   function pageTarget(){const entry=current();return entry?`${state.book}:${entry.id}`:null;}
-  function titleInput(id){return `<input class="photo-title" data-photo-title="${esc(id)}" aria-label="写真のタイトル" title="タイトルを変更すると、貼り付け先にも反映します" maxlength="200" value="${esc(model.title(id))}" placeholder="${esc(model.find(id).filename.replace(/\.[^.]+$/,''))}" ${disabled()}>`;}
+  function playerPhotoLabel(id){
+    const message=model.storageMessage(id,Boolean(boot?.photos?.researchStorage?.root));
+    return message?`<p class="player-photo-storage" data-player-photo-storage="${esc(id)}" role="status">${esc(message)}</p>`:'';
+  }
+  function titleInput(id){
+    if(model.find(id)?.protected)return '';
+    return `<input class="photo-title" data-photo-title="${esc(id)}" aria-label="写真のタイトル" title="タイトルを変更すると、貼り付け先にも反映します" maxlength="200" value="${esc(model.title(id))}" placeholder="${esc(model.find(id).filename.replace(/\.[^.]+$/,''))}" ${disabled()}>${playerPhotoLabel(id)}`;
+  }
   function related(id){
     const targets=model.targets(id),poems=targets.filter(t=>t.startsWith('poems:')).map(t=>M.poems.find(p=>p.id===t.slice(6))).filter(Boolean);
     return poems.length?`<div class="photo-poems">${poems.map(p=>`<div class="photo-poem"><p>${p.lines.map(esc).join('<br>')}</p><button type="button" class="link-button" data-open-photo-poem="${esc(p.id)}" title="この句のページを開きます">句集へ →</button></div>`).join('')}</div>`:'';
   }
   function photoDetail(id,choose=false){
     const p=model.find(id);if(!p)return '';
-    return `<img class="album-large-photo" src="${esc(p.url)}" alt=""><div class="album-photo-details">${choose?`<h3 data-photo-label="${esc(id)}">${esc(model.displayTitle(id))}</h3>`:titleInput(id)}${related(id)}${choose?'':`<button class="danger-button" type="button" data-delete-photo="${esc(id)}">この写真をごみ箱へ</button>`}</div>`;
+    return `<img class="album-large-photo" src="${esc(p.url)}" alt=""><div class="album-photo-details">${choose?`<h3 data-photo-label="${esc(id)}">${esc(model.displayTitle(id))}</h3>${playerPhotoLabel(id)}`:titleInput(id)}${related(id)}${choose||p.protected?'':`<button class="danger-button" type="button" data-delete-photo="${esc(id)}">この写真をごみ箱へ</button>`}</div>`;
   }
   function renderAlbum(){
     // 再描画で共用の表紙要素を消さない。
@@ -37,6 +44,7 @@
     document.querySelectorAll('[data-photo-title]').forEach(input=>{if(input.dataset.photoTitle===id&&input!==source&&input.value!==model.title(id))input.value=model.title(id);});
     document.querySelectorAll('[data-photo-label]').forEach(label=>{if(label.dataset.photoLabel===id)label.textContent=model.displayTitle(id);});
     document.querySelectorAll('[data-page-photo]').forEach(button=>{if(button.dataset.pagePhoto===id)button.setAttribute('aria-label',model.displayTitle(id));});
+    document.querySelectorAll('[data-player-photo-storage]').forEach(label=>{if(label.dataset.playerPhotoStorage===id)label.textContent=model.storageMessage(id,Boolean(boot?.photos?.researchStorage?.root));});
   }
   function renderPlaced(){
     renderPoemThumbnails();
@@ -54,7 +62,10 @@
       const img=document.createElement('img');img.className='collected-photo';img.src=model.find(active).url;img.alt='';stage.prepend(img);
     }
     const area=document.createElement('section');area.className='page-photos';area.setAttribute('aria-label','このページの写真');
-    area.innerHTML=(active?`<div class="placed-photo-title">${titleInput(active)}</div>`:'')+`<div class="placed-photo-slots">${photos.map((p,i)=>p?`<div class="placed-photo-slot"><button class="placed-photo-select" data-page-photo="${esc(p.id)}" aria-label="${esc(model.displayTitle(p.id))}" aria-pressed="${active===p.id}"><img src="${esc(p.url)}" alt="" loading="lazy"></button><div class="placed-photo-actions"><button data-attach-slot="${i}" title="フォトブックから別の写真を選びます" ${disabled()}>貼り替え</button><button data-detach-slot="${i}" title="このページから外します。フォトブックの元画像は残ります" ${disabled()}>はがす</button></div></div>`:`<button class="paste-photo" data-attach-slot="${i}" aria-label="写真${i+1}を貼る" title="フォトブックからこの枠に貼る写真を選びます" ${disabled()}><span aria-hidden="true">＋</span>写真を貼る</button>`).join('')}</div>`;
+    const first=model.original(target);
+    const retained=first&&!ids.includes(first.id)?`<div class="retained-research-photo"><button class="placed-photo-select" data-page-photo="${esc(first.id)}" aria-label="ドギドの視点" aria-pressed="${active===first.id}"><img src="${esc(first.url)}" alt="" loading="lazy"></button><p class="research-photo-lock">ドギドの視点</p></div>`:'';
+    const title=active?titleInput(active):'';
+    area.innerHTML=(title?`<div class="placed-photo-title">${title}</div>`:'')+retained+`<div class="placed-photo-slots">${photos.map((p,i)=>p?`<div class="placed-photo-slot"><button class="placed-photo-select" data-page-photo="${esc(p.id)}" aria-label="${esc(model.displayTitle(p.id))}" aria-pressed="${active===p.id}"><img src="${esc(p.url)}" alt="" loading="lazy"></button>${model.lockedSlot(target,i)?'<p class="research-photo-lock">ドギドの視点</p>':`<div class="placed-photo-actions"><button data-attach-slot="${i}" title="フォトブックから別の写真を選びます" ${disabled()}>貼り替え</button><button data-detach-slot="${i}" title="このページから外します。フォトブックの元画像は残ります" ${disabled()}>はがす</button></div>`}</div>`:`<button class="paste-photo" data-attach-slot="${i}" aria-label="写真${i+1}を貼る" title="フォトブックからこの枠に貼る写真を選びます" ${disabled()}><span aria-hidden="true">＋</span>写真を貼る</button>`).join('')}</div>`;
     (state.book==='poems'?detail.querySelector('.poem-overview'):stage).after(area);
   }
   // 右頁と同じ選択済み写真を読むだけ。切抜きはCSSで行い、画像や保存状態は変更しない。
@@ -71,6 +82,7 @@
     picker.innerHTML=`<header class="picker-heading"><h2 id="photo-picker-title">写真を貼る</h2><button data-close-picker aria-label="閉じる" title="写真を選ばずに戻ります">×</button></header><nav class="picker-view" aria-label="写真の表示形式"><button data-picker-view="columns" aria-pressed="${pickerView==='columns'}" title="左のリストから写真を選びます">カラム</button><button data-picker-view="gallery" aria-pressed="${pickerView==='gallery'}" title="写真を並べて選びます">ギャラリー</button></nav><div class="picker-body ${pickerView}">${photos.length?`<div class="picker-list" aria-label="写真の選択">${photos.map(p=>{const other=used.some((id,i)=>id===p.id&&i!==picking.slot);return `<button data-picker-photo="${esc(p.id)}" aria-pressed="${p.id===pickerSelected}" ${other?'disabled title="このページに貼り付け済みです"':''}><img src="${esc(p.url)}" alt="" loading="lazy"><span>${esc(p.displayTitle)}</span></button>`;}).join('')}</div><article class="picker-preview">${photoDetail(pickerSelected,true)}</article>`:'<p class="album-empty">写真はまだありません。</p>'}</div><footer class="picker-footer"><button data-close-picker>キャンセル</button><button data-confirm-photo ${!pickerSelected||used.some((id,i)=>id===pickerSelected&&i!==picking.slot)?'disabled':''}>この写真を貼る</button></footer>`;
   }
   function openPicker(slot){
+    if(model.lockedSlot(pageTarget(),slot))return;
     picking={target:pageTarget(),slot,focus:document.activeElement};pickerSelected=model.slots(picking.target)[slot]||null;pickerView='columns';renderPicker();picker.showModal();
   }
   async function save(){
@@ -96,11 +108,11 @@
   document.addEventListener('click',event=>{
     const button=event.target.closest('button');if(!button||button.disabled)return;
     if(button.hasAttribute('data-show-photo-folder')){showPhotoFolder();return;}
-    if(button.dataset.deletePhoto){window.DogidoBookshelfDeletePhoto?.(button.dataset.deletePhoto,model.displayTitle(button.dataset.deletePhoto));return;}
+    if(button.dataset.deletePhoto){if(!model.find(button.dataset.deletePhoto)?.protected)window.DogidoBookshelfDeletePhoto?.(button.dataset.deletePhoto,model.displayTitle(button.dataset.deletePhoto));return;}
     if(button.dataset.albumSelect){closeBookCover();selected=button.dataset.albumSelect;renderAlbum();page.querySelector(`[data-album-select="${selected}"]`)?.focus({preventScroll:true});}
     if(button.dataset.openPhotoPoem){switchBook('poems',button.dataset.openPhotoPoem);if(picker.open)picker.close();}
     if(button.dataset.attachSlot!==undefined&&editable)openPicker(Number(button.dataset.attachSlot));
-    if(button.dataset.detachSlot!==undefined&&editable){model.detach(pageTarget(),Number(button.dataset.detachSlot));renderPlaced();changed();}
+    if(button.dataset.detachSlot!==undefined&&editable&&model.detach(pageTarget(),Number(button.dataset.detachSlot))){renderPlaced();changed();}
     if(button.dataset.pagePhoto){activePages.set(pageTarget(),button.dataset.pagePhoto);renderPlaced();}
     if(button.dataset.pickerView){pickerView=button.dataset.pickerView;renderPicker();}
     if(button.dataset.pickerPhoto){pickerSelected=button.dataset.pickerPhoto;renderPicker();}
