@@ -27,21 +27,20 @@
     "other_trained_weights_received": true,
     "merged_weights_recomputed": false,
     "local_model_inference_or_training": false,
-    "all_trained_weights_received": false,
+    "all_trained_weights_received": true,
     "received_seed_archives": [
       42,
       43,
       44,
-      46,
-      47
-    ],
-    "missing_seed_archives": [
       45,
+      46,
+      47,
       48
     ],
-    "trained_checkpoints_available": 21,
+    "missing_seed_archives": [],
+    "trained_checkpoints_available": 28,
     "trained_checkpoints_expected": 28,
-    "additional_seed_manifest_files_checked": 210
+    "additional_seed_manifest_files_checked": 294
   },
   "training": {
     "environment": {
@@ -2248,7 +2247,59 @@
         "mob"
       ],
       "complete_seed": true,
-      "received_locally": false
+      "received_locally": true,
+      "receipt": {
+        "seed": 45,
+        "original": "/Users/yukin_co/Downloads/weights-seed45.zip",
+        "saved": "artifacts/weights-seed45.zip",
+        "bytes": 422876619,
+        "sha256": "75041d3a8b12a1f31e2536c44e3c9388403c6bbff7bbe7c0015745d5e4f90fce",
+        "manifest_files_checked": 42,
+        "checkpoint_count": 4,
+        "checkpoints": [
+          {
+            "candidate": "seed45-spatial",
+            "sha256": "baa9ecd955f4ce82957963c950c2b41803c7d37bece11771724ef075c6572e28",
+            "tensors": 66,
+            "dtype": "F32",
+            "classifier_shape": [
+              16,
+              256
+            ]
+          },
+          {
+            "candidate": "seed45-mount",
+            "sha256": "063913e70b1ee6ca1b21c8bdbe4dbbf18c0476817ca7a9d97adb6172deee3da2",
+            "tensors": 66,
+            "dtype": "F32",
+            "classifier_shape": [
+              16,
+              256
+            ]
+          },
+          {
+            "candidate": "seed45-sword",
+            "sha256": "2efd834ea4d52baa72f1ab02ad395431331ec4efc75a97d6fc10a96a9bea82bf",
+            "tensors": 66,
+            "dtype": "F32",
+            "classifier_shape": [
+              16,
+              256
+            ]
+          },
+          {
+            "candidate": "seed45-mob",
+            "sha256": "02cabbc8de0edda392e50480c1c715a8fd6747bf6347d34d54788f0d2bf876a5",
+            "tensors": 66,
+            "dtype": "F32",
+            "classifier_shape": [
+              16,
+              256
+            ]
+          }
+        ],
+        "received_at_utc": "2026-10-24T10:52:12.806574+00:00"
+      }
     },
     {
       "file": "exports/weights-seed46.zip",
@@ -2400,7 +2451,59 @@
         "mob"
       ],
       "complete_seed": true,
-      "received_locally": false
+      "received_locally": true,
+      "receipt": {
+        "seed": 48,
+        "original": "/Users/yukin_co/Downloads/weights-seed48.zip",
+        "saved": "artifacts/weights-seed48.zip",
+        "bytes": 422887021,
+        "sha256": "91a752f944d27c3b7bae11a184bd64f73845bb98080d0236f20a9f5fdfa6ea83",
+        "manifest_files_checked": 42,
+        "checkpoint_count": 4,
+        "checkpoints": [
+          {
+            "candidate": "seed48-spatial",
+            "sha256": "e3a8b4b8acf61d4768adeb42909069fbdd6e87042e2a6e69aa2f055b4327fdd9",
+            "tensors": 66,
+            "dtype": "F32",
+            "classifier_shape": [
+              16,
+              256
+            ]
+          },
+          {
+            "candidate": "seed48-mount",
+            "sha256": "136a59b0f4b355177c2ea3c364351e1214465294e46d47b897e21a3c4537ba02",
+            "tensors": 66,
+            "dtype": "F32",
+            "classifier_shape": [
+              16,
+              256
+            ]
+          },
+          {
+            "candidate": "seed48-sword",
+            "sha256": "02c59f27e880bf95e802e385e408573596ea5257e2f68419a2fb790d37502a7a",
+            "tensors": 66,
+            "dtype": "F32",
+            "classifier_shape": [
+              16,
+              256
+            ]
+          },
+          {
+            "candidate": "seed48-mob",
+            "sha256": "51c5aaf94c1b6f71cbd38e6d3b57b3aa0bfab0bad2f60408d3e488b2e6481b04",
+            "tensors": 66,
+            "dtype": "F32",
+            "classifier_shape": [
+              16,
+              256
+            ]
+          }
+        ],
+        "received_at_utc": "2026-10-24T10:52:14.387773+00:00"
+      }
     }
   ],
   "group_results": {
@@ -12079,5 +12182,5 @@
   },
   "evaluation_scope": "Existing dev 46 / test 50 were already used in material design; diagnostic only. No new independent heldout or real-world accuracy evidence created.",
   "runtime_adoption": false,
-  "weight_receipt_updated_at_utc": "2026-10-24T10:48:33.731683+00:00"
+  "weight_receipt_updated_at_utc": "2026-10-24T10:52:14.388082+00:00"
 }
