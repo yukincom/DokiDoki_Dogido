@@ -37,16 +37,27 @@ test('list toolbar keeps clear above count beside icons and bookmark aligns righ
  assert.match(fs.readFileSync(__dirname+'/readability.css','utf8'),/\.desk,\.desk\.list-open \{ grid-template-columns:340px minmax\(0,1fr\); \}/);
 });
 test('capture records show stages and partial dimensions with escaped links and no invented final-verse alignment',()=>{
- const e={id:'root:<poem>',internalCapture:{requests:[{request_index:2,request_id:'<job>',response_id:'<reply>',kind:'haiku_scene',status:'partial',response_model:'<model>',artifact:{backend:'llama.cpp',hidden_verified:true,shape:[32,30,2816],hidden_bytes:10813440,hidden_sha256:'abc',manifest_sha256:'def',boundary:'decoder_layer_output_pre_final_norm'}}]},internalCaptureStorage:{requests:[{request_index:2,response_id:'<reply>',state:'saved'}]}};
+ const e={id:'root:<poem>',internalCapture:{requests:[{request_index:2,request_id:'<job>',response_id:'<reply>',kind:'haiku_scene',status:'partial',response_model:'default_model',artifact:{model:{path:'/models/<model>.gguf'},backend:'llama.cpp',hidden_verified:true,shape:[32,30,2816],hidden_bytes:10813440,hidden_sha256:'abc',manifest_sha256:'def',boundary:'decoder_layer_output_pre_final_norm'}}]},internalCaptureStorage:{requests:[{request_index:2,response_id:'<reply>',state:'saved'}]}};
  const before=JSON.stringify(e),html=record.render(e);
  assert.match(html,/情景/);assert.match(html,/一部採取/);assert.match(html,/32 トークン × 30 層 × 2816 次元/);
- assert.match(html,/研究保存先へ保全済み/);assert.match(html,/数値データを保存/);assert.match(html,/root%3A%3Cpoem%3E\/internal-capture\/2\/hidden/);
+ assert.doesNotMatch(html,/保全|default_model/);assert.match(html,/数値データを保存/);assert.match(html,/root%3A%3Cpoem%3E\/internal-capture\/2\/hidden/);
  assert.match(html,/一対一には対応しません/);assert.match(html,/&lt;model&gt;/);assert.doesNotMatch(html,/<model>|<reply>|<job>/);
  assert.equal(JSON.stringify(e),before);
 });
-test('failed and missing captures never claim numeric data and storage errors remain distinct',()=>{
+test('failed and missing captures never claim numeric data or display archive status',()=>{
  for(const status of ['failed','cancelled','missing','invalid','request_failed','requested']){
   const e={id:'root:p',internalCapture:{requests:[{request_index:1,kind:'haiku_draft',status,error:'<reason>',artifact:{hidden_verified:false}}]},internalCaptureStorage:{requests:[{request_index:1,state:'error'}]}};
-  const html=record.render(e);assert.doesNotMatch(html,/数値データを保存|トークン ×/);assert.match(html,/&lt;reason&gt;/);assert.match(html,/検証済みの数値データはありません/);assert.match(html,/保全を確認できません/);
+  const html=record.render(e);assert.doesNotMatch(html,/数値データを保存|トークン ×|保全/);assert.match(html,/&lt;reason&gt;/);assert.match(html,/検証済みの数値データはありません/);
+ }
+});
+test('capture models use recorded GGUF or MLX assets instead of API aliases',()=>{
+ for(const [artifact,expected] of [
+  [{identity:{model:{path:'/models/gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf'}},model:{name:'default_model',path:'/models/alias.gguf'}},'gemma-4-26B-A4B-it-qat-UD-Q4_K_XL'],
+  [{model:{assets:{resolved_model_path:'/models/gemma-4-26B-A4B-it-4bit'}}},'gemma-4-26B-A4B-it-4bit'],
+  [{model:{assets:{resolved_model_path:'/cache/models--mlx-community--gemma-4-26B-A4B-it-4bit/snapshots/abcdef'}}},'mlx-community/gemma-4-26B-A4B-it-4bit'],
+  [{model:{name:'default_model'}},'モデル未記録']
+ ]){
+  const html=record.render({internalCapture:{requests:[{kind:'haiku_draft',request_index:1,status:'requested',requested_model:'default_model',response_model:'custom_api_alias',artifact}]}});
+  assert(html.includes(expected));assert.doesNotMatch(html,/default_model|custom_api_alias|\/models\/|abcdef/);
  }
 });

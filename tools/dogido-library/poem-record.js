@@ -4,21 +4,28 @@
   const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const texts=atoms=>(Array.isArray(atoms)?atoms:[]).map(atom=>typeof atom==='string'?atom:atom?.text).filter(text=>typeof text==='string'&&text.trim());
   function time(value){const date=new Date(value);return Number.isNaN(date.valueOf())?'時刻未記録':new Intl.DateTimeFormat('ja-JP',{timeZone:'Asia/Tokyo',hour:'2-digit',minute:'2-digit'}).format(date);}
+  function captureModelName(artifact){
+    // APIの別名ではなく、採取時に照合したモデル資産から表示名を取る。
+    const path=[artifact?.identity?.model?.path,artifact?.model?.assets?.resolved_model_path,artifact?.model?.path].find(value=>typeof value==='string'&&value.trim());
+    if(!path)return 'モデル未記録';
+    const parts=path.replaceAll('\\','/').split('/').filter(Boolean);
+    const snapshot=parts.lastIndexOf('snapshots'),repository=parts[snapshot-1];
+    if(snapshot>0&&repository?.startsWith('models--'))return repository.slice(8).replaceAll('--','/');
+    return parts.at(-1)?.replace(/\.gguf$/i,'')||'モデル未記録';
+  }
   function internalCapture(e){
     const capture=e.internalCapture,requests=Array.isArray(capture?.requests)?capture.requests:[];
     if(!requests.length)return '<p class="record-missing">内部表現の記録はありません。この句には採取記録が保存されていません。</p>';
     const stages={haiku_irony:'見どころ',haiku_scene:'情景',haiku_draft:'句の生成',haiku_line_regeneration:'行の再生成'};
     const states={complete:'採取完了',partial:'一部採取',failed:'採取失敗',cancelled:'採取取消',missing:'採取ファイルなし',invalid:'検証不成立',request_failed:'生成要求失敗',requested:'結果未記録'};
-    const saved=Array.isArray(e.internalCaptureStorage?.requests)?e.internalCaptureStorage.requests:[];
     return `<p class="record-prose">発句中に生成した元のトークンに対応する、各層の数値記録です。整形・読みの補完後の句と一対一には対応しません。</p><ol class="capture-records">${requests.map(r=>{
       const a=r.artifact,shape=a?.shape,numeric=a?.hidden_verified===true&&['complete','partial'].includes(r.status)&&Array.isArray(shape)&&shape.length===3&&shape.every(n=>Number.isSafeInteger(n)&&n>0);
-      const storage=saved.find(s=>s.request_index===r.request_index&&s.response_id===r.response_id);
       const index=Number.isSafeInteger(r.request_index)&&r.request_index>0?r.request_index:null;
       const base=e.id&&index?`/api/poems/${encodeURIComponent(e.id)}/internal-capture/${index}`:null;
       const downloadable=a&&['complete','partial','failed','cancelled'].includes(r.status)&&base;
       const bytes=Number(a?.hidden_bytes),size=Number.isFinite(bytes)&&bytes>0?`${(bytes/1048576).toFixed(1)} MiB`:'';
       const state=states[r.status]||'状態不明';
-      return `<li><h4>${esc(stages[r.kind]||r.kind)} <span>要求 ${esc(r.request_index)} · ${state}</span></h4><p>${esc(r.response_model||r.requested_model||'モデル未記録')}${a?.backend?` ／ ${esc(a.backend)}`:''}</p>${numeric?`<p>${shape[0]} トークン × ${shape[1]} 層 × ${shape[2]} 次元${size?` · ${size}`:''}</p>`:'<p class="record-missing">検証済みの数値データはありません。</p>'}${storage?.state==='saved'?'<p>研究保存先へ保全済み</p>':storage?.state==='error'?'<p class="record-missing">研究保存先への保全を確認できません。</p>':''}${downloadable?`<p class="capture-downloads"><a href="${esc(base)}/manifest" download>採取記録を保存</a>${numeric?`<a href="${esc(base)}/hidden" download>数値データを保存</a>`:''}</p>`:''}<details class="capture-identifiers"><summary>照合情報</summary><dl><dt>応答ID</dt><dd>${esc(r.response_id||'未記録')}</dd><dt>要求ID</dt><dd>${esc(r.request_id||'未記録')}</dd>${a?.manifest_sha256?`<dt>採取記録のSHA-256</dt><dd>${esc(a.manifest_sha256)}</dd>`:''}${numeric?`<dt>数値データのSHA-256</dt><dd>${esc(a.hidden_sha256)}</dd><dt>採取位置</dt><dd>${esc(a.boundary)}</dd>`:''}${r.error||a?.error?`<dt>採取時の記録</dt><dd>${esc(r.error||a.error)}</dd>`:''}</dl></details></li>`;
+      return `<li><h4>${esc(stages[r.kind]||r.kind)} <span>要求 ${esc(r.request_index)} · ${state}</span></h4><p>${esc(captureModelName(a))}${a?.backend?` ／ ${esc(a.backend)}`:''}</p>${numeric?`<p>${shape[0]} トークン × ${shape[1]} 層 × ${shape[2]} 次元${size?` · ${size}`:''}</p>`:'<p class="record-missing">検証済みの数値データはありません。</p>'}${downloadable?`<p class="capture-downloads"><a href="${esc(base)}/manifest" download>採取記録を保存</a>${numeric?`<a href="${esc(base)}/hidden" download>数値データを保存</a>`:''}</p>`:''}<details class="capture-identifiers"><summary>照合情報</summary><dl><dt>応答ID</dt><dd>${esc(r.response_id||'未記録')}</dd><dt>要求ID</dt><dd>${esc(r.request_id||'未記録')}</dd>${a?.manifest_sha256?`<dt>採取記録のSHA-256</dt><dd>${esc(a.manifest_sha256)}</dd>`:''}${numeric?`<dt>数値データのSHA-256</dt><dd>${esc(a.hidden_sha256)}</dd><dt>採取位置</dt><dd>${esc(a.boundary)}</dd>`:''}${r.error||a?.error?`<dt>採取時の記録</dt><dd>${esc(r.error||a.error)}</dd>`:''}</dl></details></li>`;
     }).join('')}</ol>`;
   }
   function render(e){
