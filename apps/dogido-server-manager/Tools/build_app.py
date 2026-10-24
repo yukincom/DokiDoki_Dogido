@@ -73,7 +73,7 @@ def build(project, destination, identity=LOCAL_SIGNING_IDENTITY, ad_hoc=False):
         info = {
             "CFBundleName": "ドギド サーバー", "CFBundleDisplayName": "ドギド サーバー",
             "CFBundleIdentifier": "local.dogido.server-manager", "CFBundleExecutable": "DogidoServerManager",
-            "CFBundlePackageType": "APPL", "CFBundleShortVersionString": "0.1.2", "CFBundleVersion": "3",
+            "CFBundlePackageType": "APPL", "CFBundleShortVersionString": "0.1.3", "CFBundleVersion": "4",
             "CFBundleIconFile": "DogidoServer-v2.icns",
             "LSMinimumSystemVersion": "13.0", "NSHighResolutionCapable": True,
             "NSAppTransportSecurity": {"NSAllowsLocalNetworking": True},

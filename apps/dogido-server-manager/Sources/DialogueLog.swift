@@ -10,6 +10,7 @@ struct DialogueLogEntry {
     let isResponse: Bool
     let source: String
     let status: String
+    let classifierMode: String?
     let classification: String?
     let probability: Double?
     let inferenceMS: Double?
@@ -35,12 +36,14 @@ struct DialogueLog {
             let isForwarded = row["category"] as? String != "routing" && forwarded.contains(row["turn_id"] as? String ?? "")
             let input = isForwarded ? "" : (row["player_input_text"] as? String ?? "")
             let output = row["text"] as? String ?? ""
-            let prediction = (row["request_classification"] as? [String: Any])?["prediction"] as? [String: Any]
+            let classification = row["request_classification"] as? [String: Any]
+            let mode = classification?["mode"] as? String ?? row["classifier_mode"] as? String
+            let prediction = classification?["prediction"] as? [String: Any]
             let name = prediction?["label"] as? String
             let probabilities = prediction?["probabilities"] as? [Double]
-            let labels = ["not_request", "enemy_information", "equip_sword", "recall_mount", "other_request"]
-            let probability = name.flatMap { labels.firstIndex(of: $0) }.flatMap { index -> Double? in
-                guard let probabilities, probabilities.indices.contains(index),
+            let labels = DialogueLogStyle.labels(for: mode)
+            let probability = name.flatMap { name in labels.firstIndex { $0.name == name } }.flatMap { index -> Double? in
+                guard let probabilities, probabilities.count == labels.count,
                       probabilities[index].isFinite, (0...1).contains(probabilities[index]) else { return nil }
                 return probabilities[index]
             }
@@ -48,7 +51,7 @@ struct DialogueLog {
             guard !input.isEmpty || !output.isEmpty || name != nil || error != nil || isForwarded else { return nil }
             return DialogueLogEntry(id: id, timestamp: row["created_at"] as? String ?? "",
                                     input: input, output: output, isResponse: isForwarded, source: row["source"] as? String ?? "",
-                                    status: row["playback_status"] as? String ?? "", classification: name,
+                                    status: row["playback_status"] as? String ?? "", classifierMode: mode, classification: name,
                                     probability: probability, inferenceMS: prediction?["inference_ms"] as? Double,
                                     error: error)
         }
@@ -60,17 +63,73 @@ enum DialogueLogStyle {
     static let foreground = NSColor(srgbRed: 0.88, green: 0.94, blue: 0.90, alpha: 1)
     static let muted = NSColor(srgbRed: 0.64, green: 0.74, blue: 0.69, alpha: 1)
 
-    /// 構造化された分類欄だけを着色する。本文に同じ単語があっても色は変えない。
-    static func badge(_ name: String) -> (title: String, color: NSColor) {
-        let title: String, rgb: UInt32
-        switch name {
-        case "not_request": title = "依頼なし"; rgb = 0xb8daca
-        case "enemy_information": title = "敵情報"; rgb = 0xa9d9ff
-        case "equip_sword": title = "剣に持ち替え"; rgb = 0xf6d590
-        case "recall_mount": title = "呼び寄せ"; rgb = 0xd5c3ff
-        case "other_request": title = "その他の依頼"; rgb = 0xeebcca
-        default: title = "未対応ラベル"; rgb = 0xd0d5d2
+    // 本体のMode::labelsと採用モデルのid2label順。日本語名と確率の対応を同じ表で扱う。
+    // 色の番号は領域ごとに0へ戻し、川柳と通常対話の間では再利用する。
+    private static let normalLabels: [(name: String, title: String)] = [
+        ("not_target", "対象外・その他"),
+        ("enemy_information", "モブ情報（敵・友好）"),
+        ("equip_sword", "剣に持ち替え"),
+        ("recall_mount", "乗用動物を呼び寄せ"),
+        ("dogido_recall", "ドギドを呼び寄せ"),
+        ("look_direction", "指定方向を向く"),
+        ("look_relative_right", "右を向く"),
+        ("look_target", "指定した対象を見る"),
+        ("look_player", "プレイヤーを見る"),
+        ("look_relative_front", "前を向く"),
+        ("look_relative_back", "後ろを向く"),
+        ("look_relative_left", "左を向く"),
+        ("look_relative_front_left", "左前を向く"),
+        ("look_relative_front_right", "右前を向く"),
+        ("look_relative_back_left", "左後ろを向く"),
+        ("look_relative_back_right", "右後ろを向く"),
+    ]
+    private static let senryuLabels: [(name: String, title: String)] = [
+        ("not_target", "対象外・その他"),
+        ("senryu_line_upper", "上五の行指定"),
+        ("senryu_line_middle", "中七の行指定"),
+        ("senryu_line_lower", "下五の行指定"),
+        ("senryu_change_upper", "上五の具体変更"),
+        ("senryu_change_middle", "中七の具体変更"),
+        ("senryu_change_lower", "下五の具体変更"),
+        ("senryu_end", "川柳相談の終了"),
+    ]
+    // 領域のなかった旧snapshotの既存表示だけを維持する。現在の分類先は推測しない。
+    private static let legacyLabels: [(name: String, title: String)] = [
+        ("not_request", "依頼なし"), ("enemy_information", "敵情報"),
+        ("equip_sword", "剣に持ち替え"), ("recall_mount", "呼び寄せ"),
+        ("other_request", "その他の依頼"),
+    ]
+    private static let palette: [UInt32] = [
+        0xc3ccc8, 0xa9d9ff, 0xf6d590, 0xd5c3ff,
+        0xf2a9a1, 0x8fe2df, 0xe7ec8b, 0xeebcca,
+        0x9dcc91, 0xaab7f0, 0xf5b875, 0x8fcbd0,
+        0xd3b98c, 0xc2afe0, 0xf2aedd, 0xb8d9f2,
+    ]
+
+    static func labels(for mode: String?) -> [(name: String, title: String)] {
+        switch mode {
+        case "normal": return normalLabels
+        case "senryu": return senryuLabels
+        case nil: return legacyLabels
+        default: return []
         }
+    }
+
+    static func classificationTitle(_ mode: String?) -> String {
+        switch mode {
+        case "normal": return "分類［通常対話］"
+        case "senryu": return "分類［川柳］"
+        case nil: return "分類"
+        default: return "分類［領域不明］"
+        }
+    }
+
+    /// 構造化された分類欄だけを着色する。本文に同じ単語があっても色は変えない。
+    static func badge(_ name: String, mode: String? = nil) -> (title: String, color: NSColor) {
+        let definitions = labels(for: mode)
+        let index = definitions.firstIndex { $0.name == name }
+        let title = index.map { definitions[$0].title } ?? "未対応ラベル"
+        let rgb = index.map { palette[$0] } ?? 0xd0d5d2
         return (" \(title) · \(name) ", NSColor(srgbRed: CGFloat((rgb >> 16) & 255) / 255,
                 green: CGFloat((rgb >> 8) & 255) / 255, blue: CGFloat(rgb & 255) / 255, alpha: 1))
     }
@@ -123,8 +182,8 @@ enum DialogueLogStyle {
                 append(entry.input + "\n")
             }
             if let name = entry.classification {
-                append("分類  ", color: muted)
-                let value = badge(name)
+                append(classificationTitle(entry.classifierMode) + "  ", color: muted)
+                let value = badge(name, mode: entry.classifierMode)
                 result.append(NSAttributedString(string: value.title, attributes: [
                     .font: NSFont.monospacedSystemFont(ofSize: 12, weight: .semibold),
                     .foregroundColor: NSColor(srgbRed: 0.08, green: 0.16, blue: 0.13, alpha: 1),
@@ -135,7 +194,8 @@ enum DialogueLogStyle {
                 if ["cancelled", "failed"].contains(entry.status) { append(" · " + status(entry.status), color: muted) }
                 append("\n")
             } else if !entry.input.isEmpty, !entry.status.isEmpty, entry.output.isEmpty {
-                append(status(entry.status) + "\n", color: muted)
+                let domain = entry.classifierMode == nil ? "" : classificationTitle(entry.classifierMode) + " · "
+                append(domain + status(entry.status) + "\n", color: muted)
             }
             if !entry.output.isEmpty || entry.isResponse {
                 append("\(stamp)  ドギド" + (entry.status.isEmpty ? "" : " · " + status(entry.status)) + "\n", bold: true)
