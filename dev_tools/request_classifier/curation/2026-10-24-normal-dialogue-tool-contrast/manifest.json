@@ -1,7 +1,7 @@
 {
   "schema": "normal_dialogue_synthetic_candidates.v1",
   "date": "2026-10-24",
-  "status": "prepared_not_merged",
+  "status": "included_in_release",
   "base_release": "../../releases/2026-10-24-normal-dialogue-546",
   "base_release_sha256": {
     "README.md": "52fa37baae451f1a52aca114e7704ef900919571baacbebfbb4f50516bd634f9",
@@ -23,15 +23,18 @@
   "family_count": 8,
   "proposed_split": "train",
   "all_rows_source": "synthetic",
-  "label_authority": "Codexによる提案。ユーザー確認前。実機での確定ラベルとは区別。",
+  "label_authority": "Codex作成の32件をユーザーが学習データへ追加するよう指示。出自はsyntheticのまま保持。",
   "new_model_inference": false,
   "training_run": false,
   "runtime_changes": false,
   "sha256": {
-    "README.md": "08989cc606b5b35abb647491b67331ea1374a57273639ac0f06ad3c1a55d4f18",
+    "README.md": "4000cb3af9bb4abd9c6a10d84ffc098ecbe6ddaa37b8499dabca04a9ffb48fa5",
     "candidates.jsonl": "a06be43c5a6cb8330945ee663ed841d4460ea721c6bc8979f34c91f91727c5e9",
     "coverage-review.json": "94ae46250ea921bade78f9c4da7a29e19fb21ec187aedc222decddad075ec2d1",
-    "evidence.jsonl": "8ef479643392474ec98d6e2132755e288ca0a4680d22f36b0072984077627c21",
-    "materials-review.md": "c19bcad0d6a28f1cf6fdd1257884be16f90800615470c8a0517d20db4486f57b"
-  }
+    "evidence.jsonl": "3254700bf28477a755da1998ebb08f4bfff67af62830a9285b63fad46665cf6e",
+    "materials-review.md": "205c1c81d68404f8fc8f5d3ddf649cd611cb832d3dc130e5db4bd11f23641c32"
+  },
+  "included_release": "../../releases/2026-10-24-normal-dialogue-578",
+  "approved_date": "2026-10-24",
+  "approval": "この32件も追加して、通常対話の方も前回と同じようにColabで学習できるようにしよう！"
 }
