@@ -1,5 +1,13 @@
 # 依頼5分類データ v1.7
 
+## 現在の保存先（2026-10-24）
+
+研究の変遷・学習方法・結果は[公開研究README](https://github.com/yukincom/AI-Curious-Community/tree/main/modernbert-request-classifier-study)にまとめています。実験モデル・Notebook・受渡しZIPは[GitHub Releasesの保存版](https://github.com/yukincom/AI-Curious-Community/blob/main/modernbert-request-classifier-study/full-archive/README.md)へ保存し、公開物との照合後にローカルコピーを削除しました。このフォルダには軽量な教材・評価記録・補助コードを残します。学習の再実行に過去の重みやNotebookが必要な場合は保存版から取得してください。
+
+本体で使用・配布するのは[川柳8分類と通常16分類の採用済み2本](../../docs/2026-10-24-bundled-request-classifier.md)です。以下は旧5分類の研究記録です。
+
+## v1.7の記録
+
 ModernBERT-Jaの日本語依頼5分類を試すデータと学習・評価補助です。以下はv1.7のデータ・評価記録です。後に採用されたv1.9 seed43の本体接続と現在発話だけの入力契約は[接続記録](../../docs/2026-10-15-modernbert-integration-preparation.md)を参照してください。
 
 **v1.7：全762件を機能・受付範囲に照らして再確認し、754件へ整理済み。** 本文・履歴38件、注釈のみ42件を修正し、専用対話中の8件を除外しました。[変更内容・全件の採否](../../docs/2026-10-14-request-classifier-functional-scope-review.md)を参照してください。v1.7で既存モデルの再評価と3 seedの再学習を完了しました。testは既存86.7%に対して3 seed平均87.1%（標準偏差2.04ポイント）。[比較結果](../../docs/2026-10-14-modernbert-ja-request-classifier-v17-multiseed.md)を参照してください。
