@@ -1,5 +1,5 @@
 // 既存display snapshotの対話行を読み、入力・分類・返答をログ用に整形する。
-// APIの行IDと明示された転送先だけで入力の重複を除き、本文や本体の状態は変更しない。
+// APIの行IDと明示された転送先だけで入力・分類の重複を除き、本文や本体の状態は変更しない。
 import AppKit
 
 struct DialogueLogEntry {
@@ -26,19 +26,32 @@ struct DialogueLog {
               let rows = value["utterances"] as? [[String: Any]] else {
             throw ManagerError(message: "対話データの形式を読み取れませんでした。")
         }
-        let forwarded = Set(rows.compactMap { row -> String? in
-            guard !(row["player_input_text"] as? String ?? "").isEmpty,
-                  row["category"] as? String == "routing" else { return nil }
-            return (row["forwarded_input"] as? [String: Any])?["turn_id"] as? String
-        })
-        let entries = rows.suffix(200).compactMap { row -> DialogueLogEntry? in
+        let visibleRows = rows.suffix(200)
+        var forwarded = Set<String>()
+        var forwardedClassifications: [String: NSDictionary] = [:]
+        for row in visibleRows {
+            guard row["utterance_id"] is String,
+                  !(row["player_input_text"] as? String ?? "").isEmpty,
+                  row["category"] as? String == "routing",
+                  let turn = (row["forwarded_input"] as? [String: Any])?["turn_id"] as? String else { continue }
+            forwarded.insert(turn)
+            if let classification = row["request_classification"] as? [String: Any] {
+                forwardedClassifications[turn] = NSDictionary(dictionary: classification)
+            }
+        }
+        let entries = visibleRows.compactMap { row -> DialogueLogEntry? in
             guard let id = row["utterance_id"] as? String else { return nil }
-            let isForwarded = row["category"] as? String != "routing" && forwarded.contains(row["turn_id"] as? String ?? "")
+            let turn = row["turn_id"] as? String ?? ""
+            let isForwarded = row["category"] as? String != "routing" && forwarded.contains(turn)
             let input = isForwarded ? "" : (row["player_input_text"] as? String ?? "")
             let output = row["text"] as? String ?? ""
             let classification = row["request_classification"] as? [String: Any]
             let mode = classification?["mode"] as? String ?? row["classifier_mode"] as? String
-            let prediction = classification?["prediction"] as? [String: Any]
+            // 表示中の受付行と同じ結果を引き継いだ返答行だけ、分類の再表示を省く。
+            let repeatedClassification = isForwarded && classification.map {
+                forwardedClassifications[turn]?.isEqual(to: $0) == true
+            } == true
+            let prediction = repeatedClassification ? nil : classification?["prediction"] as? [String: Any]
             let name = prediction?["label"] as? String
             let probabilities = prediction?["probabilities"] as? [Double]
             let labels = DialogueLogStyle.labels(for: mode)
