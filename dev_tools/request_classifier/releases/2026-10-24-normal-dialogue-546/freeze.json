@@ -1,0 +1,183 @@
+{
+  "schema": "text_only_materials.v1",
+  "revision_date": "2026-10-24",
+  "status": "prepared_not_trained",
+  "source": {
+    "archive_url": "https://github.com/yukincom/AI-Curious-Community/releases/download/modernbert-research-2026-10-24/source-evaluation-records-01.tar.gz",
+    "archive_sha256": "aae4355c088c0436f3b019fa6674349e8b4091b51998a3f5b39274d9f1a8c2af",
+    "path": "dev_tools/request_classifier/releases/v7-verse-variety-890",
+    "source_git_head": "54005915153d3f7d7f83226cfb7576f156d3781f",
+    "file_sha256": {
+      "labels.json": "2ae5ce7467850e57c171cb1b96ab3f50f476a7c3366a170496aeded092057200",
+      "train.jsonl": "bcbeaea9b04890ce7f13035c6ff319ca29a67e040ce24ffd9761e5125ba583e1",
+      "dev.jsonl": "e75e2aba867f5ea9ceb7f0d6ed0b5073574e90eb988258fe618eb0586bfdec88",
+      "test.jsonl": "f34553296a348537a2b711e4a7926ee6dae3207f89247d7c595da6c127cc5430",
+      "split-assignments.json": "73bcf7a8f0fb70afd37fcd31d95b9c0eb594ac43fa7ea203b8ed2291989c0257",
+      "freeze.json": "3bdeae65405edea8539c6d17df4b07ba6a3d90c209184580df2e13c0934f2ac2"
+    }
+  },
+  "selection": {
+    "excluded_labels": [
+      "senryu_line_upper",
+      "senryu_line_middle",
+      "senryu_line_lower",
+      "senryu_change_upper",
+      "senryu_change_middle",
+      "senryu_change_lower",
+      "senryu_end"
+    ],
+    "retained_rows": 531,
+    "appended_train_rows": 15,
+    "included_labels": [
+      "not_target",
+      "enemy_information",
+      "equip_sword",
+      "recall_mount",
+      "dogido_recall",
+      "look_direction",
+      "look_relative_right",
+      "look_target",
+      "look_player",
+      "look_relative_front",
+      "look_relative_back",
+      "look_relative_left",
+      "look_relative_front_left",
+      "look_relative_front_right",
+      "look_relative_back_left",
+      "look_relative_back_right"
+    ],
+    "source_selected_counts": {
+      "train": 435,
+      "dev": 46,
+      "test": 50
+    }
+  },
+  "label_id_mapping": {
+    "not_target": {
+      "source_23class_id": 0,
+      "normal_16class_id": 0
+    },
+    "enemy_information": {
+      "source_23class_id": 1,
+      "normal_16class_id": 1
+    },
+    "equip_sword": {
+      "source_23class_id": 2,
+      "normal_16class_id": 2
+    },
+    "recall_mount": {
+      "source_23class_id": 3,
+      "normal_16class_id": 3
+    },
+    "dogido_recall": {
+      "source_23class_id": 4,
+      "normal_16class_id": 4
+    },
+    "look_direction": {
+      "source_23class_id": 11,
+      "normal_16class_id": 5
+    },
+    "look_relative_right": {
+      "source_23class_id": 13,
+      "normal_16class_id": 6
+    },
+    "look_target": {
+      "source_23class_id": 14,
+      "normal_16class_id": 7
+    },
+    "look_player": {
+      "source_23class_id": 15,
+      "normal_16class_id": 8
+    },
+    "look_relative_front": {
+      "source_23class_id": 16,
+      "normal_16class_id": 9
+    },
+    "look_relative_back": {
+      "source_23class_id": 17,
+      "normal_16class_id": 10
+    },
+    "look_relative_left": {
+      "source_23class_id": 18,
+      "normal_16class_id": 11
+    },
+    "look_relative_front_left": {
+      "source_23class_id": 19,
+      "normal_16class_id": 12
+    },
+    "look_relative_front_right": {
+      "source_23class_id": 20,
+      "normal_16class_id": 13
+    },
+    "look_relative_back_left": {
+      "source_23class_id": 21,
+      "normal_16class_id": 14
+    },
+    "look_relative_back_right": {
+      "source_23class_id": 22,
+      "normal_16class_id": 15
+    }
+  },
+  "additions": "../../curation/2026-10-24-normal-dialogue-feedback-1548/candidates.jsonl",
+  "addition_source_sha256": {
+    "README.md": "a819624c1ca024c8b2e8628259d68a8d5a7b7aa88835234586ab6f8c64f9a3d9",
+    "candidates.jsonl": "5d5744ec8b93b3ba81e1c726c4c7b8cb12aa379eda511c2b87c96c6a8de116ef",
+    "evidence.jsonl": "8f570f07c1a51320fb072dae4de8ef26e3a4460ec2358ae72154721d88d28386",
+    "excluded.jsonl": "77cec01ab7c61b45411a81ae53f31e41718080b37e1e50a7ec2a2083313b109a",
+    "manifest.json": "37ce8d92ba6206ca9f8eec1ccaa1b63e33bbe1faa86b93b064855a1a154768fe"
+  },
+  "counts": {
+    "train": 450,
+    "dev": 46,
+    "test": 50
+  },
+  "split_sha256": {
+    "train": "492e4c9665a0e075b5cb92cf48d18c2c90047b0a83547f916fbc6dc0c8e80a76",
+    "dev": "fcac4d822b7280f09aacf8700ef65a80613a380e6753826ba919b9421d1d21e6",
+    "test": "5638ba8990b6d666e1babb8d5e24b50ea0a0b30acae75e2b320daddb8be8ad35"
+  },
+  "output_sha256": {
+    "README.md": "52fa37baae451f1a52aca114e7704ef900919571baacbebfbb4f50516bd634f9",
+    "data_report.json": "bfeb21500475e5369e1710baf070ca1dc993d53fac8c237320b931d72517b43a",
+    "dev.jsonl": "fcac4d822b7280f09aacf8700ef65a80613a380e6753826ba919b9421d1d21e6",
+    "integrity.json": "0ae1efb0a249a7da32ae2119844160ea12b54bf9f330363ec1caaadaed34e8f1",
+    "labels.json": "41955d648f5b330758019635f10e0fa4ece607cefc2111f10ebae7f5ae25cb91",
+    "materials-review.md": "e04229078fd1d75fa599b7cb8dbc52cefce0aadb77b05640e785ac495e840617",
+    "split-assignments.json": "58a979c85a9ae4e778b1fa0d462c14799009aa551d29722207460593aebd5a3d",
+    "test.jsonl": "5638ba8990b6d666e1babb8d5e24b50ea0a0b30acae75e2b320daddb8be8ad35",
+    "train.jsonl": "492e4c9665a0e075b5cb92cf48d18c2c90047b0a83547f916fbc6dc0c8e80a76"
+  },
+  "evaluation_scope": "既知のdev/testから通常用16分類の行を抽出。追加15件（前回10件と今回5件）はtrain。未知の実機精度ではない。",
+  "routing_contract": "川柳が画面に表示されていない間は通常用。川柳表示中は川柳用へ切り替える。接続未実施。",
+  "training": null,
+  "runtime_changes": false,
+  "previous_release": {
+    "path": "../2026-10-24-normal-dialogue-541",
+    "commit": "c22ae32fa6d11dd93698a65ce83bc12ac9ab1715",
+    "file_sha256": {
+      "README.md": "a4d805a034fdcc8229b6e9dc9aef3240b44211d349fd099d4c50fc82948447c8",
+      "data_report.json": "644d0a40214e194773e71d9d885f589cf649813916314ca221dab6878c23bbc0",
+      "dev.jsonl": "fcac4d822b7280f09aacf8700ef65a80613a380e6753826ba919b9421d1d21e6",
+      "freeze.json": "10a8940c7c44113ceddd684f5884a4bdee1fbeeb160167207192d5bbe62fb6aa",
+      "integrity.json": "62442f785dbf91da11f5714380e77565c0f9f126eaa0c72ad1f714466e3a784b",
+      "labels.json": "41955d648f5b330758019635f10e0fa4ece607cefc2111f10ebae7f5ae25cb91",
+      "materials-review.md": "14289bbe4fec83bbe01ebc5950e71ce3ff1ce0e29d0896e931e74cf853a3f195",
+      "split-assignments.json": "00301461b85d2830e87b20071f72dca79b01a0d39a86e1a74f47fcabdfcc9f76",
+      "test.jsonl": "5638ba8990b6d666e1babb8d5e24b50ea0a0b30acae75e2b320daddb8be8ad35",
+      "train.jsonl": "c35a302fc55a3fb23a71b4da49da6ca33062feeba711d2d089b75e672de71d4d"
+    }
+  },
+  "latest_batch": {
+    "rows": 5,
+    "labels": {
+      "not_target": 5
+    },
+    "ids": [
+      "live_20261024_154838",
+      "live_20261024_154537",
+      "live_20261024_154449",
+      "live_20261024_154433",
+      "live_20261024_154747"
+    ]
+  }
+}

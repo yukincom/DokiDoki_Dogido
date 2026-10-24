@@ -1,0 +1,5 @@
+{"text": "松明が石の天井水の音", "input_time": "14:34:28", "classifier_label": "look_direction", "latency_ms": 9.4, "confidence_display": null, "decision": "exclude_from_normal_training", "reason": "ユーザーが川柳推敲と指定した、川柳表示中の句の復唱。通常対話用へ混ぜない。"}
+{"text": "ゾンビの声が聞こえるけど", "input_time": "14:32:54", "classifier_label": "enemy_information", "confidence_display": "99.76%", "latency_ms": 3.8, "decision": "no_classification_correction", "reason": "モブ情報の分類は維持。指摘は音に応じた回答の問題であり、誤分類例としてラベルを変えない。"}
+{"id": "user_20261024_senryu_end_01", "text": "じゃあこれで保存でお願いします", "label": "senryu_end", "decision": "exclude_senryu_label", "reason": "川柳の終了例。川柳用424件版に収録済み。"}
+{"id": "user_20261024_senryu_end_02", "text": "これでいいんじゃないでしょうか", "label": "senryu_end", "decision": "exclude_senryu_label", "reason": "川柳の終了例。川柳用424件版に収録済み。"}
+{"id": "user_20261024_senryu_end_03", "text": "じゃあそれでおしまいでお願いします", "label": "senryu_end", "decision": "exclude_senryu_label", "reason": "川柳の終了例。川柳用424件版に収録済み。"}

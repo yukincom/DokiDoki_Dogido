@@ -1,0 +1,44 @@
+{
+  "schema": "normal_dialogue_feedback.v1",
+  "date": "2026-10-24",
+  "candidate_count": 15,
+  "evidence_count": 15,
+  "excluded_count": 5,
+  "label_counts": {
+    "look_direction": 1,
+    "not_target": 14
+  },
+  "new_split": "train",
+  "new_synthetic_examples": 0,
+  "label_authority": "ユーザーの明示訂正と、水の発話に対する視線依頼の確認",
+  "reused_feedback_source": "../2026-10-24-live-feedback",
+  "reused_feedback_sha256": {
+    "README.md": "0abcd420d37c6df8ffb380098227a23baf9d1fab6630567807ec1882183dab6f",
+    "candidates.jsonl": "cc848bdc7b21124e41879bca6e51e3d48045a28035ebcb5e98e42988621ee5b7",
+    "evidence.jsonl": "81005f32bdfca16420c051ad43664d972dfb4bae38397e938eff7c934b1cb03c",
+    "manifest.json": "4e4d93f4f5a6924aeffddce011862a3a8b8881296d270adaf348bd3e3094c23f"
+  },
+  "sha256": {
+    "README.md": "a819624c1ca024c8b2e8628259d68a8d5a7b7aa88835234586ab6f8c64f9a3d9",
+    "candidates.jsonl": "5d5744ec8b93b3ba81e1c726c4c7b8cb12aa379eda511c2b87c96c6a8de116ef",
+    "evidence.jsonl": "8f570f07c1a51320fb072dae4de8ef26e3a4460ec2358ae72154721d88d28386",
+    "excluded.jsonl": "77cec01ab7c61b45411a81ae53f31e41718080b37e1e50a7ec2a2083313b109a"
+  },
+  "re_inference_performed": false,
+  "previous_feedback": "../2026-10-24-normal-dialogue-feedback",
+  "previous_feedback_sha256": {
+    "README.md": "8531e95e53a6e4b5b2860f632c19fbed2cd710cd3453a4b9d775b174529eebbb",
+    "candidates.jsonl": "75426e72fe00c9b9e2411c5ad43766a3d3c15dbc8bc59dc5662298469656a78d",
+    "evidence.jsonl": "c243e76ac3f2d1052f8813881164a40b7c352bcc49226a7891220d5ca44dd29c",
+    "excluded.jsonl": "77cec01ab7c61b45411a81ae53f31e41718080b37e1e50a7ec2a2083313b109a",
+    "manifest.json": "3bfd9a74e6f4b0a0763ff58dd08204fd44f209533b23b7778603f1d245408056"
+  },
+  "appended_count": 5,
+  "appended_ids": [
+    "live_20261024_154838",
+    "live_20261024_154537",
+    "live_20261024_154449",
+    "live_20261024_154433",
+    "live_20261024_154747"
+  ]
+}
