@@ -1,0 +1,67 @@
+{
+  "schema": "colab_training.v1",
+  "profile": "modernbert-normal578",
+  "material_commit": "f8e1d0296068dfcd9ab583cb5604b9e0cfe06701",
+  "release": "dev_tools/request_classifier/releases/2026-10-24-normal-dialogue-578",
+  "counts": {
+    "train": 482,
+    "dev": 46,
+    "test": 50
+  },
+  "label_to_id": {
+    "not_target": 0,
+    "enemy_information": 1,
+    "equip_sword": 2,
+    "recall_mount": 3,
+    "dogido_recall": 4,
+    "look_direction": 5,
+    "look_relative_right": 6,
+    "look_target": 7,
+    "look_player": 8,
+    "look_relative_front": 9,
+    "look_relative_back": 10,
+    "look_relative_left": 11,
+    "look_relative_front_left": 12,
+    "look_relative_front_right": 13,
+    "look_relative_back_left": 14,
+    "look_relative_back_right": 15
+  },
+  "release_sha256": {
+    "README.md": "72ca175b8201f8ed289ecc87b8fbf07c5e1dfe8cf64401553eb428d1cfe34fd5",
+    "data_report.json": "97937386e9e4f411e4b83d5966ff4a85ad01c6f157541040060fcfd6d4caa0d6",
+    "dev.jsonl": "fcac4d822b7280f09aacf8700ef65a80613a380e6753826ba919b9421d1d21e6",
+    "freeze.json": "28efc87a0d9f8162f14f996f93c895d35c1c8b12b9810df0689b6ecb37a2a045",
+    "integrity.json": "03465cd178efbe9f3c860abb3faa2cfa20b019516e5984d6595fbe13b9b16d2e",
+    "labels.json": "41955d648f5b330758019635f10e0fa4ece607cefc2111f10ebae7f5ae25cb91",
+    "materials-review.md": "b89d53bc89171404cfe6924172035284ae4db39f698f89f77cd37014ebf99cdf",
+    "split-assignments.json": "d2b55525a09742a3acd5458bf19686c2d91c7d207a9f8dde976b09a21b9cb0ba",
+    "test.jsonl": "5638ba8990b6d666e1babb8d5e24b50ea0a0b30acae75e2b320daddb8be8ad35",
+    "train.jsonl": "f5c157688c2aaf2b3c86fc3bfce742240a02cc2738dc36e5e74f98c4031001d4"
+  },
+  "training": {
+    "model": "sbintuitions/modernbert-ja-30m",
+    "revision": "8cb03f54cb9e30e72459e5f1cedc6d89c7d8dcb5",
+    "seeds": [
+      42,
+      43,
+      44
+    ],
+    "learning_rate": 5e-05,
+    "epochs": 10,
+    "batch_size": 16,
+    "max_length": 128,
+    "max_context": 0,
+    "dtype": "float32",
+    "attention": "sdpa",
+    "initialization": "base pretrained model with a new 16-label classification head",
+    "full_finetuning": true,
+    "class_weights": false,
+    "oversampling": false,
+    "truncation": false,
+    "tf32": false,
+    "selection": "best epoch per seed by dev macro_f1, then dev loss, then earlier epoch; freeze all selections before test; report all seeds"
+  },
+  "evaluation_scope": "前版の既知dev/testを保持。実機15件とユーザー採用の合成32件はtrain。未知の実機精度ではない。",
+  "runtime_routing": "川柳用と通常用は別モデル。掛け軸と受付状態による一方だけへの切替は本体担当の仕様で扱う。ここでは未接続。",
+  "status": "prepared_not_run"
+}
