@@ -1,0 +1,161 @@
+{
+  "schema": "senryu_colab_result_review.v1",
+  "reviewed_date": "2026-10-24",
+  "archive": {
+    "original": "/Users/yukin_co/Downloads/modernbert-senryu424-results.zip",
+    "saved": "modernbert-senryu424-results.zip",
+    "sha256": "8eb982530fc9f3dcc9dcbd8be7c77f666b41ee221434001cf050f6184bced9a7",
+    "bytes": 312439141
+  },
+  "extracted": "artifacts/colab-results",
+  "verification": {
+    "artifact_files_checked": 97,
+    "prepared_input_files_identical": 31,
+    "input_hashes_checked": 30,
+    "prediction_rows_recomputed": 1272,
+    "per_class_metrics_and_confusion_matrices": "matched",
+    "seed_mean_and_sample_stddev": "matched",
+    "dev_epoch_selection": "matched",
+    "weight_hashes_and_eight_class_heads": "matched"
+  },
+  "training": {
+    "gpu": "NVIDIA A100-SXM4-40GB",
+    "python": "3.11.14",
+    "model_revision": "8cb03f54cb9e30e72459e5f1cedc6d89c7d8dcb5",
+    "started_at_utc": "2026-10-24T06:44:27.177868+00:00",
+    "finished_at_utc": "2026-10-24T06:45:00.137945+00:00",
+    "elapsed_seconds": 33.67656995699997,
+    "local_training_or_inference_run": false
+  },
+  "results": [
+    {
+      "seed": 42,
+      "selected_epoch": 8.0,
+      "dev_loss": 0.034550946205854416,
+      "splits": {
+        "train": {
+          "correct": 349,
+          "n": 349,
+          "accuracy": 1.0,
+          "macro_f1": 1.0
+        },
+        "dev": {
+          "correct": 38,
+          "n": 39,
+          "accuracy": 0.9743589743589743,
+          "macro_f1": 0.9653846153846154
+        },
+        "test": {
+          "correct": 36,
+          "n": 36,
+          "accuracy": 1.0,
+          "macro_f1": 1.0
+        }
+      },
+      "feedback_train_correct": 7
+    },
+    {
+      "seed": 43,
+      "selected_epoch": 4.0,
+      "dev_loss": 0.06500808149576187,
+      "splits": {
+        "train": {
+          "correct": 349,
+          "n": 349,
+          "accuracy": 1.0,
+          "macro_f1": 1.0
+        },
+        "dev": {
+          "correct": 38,
+          "n": 39,
+          "accuracy": 0.9743589743589743,
+          "macro_f1": 0.9707792207792207
+        },
+        "test": {
+          "correct": 35,
+          "n": 36,
+          "accuracy": 0.9722222222222222,
+          "macro_f1": 0.9803030303030303
+        }
+      },
+      "feedback_train_correct": 7
+    },
+    {
+      "seed": 44,
+      "selected_epoch": 7.0,
+      "dev_loss": 0.9606795907020569,
+      "splits": {
+        "train": {
+          "correct": 349,
+          "n": 349,
+          "accuracy": 1.0,
+          "macro_f1": 1.0
+        },
+        "dev": {
+          "correct": 38,
+          "n": 39,
+          "accuracy": 0.9743589743589743,
+          "macro_f1": 0.9707792207792207
+        },
+        "test": {
+          "correct": 35,
+          "n": 36,
+          "accuracy": 0.9722222222222222,
+          "macro_f1": 0.9725274725274725
+        }
+      },
+      "feedback_train_correct": 7
+    }
+  ],
+  "errors": [
+    {
+      "seed": 42,
+      "split": "dev",
+      "text": "これはこのまま保存しましょう",
+      "gold": "senryu_end",
+      "predicted": "not_target",
+      "confidence": 0.7034199237823486
+    },
+    {
+      "seed": 43,
+      "split": "dev",
+      "text": "今日の冒険は終了しましょうか",
+      "gold": "not_target",
+      "predicted": "senryu_end",
+      "confidence": 0.824211835861206
+    },
+    {
+      "seed": 43,
+      "split": "test",
+      "text": "敵が三体見えたから逃げたよ。",
+      "gold": "not_target",
+      "predicted": "senryu_line_lower",
+      "confidence": 0.8074429035186768
+    },
+    {
+      "seed": 44,
+      "split": "dev",
+      "text": "今日の冒険は終了しましょうか",
+      "gold": "not_target",
+      "predicted": "senryu_end",
+      "confidence": 1.0
+    },
+    {
+      "seed": 44,
+      "split": "test",
+      "text": "中核をさららサバンナに変えてください",
+      "gold": "senryu_change_middle",
+      "predicted": "senryu_change_upper",
+      "confidence": 0.7686110138893127
+    }
+  ],
+  "test_accuracy_mean": 0.9814814814814815,
+  "test_accuracy_sample_stddev": 0.016037507477489613,
+  "weight_sha256": {
+    "42": "2e95a4f304867161adeff507ca5e5e2e89f13df0b7f0ac6bd257538dfc58411d",
+    "43": "4b32d90e84572ee24611f8af02a43a938f0cfc893edaba267b39d91512c94ad5",
+    "44": "a1d28018755a37236c5f1fcfbfee6e07d1436af8af58290bfa73c7ffc769924e"
+  },
+  "runtime_adoption": false,
+  "evaluation_scope": "既知の教材設計参照済みdev/test。追加7件は学習内確認。未知の実機精度ではない。"
+}
