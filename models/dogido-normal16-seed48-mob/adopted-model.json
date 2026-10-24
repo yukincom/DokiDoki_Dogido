@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "model_family": "sbintuitions/modernbert-ja-30m",
+  "data_version": "normal-dialogue-four-system",
+  "classifier_mode": "normal",
+  "seed": 48,
+  "candidate": "seed48-mob",
+  "label_to_id": {
+    "not_target": 0,
+    "enemy_information": 1,
+    "equip_sword": 2,
+    "recall_mount": 3,
+    "dogido_recall": 4,
+    "look_direction": 5,
+    "look_relative_right": 6,
+    "look_target": 7,
+    "look_player": 8,
+    "look_relative_front": 9,
+    "look_relative_back": 10,
+    "look_relative_left": 11,
+    "look_relative_front_left": 12,
+    "look_relative_front_right": 13,
+    "look_relative_back_left": 14,
+    "look_relative_back_right": 15
+  },
+  "checkpoint_path": ".",
+  "path_base": "repository_root",
+  "checkpoint_files_sha256": {
+    "config.json": "bd1ebcc8a20a6a5b158a77e4df4031a3274e4a62e6982ad4780b10bbdbeb8f3f",
+    "model.safetensors": "51c5aaf94c1b6f71cbd38e6d3b57b3aa0bfab0bad2f60408d3e488b2e6481b04",
+    "tokenizer.json": "6a0734cf21c802169defaffe719bc2ef12bb9d0be37e54b61ed27aa89394723d",
+    "tokenizer_config.json": "930dd278b2f45e3fdb6814699eaa23297a8ba534e0756ce0d194ec7dd4deccec"
+  },
+  "training": {
+    "selected_epoch": 2,
+    "train_unique_rows": 818,
+    "train_stream_rows_per_epoch": 942,
+    "dev_rows": 46,
+    "test_rows": 50,
+    "max_length": 128,
+    "max_history_utterances": 0,
+    "dtype": "float32"
+  },
+  "evaluated_input": {
+    "format_function": "dev_tools/request_classifier/dataset.py:model_example",
+    "max_history_utterances": 0,
+    "max_length": 128,
+    "truncation": false
+  },
+  "record_type": "dev_model_selection",
+  "status": "adopted",
+  "selected_at_utc": "2026-10-24T11:03:19.279982+00:00",
+  "decision": {
+    "chosen_by": "frozen_dev_selection",
+    "user_authorized_integration": true,
+    "selection_split": "dev",
+    "test_used": false,
+    "frozen_at_utc": "2026-10-24T10:31:12.764557+00:00",
+    "selection_record": "dev_tools/request_classifier/experiments/2026-10-24-four-system-colab/artifacts/colab-results/run/selection.json",
+    "original_labels_and_metrics_changed": false
+  },
+  "distribution": {
+    "source_checkpoint_path": "dev_tools/request_classifier/experiments/2026-10-24-four-system-colab/artifacts/colab-results/run/trained/seed48-mob/best",
+    "checkpoint_bytes_changed": false
+  },
+  "integration": {
+    "document": "docs/2026-10-24-bert-mode-routing.md",
+    "live_minecraft_verified": false
+  }
+}

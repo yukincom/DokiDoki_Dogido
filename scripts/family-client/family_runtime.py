@@ -9,9 +9,12 @@ import sys
 
 
 RUST_BINARY = "dogido-rust/target/release/dogido-rust"
-# 同梱する川柳専用seed42。通常16分類は学習済みモデルを明示指定するまで未設定。
-CLASSIFIER_ROOT = "models/dogido-senryu424-seed42"
-CLASSIFIER_FILES = tuple(f"{CLASSIFIER_ROOT}/{name}" for name in (
+# 本体が状態に応じて片方だけを使う、採用済みの二モデル。
+CLASSIFIER_ROOTS = {
+    "senryu": "models/dogido-senryu424-seed42",
+    "normal": "models/dogido-normal16-seed48-mob",
+}
+CLASSIFIER_FILES = tuple(f"{root}/{name}" for root in CLASSIFIER_ROOTS.values() for name in (
     "adopted-model.json", "config.json", "model.safetensors", "tokenizer.json",
     "tokenizer_config.json", "LICENSE", "README.md",
 ))

@@ -10,7 +10,7 @@ DokiDoki Dogido の設計・仕様ドキュメントです。
 | [../AGENTS.md](../AGENTS.md) | 実装エージェント向けの制約と作業ガイド |
 | [ローカルの軽量処理優先とLLM呼出監査](2026-10-18-dialogue-model-call-audit.md) | コード・分類器を優先する方針、呼出回数、分類追加と移行の状況 |
 | [ModernBERT 23分類の本体接続](2026-10-23-modernbert-23class-integration.md) | 旧890件版seed42の接続記録。後継は川柳・通常のBERT分離 |
-| [川柳と通常対話のBERT分離](2026-10-24-bert-mode-routing.md) | 実装済み。川柳seed42の採用、一入力一分類器、切替中の取消。通常モデルは未準備 |
+| [川柳と通常対話のBERT分離](2026-10-24-bert-mode-routing.md) | 実装済み。川柳seed42・通常seed48-mobの採用、一入力一分類器、切替中の取消 |
 | [旧実装・後方互換経路の削除](2026-10-24-legacy-path-removal.md) | 削除範囲、現行契約、検証結果 |
 | [../dev_tools/README.md](../dev_tools/README.md) | 表示プレビュー・音声診断・対話評価・独立試作 |
 | [通常会話のドギド視点画像](2026-10-21-chat-image.md) | 一枚撮影・192px・同時生成・一時画像の保持 |

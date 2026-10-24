@@ -28,11 +28,11 @@ Minecraft Java Edition向けのAIコンパニオンです。ゲーム内の観�
 | :--- | :--- |
 | Fabricアダプター・身体Mod | ゲーム内の観測、身体の動き、画像取得、文字表示、許可された操作の実行 |
 | Rust本体 | 危険・割込みの優先制御、会話状態、操作対象と実行条件の確認、取消、句や記録の保存 |
-| ModernBERT-Ja | 川柳相談中は専用8分類、それ以外は通常16分類へ一度だけ配送（通常モデルは準備中） |
+| ModernBERT-Ja | 川柳相談中は専用8分類、それ以外は通常16分類へ一度だけ配送 |
 | 会話・川柳モデル | 発話・沈黙の選択、句・説明・修正案の生成、相談の次手と候補内の身体行動の選択 |
 | Python補助・音声 | モデル・辞書・音声機器への接続、Whisperによる音声入力、VOICEVOXによる読み上げ |
 
-川柳BERTは424件版のseed42を `models/dogido-senryu424-seed42` に同梱し、重みをGit LFSで配布します。[川柳8分類と通常16分類を分離](docs/2026-10-24-bert-mode-routing.md)し、通常モデルは未設定です。通常時の入力はモデル準備後に利用でき、旧23分類へは戻しません。OS AIによる分類は撤去し、戦闘中断後の川柳相談は敵の現在観測と警戒解除条件からRustが再開します。
+川柳BERTは424件版seed42、通常BERTは全16分類のseed48-mobを `models/` に同梱し、重みをGit LFSで配布します。[川柳8分類と通常16分類を分離](docs/2026-10-24-bert-mode-routing.md)し、一つの入力は現在の受付状態に対応する片方だけへ渡します。OS AIによる分類は撤去し、戦闘中断後の川柳相談は敵の現在観測と警戒解除条件からRustが再開します。
 
 教材の補強・学習・モデル比較の経緯は、[試行錯誤](https://github.com/yukincom/AI-Curious-Community/blob/main/modernbert-request-classifier-study/README.md)にまとめています。
 
