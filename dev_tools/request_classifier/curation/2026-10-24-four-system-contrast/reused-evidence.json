@@ -1,0 +1,465 @@
+{
+  "archive": "/private/tmp/senryu-data-source-20261024/source-evaluation-records-01.tar.gz",
+  "archive_sha256": "aae4355c088c0436f3b019fa6674349e8b4091b51998a3f5b39274d9f1a8c2af",
+  "member": "colab-modernbert-ja-30m-2026-10-14/dev_tools/request_classifier/curation/2026-10-22-training-materials-v2/review-ledger.jsonl",
+  "member_sha256": "d93d47a160d17475f0952b6d1845860e0a2e0e00853e51d24a5fcc8ab8a398f8",
+  "rows": [
+    {
+      "source_key": "legacy:train-009",
+      "source_id": "train-009",
+      "text": "ゾンビの声って不気味だな。",
+      "source": "synthetic",
+      "label": "not_target",
+      "group_id": "material_c935709de931",
+      "contrast_experts": [
+        "mob"
+      ],
+      "prior_ledger": {
+        "source_key": "legacy:train-009",
+        "review_decision": "text_only",
+        "label": "not_target",
+        "reason": "この学習上の違いを表す代表例として残す。表記とラベルは変更しない。",
+        "label_authority": "curator_reading",
+        "reviewer": "Codex (independent legacy audit, parent integration)",
+        "reviewed_on": "2026-10-22",
+        "source_file": "dev_tools/request_classifier/releases/v1.9/train.jsonl",
+        "source_id": "train-009",
+        "source_label": "not_request",
+        "source_group": "social_observations",
+        "source": "synthetic",
+        "text": "ゾンビの声って不気味だな。",
+        "original_context": [],
+        "original_rationale": "感想または挨拶で、回答や操作を求めていない。",
+        "decision": "downselected",
+        "flags": [
+          "quality_reviewed_2026_10_22",
+          "mapped_to_non_target_training_class",
+          "not_target_representative_downselection"
+        ],
+        "related_evaluation": [],
+        "aliases": [],
+        "split_group": "material_c935709de931",
+        "quality_review": {
+          "source_key": "legacy:train-009",
+          "disposition": "keep",
+          "reason": "この学習上の違いを表す代表例として残す。表記とラベルは変更しない。",
+          "feature": "敵の声への気持ちを述べ、位置や数を尋ねない",
+          "represented_by": [],
+          "intent_anchors": [],
+          "expected_label": "not_request",
+          "expected_text_sha256": "ffbc0e4210f3cdd13e2a650146c8fd3262a34c0b350cc4b3e547843fb4056217",
+          "reviewer": "Codex parent",
+          "reviewed_on": "2026-10-22"
+        },
+        "prior_reason": "現在発話の本文に、指定対象・依頼または報告の意味が残る。原文のまま単文候補へ採用。",
+        "review_label": "not_request",
+        "not_target_selection": {
+          "disposition": "downselect",
+          "category": null,
+          "reason": "not_targetの代表を選ぶユーザー依頼により今回は学習候補から外す。原文や正解ラベルの誤りを確定した扱いではなく、元資料と前の判断を保持する。"
+        }
+      },
+      "readoption_reason": "2026-10-24の対照other補充依頼。以前は意味の誤りではなく代表数調整だけで外された例を、今回の境界対照として原文のまま復帰。"
+    },
+    {
+      "source_key": "legacy:train-031",
+      "source_id": "train-031",
+      "text": "あとで剣を作るつもり。",
+      "source": "synthetic",
+      "label": "not_target",
+      "group_id": "material_77e477331547",
+      "contrast_experts": [
+        "sword"
+      ],
+      "prior_ledger": {
+        "source_key": "legacy:train-031",
+        "review_decision": "text_only",
+        "label": "not_target",
+        "reason": "この学習上の違いを表す代表例として残す。表記とラベルは変更しない。",
+        "label_authority": "curator_reading",
+        "reviewer": "Codex (independent legacy audit, parent integration)",
+        "reviewed_on": "2026-10-22",
+        "source_file": "dev_tools/request_classifier/releases/v1.9/train.jsonl",
+        "source_id": "train-031",
+        "source_label": "not_request",
+        "source_group": "plans_without_request",
+        "source": "synthetic",
+        "text": "あとで剣を作るつもり。",
+        "original_context": [],
+        "original_rationale": "自分の予定や空想を話しており、現在の操作を依頼していない。",
+        "decision": "downselected",
+        "flags": [
+          "quality_reviewed_2026_10_22",
+          "mapped_to_non_target_training_class",
+          "not_target_representative_downselection"
+        ],
+        "related_evaluation": [],
+        "aliases": [],
+        "split_group": "material_77e477331547",
+        "quality_review": {
+          "source_key": "legacy:train-031",
+          "disposition": "keep",
+          "reason": "この学習上の違いを表す代表例として残す。表記とラベルは変更しない。",
+          "feature": "将来に自分が行うクラフトの予定",
+          "represented_by": [],
+          "intent_anchors": [],
+          "expected_label": "not_request",
+          "expected_text_sha256": "aaaaaf53d9e14d002625d1996e34d9c35d63fda4888331f089a17e72ade6770e",
+          "reviewer": "Codex parent",
+          "reviewed_on": "2026-10-22"
+        },
+        "prior_reason": "現在発話の本文に、指定対象・依頼または報告の意味が残る。原文のまま単文候補へ採用。",
+        "review_label": "not_request",
+        "not_target_selection": {
+          "disposition": "downselect",
+          "category": null,
+          "reason": "not_targetの代表を選ぶユーザー依頼により今回は学習候補から外す。原文や正解ラベルの誤りを確定した扱いではなく、元資料と前の判断を保持する。"
+        }
+      },
+      "readoption_reason": "2026-10-24の対照other補充依頼。以前は意味の誤りではなく代表数調整だけで外された例を、今回の境界対照として原文のまま復帰。"
+    },
+    {
+      "source_key": "legacy:train-033",
+      "source_id": "train-033",
+      "text": "敵が出たら僕は自分で剣に替えるよ。",
+      "source": "synthetic",
+      "label": "not_target",
+      "group_id": "material_77e477331547",
+      "contrast_experts": [
+        "sword"
+      ],
+      "prior_ledger": {
+        "source_key": "legacy:train-033",
+        "review_decision": "text_only",
+        "label": "not_target",
+        "reason": "この学習上の違いを表す代表例として残す。表記とラベルは変更しない。",
+        "label_authority": "curator_reading",
+        "reviewer": "Codex (independent legacy audit, parent integration)",
+        "reviewed_on": "2026-10-22",
+        "source_file": "dev_tools/request_classifier/releases/v1.9/train.jsonl",
+        "source_id": "train-033",
+        "source_label": "not_request",
+        "source_group": "plans_without_request",
+        "source": "synthetic",
+        "text": "敵が出たら僕は自分で剣に替えるよ。",
+        "original_context": [],
+        "original_rationale": "自分の予定や空想を話しており、現在の操作を依頼していない。",
+        "decision": "downselected",
+        "flags": [
+          "quality_reviewed_2026_10_22",
+          "mapped_to_non_target_training_class",
+          "not_target_representative_downselection"
+        ],
+        "related_evaluation": [],
+        "aliases": [],
+        "split_group": "material_77e477331547",
+        "quality_review": {
+          "source_key": "legacy:train-033",
+          "disposition": "keep",
+          "reason": "この学習上の違いを表す代表例として残す。表記とラベルは変更しない。",
+          "feature": "条件つきだが実行主体は自分",
+          "represented_by": [],
+          "intent_anchors": [],
+          "expected_label": "not_request",
+          "expected_text_sha256": "fbec6e17fb72b64b48febf9606899f14179a02c8d63197580734422d225bc3e1",
+          "reviewer": "Codex parent",
+          "reviewed_on": "2026-10-22"
+        },
+        "prior_reason": "現在発話の本文に、指定対象・依頼または報告の意味が残る。原文のまま単文候補へ採用。",
+        "review_label": "not_request",
+        "not_target_selection": {
+          "disposition": "downselect",
+          "category": null,
+          "reason": "not_targetの代表を選ぶユーザー依頼により今回は学習候補から外す。原文や正解ラベルの誤りを確定した扱いではなく、元資料と前の判断を保持する。"
+        }
+      },
+      "readoption_reason": "2026-10-24の対照other補充依頼。以前は意味の誤りではなく代表数調整だけで外された例を、今回の境界対照として原文のまま復帰。"
+    },
+    {
+      "source_key": "legacy:train-034",
+      "source_id": "train-034",
+      "text": "もしロバが話せたら面白いね。",
+      "source": "synthetic",
+      "label": "not_target",
+      "group_id": "material_77e477331547",
+      "contrast_experts": [
+        "mount"
+      ],
+      "prior_ledger": {
+        "source_key": "legacy:train-034",
+        "review_decision": "text_only",
+        "label": "not_target",
+        "reason": "この学習上の違いを表す代表例として残す。表記とラベルは変更しない。",
+        "label_authority": "curator_reading",
+        "reviewer": "Codex (independent legacy audit, parent integration)",
+        "reviewed_on": "2026-10-22",
+        "source_file": "dev_tools/request_classifier/releases/v1.9/train.jsonl",
+        "source_id": "train-034",
+        "source_label": "not_request",
+        "source_group": "plans_without_request",
+        "source": "synthetic",
+        "text": "もしロバが話せたら面白いね。",
+        "original_context": [],
+        "original_rationale": "自分の予定や空想を話しており、現在の操作を依頼していない。",
+        "decision": "downselected",
+        "flags": [
+          "quality_reviewed_2026_10_22",
+          "mapped_to_non_target_training_class",
+          "not_target_representative_downselection"
+        ],
+        "related_evaluation": [],
+        "aliases": [],
+        "split_group": "material_77e477331547",
+        "quality_review": {
+          "source_key": "legacy:train-034",
+          "disposition": "keep",
+          "reason": "この学習上の違いを表す代表例として残す。表記とラベルは変更しない。",
+          "feature": "架空の想像で操作を求めない",
+          "represented_by": [],
+          "intent_anchors": [],
+          "expected_label": "not_request",
+          "expected_text_sha256": "effc08a4c764a8f26b545823d0eb5ab3a9f8ae8c434935f92eb70af47b4206b9",
+          "reviewer": "Codex parent",
+          "reviewed_on": "2026-10-22"
+        },
+        "prior_reason": "現在発話の本文に、指定対象・依頼または報告の意味が残る。原文のまま単文候補へ採用。",
+        "review_label": "not_request",
+        "not_target_selection": {
+          "disposition": "downselect",
+          "category": null,
+          "reason": "not_targetの代表を選ぶユーザー依頼により今回は学習候補から外す。原文や正解ラベルの誤りを確定した扱いではなく、元資料と前の判断を保持する。"
+        }
+      },
+      "readoption_reason": "2026-10-24の対照other補充依頼。以前は意味の誤りではなく代表数調整だけで外された例を、今回の境界対照として原文のまま復帰。"
+    },
+    {
+      "source_key": "legacy:train-035",
+      "source_id": "train-035",
+      "text": "剣に替えてほしいわけじゃない、模様を眺めてるだけ。",
+      "source": "synthetic",
+      "label": "not_target",
+      "group_id": "material_77e477331547",
+      "contrast_experts": [
+        "sword"
+      ],
+      "prior_ledger": {
+        "source_key": "legacy:train-035",
+        "review_decision": "text_only",
+        "label": "not_target",
+        "reason": "この学習上の違いを表す代表例として残す。表記とラベルは変更しない。",
+        "label_authority": "curator_reading",
+        "reviewer": "Codex (independent legacy audit, parent integration)",
+        "reviewed_on": "2026-10-22",
+        "source_file": "dev_tools/request_classifier/releases/v1.9/train.jsonl",
+        "source_id": "train-035",
+        "source_label": "not_request",
+        "source_group": "plans_without_request",
+        "source": "synthetic",
+        "text": "剣に替えてほしいわけじゃない、模様を眺めてるだけ。",
+        "original_context": [],
+        "original_rationale": "自分の予定や空想を話しており、現在の操作を依頼していない。",
+        "decision": "downselected",
+        "flags": [
+          "quality_reviewed_2026_10_22",
+          "mapped_to_non_target_training_class",
+          "not_target_representative_downselection"
+        ],
+        "related_evaluation": [],
+        "aliases": [],
+        "split_group": "material_77e477331547",
+        "quality_review": {
+          "source_key": "legacy:train-035",
+          "disposition": "keep",
+          "reason": "この学習上の違いを表す代表例として残す。表記とラベルは変更しない。",
+          "feature": "依頼でない旨と感想の対象を本文で説明",
+          "represented_by": [],
+          "intent_anchors": [],
+          "expected_label": "not_request",
+          "expected_text_sha256": "881f8991b10a95d66cab883d0439592402afe61484651fec1569f7132872ee3c",
+          "reviewer": "Codex parent",
+          "reviewed_on": "2026-10-22"
+        },
+        "prior_reason": "現在発話の本文に、指定対象・依頼または報告の意味が残る。原文のまま単文候補へ採用。",
+        "review_label": "not_request",
+        "not_target_selection": {
+          "disposition": "downselect",
+          "category": null,
+          "reason": "not_targetの代表を選ぶユーザー依頼により今回は学習候補から外す。原文や正解ラベルの誤りを確定した扱いではなく、元資料と前の判断を保持する。"
+        }
+      },
+      "readoption_reason": "2026-10-24の対照other補充依頼。以前は意味の誤りではなく代表数調整だけで外された例を、今回の境界対照として原文のまま復帰。"
+    },
+    {
+      "source_key": "legacy:train-039",
+      "source_id": "train-039",
+      "text": "いつかダイヤの剣を飾りたい。",
+      "source": "synthetic",
+      "label": "not_target",
+      "group_id": "material_77e477331547",
+      "contrast_experts": [
+        "sword"
+      ],
+      "prior_ledger": {
+        "source_key": "legacy:train-039",
+        "review_decision": "text_only",
+        "label": "not_target",
+        "reason": "この学習上の違いを表す代表例として残す。表記とラベルは変更しない。",
+        "label_authority": "curator_reading",
+        "reviewer": "Codex (independent legacy audit, parent integration)",
+        "reviewed_on": "2026-10-22",
+        "source_file": "dev_tools/request_classifier/releases/v1.9/train.jsonl",
+        "source_id": "train-039",
+        "source_label": "not_request",
+        "source_group": "plans_without_request",
+        "source": "synthetic",
+        "text": "いつかダイヤの剣を飾りたい。",
+        "original_context": [],
+        "original_rationale": "自分の予定や空想を話しており、現在の操作を依頼していない。",
+        "decision": "downselected",
+        "flags": [
+          "quality_reviewed_2026_10_22",
+          "mapped_to_non_target_training_class",
+          "not_target_representative_downselection"
+        ],
+        "related_evaluation": [],
+        "aliases": [],
+        "split_group": "material_77e477331547",
+        "quality_review": {
+          "source_key": "legacy:train-039",
+          "disposition": "keep",
+          "reason": "この学習上の違いを表す代表例として残す。表記とラベルは変更しない。",
+          "feature": "剣を装備する依頼と異なる装飾への願望",
+          "represented_by": [],
+          "intent_anchors": [],
+          "expected_label": "not_request",
+          "expected_text_sha256": "27125ab0f88df6f1c8033bf892be4b91f09a6091cc140a44850c5c6be906fb8a",
+          "reviewer": "Codex parent",
+          "reviewed_on": "2026-10-22"
+        },
+        "prior_reason": "現在発話の本文に、指定対象・依頼または報告の意味が残る。原文のまま単文候補へ採用。",
+        "review_label": "not_request",
+        "not_target_selection": {
+          "disposition": "downselect",
+          "category": null,
+          "reason": "not_targetの代表を選ぶユーザー依頼により今回は学習候補から外す。原文や正解ラベルの誤りを確定した扱いではなく、元資料と前の判断を保持する。"
+        }
+      },
+      "readoption_reason": "2026-10-24の対照other補充依頼。以前は意味の誤りではなく代表数調整だけで外された例を、今回の境界対照として原文のまま復帰。"
+    },
+    {
+      "source_key": "legacy:train-533",
+      "source_id": "train-533",
+      "text": "落ち着いてから馬を迎えに行くよ。ドギドは先に休んでて。",
+      "source": "synthetic",
+      "label": "not_target",
+      "group_id": "material_d2c7a6c4eaa4",
+      "contrast_experts": [
+        "mount"
+      ],
+      "prior_ledger": {
+        "source_key": "legacy:train-533",
+        "review_decision": "text_only",
+        "label": "not_target",
+        "reason": "この学習上の違いを表す代表例として残す。表記とラベルは変更しない。",
+        "label_authority": "curator_reading",
+        "reviewer": "Codex (independent legacy audit, parent integration)",
+        "reviewed_on": "2026-10-22",
+        "source_file": "dev_tools/request_classifier/releases/v1.9/train.jsonl",
+        "source_id": "train-533",
+        "source_label": "other_request",
+        "source_group": "codex_conversation_18",
+        "source": "synthetic",
+        "text": "落ち着いてから馬を迎えに行くよ。ドギドは先に休んでて。",
+        "original_context": [],
+        "original_rationale": "馬の迎えは本人の予定で、相棒には休むよう頼んでいる。",
+        "decision": "downselected",
+        "flags": [
+          "quality_reviewed_2026_10_22",
+          "mapped_to_non_target_training_class",
+          "not_target_representative_downselection"
+        ],
+        "related_evaluation": [],
+        "aliases": [],
+        "split_group": "material_d2c7a6c4eaa4",
+        "quality_review": {
+          "source_key": "legacy:train-533",
+          "disposition": "keep",
+          "reason": "この学習上の違いを表す代表例として残す。表記とラベルは変更しない。",
+          "feature": "自分の予定と相手への休息依頼を区別",
+          "represented_by": [],
+          "intent_anchors": [],
+          "expected_label": "other_request",
+          "expected_text_sha256": "4d1a089fa5db98255da6c5ab078cba1fbd8013b5591187d6b54a460efdafcdbc",
+          "reviewer": "Codex parent",
+          "reviewed_on": "2026-10-22"
+        },
+        "prior_reason": "現在発話の本文に、指定対象・依頼または報告の意味が残る。原文のまま単文候補へ採用。",
+        "review_label": "other_request",
+        "not_target_selection": {
+          "disposition": "downselect",
+          "category": null,
+          "reason": "not_targetの代表を選ぶユーザー依頼により今回は学習候補から外す。原文や正解ラベルの誤りを確定した扱いではなく、元資料と前の判断を保持する。"
+        }
+      },
+      "readoption_reason": "2026-10-24の対照other補充依頼。以前は意味の誤りではなく代表数調整だけで外された例を、今回の境界対照として原文のまま復帰。"
+    },
+    {
+      "source_key": "legacy:train-537",
+      "source_id": "train-537",
+      "text": "敵が何体いるかは今は聞かないよ。ゾンビって日光で燃えるの？",
+      "source": "synthetic",
+      "label": "not_target",
+      "group_id": "material_d78490ba3ce2",
+      "contrast_experts": [
+        "mob"
+      ],
+      "prior_ledger": {
+        "source_key": "legacy:train-537",
+        "review_decision": "text_only",
+        "label": "not_target",
+        "reason": "この学習上の違いを表す代表例として残す。表記とラベルは変更しない。",
+        "label_authority": "curator_reading",
+        "reviewer": "Codex (independent legacy audit, parent integration)",
+        "reviewed_on": "2026-10-22",
+        "source_file": "dev_tools/request_classifier/releases/v1.9/train.jsonl",
+        "source_id": "train-537",
+        "source_label": "other_request",
+        "source_group": "codex_conversation_19",
+        "source": "synthetic",
+        "text": "敵が何体いるかは今は聞かないよ。ゾンビって日光で燃えるの？",
+        "original_context": [],
+        "original_rationale": "現在の敵の数ではなく、ゾンビの一般的な性質について尋ねている。",
+        "decision": "downselected",
+        "flags": [
+          "label_migrated",
+          "quality_reviewed_2026_10_22",
+          "mapped_to_non_target_training_class",
+          "not_target_representative_downselection"
+        ],
+        "related_evaluation": [],
+        "aliases": [],
+        "split_group": "material_d78490ba3ce2",
+        "quality_review": {
+          "source_key": "legacy:train-537",
+          "disposition": "keep",
+          "reason": "この学習上の違いを表す代表例として残す。表記とラベルは変更しない。",
+          "feature": "現在の数と一般的な日光の性質の話題切替",
+          "represented_by": [],
+          "intent_anchors": [],
+          "expected_label": "minecraft_knowledge",
+          "expected_text_sha256": "4c05112076cb40b2cfc5e6db965ce072a62bbaf9d36b3f0413b7d2bbd8eec3a1",
+          "reviewer": "Codex parent",
+          "reviewed_on": "2026-10-22"
+        },
+        "prior_reason": "現在発話の本文に、指定対象・依頼または報告の意味が残る。原文のまま単文候補へ採用。 新分類へ移す根拠: 一般的なゲーム仕様・道具・Mobの知識を尋ねる。",
+        "review_label": "minecraft_knowledge",
+        "not_target_selection": {
+          "disposition": "downselect",
+          "category": null,
+          "reason": "not_targetの代表を選ぶユーザー依頼により今回は学習候補から外す。原文や正解ラベルの誤りを確定した扱いではなく、元資料と前の判断を保持する。"
+        }
+      },
+      "readoption_reason": "2026-10-24の対照other補充依頼。以前は意味の誤りではなく代表数調整だけで外された例を、今回の境界対照として原文のまま復帰。"
+    }
+  ]
+}

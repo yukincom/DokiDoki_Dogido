@@ -1,0 +1,86 @@
+{
+  "date": "2026-10-24",
+  "source_checkpoint_before_work": "dcd20db",
+  "scope": "Dataset preparation only; no training, inference, implementation tests or runtime changes",
+  "original_train_rows_exact": 482,
+  "new_synthetic_rows": 328,
+  "reused_synthetic_rows": 8,
+  "unique_train": 818,
+  "shared_normalized_duplicate_count": 0,
+  "cross_split_group_count": 0,
+  "cross_split_source_key_count": 0,
+  "unchanged_dev_rows": 46,
+  "unchanged_test_rows": 50,
+  "labels_byte_identical": true,
+  "expert_streams": {
+    "spatial": {
+      "unique_inputs": 818,
+      "occurrences": 1184,
+      "replayed_once": 366,
+      "all_source_rows_exact": true,
+      "expected_frequencies_match": true
+    },
+    "mount": {
+      "unique_inputs": 818,
+      "occurrences": 945,
+      "replayed_once": 127,
+      "all_source_rows_exact": true,
+      "expected_frequencies_match": true
+    },
+    "sword": {
+      "unique_inputs": 818,
+      "occurrences": 937,
+      "replayed_once": 119,
+      "all_source_rows_exact": true,
+      "expected_frequencies_match": true
+    },
+    "mob": {
+      "unique_inputs": 818,
+      "occurrences": 942,
+      "replayed_once": 124,
+      "all_source_rows_exact": true,
+      "expected_frequencies_match": true
+    }
+  },
+  "seed_count": 7,
+  "planned_specialist_jobs": 28,
+  "jobs_executed": 0,
+  "token_lengths": {
+    "train": {
+      "minimum": 16,
+      "maximum": 36,
+      "over_128": 0,
+      "rows": 818
+    },
+    "dev": {
+      "minimum": 17,
+      "maximum": 28,
+      "over_128": 0,
+      "rows": 46
+    },
+    "test": {
+      "minimum": 16,
+      "maximum": 36,
+      "over_128": 0,
+      "rows": 50
+    }
+  },
+  "tokenizer_sha256": {
+    "tokenizer.json": "6a0734cf21c802169defaffe719bc2ef12bb9d0be37e54b61ed27aa89394723d",
+    "tokenizer_config.json": "930dd278b2f45e3fdb6814699eaa23297a8ba534e0756ce0d194ec7dd4deccec"
+  },
+  "shared_sha256": {
+    "train": "e6a44c432f1d784ed6b2dbedbabfba028cf8eda4259c20751c1183887e484003",
+    "dev": "fcac4d822b7280f09aacf8700ef65a80613a380e6753826ba919b9421d1d21e6",
+    "test": "5638ba8990b6d666e1babb8d5e24b50ea0a0b30acae75e2b320daddb8be8ad35"
+  },
+  "curation_inputs_sha256": {
+    "authored-groups.json": "67e5fd3855376f69b61d864388baaaa394f5e04bf7ae780462b3b8c03452aed2",
+    "reused-evidence.json": "230d7760b13420a7c59e6537ee5438c2098843d3aee1909805c4c66573b567cf",
+    "candidates.jsonl": "480362525b464ab51791c9c192c9903be52b85e0d7e1847c80ae56113903e97b",
+    "evidence.jsonl": "4a916f4fe21afef502e58bcefeb4daf4463d27d9c943761391a0068fba3f0060",
+    "build_materials.py": "440aff071073f393ac21045ed4e3b7e106da7ade9688d0b91b9b1e8d410b44c4"
+  },
+  "text_review": "Parent reading plus independent Codex reading of 328 new rows; wording and boundary notes corrected; not human/live gold verification",
+  "evaluation_caveat": "Existing dev/test are already known diagnostic materials. Similarity inspection and prior work are not unseen evaluation."
+}

@@ -1,0 +1,27 @@
+{
+  "method": "SequenceMatcher on existing normalized strings; no text generated from heldout",
+  "threshold": 0.72,
+  "candidates": [
+    {
+      "id": "four_contrast_20261024_05_11",
+      "nearest_id": "gaze_variant__gaze_direction_05_front_left",
+      "nearest_split": "train",
+      "ratio": 0.72,
+      "same_label": true
+    },
+    {
+      "id": "four_contrast_20261024_07_11",
+      "nearest_id": "gaze_variant__gaze_direction_05_back_left",
+      "nearest_split": "train",
+      "ratio": 0.7407407407407407,
+      "same_label": true
+    },
+    {
+      "id": "four_contrast_20261024_09_01",
+      "nearest_id": "gaze_variant__gaze_player_07_variant_01",
+      "nearest_split": "train",
+      "ratio": 0.7333333333333333,
+      "same_label": true
+    }
+  ]
+}

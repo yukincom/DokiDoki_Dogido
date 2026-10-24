@@ -1,0 +1,32 @@
+{
+  "focus_labels": [
+    "enemy_information"
+  ],
+  "unique_rows": 818,
+  "focus_unique_rows": 106,
+  "not_target_unique_rows": 190,
+  "replay_occurrences": 124,
+  "training_occurrences_per_epoch": 942,
+  "focus_occurrences": 212,
+  "not_target_occurrences": 208,
+  "label_occurrences": {
+    "not_target": 208,
+    "enemy_information": 212,
+    "equip_sword": 99,
+    "recall_mount": 113,
+    "dogido_recall": 63,
+    "look_target": 24,
+    "look_direction": 33,
+    "look_relative_right": 21,
+    "look_relative_back": 21,
+    "look_player": 27,
+    "look_relative_front": 20,
+    "look_relative_left": 21,
+    "look_relative_front_left": 20,
+    "look_relative_front_right": 20,
+    "look_relative_back_left": 20,
+    "look_relative_back_right": 20
+  },
+  "train_sha256": "3b173f490528d7918d005b402f66bd8dbe6c1e33fb7e6d986dd209b3b917242a",
+  "replay_sha256": "54bc3aa65e57ea45aab4a627659b673922b0248b0930332af15cdfb39dc5b5b5"
+}

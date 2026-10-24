@@ -1,0 +1,478 @@
+[
+  {
+    "seed": 42,
+    "data_seed": 42,
+    "expert": "spatial",
+    "train": "experts/spatial/train.jsonl",
+    "dev": "dev.jsonl",
+    "test": "test.jsonl",
+    "labels": "labels.json",
+    "initial_state": {
+      "path": "dev_tools/request_classifier/experiments/2026-10-24-normal-dialogue-colab/artifacts/colab-results/weights/trial-2/best",
+      "model_sha256": "0e8142045166ffea465ffaef6c5742fbd93949cec71641b5bfdb288aa49b813d",
+      "existing_seed": 43,
+      "policy": "Within all four experts and seven repeats use the same saved starting tensors, including classifier head. Do not create independent heads and average them.",
+      "limitation": "Base already trained on the original 482 rows. Seven seeds do not represent seven fresh base-model initializations."
+    },
+    "status": "prepared_not_run"
+  },
+  {
+    "seed": 42,
+    "data_seed": 42,
+    "expert": "mount",
+    "train": "experts/mount/train.jsonl",
+    "dev": "dev.jsonl",
+    "test": "test.jsonl",
+    "labels": "labels.json",
+    "initial_state": {
+      "path": "dev_tools/request_classifier/experiments/2026-10-24-normal-dialogue-colab/artifacts/colab-results/weights/trial-2/best",
+      "model_sha256": "0e8142045166ffea465ffaef6c5742fbd93949cec71641b5bfdb288aa49b813d",
+      "existing_seed": 43,
+      "policy": "Within all four experts and seven repeats use the same saved starting tensors, including classifier head. Do not create independent heads and average them.",
+      "limitation": "Base already trained on the original 482 rows. Seven seeds do not represent seven fresh base-model initializations."
+    },
+    "status": "prepared_not_run"
+  },
+  {
+    "seed": 42,
+    "data_seed": 42,
+    "expert": "sword",
+    "train": "experts/sword/train.jsonl",
+    "dev": "dev.jsonl",
+    "test": "test.jsonl",
+    "labels": "labels.json",
+    "initial_state": {
+      "path": "dev_tools/request_classifier/experiments/2026-10-24-normal-dialogue-colab/artifacts/colab-results/weights/trial-2/best",
+      "model_sha256": "0e8142045166ffea465ffaef6c5742fbd93949cec71641b5bfdb288aa49b813d",
+      "existing_seed": 43,
+      "policy": "Within all four experts and seven repeats use the same saved starting tensors, including classifier head. Do not create independent heads and average them.",
+      "limitation": "Base already trained on the original 482 rows. Seven seeds do not represent seven fresh base-model initializations."
+    },
+    "status": "prepared_not_run"
+  },
+  {
+    "seed": 42,
+    "data_seed": 42,
+    "expert": "mob",
+    "train": "experts/mob/train.jsonl",
+    "dev": "dev.jsonl",
+    "test": "test.jsonl",
+    "labels": "labels.json",
+    "initial_state": {
+      "path": "dev_tools/request_classifier/experiments/2026-10-24-normal-dialogue-colab/artifacts/colab-results/weights/trial-2/best",
+      "model_sha256": "0e8142045166ffea465ffaef6c5742fbd93949cec71641b5bfdb288aa49b813d",
+      "existing_seed": 43,
+      "policy": "Within all four experts and seven repeats use the same saved starting tensors, including classifier head. Do not create independent heads and average them.",
+      "limitation": "Base already trained on the original 482 rows. Seven seeds do not represent seven fresh base-model initializations."
+    },
+    "status": "prepared_not_run"
+  },
+  {
+    "seed": 43,
+    "data_seed": 43,
+    "expert": "spatial",
+    "train": "experts/spatial/train.jsonl",
+    "dev": "dev.jsonl",
+    "test": "test.jsonl",
+    "labels": "labels.json",
+    "initial_state": {
+      "path": "dev_tools/request_classifier/experiments/2026-10-24-normal-dialogue-colab/artifacts/colab-results/weights/trial-2/best",
+      "model_sha256": "0e8142045166ffea465ffaef6c5742fbd93949cec71641b5bfdb288aa49b813d",
+      "existing_seed": 43,
+      "policy": "Within all four experts and seven repeats use the same saved starting tensors, including classifier head. Do not create independent heads and average them.",
+      "limitation": "Base already trained on the original 482 rows. Seven seeds do not represent seven fresh base-model initializations."
+    },
+    "status": "prepared_not_run"
+  },
+  {
+    "seed": 43,
+    "data_seed": 43,
+    "expert": "mount",
+    "train": "experts/mount/train.jsonl",
+    "dev": "dev.jsonl",
+    "test": "test.jsonl",
+    "labels": "labels.json",
+    "initial_state": {
+      "path": "dev_tools/request_classifier/experiments/2026-10-24-normal-dialogue-colab/artifacts/colab-results/weights/trial-2/best",
+      "model_sha256": "0e8142045166ffea465ffaef6c5742fbd93949cec71641b5bfdb288aa49b813d",
+      "existing_seed": 43,
+      "policy": "Within all four experts and seven repeats use the same saved starting tensors, including classifier head. Do not create independent heads and average them.",
+      "limitation": "Base already trained on the original 482 rows. Seven seeds do not represent seven fresh base-model initializations."
+    },
+    "status": "prepared_not_run"
+  },
+  {
+    "seed": 43,
+    "data_seed": 43,
+    "expert": "sword",
+    "train": "experts/sword/train.jsonl",
+    "dev": "dev.jsonl",
+    "test": "test.jsonl",
+    "labels": "labels.json",
+    "initial_state": {
+      "path": "dev_tools/request_classifier/experiments/2026-10-24-normal-dialogue-colab/artifacts/colab-results/weights/trial-2/best",
+      "model_sha256": "0e8142045166ffea465ffaef6c5742fbd93949cec71641b5bfdb288aa49b813d",
+      "existing_seed": 43,
+      "policy": "Within all four experts and seven repeats use the same saved starting tensors, including classifier head. Do not create independent heads and average them.",
+      "limitation": "Base already trained on the original 482 rows. Seven seeds do not represent seven fresh base-model initializations."
+    },
+    "status": "prepared_not_run"
+  },
+  {
+    "seed": 43,
+    "data_seed": 43,
+    "expert": "mob",
+    "train": "experts/mob/train.jsonl",
+    "dev": "dev.jsonl",
+    "test": "test.jsonl",
+    "labels": "labels.json",
+    "initial_state": {
+      "path": "dev_tools/request_classifier/experiments/2026-10-24-normal-dialogue-colab/artifacts/colab-results/weights/trial-2/best",
+      "model_sha256": "0e8142045166ffea465ffaef6c5742fbd93949cec71641b5bfdb288aa49b813d",
+      "existing_seed": 43,
+      "policy": "Within all four experts and seven repeats use the same saved starting tensors, including classifier head. Do not create independent heads and average them.",
+      "limitation": "Base already trained on the original 482 rows. Seven seeds do not represent seven fresh base-model initializations."
+    },
+    "status": "prepared_not_run"
+  },
+  {
+    "seed": 44,
+    "data_seed": 44,
+    "expert": "spatial",
+    "train": "experts/spatial/train.jsonl",
+    "dev": "dev.jsonl",
+    "test": "test.jsonl",
+    "labels": "labels.json",
+    "initial_state": {
+      "path": "dev_tools/request_classifier/experiments/2026-10-24-normal-dialogue-colab/artifacts/colab-results/weights/trial-2/best",
+      "model_sha256": "0e8142045166ffea465ffaef6c5742fbd93949cec71641b5bfdb288aa49b813d",
+      "existing_seed": 43,
+      "policy": "Within all four experts and seven repeats use the same saved starting tensors, including classifier head. Do not create independent heads and average them.",
+      "limitation": "Base already trained on the original 482 rows. Seven seeds do not represent seven fresh base-model initializations."
+    },
+    "status": "prepared_not_run"
+  },
+  {
+    "seed": 44,
+    "data_seed": 44,
+    "expert": "mount",
+    "train": "experts/mount/train.jsonl",
+    "dev": "dev.jsonl",
+    "test": "test.jsonl",
+    "labels": "labels.json",
+    "initial_state": {
+      "path": "dev_tools/request_classifier/experiments/2026-10-24-normal-dialogue-colab/artifacts/colab-results/weights/trial-2/best",
+      "model_sha256": "0e8142045166ffea465ffaef6c5742fbd93949cec71641b5bfdb288aa49b813d",
+      "existing_seed": 43,
+      "policy": "Within all four experts and seven repeats use the same saved starting tensors, including classifier head. Do not create independent heads and average them.",
+      "limitation": "Base already trained on the original 482 rows. Seven seeds do not represent seven fresh base-model initializations."
+    },
+    "status": "prepared_not_run"
+  },
+  {
+    "seed": 44,
+    "data_seed": 44,
+    "expert": "sword",
+    "train": "experts/sword/train.jsonl",
+    "dev": "dev.jsonl",
+    "test": "test.jsonl",
+    "labels": "labels.json",
+    "initial_state": {
+      "path": "dev_tools/request_classifier/experiments/2026-10-24-normal-dialogue-colab/artifacts/colab-results/weights/trial-2/best",
+      "model_sha256": "0e8142045166ffea465ffaef6c5742fbd93949cec71641b5bfdb288aa49b813d",
+      "existing_seed": 43,
+      "policy": "Within all four experts and seven repeats use the same saved starting tensors, including classifier head. Do not create independent heads and average them.",
+      "limitation": "Base already trained on the original 482 rows. Seven seeds do not represent seven fresh base-model initializations."
+    },
+    "status": "prepared_not_run"
+  },
+  {
+    "seed": 44,
+    "data_seed": 44,
+    "expert": "mob",
+    "train": "experts/mob/train.jsonl",
+    "dev": "dev.jsonl",
+    "test": "test.jsonl",
+    "labels": "labels.json",
+    "initial_state": {
+      "path": "dev_tools/request_classifier/experiments/2026-10-24-normal-dialogue-colab/artifacts/colab-results/weights/trial-2/best",
+      "model_sha256": "0e8142045166ffea465ffaef6c5742fbd93949cec71641b5bfdb288aa49b813d",
+      "existing_seed": 43,
+      "policy": "Within all four experts and seven repeats use the same saved starting tensors, including classifier head. Do not create independent heads and average them.",
+      "limitation": "Base already trained on the original 482 rows. Seven seeds do not represent seven fresh base-model initializations."
+    },
+    "status": "prepared_not_run"
+  },
+  {
+    "seed": 45,
+    "data_seed": 45,
+    "expert": "spatial",
+    "train": "experts/spatial/train.jsonl",
+    "dev": "dev.jsonl",
+    "test": "test.jsonl",
+    "labels": "labels.json",
+    "initial_state": {
+      "path": "dev_tools/request_classifier/experiments/2026-10-24-normal-dialogue-colab/artifacts/colab-results/weights/trial-2/best",
+      "model_sha256": "0e8142045166ffea465ffaef6c5742fbd93949cec71641b5bfdb288aa49b813d",
+      "existing_seed": 43,
+      "policy": "Within all four experts and seven repeats use the same saved starting tensors, including classifier head. Do not create independent heads and average them.",
+      "limitation": "Base already trained on the original 482 rows. Seven seeds do not represent seven fresh base-model initializations."
+    },
+    "status": "prepared_not_run"
+  },
+  {
+    "seed": 45,
+    "data_seed": 45,
+    "expert": "mount",
+    "train": "experts/mount/train.jsonl",
+    "dev": "dev.jsonl",
+    "test": "test.jsonl",
+    "labels": "labels.json",
+    "initial_state": {
+      "path": "dev_tools/request_classifier/experiments/2026-10-24-normal-dialogue-colab/artifacts/colab-results/weights/trial-2/best",
+      "model_sha256": "0e8142045166ffea465ffaef6c5742fbd93949cec71641b5bfdb288aa49b813d",
+      "existing_seed": 43,
+      "policy": "Within all four experts and seven repeats use the same saved starting tensors, including classifier head. Do not create independent heads and average them.",
+      "limitation": "Base already trained on the original 482 rows. Seven seeds do not represent seven fresh base-model initializations."
+    },
+    "status": "prepared_not_run"
+  },
+  {
+    "seed": 45,
+    "data_seed": 45,
+    "expert": "sword",
+    "train": "experts/sword/train.jsonl",
+    "dev": "dev.jsonl",
+    "test": "test.jsonl",
+    "labels": "labels.json",
+    "initial_state": {
+      "path": "dev_tools/request_classifier/experiments/2026-10-24-normal-dialogue-colab/artifacts/colab-results/weights/trial-2/best",
+      "model_sha256": "0e8142045166ffea465ffaef6c5742fbd93949cec71641b5bfdb288aa49b813d",
+      "existing_seed": 43,
+      "policy": "Within all four experts and seven repeats use the same saved starting tensors, including classifier head. Do not create independent heads and average them.",
+      "limitation": "Base already trained on the original 482 rows. Seven seeds do not represent seven fresh base-model initializations."
+    },
+    "status": "prepared_not_run"
+  },
+  {
+    "seed": 45,
+    "data_seed": 45,
+    "expert": "mob",
+    "train": "experts/mob/train.jsonl",
+    "dev": "dev.jsonl",
+    "test": "test.jsonl",
+    "labels": "labels.json",
+    "initial_state": {
+      "path": "dev_tools/request_classifier/experiments/2026-10-24-normal-dialogue-colab/artifacts/colab-results/weights/trial-2/best",
+      "model_sha256": "0e8142045166ffea465ffaef6c5742fbd93949cec71641b5bfdb288aa49b813d",
+      "existing_seed": 43,
+      "policy": "Within all four experts and seven repeats use the same saved starting tensors, including classifier head. Do not create independent heads and average them.",
+      "limitation": "Base already trained on the original 482 rows. Seven seeds do not represent seven fresh base-model initializations."
+    },
+    "status": "prepared_not_run"
+  },
+  {
+    "seed": 46,
+    "data_seed": 46,
+    "expert": "spatial",
+    "train": "experts/spatial/train.jsonl",
+    "dev": "dev.jsonl",
+    "test": "test.jsonl",
+    "labels": "labels.json",
+    "initial_state": {
+      "path": "dev_tools/request_classifier/experiments/2026-10-24-normal-dialogue-colab/artifacts/colab-results/weights/trial-2/best",
+      "model_sha256": "0e8142045166ffea465ffaef6c5742fbd93949cec71641b5bfdb288aa49b813d",
+      "existing_seed": 43,
+      "policy": "Within all four experts and seven repeats use the same saved starting tensors, including classifier head. Do not create independent heads and average them.",
+      "limitation": "Base already trained on the original 482 rows. Seven seeds do not represent seven fresh base-model initializations."
+    },
+    "status": "prepared_not_run"
+  },
+  {
+    "seed": 46,
+    "data_seed": 46,
+    "expert": "mount",
+    "train": "experts/mount/train.jsonl",
+    "dev": "dev.jsonl",
+    "test": "test.jsonl",
+    "labels": "labels.json",
+    "initial_state": {
+      "path": "dev_tools/request_classifier/experiments/2026-10-24-normal-dialogue-colab/artifacts/colab-results/weights/trial-2/best",
+      "model_sha256": "0e8142045166ffea465ffaef6c5742fbd93949cec71641b5bfdb288aa49b813d",
+      "existing_seed": 43,
+      "policy": "Within all four experts and seven repeats use the same saved starting tensors, including classifier head. Do not create independent heads and average them.",
+      "limitation": "Base already trained on the original 482 rows. Seven seeds do not represent seven fresh base-model initializations."
+    },
+    "status": "prepared_not_run"
+  },
+  {
+    "seed": 46,
+    "data_seed": 46,
+    "expert": "sword",
+    "train": "experts/sword/train.jsonl",
+    "dev": "dev.jsonl",
+    "test": "test.jsonl",
+    "labels": "labels.json",
+    "initial_state": {
+      "path": "dev_tools/request_classifier/experiments/2026-10-24-normal-dialogue-colab/artifacts/colab-results/weights/trial-2/best",
+      "model_sha256": "0e8142045166ffea465ffaef6c5742fbd93949cec71641b5bfdb288aa49b813d",
+      "existing_seed": 43,
+      "policy": "Within all four experts and seven repeats use the same saved starting tensors, including classifier head. Do not create independent heads and average them.",
+      "limitation": "Base already trained on the original 482 rows. Seven seeds do not represent seven fresh base-model initializations."
+    },
+    "status": "prepared_not_run"
+  },
+  {
+    "seed": 46,
+    "data_seed": 46,
+    "expert": "mob",
+    "train": "experts/mob/train.jsonl",
+    "dev": "dev.jsonl",
+    "test": "test.jsonl",
+    "labels": "labels.json",
+    "initial_state": {
+      "path": "dev_tools/request_classifier/experiments/2026-10-24-normal-dialogue-colab/artifacts/colab-results/weights/trial-2/best",
+      "model_sha256": "0e8142045166ffea465ffaef6c5742fbd93949cec71641b5bfdb288aa49b813d",
+      "existing_seed": 43,
+      "policy": "Within all four experts and seven repeats use the same saved starting tensors, including classifier head. Do not create independent heads and average them.",
+      "limitation": "Base already trained on the original 482 rows. Seven seeds do not represent seven fresh base-model initializations."
+    },
+    "status": "prepared_not_run"
+  },
+  {
+    "seed": 47,
+    "data_seed": 47,
+    "expert": "spatial",
+    "train": "experts/spatial/train.jsonl",
+    "dev": "dev.jsonl",
+    "test": "test.jsonl",
+    "labels": "labels.json",
+    "initial_state": {
+      "path": "dev_tools/request_classifier/experiments/2026-10-24-normal-dialogue-colab/artifacts/colab-results/weights/trial-2/best",
+      "model_sha256": "0e8142045166ffea465ffaef6c5742fbd93949cec71641b5bfdb288aa49b813d",
+      "existing_seed": 43,
+      "policy": "Within all four experts and seven repeats use the same saved starting tensors, including classifier head. Do not create independent heads and average them.",
+      "limitation": "Base already trained on the original 482 rows. Seven seeds do not represent seven fresh base-model initializations."
+    },
+    "status": "prepared_not_run"
+  },
+  {
+    "seed": 47,
+    "data_seed": 47,
+    "expert": "mount",
+    "train": "experts/mount/train.jsonl",
+    "dev": "dev.jsonl",
+    "test": "test.jsonl",
+    "labels": "labels.json",
+    "initial_state": {
+      "path": "dev_tools/request_classifier/experiments/2026-10-24-normal-dialogue-colab/artifacts/colab-results/weights/trial-2/best",
+      "model_sha256": "0e8142045166ffea465ffaef6c5742fbd93949cec71641b5bfdb288aa49b813d",
+      "existing_seed": 43,
+      "policy": "Within all four experts and seven repeats use the same saved starting tensors, including classifier head. Do not create independent heads and average them.",
+      "limitation": "Base already trained on the original 482 rows. Seven seeds do not represent seven fresh base-model initializations."
+    },
+    "status": "prepared_not_run"
+  },
+  {
+    "seed": 47,
+    "data_seed": 47,
+    "expert": "sword",
+    "train": "experts/sword/train.jsonl",
+    "dev": "dev.jsonl",
+    "test": "test.jsonl",
+    "labels": "labels.json",
+    "initial_state": {
+      "path": "dev_tools/request_classifier/experiments/2026-10-24-normal-dialogue-colab/artifacts/colab-results/weights/trial-2/best",
+      "model_sha256": "0e8142045166ffea465ffaef6c5742fbd93949cec71641b5bfdb288aa49b813d",
+      "existing_seed": 43,
+      "policy": "Within all four experts and seven repeats use the same saved starting tensors, including classifier head. Do not create independent heads and average them.",
+      "limitation": "Base already trained on the original 482 rows. Seven seeds do not represent seven fresh base-model initializations."
+    },
+    "status": "prepared_not_run"
+  },
+  {
+    "seed": 47,
+    "data_seed": 47,
+    "expert": "mob",
+    "train": "experts/mob/train.jsonl",
+    "dev": "dev.jsonl",
+    "test": "test.jsonl",
+    "labels": "labels.json",
+    "initial_state": {
+      "path": "dev_tools/request_classifier/experiments/2026-10-24-normal-dialogue-colab/artifacts/colab-results/weights/trial-2/best",
+      "model_sha256": "0e8142045166ffea465ffaef6c5742fbd93949cec71641b5bfdb288aa49b813d",
+      "existing_seed": 43,
+      "policy": "Within all four experts and seven repeats use the same saved starting tensors, including classifier head. Do not create independent heads and average them.",
+      "limitation": "Base already trained on the original 482 rows. Seven seeds do not represent seven fresh base-model initializations."
+    },
+    "status": "prepared_not_run"
+  },
+  {
+    "seed": 48,
+    "data_seed": 48,
+    "expert": "spatial",
+    "train": "experts/spatial/train.jsonl",
+    "dev": "dev.jsonl",
+    "test": "test.jsonl",
+    "labels": "labels.json",
+    "initial_state": {
+      "path": "dev_tools/request_classifier/experiments/2026-10-24-normal-dialogue-colab/artifacts/colab-results/weights/trial-2/best",
+      "model_sha256": "0e8142045166ffea465ffaef6c5742fbd93949cec71641b5bfdb288aa49b813d",
+      "existing_seed": 43,
+      "policy": "Within all four experts and seven repeats use the same saved starting tensors, including classifier head. Do not create independent heads and average them.",
+      "limitation": "Base already trained on the original 482 rows. Seven seeds do not represent seven fresh base-model initializations."
+    },
+    "status": "prepared_not_run"
+  },
+  {
+    "seed": 48,
+    "data_seed": 48,
+    "expert": "mount",
+    "train": "experts/mount/train.jsonl",
+    "dev": "dev.jsonl",
+    "test": "test.jsonl",
+    "labels": "labels.json",
+    "initial_state": {
+      "path": "dev_tools/request_classifier/experiments/2026-10-24-normal-dialogue-colab/artifacts/colab-results/weights/trial-2/best",
+      "model_sha256": "0e8142045166ffea465ffaef6c5742fbd93949cec71641b5bfdb288aa49b813d",
+      "existing_seed": 43,
+      "policy": "Within all four experts and seven repeats use the same saved starting tensors, including classifier head. Do not create independent heads and average them.",
+      "limitation": "Base already trained on the original 482 rows. Seven seeds do not represent seven fresh base-model initializations."
+    },
+    "status": "prepared_not_run"
+  },
+  {
+    "seed": 48,
+    "data_seed": 48,
+    "expert": "sword",
+    "train": "experts/sword/train.jsonl",
+    "dev": "dev.jsonl",
+    "test": "test.jsonl",
+    "labels": "labels.json",
+    "initial_state": {
+      "path": "dev_tools/request_classifier/experiments/2026-10-24-normal-dialogue-colab/artifacts/colab-results/weights/trial-2/best",
+      "model_sha256": "0e8142045166ffea465ffaef6c5742fbd93949cec71641b5bfdb288aa49b813d",
+      "existing_seed": 43,
+      "policy": "Within all four experts and seven repeats use the same saved starting tensors, including classifier head. Do not create independent heads and average them.",
+      "limitation": "Base already trained on the original 482 rows. Seven seeds do not represent seven fresh base-model initializations."
+    },
+    "status": "prepared_not_run"
+  },
+  {
+    "seed": 48,
+    "data_seed": 48,
+    "expert": "mob",
+    "train": "experts/mob/train.jsonl",
+    "dev": "dev.jsonl",
+    "test": "test.jsonl",
+    "labels": "labels.json",
+    "initial_state": {
+      "path": "dev_tools/request_classifier/experiments/2026-10-24-normal-dialogue-colab/artifacts/colab-results/weights/trial-2/best",
+      "model_sha256": "0e8142045166ffea465ffaef6c5742fbd93949cec71641b5bfdb288aa49b813d",
+      "existing_seed": 43,
+      "policy": "Within all four experts and seven repeats use the same saved starting tensors, including classifier head. Do not create independent heads and average them.",
+      "limitation": "Base already trained on the original 482 rows. Seven seeds do not represent seven fresh base-model initializations."
+    },
+    "status": "prepared_not_run"
+  }
+]

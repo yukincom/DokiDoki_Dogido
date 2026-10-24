@@ -1,0 +1,79 @@
+{
+  "status": "materials prepared; training not run",
+  "source_git_checkpoint": "dcd20db",
+  "label_to_id": {
+    "not_target": 0,
+    "enemy_information": 1,
+    "equip_sword": 2,
+    "recall_mount": 3,
+    "dogido_recall": 4,
+    "look_direction": 5,
+    "look_relative_right": 6,
+    "look_target": 7,
+    "look_player": 8,
+    "look_relative_front": 9,
+    "look_relative_back": 10,
+    "look_relative_left": 11,
+    "look_relative_front_left": 12,
+    "look_relative_front_right": 13,
+    "look_relative_back_left": 14,
+    "look_relative_back_right": 15
+  },
+  "experts": {
+    "spatial": [
+      "dogido_recall",
+      "look_direction",
+      "look_relative_right",
+      "look_target",
+      "look_player",
+      "look_relative_front",
+      "look_relative_back",
+      "look_relative_left",
+      "look_relative_front_left",
+      "look_relative_front_right",
+      "look_relative_back_left",
+      "look_relative_back_right"
+    ],
+    "mount": [
+      "recall_mount"
+    ],
+    "sword": [
+      "equip_sword"
+    ],
+    "mob": [
+      "enemy_information"
+    ]
+  },
+  "common_other": "not_target",
+  "seed_plan": [
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48
+  ],
+  "planned_specialist_runs": 28,
+  "seed_scope": "training/data order randomness; material split and row membership fixed",
+  "initialization_for_merge": {
+    "path": "dev_tools/request_classifier/experiments/2026-10-24-normal-dialogue-colab/artifacts/colab-results/weights/trial-2/best",
+    "model_sha256": "0e8142045166ffea465ffaef6c5742fbd93949cec71641b5bfdb288aa49b813d",
+    "existing_seed": 43,
+    "policy": "Within all four experts and seven repeats use the same saved starting tensors, including classifier head. Do not create independent heads and average them.",
+    "limitation": "Base already trained on the original 482 rows. Seven seeds do not represent seven fresh base-model initializations."
+  },
+  "input": {
+    "context": 0,
+    "max_length": 128,
+    "output_labels": 16,
+    "metadata_is_not_model_input": true
+  },
+  "training_stream": "Every unique shared row once, then focus rows and linked contrast rows once more; concatenate before the normal seeded training shuffle. No replacement sampling and no third copy.",
+  "consumer": "Reuse EncodedRows in the archived train.py and the row-concatenation route used by the previous specialist pilot. Expert train.jsonl is an occurrence stream with intentional repeated IDs, not a unique-row --material-release. Shared root is a valid material release.",
+  "comparison": "The same seven seeds are paired across four experts. Report all seeds, mean and sample SD. Split never changes with seed. Merge only compatible checkpoints from the same declared starting state.",
+  "selection": "Freeze any training hyperparameters and merge candidates before running. Select with dev only, fix selection before test. No seed cherry-picking from test.",
+  "evaluation_scope": "Existing dev 46 / test 50 were already used in material design; diagnostic only. No new independent heldout or real-world accuracy evidence created.",
+  "training_hyperparameters": "Not selected or run in this materials-only step; keep separate from the seed and dataset contract.",
+  "runtime_adoption": false
+}

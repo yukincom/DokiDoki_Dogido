@@ -1,0 +1,141 @@
+{
+  "spatial": {
+    "focus_labels": [
+      "dogido_recall",
+      "look_direction",
+      "look_relative_right",
+      "look_target",
+      "look_player",
+      "look_relative_front",
+      "look_relative_back",
+      "look_relative_left",
+      "look_relative_front_left",
+      "look_relative_front_right",
+      "look_relative_back_left",
+      "look_relative_back_right"
+    ],
+    "unique_rows": 818,
+    "focus_unique_rows": 310,
+    "not_target_unique_rows": 190,
+    "replay_occurrences": 366,
+    "training_occurrences_per_epoch": 1184,
+    "focus_occurrences": 620,
+    "not_target_occurrences": 246,
+    "label_occurrences": {
+      "not_target": 246,
+      "enemy_information": 106,
+      "equip_sword": 99,
+      "recall_mount": 113,
+      "dogido_recall": 126,
+      "look_target": 48,
+      "look_direction": 66,
+      "look_relative_right": 42,
+      "look_relative_back": 42,
+      "look_player": 54,
+      "look_relative_front": 40,
+      "look_relative_left": 42,
+      "look_relative_front_left": 40,
+      "look_relative_front_right": 40,
+      "look_relative_back_left": 40,
+      "look_relative_back_right": 40
+    },
+    "train_sha256": "e2fa7d6fe3cfcf36ca5fc953b2948b3e1d215d3a1d39e7db19ae79c71b0ed347",
+    "replay_sha256": "41bf50a004011edbebf0d4ef586aa4ae85b55ddf92b00ed78829ede9c2189094"
+  },
+  "mount": {
+    "focus_labels": [
+      "recall_mount"
+    ],
+    "unique_rows": 818,
+    "focus_unique_rows": 113,
+    "not_target_unique_rows": 190,
+    "replay_occurrences": 127,
+    "training_occurrences_per_epoch": 945,
+    "focus_occurrences": 226,
+    "not_target_occurrences": 204,
+    "label_occurrences": {
+      "not_target": 204,
+      "enemy_information": 106,
+      "equip_sword": 99,
+      "recall_mount": 226,
+      "dogido_recall": 63,
+      "look_target": 24,
+      "look_direction": 33,
+      "look_relative_right": 21,
+      "look_relative_back": 21,
+      "look_player": 27,
+      "look_relative_front": 20,
+      "look_relative_left": 21,
+      "look_relative_front_left": 20,
+      "look_relative_front_right": 20,
+      "look_relative_back_left": 20,
+      "look_relative_back_right": 20
+    },
+    "train_sha256": "7f27f48d76901ec50e154796429646cdc346e4efc3395b32f6ce15bfa3a2d0b0",
+    "replay_sha256": "7067cdc1ac830e1df47004d7c7a5a1c4cede5fd4bf6d354ae1d33f8893ee59ed"
+  },
+  "sword": {
+    "focus_labels": [
+      "equip_sword"
+    ],
+    "unique_rows": 818,
+    "focus_unique_rows": 99,
+    "not_target_unique_rows": 190,
+    "replay_occurrences": 119,
+    "training_occurrences_per_epoch": 937,
+    "focus_occurrences": 198,
+    "not_target_occurrences": 210,
+    "label_occurrences": {
+      "not_target": 210,
+      "enemy_information": 106,
+      "equip_sword": 198,
+      "recall_mount": 113,
+      "dogido_recall": 63,
+      "look_target": 24,
+      "look_direction": 33,
+      "look_relative_right": 21,
+      "look_relative_back": 21,
+      "look_player": 27,
+      "look_relative_front": 20,
+      "look_relative_left": 21,
+      "look_relative_front_left": 20,
+      "look_relative_front_right": 20,
+      "look_relative_back_left": 20,
+      "look_relative_back_right": 20
+    },
+    "train_sha256": "fe5ddb7d90fa6ef01318bbc71c00b3b320c6cb3f9dde5e15f73408c318d27baa",
+    "replay_sha256": "dcf528f4a07cc7e4a8677192396b119e519f51d69b7da998e23ec64b71d7a760"
+  },
+  "mob": {
+    "focus_labels": [
+      "enemy_information"
+    ],
+    "unique_rows": 818,
+    "focus_unique_rows": 106,
+    "not_target_unique_rows": 190,
+    "replay_occurrences": 124,
+    "training_occurrences_per_epoch": 942,
+    "focus_occurrences": 212,
+    "not_target_occurrences": 208,
+    "label_occurrences": {
+      "not_target": 208,
+      "enemy_information": 212,
+      "equip_sword": 99,
+      "recall_mount": 113,
+      "dogido_recall": 63,
+      "look_target": 24,
+      "look_direction": 33,
+      "look_relative_right": 21,
+      "look_relative_back": 21,
+      "look_player": 27,
+      "look_relative_front": 20,
+      "look_relative_left": 21,
+      "look_relative_front_left": 20,
+      "look_relative_front_right": 20,
+      "look_relative_back_left": 20,
+      "look_relative_back_right": 20
+    },
+    "train_sha256": "3b173f490528d7918d005b402f66bd8dbe6c1e33fb7e6d986dd209b3b917242a",
+    "replay_sha256": "54bc3aa65e57ea45aab4a627659b673922b0248b0930332af15cdfb39dc5b5b5"
+  }
+}
