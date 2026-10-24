@@ -1,0 +1,232 @@
+{
+  "schema": "four_system_colab.v1",
+  "status": "prepared_not_run",
+  "profile": "modernbert-four-system",
+  "material_commit": "3228997ab113ca676f4c0a498716b0ecf43e6fe0",
+  "release": "dev_tools/request_classifier/releases/2026-10-24-normal-dialogue-four-system",
+  "additions": "dev_tools/request_classifier/curation/2026-10-24-four-system-contrast/candidates.jsonl",
+  "counts": {
+    "train": 818,
+    "dev": 46,
+    "test": 50
+  },
+  "label_to_id": {
+    "not_target": 0,
+    "enemy_information": 1,
+    "equip_sword": 2,
+    "recall_mount": 3,
+    "dogido_recall": 4,
+    "look_direction": 5,
+    "look_relative_right": 6,
+    "look_target": 7,
+    "look_player": 8,
+    "look_relative_front": 9,
+    "look_relative_back": 10,
+    "look_relative_left": 11,
+    "look_relative_front_left": 12,
+    "look_relative_front_right": 13,
+    "look_relative_back_left": 14,
+    "look_relative_back_right": 15
+  },
+  "experts": {
+    "spatial": [
+      "dogido_recall",
+      "look_direction",
+      "look_relative_right",
+      "look_target",
+      "look_player",
+      "look_relative_front",
+      "look_relative_back",
+      "look_relative_left",
+      "look_relative_front_left",
+      "look_relative_front_right",
+      "look_relative_back_left",
+      "look_relative_back_right"
+    ],
+    "mount": [
+      "recall_mount"
+    ],
+    "sword": [
+      "equip_sword"
+    ],
+    "mob": [
+      "enemy_information"
+    ]
+  },
+  "seeds": [
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48
+  ],
+  "base_source": {
+    "path": "dev_tools/request_classifier/experiments/2026-10-24-normal-dialogue-colab/artifacts/colab-results/weights/trial-2/best",
+    "model_sha256": "0e8142045166ffea465ffaef6c5742fbd93949cec71641b5bfdb288aa49b813d",
+    "existing_seed": 43,
+    "policy": "Within all four experts and seven repeats use the same saved starting tensors, including classifier head. Do not create independent heads and average them.",
+    "limitation": "Base already trained on the original 482 rows. Seven seeds do not represent seven fresh base-model initializations."
+  },
+  "base_files_sha256": {
+    "config.json": "bd1ebcc8a20a6a5b158a77e4df4031a3274e4a62e6982ad4780b10bbdbeb8f3f",
+    "model.safetensors": "0e8142045166ffea465ffaef6c5742fbd93949cec71641b5bfdb288aa49b813d",
+    "tokenizer.json": "6a0734cf21c802169defaffe719bc2ef12bb9d0be37e54b61ed27aa89394723d",
+    "tokenizer_config.json": "930dd278b2f45e3fdb6814699eaa23297a8ba534e0756ce0d194ec7dd4deccec"
+  },
+  "base_upload": {
+    "filename": "modernbert-four-system-base.zip",
+    "bytes": 105319277,
+    "sha256": "f863ff4a58652d953c937a0a300647e33be1bd1dce4b93278b4776783ce79749"
+  },
+  "training": {
+    "jobs": 28,
+    "learning_rate": 1e-05,
+    "epochs": 10,
+    "batch_size": 16,
+    "max_length": 128,
+    "context": 0,
+    "dtype": "float32",
+    "attention": "sdpa",
+    "device": "cuda",
+    "optimizer": "adamw_torch",
+    "weight_decay": 0.01,
+    "warmup_steps": 0,
+    "max_grad_norm": 1.0,
+    "scheduler": "linear",
+    "tf32": false,
+    "deterministic_algorithms": true,
+    "initialization": "All 66 tensors including classifier loaded from the same saved seed43 checkpoint; fresh optimizer for each job",
+    "training_stream": "Every unique shared row once, then focus rows and linked contrast rows once more; concatenate before the normal seeded training shuffle. No replacement sampling and no third copy.",
+    "full_finetuning": true,
+    "checkpoint_selection": "Development macro F1 descending, loss ascending, earlier epoch",
+    "rationale": "Keep the prior specialist pilot learning rate 1e-5; allow 10 epochs for the new 336 rows and choose the epoch by dev, as in the earlier Colab training"
+  },
+  "recipes": [
+    {
+      "id": "arithmetic-quarter",
+      "method": "arithmetic",
+      "scale": 0.25
+    },
+    {
+      "id": "arithmetic-half",
+      "method": "arithmetic",
+      "scale": 0.5
+    },
+    {
+      "id": "arithmetic-one",
+      "method": "arithmetic",
+      "scale": 1.0
+    },
+    {
+      "id": "ties20-half",
+      "method": "ties",
+      "keep_percent": 20,
+      "scale": 0.5
+    },
+    {
+      "id": "ties20-one",
+      "method": "ties",
+      "keep_percent": 20,
+      "scale": 1.0
+    }
+  ],
+  "candidates": [
+    "base-seed43",
+    "seed42-spatial",
+    "seed42-mount",
+    "seed42-sword",
+    "seed42-mob",
+    "seed42-arithmetic-quarter",
+    "seed42-arithmetic-half",
+    "seed42-arithmetic-one",
+    "seed42-ties20-half",
+    "seed42-ties20-one",
+    "seed43-spatial",
+    "seed43-mount",
+    "seed43-sword",
+    "seed43-mob",
+    "seed43-arithmetic-quarter",
+    "seed43-arithmetic-half",
+    "seed43-arithmetic-one",
+    "seed43-ties20-half",
+    "seed43-ties20-one",
+    "seed44-spatial",
+    "seed44-mount",
+    "seed44-sword",
+    "seed44-mob",
+    "seed44-arithmetic-quarter",
+    "seed44-arithmetic-half",
+    "seed44-arithmetic-one",
+    "seed44-ties20-half",
+    "seed44-ties20-one",
+    "seed45-spatial",
+    "seed45-mount",
+    "seed45-sword",
+    "seed45-mob",
+    "seed45-arithmetic-quarter",
+    "seed45-arithmetic-half",
+    "seed45-arithmetic-one",
+    "seed45-ties20-half",
+    "seed45-ties20-one",
+    "seed46-spatial",
+    "seed46-mount",
+    "seed46-sword",
+    "seed46-mob",
+    "seed46-arithmetic-quarter",
+    "seed46-arithmetic-half",
+    "seed46-arithmetic-one",
+    "seed46-ties20-half",
+    "seed46-ties20-one",
+    "seed47-spatial",
+    "seed47-mount",
+    "seed47-sword",
+    "seed47-mob",
+    "seed47-arithmetic-quarter",
+    "seed47-arithmetic-half",
+    "seed47-arithmetic-one",
+    "seed47-ties20-half",
+    "seed47-ties20-one",
+    "seed48-spatial",
+    "seed48-mount",
+    "seed48-sword",
+    "seed48-mob",
+    "seed48-arithmetic-quarter",
+    "seed48-arithmetic-half",
+    "seed48-arithmetic-one",
+    "seed48-ties20-half",
+    "seed48-ties20-one",
+    "mean7-spatial",
+    "mean7-mount",
+    "mean7-sword",
+    "mean7-mob",
+    "mean7-arithmetic-quarter",
+    "mean7-arithmetic-half",
+    "mean7-arithmetic-one",
+    "mean7-ties20-half",
+    "mean7-ties20-one"
+  ],
+  "merge_scope": "All 66 float32 tensors including classifier; experts ordered spatial, mount, sword, mob",
+  "arithmetic_formula": "base + scale * sum(expert - base); scale .25 is the equal mean of four experts, up to floating-point roundoff",
+  "ties_formula": "base + scale * TIES(expert - base); concatenate all tensors sorted by name; per-model global top20 percent, mass sign election, dis-mean",
+  "ties_reference": {
+    "repository": "https://github.com/prateeky2806/ties-merging",
+    "commit": "44e7891fc84f3de7e4caa52664cd864ca3715e91",
+    "path": "src/utils/merge_utils.py",
+    "reuse": "Previously archived author source; execute only four inspected pure functions"
+  },
+  "seven_seed_weight_mean": "For each of the four experts and five merge recipes, equally average its seven checkpoints; separately evaluate all nine resulting models",
+  "selection": "Rank all 73 candidates by dev macro F1 descending, loss ascending, declared candidate order; freeze before test. Also select best trained single and best four-expert merge by the same rule. Pick recipe by seven-seed mean dev macro F1, mean dev loss, declared recipe order.",
+  "test_policy": "Evaluate all 73 fixed candidates only after dev selection is frozen; no changes based on test",
+  "train_diagnostics": "Evaluate unique selected candidates plus baseline on shared 818 rows; identify added 336 rows separately; not heldout accuracy",
+  "evaluation_scope": "Existing dev 46 / test 50 were already used in material design; diagnostic only. No new independent heldout or real-world accuracy evidence created.",
+  "runtime_adoption": false,
+  "runtime_environment": {
+    "python": "3.11.14",
+    "requirements": "dev_tools/request_classifier/requirements-train.txt",
+    "gpu_required": true,
+    "initial_free_disk_gib": 20,
+    "reproducibility": "Record GPU, CUDA, package versions, seeds, hashes and deterministic mode. Different GPU/driver versions can still produce different floating-point results."
+  }
+}

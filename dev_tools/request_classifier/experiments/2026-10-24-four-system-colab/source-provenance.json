@@ -1,0 +1,74 @@
+{
+  "material_commit": "3228997ab113ca676f4c0a498716b0ecf43e6fe0",
+  "material_sha256": {
+    "dev_tools/request_classifier/curation/2026-10-24-four-system-contrast/README.md": "8b9f649630a0b524f8c7267a4886ef23049e5210a915f800d6b1b6ff43ad46e8",
+    "dev_tools/request_classifier/curation/2026-10-24-four-system-contrast/authored-groups.json": "67e5fd3855376f69b61d864388baaaa394f5e04bf7ae780462b3b8c03452aed2",
+    "dev_tools/request_classifier/curation/2026-10-24-four-system-contrast/build_materials.py": "440aff071073f393ac21045ed4e3b7e106da7ade9688d0b91b9b1e8d410b44c4",
+    "dev_tools/request_classifier/curation/2026-10-24-four-system-contrast/candidates.jsonl": "480362525b464ab51791c9c192c9903be52b85e0d7e1847c80ae56113903e97b",
+    "dev_tools/request_classifier/curation/2026-10-24-four-system-contrast/evidence.jsonl": "4a916f4fe21afef502e58bcefeb4daf4463d27d9c943761391a0068fba3f0060",
+    "dev_tools/request_classifier/curation/2026-10-24-four-system-contrast/manifest.json": "d8f633b67016d9704d8a4d82f71b2a8aae4ad0f94f72d4a68640e25290024e48",
+    "dev_tools/request_classifier/curation/2026-10-24-four-system-contrast/materials-review.md": "46340f9e789995574c9c638006b57dcaecf0a6d157d0998d20a0c2346cf21279",
+    "dev_tools/request_classifier/curation/2026-10-24-four-system-contrast/reused-evidence.json": "230d7760b13420a7c59e6537ee5438c2098843d3aee1909805c4c66573b567cf",
+    "dev_tools/request_classifier/curation/2026-10-24-four-system-contrast/similarity-review.json": "0c7b6c3b1623f9f83f1a9b4f041e7af0e71073aa3e41353d31c3f385a700ad0d",
+    "dev_tools/request_classifier/releases/2026-10-24-normal-dialogue-four-system/README.md": "6ba7e6a2ec91dcd72e4399637afc2ede3ded9bf90aeaa7dd16a9d0a60272252a",
+    "dev_tools/request_classifier/releases/2026-10-24-normal-dialogue-four-system/data_report.json": "cbd130c376948cf4831d80fc4238c9ee1c3c044eab2e8d574f960a3730e5aad7",
+    "dev_tools/request_classifier/releases/2026-10-24-normal-dialogue-four-system/dev.jsonl": "fcac4d822b7280f09aacf8700ef65a80613a380e6753826ba919b9421d1d21e6",
+    "dev_tools/request_classifier/releases/2026-10-24-normal-dialogue-four-system/expert-inventory.json": "7cc48bedc05b65d5b0e7da51f401465c5216216fe37c4e01ecf67cc6fa2c2e2e",
+    "dev_tools/request_classifier/releases/2026-10-24-normal-dialogue-four-system/experts/mob/inventory.json": "6501d000cd0a57653a5cf2806e20956435788997d79a6bf150794e644a435002",
+    "dev_tools/request_classifier/releases/2026-10-24-normal-dialogue-four-system/experts/mob/replay.jsonl": "54bc3aa65e57ea45aab4a627659b673922b0248b0930332af15cdfb39dc5b5b5",
+    "dev_tools/request_classifier/releases/2026-10-24-normal-dialogue-four-system/experts/mob/train.jsonl": "3b173f490528d7918d005b402f66bd8dbe6c1e33fb7e6d986dd209b3b917242a",
+    "dev_tools/request_classifier/releases/2026-10-24-normal-dialogue-four-system/experts/mount/inventory.json": "834c4cdbea0c7a349f9f3fa163dd89b1efe09f3fbc4a325699ad50629d0d67d8",
+    "dev_tools/request_classifier/releases/2026-10-24-normal-dialogue-four-system/experts/mount/replay.jsonl": "7067cdc1ac830e1df47004d7c7a5a1c4cede5fd4bf6d354ae1d33f8893ee59ed",
+    "dev_tools/request_classifier/releases/2026-10-24-normal-dialogue-four-system/experts/mount/train.jsonl": "7f27f48d76901ec50e154796429646cdc346e4efc3395b32f6ce15bfa3a2d0b0",
+    "dev_tools/request_classifier/releases/2026-10-24-normal-dialogue-four-system/experts/spatial/inventory.json": "91e64229aeabaf50748cf9b492e11b85ecf27df649f2293acaf35e8616cbe9cd",
+    "dev_tools/request_classifier/releases/2026-10-24-normal-dialogue-four-system/experts/spatial/replay.jsonl": "41bf50a004011edbebf0d4ef586aa4ae85b55ddf92b00ed78829ede9c2189094",
+    "dev_tools/request_classifier/releases/2026-10-24-normal-dialogue-four-system/experts/spatial/train.jsonl": "e2fa7d6fe3cfcf36ca5fc953b2948b3e1d215d3a1d39e7db19ae79c71b0ed347",
+    "dev_tools/request_classifier/releases/2026-10-24-normal-dialogue-four-system/experts/sword/inventory.json": "5782be681ce5920ed7f1b1be088b634eabadb742304b8dd2b7d1e53ffe761527",
+    "dev_tools/request_classifier/releases/2026-10-24-normal-dialogue-four-system/experts/sword/replay.jsonl": "dcf528f4a07cc7e4a8677192396b119e519f51d69b7da998e23ec64b71d7a760",
+    "dev_tools/request_classifier/releases/2026-10-24-normal-dialogue-four-system/experts/sword/train.jsonl": "fe5ddb7d90fa6ef01318bbc71c00b3b320c6cb3f9dde5e15f73408c318d27baa",
+    "dev_tools/request_classifier/releases/2026-10-24-normal-dialogue-four-system/labels.json": "41955d648f5b330758019635f10e0fa4ece607cefc2111f10ebae7f5ae25cb91",
+    "dev_tools/request_classifier/releases/2026-10-24-normal-dialogue-four-system/preparation-review.json": "5bbfa4cc014cc2467392cc8d203ed95ec0c89ea9deb1826b0338cd002eaa509e",
+    "dev_tools/request_classifier/releases/2026-10-24-normal-dialogue-four-system/test.jsonl": "5638ba8990b6d666e1babb8d5e24b50ea0a0b30acae75e2b320daddb8be8ad35",
+    "dev_tools/request_classifier/releases/2026-10-24-normal-dialogue-four-system/train.jsonl": "e6a44c432f1d784ed6b2dbedbabfba028cf8eda4259c20751c1183887e484003",
+    "dev_tools/request_classifier/releases/2026-10-24-normal-dialogue-four-system/training-jobs.json": "384a1de1b0f8fab4be775b03b094f5aec53ab6fa0903008e38f926db881a2ea7",
+    "dev_tools/request_classifier/releases/2026-10-24-normal-dialogue-four-system/training-plan.json": "ee8925fcd210e25b56a9799846a2946162c31e820135d4cbee9b2ae1ae9dc76b"
+  },
+  "unchanged_training_sources_sha256": {
+    "dev_tools/request_classifier/dataset.py": "083c91f132502bf397ad9bb66c23a48623c02033335a68fb26f17e6529a58e23",
+    "dev_tools/request_classifier/evaluation.py": "3300083a0b94d682ad05525b9fb066f93143b6d0de40adc842f81f0f87bb97cf",
+    "dev_tools/request_classifier/train.py": "76cc522e8dea62089b48ef678585e9d928894eb21ddc195b6d67adf5651efa80",
+    "dev_tools/request_classifier/labels.json": "237c708a4c5401ec03371ee7bb15b744fd0d6af08cb1f7b53f8864e8988eba9c",
+    "dev_tools/request_classifier/requirements-train.txt": "f45782d28fe9ac8e4123aaf8a8878fbf17d8b38782a8bda21958f0a6cf407ff1"
+  },
+  "archived_training_source": "https://github.com/yukincom/AI-Curious-Community/releases/tag/modernbert-research-2026-10-24",
+  "archived_training_archive_sha256": "aae4355c088c0436f3b019fa6674349e8b4091b51998a3f5b39274d9f1a8c2af",
+  "common_checkpoint_source": "dev_tools/request_classifier/experiments/2026-10-24-normal-dialogue-colab/artifacts/colab-results/weights/trial-2/best",
+  "common_checkpoint_sha256": {
+    "config.json": "bd1ebcc8a20a6a5b158a77e4df4031a3274e4a62e6982ad4780b10bbdbeb8f3f",
+    "model.safetensors": "0e8142045166ffea465ffaef6c5742fbd93949cec71641b5bfdb288aa49b813d",
+    "tokenizer.json": "6a0734cf21c802169defaffe719bc2ef12bb9d0be37e54b61ed27aa89394723d",
+    "tokenizer_config.json": "930dd278b2f45e3fdb6814699eaa23297a8ba534e0756ce0d194ec7dd4deccec"
+  },
+  "ties_reference": {
+    "repository": "https://github.com/prateeky2806/ties-merging",
+    "commit": "44e7891fc84f3de7e4caa52664cd864ca3715e91",
+    "path": "src/utils/merge_utils.py",
+    "reuse": "Previously archived author source; execute only four inspected pure functions"
+  },
+  "ties_reference_sha256": {
+    "reference/merge_utils.py": "8254578774972384be6acca82fd51f65cca165f14d150f208e6456a21ada6014",
+    "reference/LICENSE.txt": "8849cb6bfa479a11e64f668c97154226a4631cde13389cec7099ae8111e69b60"
+  },
+  "new_orchestration_sha256": {
+    "run_experiment.py": "cd36a3d371bc5d8f26c31df0f8171c3a27c55c3c16f16ae5355762754bcf6bed",
+    "build_report.py": "b688fb24e3949bc67f789255bfb9f1054a8dd7f79648c96e8e9fd2c0dcd49668"
+  },
+  "reuse": [
+    "EncodedRows",
+    "SaveBestDevelopment",
+    "MeasuredTrainer",
+    "compute_metrics",
+    "evaluate_checkpoint"
+  ],
+  "new_work": "28-job schedule, compatible all-tensor merges, seven-seed statistics, frozen selection, comparison report and ZIP export"
+}
