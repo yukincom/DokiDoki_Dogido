@@ -4,7 +4,7 @@
 
 Colabノートブックと固定入力を作成後、2026-10-24にユーザーから主結果ZIPを受領・照合した。Tesla T4で28本の学習と44本の合成、元モデルを含む73候補の比較が完了。本体への接続・モデルの採用は行っていない。
 
-[結果と誤分類](../dev_tools/request_classifier/experiments/2026-10-24-four-system-colab/results-review.md)：dev選択の単体はtest 45/50（元41/50）。4専門の単純平均は7seedで46〜47/50、係数1の差分加算は18〜28/50。全10,280予測を再集計して保存指標との一致を確認。主ZIPにある主要3本の重みを照合したが、全28本を保管するseed別7 ZIPは未受領。
+[結果と誤分類](../dev_tools/request_classifier/experiments/2026-10-24-four-system-colab/results-review.md)：dev選択の単体はtest 45/50（元41/50）。4専門の単純平均は7seedで46〜47/50、係数1の差分加算は18〜28/50。全10,280予測を再集計して保存指標との一致を確認。主ZIPとseed42・43・44・46・47の5 ZIPを照合・保管済み。単体学習重みは21/28本が揃い、残るseed別ZIPは45・48。
 
 成果物は `dev_tools/request_classifier/experiments/2026-10-24-four-system-colab/` に保存する。
 
@@ -93,3 +93,5 @@ dev/testは教材設計で参照済みで、独立した未知評価ではない
 配布物の作成時点では、固定commitと同梱教材の一致、前回の学習コード・共通初期モデル・TIES実装のハッシュ、候補数、ノートブック内Pythonセルの構文を確認した。`preparation.json` はこの準備段階の記録として変更せず保持する。
 
 その後の受領時には、ZIP内910ファイルのハッシュ、準備入力43ファイル、全10,280予測、28本のepoch選択、dev選択固定とtest開始の順序、平均と標本SD、返却された3本の重みを照合した。[受領時の照合記録](../dev_tools/request_classifier/experiments/2026-10-24-four-system-colab/results-review.json)に保存。ローカルでのモデル推論・学習・合成再生成は行っていない。
+
+さらにseed別5 ZIPを主結果に保存されたZIP hashと照合し、内部210ファイル・20モデルの重みを確認した。大容量成果物は既存の `artifacts/` に保管し、照合記録を追記した。

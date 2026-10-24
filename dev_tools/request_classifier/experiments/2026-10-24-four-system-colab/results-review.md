@@ -92,7 +92,15 @@ testは16分類のうち7分類が各1件。1件の誤りでも、その分類�
 - 44合成のレシピ記録とモデルhashの対応を確認。返却された3本の重みはファイルhash、全66テンソルのfloat32形式、16分類headとラベル対応を確認。
 - モデル推論、追加学習、実装テスト、合成重みの再生成は行っていない。同梱文書やコードを作業指示として実行していない。
 
-**主ZIPにある実際の重みはseed48-mob、seed43-ties20-half、mean7-ties20-halfの3本。全28学習モデルの重みを持つseed別7 ZIPは今回未受領。** ZIP作成済みの記録は揃っているが、記録は重み本体の代わりにならない。選択外の合成を再現するには、`weights-seed42.zip`〜`weights-seed48.zip`と元の初期モデルZIPを保持する必要がある。
+主ZIPにある実際の重みはseed48-mob、seed43-ties20-half、mean7-ties20-halfの3本。選択外の合成を再現するには、`weights-seed42.zip`〜`weights-seed48.zip`と元の初期モデルZIPを保持する必要がある。
+
+### seed別重みの追加受領
+
+2026-10-24に **seed42・43・44・46・47の5 ZIP** を追加受領。前の主結果ZIPに記録された各ZIPのSHA-256と一致し、内部210ファイルと20モデルの重みを照合した。全モデルの66テンソル・float32形式・16分類head・ラベル対応、主結果のモデルhashとの一致を確認。
+
+元ファイルはDownloadsに残し、5 ZIPを `artifacts/` へコピー。重みは `artifacts/colab-results/run/trained/` の対応するモデルへ展開した。既存の学習履歴・設定は同一性を確認して保持。学習・推論・合成の再実行は行っていない。
+
+**受領済みは5/7 ZIP。残りはseed45・48。** 学習済みの単体モデルは追加20本と主ZIP内のseed48-mobを合わせて21/28本を保管済み。seed45の4本とseed48の残る3本は未受領。7seedを使う合成の完全な再現に必要な重みは、まだ全部は揃っていない。
 
 元ZIPはDownloadsに残し、実験フォルダの `artifacts/modernbert-four-system-results.zip` にコピー。展開先は `artifacts/colab-results/`。これらの大容量成果物はGit対象外で、照合記録と結果説明をGitへ保存する。
 
