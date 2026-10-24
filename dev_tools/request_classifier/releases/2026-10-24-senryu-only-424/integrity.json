@@ -1,0 +1,25 @@
+{
+  "schema": "senryu_subset_integrity.v1",
+  "original_rows_preserved": 417,
+  "added_rows": 7,
+  "added_label_counts": {
+    "not_target": 4,
+    "senryu_end": 3
+  },
+  "added_split": "train",
+  "source_prediction_events_recorded": 5,
+  "duplicate_ids": 0,
+  "duplicate_normalized_inputs": 0,
+  "cross_split_groups": 0,
+  "all_context_empty": true,
+  "unchanged_files_from_417": [
+    "labels.json",
+    "dev.jsonl",
+    "test.jsonl"
+  ],
+  "original_train_jsonl_bytes_preserved_as_prefix": true,
+  "candidates_evidence_id_order_matches": true,
+  "new_synthetic_examples": 0,
+  "model_training_run": false,
+  "runtime_modified": false
+}

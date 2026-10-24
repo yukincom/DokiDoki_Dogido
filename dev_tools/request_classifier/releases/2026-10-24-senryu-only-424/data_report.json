@@ -1,0 +1,109 @@
+{
+  "train": {
+    "rows": 349,
+    "labels": {
+      "not_target": 48,
+      "senryu_change_lower": 48,
+      "senryu_change_middle": 42,
+      "senryu_change_upper": 42,
+      "senryu_end": 17,
+      "senryu_line_lower": 56,
+      "senryu_line_middle": 48,
+      "senryu_line_upper": 48
+    },
+    "groups": 72,
+    "with_context": 0,
+    "needs_clarification": 0,
+    "sources": {
+      "observed_text": 31,
+      "synthetic": 295,
+      "user_example": 23
+    },
+    "tags": {
+      "ambiguous": 3,
+      "cancellation": 7,
+      "casual": 18,
+      "context": 3,
+      "correction": 5,
+      "direct": 158,
+      "ellipsis": 3,
+      "general_knowledge": 4,
+      "location": 1,
+      "negation": 6,
+      "orthography": 1,
+      "past": 4,
+      "politeness": 15,
+      "question": 29,
+      "quotation": 34,
+      "reference": 3,
+      "reported_speech": 3,
+      "rhetorical": 2,
+      "statement": 145
+    },
+    "max_input_characters": 53,
+    "sha256": "94423a79046978d2b208ff994c956b7f20f93f713f6ea709dce6406e622c574c"
+  },
+  "dev": {
+    "rows": 39,
+    "labels": {
+      "not_target": 6,
+      "senryu_change_lower": 4,
+      "senryu_change_middle": 3,
+      "senryu_change_upper": 3,
+      "senryu_end": 3,
+      "senryu_line_lower": 8,
+      "senryu_line_middle": 6,
+      "senryu_line_upper": 6
+    },
+    "groups": 10,
+    "with_context": 0,
+    "needs_clarification": 0,
+    "sources": {
+      "observed_text": 4,
+      "synthetic": 30,
+      "user_example": 5
+    },
+    "tags": {
+      "casual": 4,
+      "direct": 33,
+      "hypothetical": 1,
+      "question": 4,
+      "reference": 2,
+      "statement": 2
+    },
+    "max_input_characters": 46,
+    "sha256": "f81346802816e28bac27ee8a92003b2b40b887025006fc685accebbb7b233b76"
+  },
+  "test": {
+    "rows": 36,
+    "labels": {
+      "not_target": 8,
+      "senryu_change_lower": 4,
+      "senryu_change_middle": 4,
+      "senryu_change_upper": 6,
+      "senryu_end": 3,
+      "senryu_line_lower": 5,
+      "senryu_line_middle": 3,
+      "senryu_line_upper": 3
+    },
+    "groups": 10,
+    "with_context": 0,
+    "needs_clarification": 0,
+    "sources": {
+      "observed_text": 5,
+      "synthetic": 24,
+      "user_example": 7
+    },
+    "tags": {
+      "casual": 2,
+      "correction": 4,
+      "direct": 28,
+      "past": 4,
+      "quotation": 1,
+      "reference": 1,
+      "statement": 8
+    },
+    "max_input_characters": 40,
+    "sha256": "f3437b44126734b9e2a475feaa103ca9ebc422e328bd74acf3ac02805bf1d562"
+  }
+}

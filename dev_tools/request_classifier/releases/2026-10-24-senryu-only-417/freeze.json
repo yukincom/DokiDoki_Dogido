@@ -1,0 +1,140 @@
+{
+  "schema": "text_only_materials.v1",
+  "revision_date": "2026-10-24",
+  "status": "prepared_not_trained",
+  "purpose": "既存890件版を川柳専用へ抽出し直す。新規例文なし。",
+  "routing_contract": {
+    "condition": "画面に川柳が表示されている間、川柳用分類器へ切り替える",
+    "implementation_status": "not_implemented_in_this_data_task"
+  },
+  "source": {
+    "release": "v7-verse-variety-890",
+    "archive_url": "https://github.com/yukincom/AI-Curious-Community/releases/download/modernbert-research-2026-10-24/source-evaluation-records-01.tar.gz",
+    "archive_sha256": "aae4355c088c0436f3b019fa6674349e8b4091b51998a3f5b39274d9f1a8c2af",
+    "archive_manifest_sha256": "d55b6850a581fca3b3734ad6261f5eacae3a828bd9216c77cca570c844d58268",
+    "repository_head_at_archive": "54005915153d3f7d7f83226cfb7576f156d3781f",
+    "path": "dev_tools/request_classifier/releases/v7-verse-variety-890",
+    "files_sha256": {
+      "labels.json": "2ae5ce7467850e57c171cb1b96ab3f50f476a7c3366a170496aeded092057200",
+      "train.jsonl": "bcbeaea9b04890ce7f13035c6ff319ca29a67e040ce24ffd9761e5125ba583e1",
+      "dev.jsonl": "e75e2aba867f5ea9ceb7f0d6ed0b5073574e90eb988258fe618eb0586bfdec88",
+      "test.jsonl": "f34553296a348537a2b711e4a7926ee6dae3207f89247d7c595da6c127cc5430",
+      "split-assignments.json": "73bcf7a8f0fb70afd37fcd31d95b9c0eb594ac43fa7ea203b8ed2291989c0257",
+      "freeze.json": "3bdeae65405edea8539c6d17df4b07ba6a3d90c209184580df2e13c0934f2ac2",
+      "README.md": "9e1a89ac95b5b865bd7c0586eb545e48a0dc0354da9b76880242bb8d61473070"
+    }
+  },
+  "selection": {
+    "included_labels": [
+      "not_target",
+      "senryu_line_upper",
+      "senryu_line_middle",
+      "senryu_line_lower",
+      "senryu_change_upper",
+      "senryu_change_middle",
+      "senryu_change_lower",
+      "senryu_end"
+    ],
+    "excluded_rows": 473,
+    "new_examples": 0,
+    "relabeled_examples": 0,
+    "rewritten_examples": 0,
+    "resplit_examples": 0,
+    "jsonl_line_bytes_preserved": true,
+    "all_existing_not_target_rows_included": true
+  },
+  "label_id_mapping": {
+    "not_target": {
+      "source_23class_id": 0,
+      "senryu_8class_id": 0
+    },
+    "senryu_line_upper": {
+      "source_23class_id": 5,
+      "senryu_8class_id": 1
+    },
+    "senryu_line_middle": {
+      "source_23class_id": 6,
+      "senryu_8class_id": 2
+    },
+    "senryu_line_lower": {
+      "source_23class_id": 7,
+      "senryu_8class_id": 3
+    },
+    "senryu_change_upper": {
+      "source_23class_id": 8,
+      "senryu_8class_id": 4
+    },
+    "senryu_change_middle": {
+      "source_23class_id": 9,
+      "senryu_8class_id": 5
+    },
+    "senryu_change_lower": {
+      "source_23class_id": 10,
+      "senryu_8class_id": 6
+    },
+    "senryu_end": {
+      "source_23class_id": 12,
+      "senryu_8class_id": 7
+    }
+  },
+  "counts": {
+    "train": 342,
+    "dev": 39,
+    "test": 36
+  },
+  "label_counts": {
+    "train": {
+      "not_target": 44,
+      "senryu_end": 14,
+      "senryu_line_upper": 48,
+      "senryu_change_upper": 42,
+      "senryu_line_middle": 48,
+      "senryu_line_lower": 56,
+      "senryu_change_middle": 42,
+      "senryu_change_lower": 48
+    },
+    "dev": {
+      "not_target": 6,
+      "senryu_end": 3,
+      "senryu_line_upper": 6,
+      "senryu_change_upper": 3,
+      "senryu_line_middle": 6,
+      "senryu_line_lower": 8,
+      "senryu_change_middle": 3,
+      "senryu_change_lower": 4
+    },
+    "test": {
+      "not_target": 8,
+      "senryu_end": 3,
+      "senryu_line_lower": 5,
+      "senryu_change_middle": 4,
+      "senryu_change_upper": 6,
+      "senryu_line_upper": 3,
+      "senryu_line_middle": 3,
+      "senryu_change_lower": 4
+    }
+  },
+  "input": {
+    "context": [],
+    "max_history_utterances": 0,
+    "annotation_fields_are_not_model_input": true
+  },
+  "evaluation_scope": "dev/testは前回の教材設計時に参照済み。未知の実機発話への精度は測定していない。",
+  "output_sha256": {
+    "README.md": "8153a26a39f46875ecc5fb0dfe169b4021dc88e2793cf89e92ea36aefaf3c0bb",
+    "data_report.json": "fbc13018783519eb24627a5d1fb0ec51ef6115c3f1aef31cc6e586883fed4e63",
+    "dev.jsonl": "f81346802816e28bac27ee8a92003b2b40b887025006fc685accebbb7b233b76",
+    "labels.json": "46f3b699d4a842d6e46cc39149e55bd104146d2a1205a5c1c78316bbfbe7723e",
+    "materials-review.md": "e8ebb783dd77aa00d9ba97e5c9e346de2d1417324e85ce7c75f39295d60166bd",
+    "split-assignments.json": "9b726e926d2e9b57b16532204bcfda31fbcc31d34c6784374f8f33975ad15a60",
+    "test.jsonl": "f3437b44126734b9e2a475feaa103ca9ebc422e328bd74acf3ac02805bf1d562",
+    "train.jsonl": "b834f4d92fb343d80bb32c3feea7d6150b29a8543848eff2842b95d2b503aae9"
+  },
+  "split_sha256": {
+    "train": "b834f4d92fb343d80bb32c3feea7d6150b29a8543848eff2842b95d2b503aae9",
+    "dev": "f81346802816e28bac27ee8a92003b2b40b887025006fc685accebbb7b233b76",
+    "test": "f3437b44126734b9e2a475feaa103ca9ebc422e328bd74acf3ac02805bf1d562"
+  },
+  "training": null,
+  "runtime_changes": false
+}

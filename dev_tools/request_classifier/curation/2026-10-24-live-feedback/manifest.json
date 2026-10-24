@@ -1,0 +1,20 @@
+{
+  "schema": "user_runtime_feedback.v1",
+  "date": "2026-10-24",
+  "candidate_count": 7,
+  "evidence_count": 7,
+  "label_counts": {
+    "not_target": 4,
+    "senryu_end": 3
+  },
+  "split": "train",
+  "raw_user_observation": "以外にも剣持変え誤爆が出なかった。",
+  "new_synthetic_examples": 0,
+  "source_prediction_values_preserved": true,
+  "classifier_re_inference": false,
+  "sha256": {
+    "README.md": "0abcd420d37c6df8ffb380098227a23baf9d1fab6630567807ec1882183dab6f",
+    "candidates.jsonl": "cc848bdc7b21124e41879bca6e51e3d48045a28035ebcb5e98e42988621ee5b7",
+    "evidence.jsonl": "81005f32bdfca16420c051ad43664d972dfb4bae38397e938eff7c934b1cb03c"
+  }
+}

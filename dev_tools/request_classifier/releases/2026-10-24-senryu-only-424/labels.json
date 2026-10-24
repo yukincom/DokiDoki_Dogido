@@ -1,0 +1,10 @@
+{
+  "not_target": 0,
+  "senryu_line_upper": 1,
+  "senryu_line_middle": 2,
+  "senryu_line_lower": 3,
+  "senryu_change_upper": 4,
+  "senryu_change_middle": 5,
+  "senryu_change_lower": 6,
+  "senryu_end": 7
+}
