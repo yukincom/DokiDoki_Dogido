@@ -1,4 +1,4 @@
-# 通常対話用16分類・578件のColab学習準備（2026-10-24）
+# 通常対話用16分類・578件のColab学習準備と結果（2026-10-24）
 
 ## 教材
 
@@ -58,3 +58,11 @@ dev/testは過去の教材設計で参照済みの診断データ。実機15件�
 ```bash
 python3 dev_tools/request_classifier/experiments/2026-10-24-normal-dialogue-colab/build_notebook.py
 ```
+
+## 学習結果の受領
+
+同日にユーザーから `modernbert-normal578-results.zip` を受領。Tesla T4で3シード・各10 epochが完走し、devで選んだepochは10 / 9 / 7だった。testはseed42が38/50、seed43が41/50、seed44が38/50。正解率の平均は78.00%、標本標準偏差は3.46ポイント。
+
+実機15件は全シードで15/15正解。合成32件は32/32・32/32・31/32で、seed44が迷子の発話をモブ情報へ誤分類した。追加47件はtrainに含むため学習内確認として扱う。対象外の発話、視線・呼び出しの区別に残った誤りを[結果記録](../dev_tools/request_classifier/experiments/2026-10-24-normal-dialogue-colab/results-review.md)にまとめた。
+
+全1,734予測の再集計、同梱127ファイルのhash、準備時入力58ファイル、devによるepoch選択、16分類のモデル構造を照合した。ローカルで再推論・学習は行わず、本体モデルも変更していない。準備時のノートブック・入力・条件ファイルは当時の記録として保持した。

@@ -1,0 +1,649 @@
+{
+  "schema": "normal_dialogue_colab_result_review.v1",
+  "reviewed_date": "2026-10-24",
+  "archive": {
+    "original": "/Users/yukin_co/Downloads/modernbert-normal578-results.zip",
+    "saved": "modernbert-normal578-results.zip",
+    "sha256": "78a76e3e344351b98c76b81e91d8047c67991776ec0c1d391e5222ebb86b0a40",
+    "bytes": 314247967
+  },
+  "extracted": "artifacts/colab-results",
+  "verification": {
+    "artifact_files_checked": 127,
+    "prepared_input_files_identical": 58,
+    "input_hashes_checked": 57,
+    "prediction_rows_recomputed": 1734,
+    "per_class_metrics_and_confusion_matrices": "matched",
+    "seed_mean_and_sample_stddev": "matched",
+    "dev_epoch_selection": "matched",
+    "weight_hashes_and_sixteen_class_heads": "matched",
+    "training_conditions": "matched; actual GPU Tesla T4"
+  },
+  "training": {
+    "gpu": "Tesla T4",
+    "python": "3.11.14",
+    "model_revision": "8cb03f54cb9e30e72459e5f1cedc6d89c7d8dcb5",
+    "started_at_utc": "2026-10-24T07:27:44.717537+00:00",
+    "finished_at_utc": "2026-10-24T07:28:51.358519+00:00",
+    "elapsed_seconds": 67.48408601,
+    "local_training_or_inference_run": false
+  },
+  "results": [
+    {
+      "seed": 42,
+      "selected_epoch": 10.0,
+      "dev_loss": 3.973606824874878,
+      "splits": {
+        "train": {
+          "correct": 482,
+          "n": 482,
+          "accuracy": 1.0,
+          "macro_f1": 1.0
+        },
+        "dev": {
+          "correct": 38,
+          "n": 46,
+          "accuracy": 0.8260869565217391,
+          "macro_f1": 0.870376559714795
+        },
+        "test": {
+          "correct": 38,
+          "n": 50,
+          "accuracy": 0.76,
+          "macro_f1": 0.6358060342435342
+        }
+      },
+      "feedback_train": {
+        "correct": 15,
+        "n": 15
+      },
+      "contrast_train": {
+        "correct": 32,
+        "n": 32
+      }
+    },
+    {
+      "seed": 43,
+      "selected_epoch": 9.0,
+      "dev_loss": 2.3479835987091064,
+      "splits": {
+        "train": {
+          "correct": 482,
+          "n": 482,
+          "accuracy": 1.0,
+          "macro_f1": 1.0
+        },
+        "dev": {
+          "correct": 39,
+          "n": 46,
+          "accuracy": 0.8478260869565217,
+          "macro_f1": 0.8930115635997989
+        },
+        "test": {
+          "correct": 41,
+          "n": 50,
+          "accuracy": 0.82,
+          "macro_f1": 0.7105769230769231
+        }
+      },
+      "feedback_train": {
+        "correct": 15,
+        "n": 15
+      },
+      "contrast_train": {
+        "correct": 32,
+        "n": 32
+      }
+    },
+    {
+      "seed": 44,
+      "selected_epoch": 7.0,
+      "dev_loss": 1.8935495615005493,
+      "splits": {
+        "train": {
+          "correct": 481,
+          "n": 482,
+          "accuracy": 0.9979253112033195,
+          "macro_f1": 0.9992377765383901
+        },
+        "dev": {
+          "correct": 39,
+          "n": 46,
+          "accuracy": 0.8478260869565217,
+          "macro_f1": 0.8822813216195569
+        },
+        "test": {
+          "correct": 38,
+          "n": 50,
+          "accuracy": 0.76,
+          "macro_f1": 0.6762248168498168
+        }
+      },
+      "feedback_train": {
+        "correct": 15,
+        "n": 15
+      },
+      "contrast_train": {
+        "correct": 31,
+        "n": 32
+      }
+    }
+  ],
+  "errors": [
+    {
+      "seed": 42,
+      "split": "dev",
+      "id": "live__short_runtime_014",
+      "text": "ゾンビ出たら泣いちゃう？",
+      "gold": "not_target",
+      "predicted": "enemy_information",
+      "confidence": 0.9995604157447815
+    },
+    {
+      "seed": 42,
+      "split": "dev",
+      "id": "contrast__contrast_011",
+      "text": "ドギド、あっちのクリーパーのほうをみて！",
+      "gold": "look_direction",
+      "predicted": "look_player",
+      "confidence": 0.9999959468841553
+    },
+    {
+      "seed": 42,
+      "split": "dev",
+      "id": "contrast__contrast_038",
+      "text": "後ろを振り向いて、私が見てる方を見て。",
+      "gold": "look_direction",
+      "predicted": "look_relative_back",
+      "confidence": 0.9999996423721313
+    },
+    {
+      "seed": 42,
+      "split": "dev",
+      "id": "contrast__contrast_040",
+      "text": "私はさっき後ろを振り向いたよ。",
+      "gold": "not_target",
+      "predicted": "look_relative_back",
+      "confidence": 1.0
+    },
+    {
+      "seed": 42,
+      "split": "dev",
+      "id": "contrast__contrast_042",
+      "text": "この松明を壁に設置してくれる？",
+      "gold": "not_target",
+      "predicted": "equip_sword",
+      "confidence": 1.0
+    },
+    {
+      "seed": 42,
+      "split": "dev",
+      "id": "contrast__contrast_044",
+      "text": "ラクダを呼ぶつもりだったけど、今日は歩くことにした。",
+      "gold": "not_target",
+      "predicted": "recall_mount",
+      "confidence": 1.0
+    },
+    {
+      "seed": 42,
+      "split": "dev",
+      "id": "gaze_variant__gaze_far_align_view_01",
+      "text": "今わたしが見てる方、ドギドも見てみて。",
+      "gold": "look_direction",
+      "predicted": "look_player",
+      "confidence": 0.9999958276748657
+    },
+    {
+      "seed": 42,
+      "split": "dev",
+      "id": "gaze_variant__gaze_far_align_view_02",
+      "text": "私と同じ方を向いてみて。遠くにおもしろいものがあるよ。",
+      "gold": "look_direction",
+      "predicted": "look_player",
+      "confidence": 0.9989691972732544
+    },
+    {
+      "seed": 42,
+      "split": "test",
+      "id": "legacy__train-011",
+      "text": "剣にはもう持ち替えたよ。",
+      "gold": "not_target",
+      "predicted": "equip_sword",
+      "confidence": 1.0
+    },
+    {
+      "seed": 42,
+      "split": "test",
+      "id": "legacy__train-012",
+      "text": "馬はさっき自分で連れてきた。",
+      "gold": "not_target",
+      "predicted": "dogido_recall",
+      "confidence": 0.9980104565620422
+    },
+    {
+      "seed": 42,
+      "split": "test",
+      "id": "legacy__train-013",
+      "text": "敵が三体見えたから逃げたよ。",
+      "gold": "not_target",
+      "predicted": "enemy_information",
+      "confidence": 0.9991264939308167
+    },
+    {
+      "seed": 42,
+      "split": "test",
+      "id": "legacy__train-062",
+      "text": "近くのモンスターを数えて。",
+      "gold": "enemy_information",
+      "predicted": "dogido_recall",
+      "confidence": 0.6911274790763855
+    },
+    {
+      "seed": 42,
+      "split": "test",
+      "id": "user_addition__user_20261022_048",
+      "text": "一緒に空を見ようよ！",
+      "gold": "look_direction",
+      "predicted": "recall_mount",
+      "confidence": 0.97849041223526
+    },
+    {
+      "seed": 42,
+      "split": "test",
+      "id": "contrast__contrast_029",
+      "text": "顔だけこちらへ向けてもらえるかな。",
+      "gold": "look_player",
+      "predicted": "dogido_recall",
+      "confidence": 0.9967769980430603
+    },
+    {
+      "seed": 42,
+      "split": "test",
+      "id": "contrast__contrast_032",
+      "text": "私はもう少し近くまで行ってみるね。",
+      "gold": "not_target",
+      "predicted": "dogido_recall",
+      "confidence": 1.0
+    },
+    {
+      "seed": 42,
+      "split": "test",
+      "id": "contrast__contrast_048",
+      "text": "「右を向いて」と書かれた看板があったよ。",
+      "gold": "not_target",
+      "predicted": "look_relative_right",
+      "confidence": 0.9999983310699463
+    },
+    {
+      "seed": 42,
+      "split": "test",
+      "id": "gaze_variant__gaze_direction_10_front",
+      "text": "何かの気配を前から感じるような気がする",
+      "gold": "look_relative_front",
+      "predicted": "enemy_information",
+      "confidence": 0.9947211742401123
+    },
+    {
+      "seed": 42,
+      "split": "test",
+      "id": "gaze_variant__gaze_direction_10_back",
+      "text": "何かの気配を後ろから感じるような気がする",
+      "gold": "look_relative_back",
+      "predicted": "enemy_information",
+      "confidence": 0.9916638135910034
+    },
+    {
+      "seed": 42,
+      "split": "test",
+      "id": "gaze_variant__gaze_direction_10_left",
+      "text": "何かの気配を左から感じるような気がする",
+      "gold": "look_relative_left",
+      "predicted": "enemy_information",
+      "confidence": 0.9987255930900574
+    },
+    {
+      "seed": 42,
+      "split": "test",
+      "id": "gaze_variant__gaze_direction_10_front_left",
+      "text": "何かの気配を左斜め前から感じるような気がする",
+      "gold": "look_relative_front_left",
+      "predicted": "enemy_information",
+      "confidence": 0.9963362216949463
+    },
+    {
+      "seed": 43,
+      "split": "dev",
+      "id": "live__short_runtime_014",
+      "text": "ゾンビ出たら泣いちゃう？",
+      "gold": "not_target",
+      "predicted": "enemy_information",
+      "confidence": 0.999473512172699
+    },
+    {
+      "seed": 43,
+      "split": "dev",
+      "id": "live__short_runtime_045",
+      "text": "こっちで一緒にしようよ",
+      "gold": "dogido_recall",
+      "predicted": "not_target",
+      "confidence": 0.9999189376831055
+    },
+    {
+      "seed": 43,
+      "split": "dev",
+      "id": "live__short_runtime_059",
+      "text": "今日の冒険は終了しましょうか",
+      "gold": "not_target",
+      "predicted": "equip_sword",
+      "confidence": 0.9878572225570679
+    },
+    {
+      "seed": 43,
+      "split": "dev",
+      "id": "contrast__contrast_038",
+      "text": "後ろを振り向いて、私が見てる方を見て。",
+      "gold": "look_direction",
+      "predicted": "look_relative_back",
+      "confidence": 0.9655090570449829
+    },
+    {
+      "seed": 43,
+      "split": "dev",
+      "id": "contrast__contrast_042",
+      "text": "この松明を壁に設置してくれる？",
+      "gold": "not_target",
+      "predicted": "equip_sword",
+      "confidence": 1.0
+    },
+    {
+      "seed": 43,
+      "split": "dev",
+      "id": "contrast__contrast_044",
+      "text": "ラクダを呼ぶつもりだったけど、今日は歩くことにした。",
+      "gold": "not_target",
+      "predicted": "equip_sword",
+      "confidence": 0.8589413166046143
+    },
+    {
+      "seed": 43,
+      "split": "dev",
+      "id": "gaze_variant__gaze_far_align_view_01",
+      "text": "今わたしが見てる方、ドギドも見てみて。",
+      "gold": "look_direction",
+      "predicted": "dogido_recall",
+      "confidence": 0.7909059524536133
+    },
+    {
+      "seed": 43,
+      "split": "test",
+      "id": "legacy__train-012",
+      "text": "馬はさっき自分で連れてきた。",
+      "gold": "not_target",
+      "predicted": "recall_mount",
+      "confidence": 0.9999997615814209
+    },
+    {
+      "seed": 43,
+      "split": "test",
+      "id": "legacy__train-013",
+      "text": "敵が三体見えたから逃げたよ。",
+      "gold": "not_target",
+      "predicted": "enemy_information",
+      "confidence": 0.9641598463058472
+    },
+    {
+      "seed": 43,
+      "split": "test",
+      "id": "legacy__train-205",
+      "text": "今は替えなくていい。それより敵の数を教えて。",
+      "gold": "enemy_information",
+      "predicted": "not_target",
+      "confidence": 1.0
+    },
+    {
+      "seed": 43,
+      "split": "test",
+      "id": "user_addition__user_20261022_066",
+      "text": "このブロックは何でできているんだろう？",
+      "gold": "look_target",
+      "predicted": "not_target",
+      "confidence": 0.9943757057189941
+    },
+    {
+      "seed": 43,
+      "split": "test",
+      "id": "contrast__contrast_029",
+      "text": "顔だけこちらへ向けてもらえるかな。",
+      "gold": "look_player",
+      "predicted": "dogido_recall",
+      "confidence": 0.9576574563980103
+    },
+    {
+      "seed": 43,
+      "split": "test",
+      "id": "contrast__contrast_030",
+      "text": "私が立っているところへ、もう少し近寄ってもらえる？",
+      "gold": "dogido_recall",
+      "predicted": "look_player",
+      "confidence": 0.9059188961982727
+    },
+    {
+      "seed": 43,
+      "split": "test",
+      "id": "gaze_variant__gaze_direction_10_front",
+      "text": "何かの気配を前から感じるような気がする",
+      "gold": "look_relative_front",
+      "predicted": "look_direction",
+      "confidence": 0.9999910593032837
+    },
+    {
+      "seed": 43,
+      "split": "test",
+      "id": "gaze_variant__gaze_direction_10_back",
+      "text": "何かの気配を後ろから感じるような気がする",
+      "gold": "look_relative_back",
+      "predicted": "look_direction",
+      "confidence": 0.999314546585083
+    },
+    {
+      "seed": 43,
+      "split": "test",
+      "id": "gaze_variant__gaze_direction_10_left",
+      "text": "何かの気配を左から感じるような気がする",
+      "gold": "look_relative_left",
+      "predicted": "look_direction",
+      "confidence": 0.9933342933654785
+    },
+    {
+      "seed": 44,
+      "split": "train",
+      "id": "normal_tool_contrast_20261024_030",
+      "text": "ここ、どっちから来たのか分からなくなったよ。",
+      "gold": "not_target",
+      "predicted": "enemy_information",
+      "confidence": 0.8589084148406982
+    },
+    {
+      "seed": 44,
+      "split": "dev",
+      "id": "live__short_runtime_014",
+      "text": "ゾンビ出たら泣いちゃう？",
+      "gold": "not_target",
+      "predicted": "enemy_information",
+      "confidence": 1.0
+    },
+    {
+      "seed": 44,
+      "split": "dev",
+      "id": "live__short_runtime_045",
+      "text": "こっちで一緒にしようよ",
+      "gold": "dogido_recall",
+      "predicted": "look_player",
+      "confidence": 0.9966183304786682
+    },
+    {
+      "seed": 44,
+      "split": "dev",
+      "id": "contrast__contrast_037",
+      "text": "頭上の明るいところ、見上げてみて。",
+      "gold": "look_direction",
+      "predicted": "equip_sword",
+      "confidence": 0.9328606128692627
+    },
+    {
+      "seed": 44,
+      "split": "dev",
+      "id": "contrast__contrast_038",
+      "text": "後ろを振り向いて、私が見てる方を見て。",
+      "gold": "look_direction",
+      "predicted": "look_relative_back",
+      "confidence": 0.9995954632759094
+    },
+    {
+      "seed": 44,
+      "split": "dev",
+      "id": "contrast__contrast_040",
+      "text": "私はさっき後ろを振り向いたよ。",
+      "gold": "not_target",
+      "predicted": "look_relative_back",
+      "confidence": 0.9784625768661499
+    },
+    {
+      "seed": 44,
+      "split": "dev",
+      "id": "contrast__contrast_044",
+      "text": "ラクダを呼ぶつもりだったけど、今日は歩くことにした。",
+      "gold": "not_target",
+      "predicted": "recall_mount",
+      "confidence": 0.9999978542327881
+    },
+    {
+      "seed": 44,
+      "split": "dev",
+      "id": "gaze_variant__gaze_far_align_view_01",
+      "text": "今わたしが見てる方、ドギドも見てみて。",
+      "gold": "look_direction",
+      "predicted": "dogido_recall",
+      "confidence": 0.9766762852668762
+    },
+    {
+      "seed": 44,
+      "split": "test",
+      "id": "legacy__train-012",
+      "text": "馬はさっき自分で連れてきた。",
+      "gold": "not_target",
+      "predicted": "recall_mount",
+      "confidence": 0.5713943839073181
+    },
+    {
+      "seed": 44,
+      "split": "test",
+      "id": "legacy__train-013",
+      "text": "敵が三体見えたから逃げたよ。",
+      "gold": "not_target",
+      "predicted": "enemy_information",
+      "confidence": 1.0
+    },
+    {
+      "seed": 44,
+      "split": "test",
+      "id": "legacy__train-018",
+      "text": "手持ちの剣が壊れちゃった。",
+      "gold": "not_target",
+      "predicted": "equip_sword",
+      "confidence": 0.9999668598175049
+    },
+    {
+      "seed": 44,
+      "split": "test",
+      "id": "legacy__train-205",
+      "text": "今は替えなくていい。それより敵の数を教えて。",
+      "gold": "enemy_information",
+      "predicted": "not_target",
+      "confidence": 0.9892688393592834
+    },
+    {
+      "seed": 44,
+      "split": "test",
+      "id": "live__short_runtime_046",
+      "text": "ドギドウズを呼んでください",
+      "gold": "recall_mount",
+      "predicted": "dogido_recall",
+      "confidence": 0.9999994039535522
+    },
+    {
+      "seed": 44,
+      "split": "test",
+      "id": "user_addition__user_20261022_064",
+      "text": "おっ！いいもの見つけた！",
+      "gold": "look_target",
+      "predicted": "look_direction",
+      "confidence": 0.9991428852081299
+    },
+    {
+      "seed": 44,
+      "split": "test",
+      "id": "user_addition__user_20261022_066",
+      "text": "このブロックは何でできているんだろう？",
+      "gold": "look_target",
+      "predicted": "enemy_information",
+      "confidence": 0.7142906188964844
+    },
+    {
+      "seed": 44,
+      "split": "test",
+      "id": "contrast__contrast_029",
+      "text": "顔だけこちらへ向けてもらえるかな。",
+      "gold": "look_player",
+      "predicted": "look_relative_back",
+      "confidence": 0.531374990940094
+    },
+    {
+      "seed": 44,
+      "split": "test",
+      "id": "contrast__contrast_030",
+      "text": "私が立っているところへ、もう少し近寄ってもらえる？",
+      "gold": "dogido_recall",
+      "predicted": "look_player",
+      "confidence": 0.6242892742156982
+    },
+    {
+      "seed": 44,
+      "split": "test",
+      "id": "contrast__contrast_032",
+      "text": "私はもう少し近くまで行ってみるね。",
+      "gold": "not_target",
+      "predicted": "dogido_recall",
+      "confidence": 0.8993668556213379
+    },
+    {
+      "seed": 44,
+      "split": "test",
+      "id": "gaze_variant__gaze_direction_10_front",
+      "text": "何かの気配を前から感じるような気がする",
+      "gold": "look_relative_front",
+      "predicted": "look_direction",
+      "confidence": 0.7039418816566467
+    },
+    {
+      "seed": 44,
+      "split": "test",
+      "id": "gaze_variant__gaze_direction_10_left",
+      "text": "何かの気配を左から感じるような気がする",
+      "gold": "look_relative_left",
+      "predicted": "look_relative_back",
+      "confidence": 0.8353838324546814
+    }
+  ],
+  "test_accuracy_mean": 0.78,
+  "test_accuracy_sample_stddev": 0.03464101615137751,
+  "test_macro_f1_mean": 0.6742025913900914,
+  "test_macro_f1_sample_stddev": 0.03742644120259394,
+  "weight_sha256": {
+    "42": "4ab2baef8382663b65916eca027cb4f2dede736253c031c5dce982a302b13771",
+    "43": "0e8142045166ffea465ffaef6c5742fbd93949cec71641b5bfdb288aa49b813d",
+    "44": "a854ddcf3dc01cf36053d69cdd5b86cc50b28f5caf964ae7a1220ca03a1fdaba"
+  },
+  "runtime_adoption": false,
+  "evaluation_scope": "既知の教材設計参照済みdev/test。実機15件と合成32件は学習内確認。未知の実機精度ではない。"
+}
