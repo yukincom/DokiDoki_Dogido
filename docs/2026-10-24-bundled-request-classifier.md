@@ -1,22 +1,34 @@
 # 採用分類モデルの本体同梱（2026-10-24）
 
-890件版の元seed42・23分類を `models/dogido-request-v7-seed42/` に同梱する。研究フォルダへの絶対パスを使わず、通常導入と家庭用セットの両方で同じ重みを使う。分類ラベル、推論上限、重み・tokenizerの内容は変更しない。
+現在は、川柳8分類のseed42と通常16分類のseed48-mobを同梱する。研究フォルダへの絶対パスを使わず、通常導入と家庭用セットの両方で同じ採用済み2本を取得する。一つの入力は[現在の相談状態に対応する片方](2026-10-24-bert-mode-routing.md)だけへ渡す。
+
+| 用途 | 同梱先 | 重みのSHA-256 |
+|---|---|---|
+| 川柳8分類 | `models/dogido-senryu424-seed42/` | `2e95a4f304867161adeff507ca5e5e2e89f13df0b7f0ac6bd257538dfc58411d` |
+| 通常16分類 | `models/dogido-normal16-seed48-mob/` | `51c5aaf94c1b6f71cbd38e6d3b57b3aa0bfab0bad2f60408d3e488b2e6481b04` |
 
 ## 導入
 
 Git LFSを導入した環境で `git lfs pull` を実行し、本体の `.venv` に `python -m pip install -e ".[request-classifier]"` で推論依存を入れる。`.env.example` をコピーすると本体内のモデルと `.venv/bin/python` を参照する。既存環境の `DOGIDO_REQUEST_CLASSIFIER_PYTHON` は準備済みの別Pythonを指定できる。学習用のaccelerateやscikit-learnは推論に不要。
 
-`python dogido-rust/scripts/launch_dialogue.py --settings-dir . --check` は従来の採用記録・全4ファイルのSHA-256検査を行う。LFSのpointerだけがある場合は取得コマンドを示して停止する。モデルや依存を起動時に自動ダウンロードしない。
+`python dogido-rust/scripts/launch_dialogue.py --settings-dir . --check` は各モデルの採用記録・4ファイルのSHA-256検査を行う。LFSのpointerだけがある場合は取得コマンドを示して停止する。モデルや依存を起動時に自動ダウンロードしない。
 
 ## 配布と出典
 
-- `model.safetensors`: 147,115,660 bytes、SHA-256 `8645b0c742c9f71df13e940e252619648df04b1243644c4a705b5d20a3256bbd`。
-- tokenizer・設定・採用記録・MITライセンスは同じフォルダに置く。Git LFSの対象はこの採用重み1個に限定する。
+- 重みはGit LFSで配布し、現在の取得対象を採用済み2本に限定する。tokenizer・設定・採用記録・MITライセンスは各モデルと同じフォルダに置く。
 - 基盤: [SB Intuitions ModernBERT-Ja-30M](https://huggingface.co/sbintuitions/modernbert-ja-30m)。同梱の基盤LICENSEを保持する。
 - 学習・評価・旧モデルの記録: [知りたがり屋](https://github.com/yukincom/AI-Curious-Community/tree/main/modernbert-request-classifier-study)。採用記録の `distribution` に移設元のcommit、採用記録hash、元のcheckpoint相対パスを残す。
-- 家庭用セットの作成も同じ7ファイルをコピーし、初期設定時に分類用推論依存を準備する。個人の記憶・設定は配布しない。
+- 家庭用セットの作成も各7ファイル、計14ファイルだけをコピーし、初期設定時に分類用推論依存を準備する。個人の記憶・設定は配布しない。
+- 旧23分類 `models/dogido-request-v7-seed42/` は現在のGit追跡と配布指定から外す。手元の原本と過去のGit履歴は保持する。新規cloneと現在のソースZIPには旧モデルを含めない。過去のcommitを明示取得した場合や既存cloneに取得済みの旧ファイルまでは削除しない。
+- 旧・実験用モデルと元ZIPは[研究用の保存版](https://github.com/yukincom/AI-Curious-Community/blob/main/modernbert-request-classifier-study/full-archive/README.md)から任意で取得する。研究Releaseへのリンクから通常導入時に自動取得する処理はない。
 
-## 検証
+## 現行2モデルの確認
+
+採用時のhash照合・全教材の再推論・モード切替の確認は[接続記録](2026-10-24-bert-mode-routing.md#通常モデル採用時の確認)に記載した。今回の配布整理では重み・推論処理を変更せず、Gitの取得対象と家庭用セットの対象が同じ2本であることを確認する。モデルの再推論やMinecraft実機試験はこの配布整理では行っていない。
+
+## 旧23分類の初回同梱時の検証記録
+
+以下は旧23分類 `8645b0c742c9f71df13e940e252619648df04b1243644c4a705b5d20a3256bbd` を初めて同梱した時点の結果。現在の2モデルの検証結果へ読み替えない。
 
 - Python全体検証: 206 passed、11 skipped、22 subtests passed。モデル完全性、LFSポインターの案内、通常導入・家庭用配布の接続を含む。
 - `launch_dialogue.py --settings-dir . --check` 成功。実環境の設定も本体内のモデルと既存の推論用Pythonへ接続した。

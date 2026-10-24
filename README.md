@@ -34,7 +34,7 @@ Minecraft Java Edition向けのAIコンパニオンです。ゲーム内の観�
 
 川柳BERTは424件版seed42、通常BERTは全16分類のseed48-mobを `models/` に同梱し、重みをGit LFSで配布します。[川柳8分類と通常16分類を分離](docs/2026-10-24-bert-mode-routing.md)し、一つの入力は現在の受付状態に対応する片方だけへ渡します。OS AIによる分類は撤去し、戦闘中断後の川柳相談は敵の現在観測と警戒解除条件からRustが再開します。
 
-教材の補強・学習・モデル比較の経緯は、[試行錯誤](https://github.com/yukincom/AI-Curious-Community/blob/main/modernbert-request-classifier-study/README.md)にまとめています。
+通常の取得・家庭用セットには、この採用済み2本だけを含めます。教材の補強・学習・モデル比較の経緯は[研究README](https://github.com/yukincom/AI-Curious-Community/blob/main/modernbert-request-classifier-study/README.md)、旧モデルと実験用の重みは[研究用Releases](https://github.com/yukincom/AI-Curious-Community/blob/main/modernbert-request-classifier-study/full-archive/README.md)で公開しています。
 
 句への指摘は記録として保存し、後の生成時に参考情報として渡します。モデルの重みの更新は伴いません。現在のゲーム観測、一般知識、過去の会話・記録は区別して扱います。
 
