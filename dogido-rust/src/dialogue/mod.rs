@@ -258,7 +258,7 @@ pub struct Dialogue {
     llm: RigLlm,
     audio: audio::Audio,
     haiku_routes: haiku_runtime::Routes,
-    request_classifier: tokio::sync::Mutex<Option<crate::request_classifier::Classifier>>,
+    request_classifier: tokio::sync::Mutex<request_runtime::Models>,
     episodes: Option<Arc<crate::episode_log::Recorder>>,
     /// 状態の短い照合・更新区間だけで保持し、ネットワークや音声の完了待ちへ持ち越さない。
     data: Mutex<Data>,
@@ -343,7 +343,7 @@ impl Dialogue {
             .with_enabled(config.llm_enabled),
             audio: audio::Audio::new()?,
             haiku_routes: haiku_runtime::Routes::new(&config)?,
-            request_classifier: tokio::sync::Mutex::new(None),
+            request_classifier: tokio::sync::Mutex::new(request_runtime::Models::default()),
             episodes: if config.haiku.memory_enabled {
                 match crate::episode_log::Recorder::new(config.haiku.memory_dir.clone()) {
                     Ok(recorder) => Some(Arc::new(recorder)),
@@ -498,6 +498,26 @@ impl Dialogue {
             workshop_record::Admission::default(),
         )
     }
+    /// 録音開始時の識別子を、最終受付と同じlock内で検査する音声入口。
+    /// 検査とsubmitの間に発句確定・戦闘中断が入っても新モードへ付け替えない。
+    pub fn submit_voice(
+        self: &Arc<Self>,
+        selected: Option<&str>,
+        text: &str,
+        generation: Option<&str>,
+    ) -> Value {
+        self.submit_recorded_guarded(
+            selected,
+            text,
+            "voice",
+            false,
+            None,
+            false,
+            workshop_record::Admission::default(),
+            None,
+            Some(generation),
+        )
+    }
     /// 接続の進行中処理を取り消し、保留入力と世代を更新して遅れた結果の反映を止める。
     pub fn interrupt(&self, session_id: &str) {
         let mut d = self.data.lock().unwrap();
@@ -535,7 +555,7 @@ impl Dialogue {
             .filter(|r| selected.is_none_or(|id| r["session_id"] == id))
             .collect::<Vec<_>>();
         json!({"revision":d.revision,"phase":"dialogue","audio_enabled":self.config.audio_enabled,"llm_enabled":self.config.llm_enabled,
-            "sessions":d.sessions.iter().map(|(id,s)|json!({"session_id":id,"session_instance":s.instance_id,"voice_enabled":s.delivery.voice_enabled,"voice_generation":s.delivery.generation,"voice_inputs":s.delivery.voice_inputs,"text_enabled":s.delivery.enabled,"name":s.name,"status":s.status,"observation_mode":if s.preview{"none"}else{"minecraft"},"history":s.history.rows(),"history_retention":s.history.retention_status(),"foreground":s.foreground.snapshot(self.clock.elapsed().as_millis() as u64),"workshop_history":s.haiku.workshop.as_ref().map(|w| &w.dialogue),"workshop_followup":s.haiku.workshop.as_ref().map(|w| w.followup),"workshop_discussion_target":s.haiku.workshop.as_ref().and_then(|w| w.discussion_target.as_ref()),"state":s.mode,"chat_allowed":fresh(s),"horse_recall":horse_recall_runtime::snapshot(s),"body_observation":s.body_observation.project(Instant::now()),"body_probe":s.body_observation.diagnostic_sample(Instant::now()),"chat_image":json!({"enabled":self.config.chat_image.enabled,"wait_ms":self.config.chat_image.wait_ms,"state":s.visual.snapshot()}),"body_gaze":body_gaze_runtime::snapshot(s,&d.rows)})).collect::<Vec<_>>(),
+            "sessions":d.sessions.iter().map(|(id,s)|json!({"session_id":id,"session_instance":s.instance_id,"voice_enabled":s.delivery.voice_enabled,"voice_generation":request_runtime::voice_generation(s),"voice_inputs":s.delivery.voice_inputs,"text_enabled":s.delivery.enabled,"name":s.name,"status":s.status,"observation_mode":if s.preview{"none"}else{"minecraft"},"history":s.history.rows(),"history_retention":s.history.retention_status(),"foreground":s.foreground.snapshot(self.clock.elapsed().as_millis() as u64),"workshop_history":s.haiku.workshop.as_ref().map(|w| &w.dialogue),"workshop_followup":s.haiku.workshop.as_ref().map(|w| w.followup),"workshop_discussion_target":s.haiku.workshop.as_ref().and_then(|w| w.discussion_target.as_ref()),"state":s.mode,"chat_allowed":fresh(s),"horse_recall":horse_recall_runtime::snapshot(s),"body_observation":s.body_observation.project(Instant::now()),"body_probe":s.body_observation.diagnostic_sample(Instant::now()),"chat_image":json!({"enabled":self.config.chat_image.enabled,"wait_ms":self.config.chat_image.wait_ms,"state":s.visual.snapshot()}),"body_gaze":body_gaze_runtime::snapshot(s,&d.rows)})).collect::<Vec<_>>(),
             "utterances":rows,"references":knowledge_display::collect(&rows)})
     }
     pub fn cancel_all(&self) {
@@ -591,9 +611,7 @@ impl Dialogue {
         }
         self.workshop_records.flush().await;
         self.workshop_records.forget_all();
-        if let Some(classifier) = self.request_classifier.lock().await.take() {
-            let _ = classifier.close().await;
-        }
+        self.request_classifier.lock().await.close().await;
         if let Some(recorder) = &self.episodes {
             let recorder = recorder.clone();
             let _ = tokio::task::spawn_blocking(move || recorder.close()).await;

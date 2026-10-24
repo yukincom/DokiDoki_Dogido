@@ -179,7 +179,7 @@ mod tests {
             assert_eq!(mode(label), Some(body_mode));
         }
         assert_eq!(
-            crate::request_classifier::LABELS
+            crate::request_classifier::NORMAL_LABELS
                 .into_iter()
                 .filter(|label| mode(*label).is_some())
                 .count(),

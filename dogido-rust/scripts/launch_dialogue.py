@@ -56,23 +56,28 @@ def voice_settings(settings, folder):
 
 
 def request_classifier_settings(settings, folder):
-    """相対パスは設定フォルダ基準。未指定は分類なしとし、旧判定へ戻さない。
+    """相対パスは設定フォルダ基準。通常16分類と川柳8分類を別々に検証する。
 
-    分類器を指定した場合は採用記録と実行環境を確認し、不備があれば起動を止める。
+    未準備の側はNoneのまま渡し、入力時に明示的に拒否する。旧23分類へ戻さない。
     """
-    root = settings.request_classifier_model_root
+    roots = {mode: getattr(settings, f"request_classifier_{mode}_model_root")
+             for mode in ("normal", "senryu")}
     python = settings.request_classifier_python
-    if root is not None:
-        root = (folder / root).resolve()
+    if any(root is not None for root in roots.values()):
         python = (folder / (python or Path(".dogido_tools/request_classifier/.venv/bin/python"))).resolve()
         if not python.is_file() or not os.access(python, os.X_OK):
             raise RuntimeError("依頼分類器のPython環境が見つかりません。")
-        # 数値ライブラリを初期化せず、既存workerと同じ採用記録・重み検査を使う。
         from request_classifier_worker import digest, read_spec
-        manifest = root / "adopted-model.json"
-        read_spec({"manifest_path": str(manifest), "model_root": str(root),
-                   "manifest_sha256": digest(manifest)})
-    return {"model_root": str(root) if root is not None else None,
+        for mode, root in roots.items():
+            if root is None:
+                continue
+            root = (folder / root).resolve()
+            manifest = root / "adopted-model.json"
+            read_spec({"manifest_path": str(manifest), "model_root": str(root),
+                       "manifest_sha256": digest(manifest), "mode": mode})
+            roots[mode] = root
+    return {**{f"{mode}_model_root": str(root) if root is not None else None
+               for mode, root in roots.items()},
             "python": str(python) if python is not None else None,
             "load_timeout_ms": settings.request_classifier_load_timeout_ms,
             "timeout_ms": settings.request_classifier_timeout_ms}

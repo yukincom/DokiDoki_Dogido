@@ -290,12 +290,13 @@ mod tests {
             let mut current = input(text);
             if text == "剣に持ち替えて" {
                 let classification = crate::request_classifier::Classification {
+                    mode: crate::request_classifier::Mode::Normal,
                     text: text.into(),
                     source: "text".into(),
                     manifest_sha256: "fixture".into(),
                     prediction: crate::request_classifier::Prediction {
                         label: crate::request_classifier::Label::EquipSword,
-                        probabilities: std::array::from_fn(|i| if i == 2 { 1.0 } else { 0.0 }),
+                        probabilities: (0..16).map(|i| if i == 2 { 1.0 } else { 0.0 }).collect(),
                         token_count: 8,
                         inference_ms: 0.1,
                     },

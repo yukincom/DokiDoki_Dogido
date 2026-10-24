@@ -52,7 +52,8 @@ class Settings(BaseSettings):
 
     audio_enabled: bool = True
     # 採用記録を置くルートを指定したときだけ既存受付の依頼判定に使う。
-    request_classifier_model_root: Path | None = DEFAULTS["request_classifier"]["model_root"]
+    request_classifier_normal_model_root: Path | None = DEFAULTS["request_classifier"]["normal_model_root"]
+    request_classifier_senryu_model_root: Path | None = DEFAULTS["request_classifier"]["senryu_model_root"]
     request_classifier_python: Path | None = DEFAULTS["request_classifier"]["python"]
     request_classifier_load_timeout_ms: int = Field(default=DEFAULTS["request_classifier"]["load_timeout_ms"], ge=1, le=300000)
     request_classifier_timeout_ms: int = Field(default=DEFAULTS["request_classifier"]["timeout_ms"], ge=1, le=300000)

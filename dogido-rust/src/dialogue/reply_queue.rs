@@ -12,6 +12,7 @@ pub(super) struct Request {
     pub input_at: u64,
     pub record_private: bool,
     pub classification: Option<crate::request_classifier::Classification>,
+    pub binding: Option<super::request_runtime::Binding>,
 }
 
 #[cfg(test)]
@@ -129,6 +130,15 @@ impl Dialogue {
             input_at: row["input_at_ms"].as_u64().unwrap_or(0),
             record_private: row["workshop_record_private"] == true,
             classification: serde_json::from_value(row["request_classification"].clone()).ok(),
+            binding: s
+                .request_classification
+                .binding(
+                    s.input_generation,
+                    row["player_input_text"].as_str().unwrap_or(""),
+                    row["source"].as_str().unwrap_or("text"),
+                )
+                .cloned()
+                .or_else(|| super::request_runtime::Binding::capture(s)),
         };
         let audit = super::workshop_record::Attempt::new(
             row["workshop_state_before"].clone(),
@@ -229,6 +239,11 @@ impl Dialogue {
         let instance = s.instance_id.clone();
         let request = Request {
             classification: super::request_runtime::classification(s, text, source).cloned(),
+            binding: s
+                .request_classification
+                .binding(s.input_generation, text, source)
+                .cloned()
+                .or_else(|| super::request_runtime::Binding::capture(s)),
             turn: id("reply"),
             text: text.into(),
             source: source.into(),
@@ -288,16 +303,21 @@ impl Dialogue {
         dispatch_input: bool,
     ) {
         // 危険中も依頼の種類だけはCPUで判定する。操作・知識回答・音声はここでは行わない。
-        let classified =
-            if self.config.request_classifier.enabled() && request.classification.is_none() {
-                self.classify_request(&request.text, &request.source, &mut cancel)
+        let classified = if self.config.request_classifier.enabled()
+            && request.classification.is_none()
+        {
+            if let Some(binding) = request.binding.as_ref() {
+                self.classify_request(&sid, binding, &request.text, &request.source, &mut cancel)
                     .await
                     .map(|result| {
                         request.classification = Some(result);
                     })
             } else {
-                Ok(())
-            };
+                Err(anyhow::anyhow!("classifier binding unavailable"))
+            }
+        } else {
+            Ok(())
+        };
         let result = if let Err(error) = classified {
             Err(error)
         } else if dispatch_input {
@@ -343,7 +363,11 @@ impl Dialogue {
                 return;
             }
             s.reply_queue[index].request.classification = request.classification.clone();
-            let retained = if *cancel.borrow() {
+            let stale = request
+                .binding
+                .as_ref()
+                .is_some_and(|binding| !binding.current(s));
+            let retained = if *cancel.borrow() || stale {
                 None
             } else {
                 result
@@ -364,8 +388,11 @@ impl Dialogue {
             } else {
                 s.reply_queue.remove(index);
                 if forward {
-                    s.request_classification
-                        .restore(generation, request.classification.clone());
+                    s.request_classification.restore(
+                        generation,
+                        request.binding.clone(),
+                        request.classification.clone(),
+                    );
                     s.reply_checked = Some(Checked {
                         dispatch_input: false,
                         generation,
@@ -375,9 +402,12 @@ impl Dialogue {
                 }
             }
             if let Some(row) = d.rows.iter_mut().find(|r| r["turn_id"] == request.turn) {
+                row["request_classification"] = json!(request.classification);
+                row["classifier_mode"] = json!(request.binding.as_ref().map(|b| b.mode));
                 row["playback_status"] = match retained {
                     Some(true) => "waiting_for_warning",
                     Some(false) => "not_selected",
+                    None if stale => "cancelled",
                     None => "failed",
                 }
                 .into();
@@ -385,6 +415,7 @@ impl Dialogue {
                     Some(true) => "reply_queued",
                     Some(false) if forward => "other_input",
                     Some(false) => "superseded_input",
+                    None if stale => "superseded_classifier_mode",
                     None => "reply_route_failed",
                 }
                 .into();
@@ -408,6 +439,7 @@ impl Dialogue {
                     private: request.record_private,
                 },
                 Some(&instance),
+                None,
             );
             let mut d = self.data.lock().unwrap();
             if let Some(row) = d.rows.iter_mut().find(|r| r["turn_id"] == request.turn) {
@@ -460,9 +492,48 @@ impl Dialogue {
             "reason":"reply_input_routing"})
     }
 
+    /// 分類対象を失った入力は終端取消にする。分類済みの同一句だけ中断を越えて保持する。
+    pub(super) fn prune_classifier_inputs(&self, d: &mut Data, sid: &str) {
+        let Some(s) = d.sessions.get_mut(sid) else {
+            return;
+        };
+        let mut cancelled = Vec::new();
+        let mut queue = std::mem::take(&mut s.reply_queue);
+        queue.retain(|p| {
+            let keep = p.request.binding.as_ref().is_none_or(|b| {
+                b.current(s)
+                    || p.ready
+                        && p.request
+                            .classification
+                            .as_ref()
+                            .is_some_and(|c| c.mode == crate::request_classifier::Mode::Senryu)
+                        && b.same_open_workshop(s)
+            });
+            if !keep {
+                let _ = p.cancel.send(true);
+                cancelled.push((p.request.turn.clone(), p.audit.clone()));
+            }
+            keep
+        });
+        s.reply_queue = queue;
+        let after = super::workshop_record::state(s.haiku.workshop.as_ref());
+        for (turn, audit) in cancelled {
+            let result = if let Some(row) = d.rows.iter_mut().find(|r| r["turn_id"] == turn) {
+                row["playback_status"] = "cancelled".into();
+                row["resolution"] = "superseded_classifier_mode".into();
+                row.clone()
+            } else {
+                json!({"turn_id":turn,"playback_status":"cancelled","resolution":"superseded_classifier_mode"})
+            };
+            self.record_workshop_result(sid, &audit, &after, &result);
+            d.revision += 1;
+        }
+    }
+
     pub(super) fn resume_reply_input(self: &Arc<Self>, sid: &str) {
         let (pending, generation, instance) = {
             let mut d = self.data.lock().unwrap();
+            self.prune_classifier_inputs(&mut d, sid);
             if d.stopped || playback_started(&d, sid) {
                 return;
             }
@@ -498,11 +569,32 @@ impl Dialogue {
             {
                 return;
             }
-            let pending = s.reply_queue.pop_front().unwrap();
+            if s.reply_queue.front().is_some_and(|p| {
+                p.request.binding.as_ref().is_some_and(|b| {
+                    b.same_open_workshop(s)
+                        && super::request_runtime::Binding::capture(s)
+                            .is_none_or(|now| now.mode != crate::request_classifier::Mode::Senryu)
+                })
+            }) {
+                return;
+            }
+            let mut pending = s.reply_queue.pop_front().unwrap();
+            if pending
+                .request
+                .binding
+                .as_ref()
+                .is_some_and(|b| !b.current(s) && b.same_open_workshop(s))
+            {
+                // 完了済みの川柳分類を同一句の再開へ戻す。推論は再実行しない。
+                pending.request.binding = super::request_runtime::Binding::capture(s);
+            }
             s.input_generation = s.input_generation.wrapping_add(1);
             let generation = s.input_generation;
-            s.request_classification
-                .restore(generation, pending.request.classification.clone());
+            s.request_classification.restore(
+                generation,
+                pending.request.binding.clone(),
+                pending.request.classification.clone(),
+            );
             s.reply_checked = Some(Checked {
                 dispatch_input: pending.dispatch_input,
                 generation,
@@ -523,6 +615,7 @@ impl Dialogue {
                 private: pending.audit.input.private,
             },
             Some(&instance),
+            None,
         );
         let mut d = self.data.lock().unwrap();
         if let Some(s) = d.sessions.get_mut(sid)
@@ -600,6 +693,7 @@ mod tests {
             audit: super::super::workshop_record::Attempt::new(Value::Null, Default::default()),
             request: Request {
                 classification: None,
+                binding: None,
                 record_private: false,
                 turn: turn.into(),
                 text: "枕詞って何？".into(),
@@ -817,6 +911,7 @@ mod tests {
             let (tx, rx) = watch::channel(cancelled);
             let request = Request {
                 classification: None,
+                binding: None,
                 turn: "route-only".into(),
                 text: "こんにちは".into(),
                 source: "text".into(),
@@ -889,6 +984,7 @@ mod tests {
                     .push_back(Pending {
                         request: Request {
                             classification: None,
+                            binding: None,
                             turn: "reused-id".into(),
                             text: "気にせんで".into(),
                             source: "text".into(),

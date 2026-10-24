@@ -9,7 +9,8 @@ import sys
 
 
 RUST_BINARY = "dogido-rust/target/release/dogido-rust"
-CLASSIFIER_ROOT = "models/dogido-request-v7-seed42"
+# 同梱する川柳専用seed42。通常16分類は学習済みモデルを明示指定するまで未設定。
+CLASSIFIER_ROOT = "models/dogido-senryu424-seed42"
 CLASSIFIER_FILES = tuple(f"{CLASSIFIER_ROOT}/{name}" for name in (
     "adopted-model.json", "config.json", "model.safetensors", "tokenizer.json",
     "tokenizer_config.json", "LICENSE", "README.md",

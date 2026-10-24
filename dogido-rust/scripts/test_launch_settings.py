@@ -370,32 +370,54 @@ def test_source_checkout_requires_cargo_dependency_record(tmp_path):
         launch.check_binary_freshness(tmp_path, binary)
 
 
-def test_request_classifier_config_reaches_shared_launcher(monkeypatch, tmp_path):
+@pytest.mark.parametrize("modes", [("normal",), ("senryu",), ("normal", "senryu")])
+def test_request_classifier_config_reaches_shared_launcher(monkeypatch, tmp_path, modes):
     import request_classifier_worker as worker
-    model = tmp_path / "classifier-model"
-    model.mkdir()
-    (model / "adopted-model.json").write_text('{}')
+    models = {mode: tmp_path / f"{mode}-classifier-model" for mode in modes}
+    for model in models.values():
+        model.mkdir()
+        (model / "adopted-model.json").write_text('{}')
     python = tmp_path / ".dogido_tools/request_classifier/.venv/bin/python"
     python.parent.mkdir(parents=True)
     python.touch()
     python.chmod(0o700)
     checked = []
     monkeypatch.setattr(worker, "read_spec", lambda args: checked.append(args))
-    settings = Settings(_env_file=None, request_classifier_model_root="classifier-model",
+    settings = Settings(_env_file=None,
+                        **{f"request_classifier_{mode}_model_root": model.name for mode, model in models.items()},
                         request_classifier_load_timeout_ms=32100, request_classifier_timeout_ms=1234)
     args, _ = command(monkeypatch, tmp_path, settings)
     result = json.loads(value(args, "--request-classifier-settings"))
-    assert result == {"model_root": str(model), "python": str(python),
+    assert result == {"normal_model_root": str(models["normal"]) if "normal" in models else None,
+                      "senryu_model_root": str(models["senryu"]) if "senryu" in models else None,
+                      "python": str(python),
                       "load_timeout_ms":32100, "timeout_ms":1234}
-    assert checked[0]["manifest_path"] == str(model / "adopted-model.json")
-    assert len(checked[0]["manifest_sha256"]) == 64
+    assert [frame["mode"] for frame in checked] == list(modes)
+    for frame in checked:
+        model = models[frame["mode"]]
+        assert frame["manifest_path"] == str(model / "adopted-model.json")
+        assert frame["model_root"] == str(model)
+        assert len(frame["manifest_sha256"]) == 64
 
 
 def test_request_classifier_disabled_and_invalid_selection(monkeypatch, tmp_path):
     args, _ = command(monkeypatch, tmp_path, Settings(_env_file=None))
-    assert json.loads(value(args, "--request-classifier-settings"))["model_root"] is None
-    with pytest.raises(RuntimeError, match="Python"):
-        launch.request_classifier_settings(Settings(_env_file=None, request_classifier_model_root="missing"), tmp_path)
+    settings = json.loads(value(args, "--request-classifier-settings"))
+    assert settings["normal_model_root"] is None and settings["senryu_model_root"] is None
+    assert "model_root" not in settings
+    for mode in ("normal", "senryu"):
+        with pytest.raises(RuntimeError, match="Python"):
+            launch.request_classifier_settings(
+                Settings(_env_file=None, **{f"request_classifier_{mode}_model_root": "missing"}), tmp_path)
+
+
+def test_old_classifier_environment_does_not_select_either_dedicated_model(monkeypatch, tmp_path):
+    monkeypatch.setenv("DOGIDO_REQUEST_CLASSIFIER_MODEL_ROOT", "models/dogido-request-v7-seed42")
+    monkeypatch.delenv("DOGIDO_REQUEST_CLASSIFIER_NORMAL_MODEL_ROOT", raising=False)
+    monkeypatch.delenv("DOGIDO_REQUEST_CLASSIFIER_SENRYU_MODEL_ROOT", raising=False)
+    args, _ = command(monkeypatch, tmp_path, Settings(_env_file=None))
+    configured = json.loads(value(args, "--request-classifier-settings"))
+    assert configured["normal_model_root"] is None and configured["senryu_model_root"] is None
 
 
 def test_chat_image_launch_settings_and_bounds(monkeypatch, tmp_path):

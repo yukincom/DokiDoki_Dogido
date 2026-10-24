@@ -384,23 +384,15 @@ impl Runtime {
             }
             Operation::PlayerInput(request) => {
                 if let Some(d) = &self.config.dialogue {
-                    if request.source == crate::ingress::InputSource::Voice
-                        && let Some(rejection) = d.validate_voice_input(
+                    return ApiReply::ok(if request.source == crate::ingress::InputSource::Voice {
+                        d.submit_voice(
                             request.session_id.as_deref(),
+                            &request.text,
                             request.voice_generation.as_deref(),
                         )
-                    {
-                        return ApiReply::ok(rejection);
-                    }
-                    return ApiReply::ok(d.submit(
-                        request.session_id.as_deref(),
-                        &request.text,
-                        if request.source == crate::ingress::InputSource::Voice {
-                            "voice"
-                        } else {
-                            "text"
-                        },
-                    ));
+                    } else {
+                        d.submit(request.session_id.as_deref(), &request.text, "text")
+                    });
                 }
                 if request.text.trim().is_empty() {
                     ApiReply::ok(json!({"accepted": false, "reason": "empty_text"}))

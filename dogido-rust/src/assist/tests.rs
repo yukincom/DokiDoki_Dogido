@@ -15,23 +15,7 @@ fn classified(
     label: crate::request_classifier::Label,
     source: &str,
 ) -> crate::request_classifier::Classification {
-    let mut probabilities = [0.0; crate::request_classifier::LABEL_COUNT];
-    let index = crate::request_classifier::LABELS
-        .iter()
-        .position(|candidate| *candidate == label)
-        .unwrap();
-    probabilities[index] = 1.0;
-    crate::request_classifier::Classification {
-        text: text.into(),
-        source: source.into(),
-        manifest_sha256: "fixture-bert23".into(),
-        prediction: crate::request_classifier::Prediction {
-            label,
-            probabilities,
-            token_count: 8,
-            inference_ms: 0.1,
-        },
-    }
+    crate::request_classifier::fixture(text, source, label)
 }
 fn sword(text: &str) -> crate::request_classifier::Classification {
     classified(text, crate::request_classifier::Label::EquipSword, "text")
@@ -71,7 +55,10 @@ fn bert_request_result_owns_request_intent_and_preserves_original_text() {
 
 #[test]
 fn all_other_bert_labels_leave_sword_execution_unhandled() {
-    for label in crate::request_classifier::LABELS {
+    for label in crate::request_classifier::NORMAL_LABELS
+        .into_iter()
+        .chain(crate::request_classifier::SENRYU_LABELS.into_iter().skip(1))
+    {
         if label == crate::request_classifier::Label::EquipSword {
             continue;
         }
@@ -203,7 +190,7 @@ fn classified_submission_retains_pending_command_deduplication() {
 #[test]
 fn bert_probability_is_diagnostic_without_an_extra_threshold() {
     let mut classification = sword("剣に替えて");
-    classification.prediction.probabilities = [0.8 / 22.0; crate::request_classifier::LABEL_COUNT];
+    classification.prediction.probabilities = vec![0.8 / 15.0; 16];
     classification.prediction.probabilities[2] = 0.2;
     let d = dispatch(state().submit_classified(&classification, &event(), now(), false));
     assert!(d.command.is_some());

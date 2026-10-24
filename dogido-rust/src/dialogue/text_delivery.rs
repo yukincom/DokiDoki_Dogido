@@ -48,6 +48,17 @@ impl State {
     }
 }
 
+/// 音声受付と診断が共有する読み取り検査。呼出側が最終受付のdataロックを所有する。
+pub(super) fn voice_rejection(s: &super::Session, generation: Option<&str>) -> Option<Value> {
+    if s.delivery.enabled && !s.delivery.voice_enabled {
+        return Some(json!({"accepted":false,"reason":"voice_disabled"}));
+    }
+    if generation != Some(super::request_runtime::voice_generation(s).as_str()) {
+        return Some(json!({"accepted":false,"reason":"stale_voice_generation"}));
+    }
+    None
+}
+
 impl Dialogue {
     /// 外部から受けた認識原文を一度だけ表示へ渡す。再振り分けや会話履歴とは別の有界な写し。
     pub(super) fn record_voice_input(&self, selected: Option<&str>, text: &str, source: &str) {
@@ -55,7 +66,17 @@ impl Dialogue {
             return;
         }
         let mut d = self.data.lock().unwrap();
-        if d.stopped {
+        Self::record_voice_input_locked(&mut d, selected, text, source);
+    }
+
+    /// 世代照合後の同じlock内で表示原文を登録する。古いSTTをMinecraftへも漏らさない。
+    pub(super) fn record_voice_input_locked(
+        d: &mut super::Data,
+        selected: Option<&str>,
+        text: &str,
+        source: &str,
+    ) {
+        if d.stopped || source != "voice" || text.trim().is_empty() || text.chars().count() > 1000 {
             return;
         }
         let sid = selected
@@ -118,7 +139,7 @@ impl Dialogue {
             d.revision += 1;
         }
         let s = &d.sessions[sid];
-        json!({"accepted":true,"voice_enabled":s.delivery.voice_enabled,"voice_generation":s.delivery.generation})
+        json!({"accepted":true,"voice_enabled":s.delivery.voice_enabled,"voice_generation":super::request_runtime::voice_generation(s)})
     }
 
     /// actor内の入力受付直前に使う。切替前に認識した音声を、新しい有効期間へ持ち越さない。
@@ -132,15 +153,7 @@ impl Dialogue {
             .map(str::to_owned)
             .or_else(|| (d.sessions.len() == 1).then(|| d.sessions.keys().next().unwrap().clone()));
         let s = sid.as_deref().and_then(|sid| d.sessions.get(sid))?;
-        if s.delivery.enabled && !s.delivery.voice_enabled {
-            return Some(json!({"accepted":false,"reason":"voice_disabled"}));
-        }
-        if (s.delivery.enabled && generation.is_none())
-            || generation.is_some_and(|generation| generation != s.delivery.generation)
-        {
-            return Some(json!({"accepted":false,"reason":"stale_voice_generation"}));
-        }
-        None
+        voice_rejection(s, generation)
     }
 
     pub(super) fn output_config(&self, sid: &str) -> DialogueConfig {

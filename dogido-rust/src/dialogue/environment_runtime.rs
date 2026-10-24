@@ -16,6 +16,10 @@ pub(super) struct DeferredInput {
     pub text: String,
     pub source: String,
     pub previous_turn: Option<String>,
+    pub generation: u64,
+    pub instance: String,
+    pub binding: Option<super::request_runtime::Binding>,
+    pub classification: Option<crate::request_classifier::Classification>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -198,7 +202,8 @@ pub(super) fn refresh_dialogue_context(s: &Session, actions: &mut [Speech]) -> b
         }
         // 定期比較の表だけを固定する。画像の判断は生成時点の全観測を他の環境反応と共有し、
         // 撮影後に変わった天候・匂い・モブ等を古い値に戻さない。画像自体は撮影時刻付きで固定する。
-        let periodic_notice = action.kind == crate::environment::notice::KIND && action.image.is_none();
+        let periodic_notice =
+            action.kind == crate::environment::notice::KIND && action.image.is_none();
         if !periodic_notice || !leaf.details[key]["world_context"].is_object() {
             let mut context = if periodic_notice {
                 let Some(context) = s.conversation_observation.noticing_context() else {
@@ -210,14 +215,16 @@ pub(super) fn refresh_dialogue_context(s: &Session, actions: &mut [Speech]) -> b
             };
             if let Some(image) = &action.image {
                 let capture = leaf.details["visual_capture"].clone();
-                context.changes.push(crate::conversation_observation::Change {
-                    kind: "body_view".into(),
-                    before: json!({"sha256":capture["previous_sha256"]}),
-                    now: json!({"sha256":image.sha256,"captured_at":image.captured_at,
+                context
+                    .changes
+                    .push(crate::conversation_observation::Change {
+                        kind: "body_view".into(),
+                        before: json!({"sha256":capture["previous_sha256"]}),
+                        now: json!({"sha256":image.sha256,"captured_at":image.captured_at,
                         "motion_sequence":capture["motion_sequence"]}),
-                    observed_at: image.captured_at.clone(),
-                    revision: context.revision,
-                });
+                        observed_at: image.captured_at.clone(),
+                        revision: context.revision,
+                    });
                 leaf.details[key]["visual_capture"] = capture;
             }
             leaf.details[key]["world_context"] = json!(context.for_reaction(kind, &leaf.details));
@@ -227,13 +234,27 @@ pub(super) fn refresh_dialogue_context(s: &Session, actions: &mut [Speech]) -> b
             // 最新の会話Context全体へ置換すると、未提示の差分まで消費してしまう。
             let current = super::body_runtime::context(s).unwrap_or_default();
             let observations = &mut leaf.details[key]["world_context"]["observations"];
-            observations["body_observation"] = current.observations.get("body_observation")
-                .cloned().unwrap_or_else(|| json!({"status":"unavailable","reason":"not_sampled"}));
-            observations["reassurance"] = current.observations.get("reassurance").cloned().unwrap_or_default();
-            observations["attention"] = current.observations.get("attention").cloned().unwrap_or_default();
+            observations["body_observation"] = current
+                .observations
+                .get("body_observation")
+                .cloned()
+                .unwrap_or_else(|| json!({"status":"unavailable","reason":"not_sampled"}));
+            observations["reassurance"] = current
+                .observations
+                .get("reassurance")
+                .cloned()
+                .unwrap_or_default();
+            observations["attention"] = current
+                .observations
+                .get("attention")
+                .cloned()
+                .unwrap_or_default();
             observations["observer"] = json!("dogido");
-            observations["sensory_status"] = current.observations.get("sensory_status")
-                .cloned().unwrap_or_else(|| json!("unavailable"));
+            observations["sensory_status"] = current
+                .observations
+                .get("sensory_status")
+                .cloned()
+                .unwrap_or_else(|| json!("unavailable"));
         }
         if action.rain_after_window.is_some() {
             // この一件の匂いだけ雨上がりへ集中する。通常の会話snapshotは触らないので、
@@ -263,22 +284,42 @@ impl Dialogue {
             if s.warning.is_some() || s.pending_warning.is_some() {
                 return;
             }
-            s.deferred_input
-                .take()
-                .filter(|_| super::fresh(s))
-                .map(|v| (v, s.input_generation))
+            let input = s.deferred_input.take().filter(|input| {
+                super::fresh(s)
+                    && input.generation == s.input_generation
+                    && input.instance == s.instance_id
+                    && input
+                        .binding
+                        .as_ref()
+                        .is_none_or(|binding| binding.current(s))
+            });
+            if let Some(input) = &input {
+                s.request_classification.restore(
+                    input.generation,
+                    input.binding.clone(),
+                    input.classification.clone(),
+                );
+            }
+            input
         };
-        if let Some((input, generation)) = input {
-            self.submit_inner(
+        if let Some(input) = input {
+            self.submit_recorded_guarded(
                 Some(sid),
                 &input.text,
                 &input.source,
                 true,
-                Some((generation, input.previous_turn)),
+                Some((input.generation, input.previous_turn)),
                 false,
+                super::workshop_record::Admission {
+                    forwarded: true,
+                    private: false,
+                },
+                Some(&input.instance),
+                None,
             );
         }
     }
+
     pub(super) fn cancel_light(d: &mut Data, sid: &str) {
         if let Some(s) = d.sessions.get_mut(sid)
             && let Some(cancel) = s.light_cancel.take()
@@ -357,6 +398,23 @@ impl Dialogue {
                     text: text.to_owned(),
                     source: row["source"].as_str().unwrap_or("text").to_owned(),
                     previous_turn: Some(s.current_turn.clone()),
+                    generation: s.input_generation,
+                    instance: s.instance_id.clone(),
+                    binding: s
+                        .request_classification
+                        .binding(
+                            s.input_generation,
+                            text,
+                            row["source"].as_str().unwrap_or("text"),
+                        )
+                        .cloned()
+                        .or_else(|| super::request_runtime::Binding::capture(s)),
+                    classification: super::request_runtime::classification(
+                        s,
+                        text,
+                        row["source"].as_str().unwrap_or("text"),
+                    )
+                    .cloned(),
                 };
                 d.sessions.get_mut(sid).unwrap().deferred_input = Some(input);
             }
@@ -496,13 +554,21 @@ impl Dialogue {
             }
             (ambient_actions, plan)
         };
-        if actions.is_empty() && request.is_none() && !busy && self.config.llm_enabled
+        if actions.is_empty()
+            && request.is_none()
+            && !busy
+            && self.config.llm_enabled
             && self.config.chat_image.stop_reactions_enabled
-            && let Some(action) = super::visual_runtime::opportunity(s) {
+            && let Some(action) = super::visual_runtime::opportunity(s)
+        {
             actions.push(action);
         }
-        if actions.is_empty() && request.is_none() && !busy && self.config.llm_enabled
-            && let Some(action) = super::body_interest_runtime::opportunity(s, now) {
+        if actions.is_empty()
+            && request.is_none()
+            && !busy
+            && self.config.llm_enabled
+            && let Some(action) = super::body_interest_runtime::opportunity(s, now)
+        {
             actions.push(action);
         }
         self.queue_environment(d, jobs, sid, actions, false);
@@ -577,7 +643,10 @@ impl Dialogue {
             &self.config.combat,
         ) {
             if let Some(comment) = action.light_comment.as_mut() {
-                comment.reports = result["llm_reports"].as_array().cloned().unwrap_or_default();
+                comment.reports = result["llm_reports"]
+                    .as_array()
+                    .cloned()
+                    .unwrap_or_default();
             }
             self.queue_environment(&mut d, &mut jobs, &sid, vec![action], false);
         }

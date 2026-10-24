@@ -164,7 +164,7 @@ async fn duplicate_active_question_is_not_queued_behind_nonurgent_warning() {
         &dialogue,
         vec![Speech::new("hostile_defeated", "倒せたな。")],
     );
-    let response = dialogue.submit(Some("s"), "ここは何バイオーム？", "text");
+    let response = dialogue.submit(Some("s"), "ここは何バイオーム？", "voice");
     assert_eq!(response["deduplicated"], true);
     assert_eq!(response["turn_id"], "question");
     assert!(

@@ -40,6 +40,7 @@ models/
 !/models/
 /models/*
 !/models/dogido-request-v7-seed42/
+!/models/dogido-senryu424-seed42/
 *.safetensors
 *.gguf
 *.bin
@@ -56,3 +57,4 @@ models/
 
 # 本体が使う採用分類モデルだけを配布する。
 !/models/dogido-request-v7-seed42/model.safetensors
+!/models/dogido-senryu424-seed42/model.safetensors

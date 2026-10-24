@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""旧暫定再開の撤去後、敵消失を待つ保留入力を実HTTP・模擬本文/再生で確認する。"""
+"""戦闘中の新規入力を川柳へ持ち越さず、敵消失後だけ再開する境界を確認する。"""
 from datetime import datetime, timedelta, timezone
 import json
 import time
-from check_dialogue import request, row, submit, wait_for
+from check_dialogue import request, row
 from check_haiku_runtime import LINES
-from check_workshop_runtime import ready, install, step, session
-from check_workshop_combat import MOB, SETTINGS, actions, drive, enter, end, fixture
+from check_workshop_runtime import ready, install, step
+from check_workshop_combat import (MOB, SETTINGS, actions, drive, enter, end, fixture,
+    classifier_requests, rejected_normal_input, returned)
 from check_workshop_edits import revisions
 
 
@@ -38,71 +39,64 @@ def main():
     with fixture(combat_settings=SETTINGS) as (base,p,log,control,seen,gate,drafting,checks,send,hud,rows,stored,folder):
         calls = install(control, lambda text,prompt,n: step(text))
         sid = ready(base,send,rows); enter(send,rows,sid)
-        turn = submit(base,sid,"句の続きを話そう")
-        held = wait_for(lambda: row(base,turn,{"queued"}))
-        assert held["combat_input_outcome"] == "held" and not held["combat_input_result"]["llm_reports"], held
-        assert held["combat_input_result"]["analysis"]["action"] == "deferred_input", held
+        turn = rejected_normal_input(base, sid, "句の続きを話そう")
+        classified = classifier_requests(control)
         # 同じ一頭が停止していても時間経過で安全へ読み替えない。
         deadline = time.monotonic() + 8.2
         while time.monotonic() < deadline:
             threatening(send,sid); time.sleep(.1)
-            assert row(base,turn,{"queued"}) and hud(sid)["state"] == "danger"
+            assert row(base,turn,{"not_selected"}) and hud(sid)["state"] == "danger"
         assert not calls and not revisions(folder,sid)
         end(send,rows,sid)
-        result = done(base,send,sid,turn,hostile=False)
-        assert result["workshop_action"] == "explain" and len(calls) == 1, result
-        assert calls[0][0] == "句の続きを話そう" and hud(sid)["state"] == "open"
-        assert not actions(rows,sid,"workshop_resume") and not revisions(folder,sid)
-        passed.append("not_target_waits_past_old_stable_period_then_resumes_same_input_without_classifier")
+        returned(send,rows,sid)
+        assert not calls and hud(sid)["state"] == "open" and not revisions(folder,sid)
+        assert classifier_requests(control) == classified
+        passed.append("normal_input_does_not_resume_after_old_stable_period_or_reenter_senryu")
 
     with fixture(combat_settings=SETTINGS) as (base,p,log,control,seen,gate,drafting,checks,send,hud,rows,stored,folder):
         calls = install(control,lambda text,prompt,n:step(text))
         sid = ready(base,send,rows);enter(send,rows,sid)
-        turn = submit(base,sid,"上五を『さくらいろ』にして")
-        held = wait_for(lambda:row(base,turn,{"queued"}))
-        assert held["combat_input_result"]["analysis"]["action"] == "workshop_input", held
-        assert held["combat_input_result"]["provider"] == "modernbert" and not calls
+        rejected_normal_input(base, sid, "上五を『さくらいろ』にして")
+        classified = classifier_requests(control)
+        assert len(classified) == 1 and classified[0]["mode"] == "normal", classified
         assert hud(sid)["canonical_lines"] == LINES and not revisions(folder,sid)
         end(send,rows,sid)
-        result = done(base,send,sid,turn,hostile=False)
-        assert result["workshop_action"] == "stage_player_edit" and not calls, result
-        assert result["workshop_outcome"] == "player_edit_saved", result
-        assert hud(sid)["canonical_lines"] == ["さくらいろ",*LINES[1:]]
-        assert len(revisions(folder,sid)) == 1
-        passed.append("bert_change_waits_for_clear_then_edits_once_without_model")
+        returned(send,rows,sid)
+        assert not calls and hud(sid)["canonical_lines"] == LINES and not revisions(folder,sid)
+        assert classifier_requests(control) == classified
+        passed.append("combat_line_change_stays_normal_and_never_edits_after_clear")
 
     for change in ["enemy", "new_input", "stale", "stop"]:
         with fixture(combat_settings=SETTINGS) as (base,p,log,control,seen,gate,drafting,checks,send,hud,rows,stored,folder):
             calls = install(control,lambda text,prompt,n:step(text))
             sid = ready(base,send,rows);enter(send,rows,sid)
-            turn = submit(base,sid,"句の続きを話そう")
-            wait_for(lambda:row(base,turn,{"queued"}))
-            assert submit(base,sid,"句の続きを話そう") == turn
+            turn = rejected_normal_input(base, sid, "句の続きを話そう")
+            classified = classifier_requests(control)
             if change == "enemy":
                 send(sid,visual_threats=[{**MOB,"entity_id":"z2"}],combat={"combat_active_hint":True})
-                assert row(base,turn,{"queued"}) and hud(sid)["state"] == "danger"
+                assert row(base,turn,{"not_selected"}) and hud(sid)["state"] == "danger"
                 end(send,rows,sid)
-                result = done(base,send,sid,turn,hostile=False)
-                assert result["workshop_action"] == "explain" and len(calls) == 1, result
+                returned(send,rows,sid)
             elif change == "new_input":
-                closing = submit(base,sid,"終了")
-                wait_for(lambda:row(base,turn,{"cancelled"}))
-                result = done(base,send,sid,closing)
-                assert result["combat_input_outcome"] == "close_checked" and hud(sid)["state"] == "closed", result
-                assert not calls
+                rejected_normal_input(base, sid, "終了")
+                classified = classifier_requests(control)
+                assert len(classified) == 2 and all(r["mode"] == "normal" for r in classified), classified
+                assert hud(sid)["state"] == "danger"
+                end(send,rows,sid); returned(send,rows,sid)
+                assert hud(sid)["state"] == "open"
             elif change == "stale":
                 threatening(send,sid,observed_at=(datetime.now(timezone.utc)-timedelta(seconds=20)).isoformat())
                 time.sleep(.3)
-                assert row(base,turn,{"queued"}) and not calls
+                assert row(base,turn,{"not_selected"}) and not calls
+                assert not actions(rows,sid,"workshop_resume")
                 end(send,rows,sid)
-                result = done(base,send,sid,turn,hostile=False)
-                assert result["workshop_action"] == "explain" and len(calls) == 1, result
+                returned(send,rows,sid)
             else:
                 request(base,"/api/v1/rust-dialogue/interrupt",{"session_id":sid})
-                wait_for(lambda:row(base,turn,{"cancelled"}))
-                assert not calls
-            assert not revisions(folder,sid)
-            passed.append("held_input_handles_" + change + "_without_safety_classification")
+                assert row(base,turn,{"not_selected"})
+            assert not calls and not revisions(folder,sid)
+            assert classifier_requests(control) == classified
+            passed.append("normal_input_handles_" + change + "_without_senryu_reclassification")
     print(json.dumps({"passed":len(passed),"cases":passed,"all_owned_processes_stopped":True},ensure_ascii=False,indent=2))
 
 

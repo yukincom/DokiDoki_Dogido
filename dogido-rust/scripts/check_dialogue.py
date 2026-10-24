@@ -26,7 +26,15 @@ from request_classifier_fixture import mock_request_classifier, resolve_input_re
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def request(base, path, body=None, method=None, sid=None):
+def request(base, path, body=None, method=None, sid=None, *, auto_voice_generation=True):
+    # この模擬入力は直前のcontextを録音開始時として扱う。明示した古い世代は上書きしない。
+    # 欠落世代の負例ではauto_voice_generation=Falseを指定し、実際に欠落したまま送る。
+    if (auto_voice_generation and path == "/api/v1/player-input" and isinstance(body, dict)
+            and body.get("source") == "voice" and "voice_generation" not in body):
+        context = request(base, "/api/v1/voice-input/context")
+        selected = body.get("session_id") or sid or context.get("session_id")
+        if selected == context.get("session_id") and context.get("voice_generation") is not None:
+            body = {**body, "voice_generation": context["voice_generation"]}
     headers = {"Content-Type": "application/json"}
     if sid:
         headers["X-Dogido-Session-Id"] = sid
@@ -264,7 +272,7 @@ def check_text_delivery(binary, passed):
             for supplied in (None, "old-generation"):
                 body = {"session_id": sid, "source": "voice", "text": "聞こえるかな"}
                 if supplied is not None: body["voice_generation"] = supplied
-                rejected = request(base, "/api/v1/player-input", body)
+                rejected = request(base, "/api/v1/player-input", body, auto_voice_generation=False)
                 assert not rejected["accepted"] and rejected["reason"] == "stale_voice_generation", rejected
             (directory / "player_mode").write_text("slow")
             voice = request(base, "/api/v1/player-input", {"session_id": sid, "source": "voice",
