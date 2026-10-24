@@ -1,0 +1,615 @@
+{
+  "schema": "normal_tool_contrast_review.v1",
+  "base_release": "../../releases/2026-10-24-normal-dialogue-546",
+  "base_counts": {
+    "train": 450,
+    "dev": 46,
+    "test": 50
+  },
+  "base_label_counts": {
+    "not_target": 72,
+    "enemy_information": 96,
+    "equip_sword": 78,
+    "recall_mount": 109,
+    "dogido_recall": 53,
+    "look_target": 12,
+    "look_direction": 36,
+    "look_relative_right": 10,
+    "look_relative_back": 9,
+    "look_player": 22,
+    "look_relative_front": 8,
+    "look_relative_left": 9,
+    "look_relative_front_left": 8,
+    "look_relative_front_right": 8,
+    "look_relative_back_left": 8,
+    "look_relative_back_right": 8
+  },
+  "candidate_counts": {
+    "equip_sword": 8,
+    "not_target": 24
+  },
+  "duplicate_ids": 0,
+  "duplicate_normalized_texts": 0,
+  "existing_text_overlap": 0,
+  "all_context_empty": true,
+  "new_labels": [],
+  "nearest_examples": [
+    {
+      "id": "normal_tool_contrast_20261024_001",
+      "text": "灯りの準備は済んだから、ドギド、いま私の手元を剣に切り替えて。",
+      "nearest": {
+        "train": {
+          "id": "legacy__train-541",
+          "text": "いま手持ちを剣に替えてもらえる？",
+          "label": "equip_sword",
+          "character_similarity": 0.4186
+        },
+        "dev_test": {
+          "id": "legacy__train-576",
+          "text": "敵が出てくる前に備えたいから、今、剣に持ち替えて。",
+          "label": "equip_sword",
+          "character_similarity": 0.32
+        }
+      }
+    },
+    {
+      "id": "normal_tool_contrast_20261024_002",
+      "text": "たいまつを増やしてから、ずいぶん明るくなったね。",
+      "nearest": {
+        "train": {
+          "id": "live_20261024_143624",
+          "text": "たいまついっぱいつけたからね",
+          "label": "not_target",
+          "character_similarity": 0.3889
+        },
+        "dev_test": {
+          "id": "legacy__train-044",
+          "text": "いま敵が見えてる？",
+          "label": "enemy_information",
+          "character_similarity": 0.2667
+        }
+      }
+    },
+    {
+      "id": "normal_tool_contrast_20261024_003",
+      "text": "ドギドは松明の明かり、好き？",
+      "nearest": {
+        "train": {
+          "id": "mount_enemy__user_enemy_03",
+          "text": "ドギド、ゾンビはどの辺にいる？",
+          "label": "enemy_information",
+          "character_similarity": 0.4
+        },
+        "dev_test": {
+          "id": "live__short_runtime_033",
+          "text": "ドギドー何してるの?",
+          "label": "not_target",
+          "character_similarity": 0.381
+        }
+      }
+    },
+    {
+      "id": "normal_tool_contrast_20261024_004",
+      "text": "松明って、何であんなに明るいんだろう。",
+      "nearest": {
+        "train": {
+          "id": "live_20261024_150658",
+          "text": "松明つってどうなんだろう",
+          "label": "not_target",
+          "character_similarity": 0.6207
+        },
+        "dev_test": {
+          "id": "user_addition__user_20261022_066",
+          "text": "このブロックは何でできているんだろう？",
+          "label": "look_target",
+          "character_similarity": 0.4571
+        }
+      }
+    },
+    {
+      "id": "normal_tool_contrast_20261024_005",
+      "text": "鉱石を掘るのはいったん休憩。つるはしをしまって剣を選んでくれる？",
+      "nearest": {
+        "train": {
+          "id": "mount_enemy__mount_variant_05",
+          "text": "ラバのモカに来てもらいたい。呼んでくれる？",
+          "label": "recall_mount",
+          "character_similarity": 0.3265
+        },
+        "dev_test": {
+          "id": "legacy__train-525",
+          "text": "『敵はどこだ』って台詞が好きなんだ。ところで、今はロバを呼んでくれる？",
+          "label": "recall_mount",
+          "character_similarity": 0.3
+        }
+      }
+    },
+    {
+      "id": "normal_tool_contrast_20261024_006",
+      "text": "ドギドはつるはしの形、どう思う？",
+      "nearest": {
+        "train": {
+          "id": "live_20261024_154433",
+          "text": "ドギドは小野のことどう思う?",
+          "label": "not_target",
+          "character_similarity": 0.6667
+        },
+        "dev_test": {
+          "id": "live__short_runtime_033",
+          "text": "ドギドー何してるの?",
+          "label": "not_target",
+          "character_similarity": 0.4348
+        }
+      }
+    },
+    {
+      "id": "normal_tool_contrast_20261024_007",
+      "text": "さっきはつるはしでずっと石を掘ってたんだ。",
+      "nearest": {
+        "train": {
+          "id": "recovered__train-555",
+          "text": "さっき作った句、まだ頭に残ってるよ。",
+          "label": "not_target",
+          "character_similarity": 0.3333
+        },
+        "dev_test": {
+          "id": "legacy__train-012",
+          "text": "馬はさっき自分で連れてきた。",
+          "label": "not_target",
+          "character_similarity": 0.3636
+        }
+      }
+    },
+    {
+      "id": "normal_tool_contrast_20261024_008",
+      "text": "石のつるはしと鉄のつるはしって、何が違うの？",
+      "nearest": {
+        "train": {
+          "id": "legacy__train-712",
+          "text": "ツルハシじゃなくて剣にして！",
+          "label": "equip_sword",
+          "character_similarity": 0.3636
+        },
+        "dev_test": {
+          "id": "user_addition__user_20261022_008",
+          "text": "あの溶岩が流れているとこ行ってみようか",
+          "label": "look_direction",
+          "character_similarity": 0.3077
+        }
+      }
+    },
+    {
+      "id": "normal_tool_contrast_20261024_009",
+      "text": "木を切るのはここまで。いま持ってる斧を剣に替えてもらっていい？",
+      "nearest": {
+        "train": {
+          "id": "legacy__train-541",
+          "text": "いま手持ちを剣に替えてもらえる？",
+          "label": "equip_sword",
+          "character_similarity": 0.5
+        },
+        "dev_test": {
+          "id": "contrast__contrast_041",
+          "text": "松明を持つのはやめて、鉄の剣へ持ち替えて。",
+          "label": "equip_sword",
+          "character_similarity": 0.2917
+        }
+      }
+    },
+    {
+      "id": "normal_tool_contrast_20261024_010",
+      "text": "斧で切ったら、木がいっぱい集まったよ。",
+      "nearest": {
+        "train": {
+          "id": "live_20261024_143624",
+          "text": "たいまついっぱいつけたからね",
+          "label": "not_target",
+          "character_similarity": 0.3871
+        },
+        "dev_test": {
+          "id": "contrast__contrast_048",
+          "text": "「右を向いて」と書かれた看板があったよ。",
+          "label": "not_target",
+          "character_similarity": 0.2941
+        }
+      }
+    },
+    {
+      "id": "normal_tool_contrast_20261024_011",
+      "text": "ドギドは斧とつるはし、見た目ならどっちが好き？",
+      "nearest": {
+        "train": {
+          "id": "live_20261024_154433",
+          "text": "ドギドは小野のことどう思う?",
+          "label": "not_target",
+          "character_similarity": 0.3529
+        },
+        "dev_test": {
+          "id": "user_addition__user_20261022_072",
+          "text": "ドギド！こっちこっち！",
+          "label": "look_player",
+          "character_similarity": 0.3333
+        }
+      }
+    },
+    {
+      "id": "normal_tool_contrast_20261024_012",
+      "text": "斧の使い道を教えてくれる？",
+      "nearest": {
+        "train": {
+          "id": "legacy__train-573",
+          "text": "念のため、手持ちを剣に替えてくれる？",
+          "label": "equip_sword",
+          "character_similarity": 0.5
+        },
+        "dev_test": {
+          "id": "contrast__contrast_042",
+          "text": "この松明を壁に設置してくれる？",
+          "label": "not_target",
+          "character_similarity": 0.4615
+        }
+      }
+    },
+    {
+      "id": "normal_tool_contrast_20261024_013",
+      "text": "土を掘るのをやめるから、シャベルから剣へ切り替えをお願い。",
+      "nearest": {
+        "train": {
+          "id": "legacy__train-116",
+          "text": "採掘をやめるので剣に切り替えておいて。",
+          "label": "equip_sword",
+          "character_similarity": 0.5333
+        },
+        "dev_test": {
+          "id": "contrast__contrast_041",
+          "text": "松明を持つのはやめて、鉄の剣へ持ち替えて。",
+          "label": "equip_sword",
+          "character_similarity": 0.3478
+        }
+      }
+    },
+    {
+      "id": "normal_tool_contrast_20261024_014",
+      "text": "シャベルの先って平べったいね。",
+      "nearest": {
+        "train": {
+          "id": "live_20261024_154747",
+          "text": "シャベルじゃない?クワは高安道具だよね。",
+          "label": "not_target",
+          "character_similarity": 0.375
+        },
+        "dev_test": {
+          "id": "legacy__train-107",
+          "text": "木の剣じゃなくて鉄の剣を持って。",
+          "label": "equip_sword",
+          "character_similarity": 0.2759
+        }
+      }
+    },
+    {
+      "id": "normal_tool_contrast_20261024_015",
+      "text": "シャベルとクワって、使う場所が違うんだよね？",
+      "nearest": {
+        "train": {
+          "id": "live_20261024_154747",
+          "text": "シャベルじゃない?クワは高安道具だよね。",
+          "label": "not_target",
+          "character_similarity": 0.4737
+        },
+        "dev_test": {
+          "id": "legacy__train-141",
+          "text": "ミルクって名前の白い馬を呼んで。",
+          "label": "recall_mount",
+          "character_similarity": 0.2857
+        }
+      }
+    },
+    {
+      "id": "normal_tool_contrast_20261024_016",
+      "text": "穴を埋め終わったから、シャベルはもうしまったよ。",
+      "nearest": {
+        "train": {
+          "id": "user_addition__user_20261022_074",
+          "text": "わたしはここにいますよ！",
+          "label": "look_player",
+          "character_similarity": 0.3636
+        },
+        "dev_test": {
+          "id": "contrast__contrast_032",
+          "text": "私はもう少し近くまで行ってみるね。",
+          "label": "not_target",
+          "character_similarity": 0.3158
+        }
+      }
+    },
+    {
+      "id": "normal_tool_contrast_20261024_017",
+      "text": "畑仕事は終わり。持ってるクワの代わりに剣を持たせて。",
+      "nearest": {
+        "train": {
+          "id": "legacy__train-778",
+          "text": "松明をしまって、剣を持たせて",
+          "label": "equip_sword",
+          "character_similarity": 0.4324
+        },
+        "dev_test": {
+          "id": "contrast__contrast_010",
+          "text": "今こっちへ来ているクリーパーは何体？",
+          "label": "enemy_information",
+          "character_similarity": 0.2439
+        }
+      }
+    },
+    {
+      "id": "normal_tool_contrast_20261024_018",
+      "text": "畑を耕す道具って、クワで合ってる？",
+      "nearest": {
+        "train": {
+          "id": "legacy__train-252",
+          "text": "県を出してくれっ",
+          "label": "equip_sword",
+          "character_similarity": 0.3478
+        },
+        "dev_test": {
+          "id": "contrast__contrast_042",
+          "text": "この松明を壁に設置してくれる？",
+          "label": "not_target",
+          "character_similarity": 0.2759
+        }
+      }
+    },
+    {
+      "id": "normal_tool_contrast_20261024_019",
+      "text": "クワを持って畑に行こうと思ってるんだ。",
+      "nearest": {
+        "train": {
+          "id": "legacy__train-115",
+          "text": "こわいから剣を持っておいて。",
+          "label": "equip_sword",
+          "character_similarity": 0.3871
+        },
+        "dev_test": {
+          "id": "contrast__contrast_030",
+          "text": "私が立っているところへ、もう少し近寄ってもらえる？",
+          "label": "dogido_recall",
+          "character_similarity": 0.3415
+        }
+      }
+    },
+    {
+      "id": "normal_tool_contrast_20261024_020",
+      "text": "このクワ、ずいぶん使い込んだなあ。",
+      "nearest": {
+        "train": {
+          "id": "user_addition__user_20261022_062",
+          "text": "このお花かわいいね！",
+          "label": "look_target",
+          "character_similarity": 0.4167
+        },
+        "dev_test": {
+          "id": "user_addition__user_20261022_066",
+          "text": "このブロックは何でできているんだろう？",
+          "label": "look_target",
+          "character_similarity": 0.3636
+        }
+      }
+    },
+    {
+      "id": "normal_tool_contrast_20261024_021",
+      "text": "剣の話をする前に、私の手持ちをその剣へ切り替えてくれるかな。",
+      "nearest": {
+        "train": {
+          "id": "legacy__train-650",
+          "text": "説明を聞くより、まず私の手持ちを剣へ替えてくれる？",
+          "label": "equip_sword",
+          "character_similarity": 0.5882
+        },
+        "dev_test": {
+          "id": "contrast__contrast_042",
+          "text": "この松明を壁に設置してくれる？",
+          "label": "not_target",
+          "character_similarity": 0.3333
+        }
+      }
+    },
+    {
+      "id": "normal_tool_contrast_20261024_022",
+      "text": "ドギドは剣の見た目をどう思う？",
+      "nearest": {
+        "train": {
+          "id": "live_20261024_154433",
+          "text": "ドギドは小野のことどう思う?",
+          "label": "not_target",
+          "character_similarity": 0.6667
+        },
+        "dev_test": {
+          "id": "legacy__train-085",
+          "text": "ドギド、武器をソードに変更して。",
+          "label": "equip_sword",
+          "character_similarity": 0.3571
+        }
+      }
+    },
+    {
+      "id": "normal_tool_contrast_20261024_023",
+      "text": "この剣、ちょっと長く感じるな。",
+      "nearest": {
+        "train": {
+          "id": "user_addition__user_20261022_068",
+          "text": "えっ・・・なにこれ。ちょっと見てくれる？",
+          "label": "look_target",
+          "character_similarity": 0.5
+        },
+        "dev_test": {
+          "id": "gaze_variant__gaze_player_03_variant_01",
+          "text": "ちょっとだけ私の方を見てもらえる？",
+          "label": "look_player",
+          "character_similarity": 0.3448
+        }
+      }
+    },
+    {
+      "id": "normal_tool_contrast_20261024_024",
+      "text": "剣と斧の違いについて聞きたいんだ。",
+      "nearest": {
+        "train": {
+          "id": "legacy__train-178",
+          "text": "ロバとラバの違いを説明して。",
+          "label": "not_target",
+          "character_similarity": 0.3448
+        },
+        "dev_test": {
+          "id": "legacy__train-151",
+          "text": "剣は替えなくていいから、馬を呼んで。",
+          "label": "recall_mount",
+          "character_similarity": 0.25
+        }
+      }
+    },
+    {
+      "id": "normal_tool_contrast_20261024_025",
+      "text": "ドギド、持ち替えを手伝って。今の道具を剣に替えてほしい。",
+      "nearest": {
+        "train": {
+          "id": "legacy__train-680",
+          "text": "持ち替えを待ってと言ったのは取り消す。手に持ってるのを県に替えておいて。",
+          "label": "equip_sword",
+          "character_similarity": 0.4746
+        },
+        "dev_test": {
+          "id": "legacy__train-082",
+          "text": "手持ちを剣にして。",
+          "label": "equip_sword",
+          "character_similarity": 0.3636
+        }
+      }
+    },
+    {
+      "id": "normal_tool_contrast_20261024_026",
+      "text": "持ち替えるなら剣かなあ、まだ迷ってる。",
+      "nearest": {
+        "train": {
+          "id": "legacy__train-515",
+          "text": "それなら剣を一本作ってくれる？",
+          "label": "not_target",
+          "character_similarity": 0.3871
+        },
+        "dev_test": {
+          "id": "legacy__train-082",
+          "text": "手持ちを剣にして。",
+          "label": "equip_sword",
+          "character_similarity": 0.32
+        }
+      }
+    },
+    {
+      "id": "normal_tool_contrast_20261024_027",
+      "text": "手には今シャベルを持ってるよ。",
+      "nearest": {
+        "train": {
+          "id": "legacy__train-092",
+          "text": "今、剣を持ってもらえるかな。",
+          "label": "equip_sword",
+          "character_similarity": 0.4615
+        },
+        "dev_test": {
+          "id": "legacy__train-082",
+          "text": "手持ちを剣にして。",
+          "label": "equip_sword",
+          "character_similarity": 0.3636
+        }
+      }
+    },
+    {
+      "id": "normal_tool_contrast_20261024_028",
+      "text": "手持ちの道具の話をしてるんだよ。",
+      "nearest": {
+        "train": {
+          "id": "legacy__train-705",
+          "text": "よし、手持ちを剣にして！",
+          "label": "equip_sword",
+          "character_similarity": 0.48
+        },
+        "dev_test": {
+          "id": "legacy__train-082",
+          "text": "手持ちを剣にして。",
+          "label": "equip_sword",
+          "character_similarity": 0.5217
+        }
+      }
+    },
+    {
+      "id": "normal_tool_contrast_20261024_029",
+      "text": "階段を降りるから、降りる前に手持ちを剣にしておいて。",
+      "nearest": {
+        "train": {
+          "id": "legacy__train-530",
+          "text": "帰り道の敵が怖いから、今の手持ちを剣にしておいて。",
+          "label": "equip_sword",
+          "character_similarity": 0.5957
+        },
+        "dev_test": {
+          "id": "legacy__train-082",
+          "text": "手持ちを剣にして。",
+          "label": "equip_sword",
+          "character_similarity": 0.5
+        }
+      }
+    },
+    {
+      "id": "normal_tool_contrast_20261024_030",
+      "text": "ここ、どっちから来たのか分からなくなったよ。",
+      "nearest": {
+        "train": {
+          "id": "live__short_runtime_277",
+          "text": "あなた早くこっち来たら",
+          "label": "dogido_recall",
+          "character_similarity": 0.3871
+        },
+        "dev_test": {
+          "id": "contrast__contrast_045",
+          "text": "こっちに来なくていいから、その場で右を向いて。",
+          "label": "look_relative_right",
+          "character_similarity": 0.2927
+        }
+      }
+    },
+    {
+      "id": "normal_tool_contrast_20261024_031",
+      "text": "明かりが増えたから歩きやすくなったね。",
+      "nearest": {
+        "train": {
+          "id": "mount_enemy__user_enemy_06",
+          "text": "ぎゃああ！誰かが射ってきた！やったやつを探せ！",
+          "label": "enemy_information",
+          "character_similarity": 0.3158
+        },
+        "dev_test": {
+          "id": "legacy__train-013",
+          "text": "敵が三体見えたから逃げたよ。",
+          "label": "not_target",
+          "character_similarity": 0.3871
+        }
+      }
+    },
+    {
+      "id": "normal_tool_contrast_20261024_032",
+      "text": "道具をいろいろ持ってきてよかった。",
+      "nearest": {
+        "train": {
+          "id": "legacy__train-282",
+          "text": "いま、敵がいなかった？",
+          "label": "enemy_information",
+          "character_similarity": 0.4
+        },
+        "dev_test": {
+          "id": "contrast__contrast_048",
+          "text": "「右を向いて」と書かれた看板があったよ。",
+          "label": "not_target",
+          "character_similarity": 0.3636
+        }
+      }
+    }
+  ],
+  "similarity_scope": "文字列の近さだけ。意味・正解・品質の自動判定ではない。"
+}
