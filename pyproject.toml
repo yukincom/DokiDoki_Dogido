@@ -16,6 +16,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# 同梱ModernBERTのCPU推論。学習・評価用ライブラリは含めない。
+request-classifier = [
+  "torch==2.14.1",
+  "transformers==5.19.0",
+  "safetensors==0.8.0",
+]
 # テスト・開発用（本番サーバー起動だけなら不要）
 dev = [
   "pytest>=8.0",

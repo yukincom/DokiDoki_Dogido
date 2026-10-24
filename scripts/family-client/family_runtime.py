@@ -9,6 +9,11 @@ import sys
 
 
 RUST_BINARY = "dogido-rust/target/release/dogido-rust"
+CLASSIFIER_ROOT = "models/dogido-request-v7-seed42"
+CLASSIFIER_FILES = tuple(f"{CLASSIFIER_ROOT}/{name}" for name in (
+    "adopted-model.json", "config.json", "model.safetensors", "tokenizer.json",
+    "tokenizer_config.json", "LICENSE", "README.md",
+))
 RUNTIME_SCRIPTS = (
     "launch_dialogue.py", "runtime_build.py", "haiku_tokens.py", "tts_tokens_worker.py",
     "tts_shared_tokens.py", "tts_unidic_adapter.py", "request_classifier_worker.py",
@@ -27,7 +32,7 @@ LEGACY_RUNTIME = ("dogido_server/app.py", "dogido_server/service.py", "dogido_se
 
 
 def runtime_files():
-    return (RUST_BINARY, *("dogido-rust/scripts/" + name for name in RUNTIME_SCRIPTS), *RUNTIME_DATA)
+    return (RUST_BINARY, *("dogido-rust/scripts/" + name for name in RUNTIME_SCRIPTS), *RUNTIME_DATA, *CLASSIFIER_FILES)
 
 
 def reject_runtime_link(root: Path, path: Path) -> None:

@@ -32,7 +32,9 @@ Minecraft Java Edition向けのAIコンパニオンです。ゲーム内の観�
 | 会話・川柳モデル | 発話・沈黙の選択、句・説明・修正案の生成、相談の次手と候補内の身体行動の選択 |
 | Python補助・音声 | モデル・辞書・音声機器への接続、Whisperによる音声入力、VOICEVOXによる読み上げ |
 
-BERTには別途学習済みモデルの設定が必要です。[採用モデルは890件版の元seed42](docs/2026-10-23-modernbert-23class-integration.md)です。OS AIによる分類は撤去し、戦闘中断後の川柳相談は敵の現在観測と警戒解除条件からRustが再開します。
+BERTの採用モデルは本体の `models/dogido-request-v7-seed42` に同梱し、重みをGit LFSで配布します。[採用モデルは890件版の元seed42](docs/2026-10-23-modernbert-23class-integration.md)です。OS AIによる分類は撤去し、戦闘中断後の川柳相談は敵の現在観測と警戒解除条件からRustが再開します。
+
+教材の補強・学習・モデル比較の経緯は、[試行錯誤](https://github.com/yukincom/AI-Curious-Community/blob/main/modernbert-request-classifier-study/README.md)にまとめています。
 
 句への指摘は記録として保存し、後の生成時に参考情報として渡します。モデルの重みの更新は伴いません。現在のゲーム観測、一般知識、過去の会話・記録は区別して扱います。
 
@@ -54,10 +56,12 @@ CA関連部品はcertifi 2026.10.19／pip 26.2.2／uv 0.13.4以上が必要で�
 ソースから導入する開発版です。以下はmacOS／Linuxのシェル例です。リポジトリのルートで、Python補助とRust本体を準備します。
 
 ```bash
+git lfs install
+git lfs pull
 python -m venv .venv
 source .venv/bin/activate
 python -m dogido_server.tls_security --bootstrap
-python -m pip install -e .
+python -m pip install -e ".[request-classifier]"
 
 # 任意: VOICEVOXの漢字の読みを補うUniDic辞書
 # python -m pip install -e ".[tts-reading]"
@@ -66,9 +70,9 @@ cp .env.example .env
 ./dogido-rust/cargo.sh build --release --locked
 ```
 
-`.env` にLLMの接続先・モデル名と音声設定を記入し、LLM APIとVOICEVOXを起動してから本体を開きます。標準ランチャーの接続先はlocalhostに限ります。モデル本体の導入は別途必要です。
+`.env` にLLMの接続先・モデル名と音声設定を記入し、LLM APIとVOICEVOXを起動してから本体を開きます。標準ランチャーの接続先はlocalhostに限ります。会話用LLM本体の導入は別途必要です。
 
-依頼分類用BERTを使う場合は、[学習済みモデルの設定](docs/2026-10-15-modernbert-integration-preparation.md#通常起動の設定)も行います。
+分類用BERTは同梱モデルと `.env.example` の相対パスで接続します。推論はCPU上で行い、外部の研究フォルダは不要です。[同梱内容と検証](docs/2026-10-24-bundled-request-classifier.md)を参照してください。
 
 ```bash
 python dogido-rust/scripts/launch_dialogue.py --settings-dir . --check

@@ -35,6 +35,9 @@ venv/
 /dogido_server.egg-info
 /data
 models/
+!/models/
+/models/*
+!/models/dogido-request-v7-seed42/
 *.safetensors
 *.gguf
 *.bin
@@ -48,3 +51,6 @@ models/
 .aider*
 # pytestキャッシュ
 .pytest_cache/
+
+# 本体が使う採用分類モデルだけを配布する。
+!/models/dogido-request-v7-seed42/model.safetensors

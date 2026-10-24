@@ -1,2 +1,4 @@
 # Unified-diff context markers make otherwise blank lines end in one space.
 scripts/patches/*.patch whitespace=-blank-at-eol,-blank-at-eof
+
+/models/dogido-request-v7-seed42/model.safetensors filter=lfs diff=lfs merge=lfs -text

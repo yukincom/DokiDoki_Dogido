@@ -49,6 +49,12 @@ class ManifestTests(unittest.TestCase):
         with self.assertRaisesRegex(worker.ContractError, "hash mismatch"):
             worker.read_spec(self.frame())
 
+    def test_lfs_pointer_reports_required_weight_download(self):
+        (self.checkpoint / "model.safetensors").write_text(
+            "version https://git-lfs.github.com/spec/v1\noid sha256:" + "0" * 64 + "\nsize 123\n")
+        with self.assertRaisesRegex(worker.ContractError, "git lfs pull"):
+            worker.read_spec(self.frame())
+
     def test_manifest_changed_after_rust_read_rejected(self):
         frame = self.frame()
         Path(frame["manifest_path"]).write_text("{}")

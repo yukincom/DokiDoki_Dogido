@@ -15,13 +15,15 @@ import zipfile
 VERSION = "fabric-loader-0.18.4-1.21.11"
 TEMPLATES = Path(__file__).resolve().parent / "family-client"
 sys.path.insert(0, str(TEMPLATES))
-from family_runtime import RUST_BINARY, RUNTIME_SCRIPTS, validate_runtime
+from family_runtime import CLASSIFIER_FILES, RUST_BINARY, RUNTIME_SCRIPTS, validate_runtime
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "dogido-rust/scripts"))
 from runtime_build import check_binary_freshness
 ENV = """# このフォルダ専用。個人の .env はコピーしない。
 DOGIDO_BIND_HOST=127.0.0.1
 DOGIDO_BIND_PORT=5055
 DOGIDO_MEMORY_DIR=.dogido_memory
+DOGIDO_REQUEST_CLASSIFIER_MODEL_ROOT=models/dogido-request-v7-seed42
+DOGIDO_REQUEST_CLASSIFIER_PYTHON=dogido-llm/bin/python
 DOGIDO_CUE_AUDIO_DIR=cue_voice
 DOGIDO_TTS_BACKEND=voicevox
 DOGIDO_VOICEVOX_URL=http://127.0.0.1:50021
@@ -132,6 +134,8 @@ def build(args: argparse.Namespace) -> None:
         raise ValueError("同梱するRust本体はApple Silicon向けreleaseを指定してください")
     target.mkdir(parents=True)
     copy_file(binary, target / RUST_BINARY)
+    for relative in CLASSIFIER_FILES:
+        copy_file(source / relative, target / relative)
     for name in RUNTIME_SCRIPTS:
         relative = "dogido-rust/scripts/" + name
         copy_file(source / relative, target / relative)

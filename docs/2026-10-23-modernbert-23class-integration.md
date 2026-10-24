@@ -4,9 +4,9 @@
 
 ## 採用モデル
 
-- 保管リポジトリ: `colab-modernbert-ja-30m-2026-10-14`
-- 正本: 同リポジトリの `adopted-model.json`
-- 重み: `artifacts-v7-pilot890/weights/trial-1/best/`
+- 本体の保管先: `models/dogido-request-v7-seed42`（2026-10-24移設）
+- 採用記録: 同フォルダの `adopted-model.json`。研究資料は[知りたがり屋](https://github.com/yukincom/AI-Curious-Community/tree/main/modernbert-request-classifier-study)に保存。
+- 重み: `models/dogido-request-v7-seed42/model.safetensors`。研究時の元checkpointは `artifacts-v7-pilot890/weights/trial-1/best/`。
 - `model.safetensors` SHA-256: `8645b0c742c9f71df13e940e252619648df04b1243644c4a705b5d20a3256bbd`
 - 入力: 現在発話だけ、履歴0件、最大128トークン、切り詰めなし
 - 旧v1.9 seed43の採用記録は `adopted-model-v19.json` に保持する。

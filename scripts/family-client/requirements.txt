@@ -9,3 +9,8 @@ pywebrtc-audio==0.2.0
 # CA事故対応。installer自身のvendored CAも更新する。
 certifi>=2026.10.19
 pip>=26.2.2
+
+# 本体に同梱したModernBERTのCPU分類。
+torch==2.14.1
+transformers==5.19.0
+safetensors==0.8.0

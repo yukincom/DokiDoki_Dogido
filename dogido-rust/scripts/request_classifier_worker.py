@@ -1,7 +1,7 @@
 """採用記録とローカル重みを検証し、ModernBERTの数値推論だけを行うstdio補助。
 
 入力の整形・履歴選択・結果の用途と取消はRust所有。stdoutはJSONL応答専用。
-依存環境は学習用requirements-train.txtを利用し、モデルや依存を自動取得しない。
+推論依存は本体のrequest-classifier extraで準備し、モデルや依存を自動取得しない。
 """
 import contextlib
 import hashlib
@@ -71,6 +71,10 @@ def verify_files(checkpoint, hashes):
         require(Path(name).name == name and name not in (".", ".."), "invalid checkpoint filename")
         path = (checkpoint / name).resolve(strict=True)
         require(path.is_relative_to(checkpoint), "checkpoint file outside directory")
+        if name == "model.safetensors":
+            with path.open("rb") as stream:
+                require(not stream.read(128).startswith(b"version https://git-lfs.github.com/spec/v1"),
+                        "model is a Git LFS pointer; run git lfs pull")
         require(digest(path) == expected, f"checkpoint hash mismatch: {name}")
 
 
