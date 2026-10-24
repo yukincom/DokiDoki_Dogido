@@ -1,0 +1,22 @@
+{
+  "schema": "normal_dialogue_subset_integrity.v1",
+  "source_rows": 890,
+  "removed_senryu_rows": 359,
+  "retained_source_rows": 531,
+  "added_rows": 10,
+  "added_labels": {
+    "not_target": 9,
+    "look_direction": 1
+  },
+  "new_synthetic_examples": 0,
+  "original_selected_line_bytes_preserved": true,
+  "existing_splits_preserved": true,
+  "all_context_empty": true,
+  "duplicate_ids": 0,
+  "duplicate_normalized_inputs": 0,
+  "cross_split_groups": 0,
+  "all_sixteen_labels_in_each_split": true,
+  "model_training_run": false,
+  "inference_run": false,
+  "runtime_changes": false
+}
