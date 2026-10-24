@@ -1,0 +1,59 @@
+{
+  "schema": "colab_training.v1",
+  "profile": "modernbert-senryu424",
+  "material_commit": "3f0250cdb1838d231ca5f7411db8ded23a997be8",
+  "release": "dev_tools/request_classifier/releases/2026-10-24-senryu-only-424",
+  "counts": {
+    "train": 349,
+    "dev": 39,
+    "test": 36
+  },
+  "label_to_id": {
+    "not_target": 0,
+    "senryu_line_upper": 1,
+    "senryu_line_middle": 2,
+    "senryu_line_lower": 3,
+    "senryu_change_upper": 4,
+    "senryu_change_middle": 5,
+    "senryu_change_lower": 6,
+    "senryu_end": 7
+  },
+  "release_sha256": {
+    "README.md": "017cf9cbb08d6b9cc91b2921a6e677b635fdc752c2b6c9db01bc4e47249bcd7f",
+    "data_report.json": "8f2680f4e9f5a3f45ec1c6f76b5ec6b06edaff2bd833215cf9d9ac61dfccfe91",
+    "dev.jsonl": "f81346802816e28bac27ee8a92003b2b40b887025006fc685accebbb7b233b76",
+    "freeze.json": "ee088b2768e44716772bfcfac13d227c4012895b57848b6668ed678abdfb2c69",
+    "integrity.json": "e83f49bb25be9861cfb43af7a3092564c4e76c342bbe7b4d55953ce31cb5c7fe",
+    "labels.json": "46f3b699d4a842d6e46cc39149e55bd104146d2a1205a5c1c78316bbfbe7723e",
+    "materials-review.md": "43224724f596ab63993da43aa917676ec803b227565a5413293a9db3ab24ef6a",
+    "split-assignments.json": "e88d07687682cce723449d7788662d95897fa0a4a3d309363cb57c37ea1eeccc",
+    "test.jsonl": "f3437b44126734b9e2a475feaa103ca9ebc422e328bd74acf3ac02805bf1d562",
+    "train.jsonl": "94423a79046978d2b208ff994c956b7f20f93f713f6ea709dce6406e622c574c"
+  },
+  "training": {
+    "model": "sbintuitions/modernbert-ja-30m",
+    "revision": "8cb03f54cb9e30e72459e5f1cedc6d89c7d8dcb5",
+    "seeds": [
+      42,
+      43,
+      44
+    ],
+    "learning_rate": 5e-05,
+    "epochs": 10,
+    "batch_size": 16,
+    "max_length": 128,
+    "max_context": 0,
+    "dtype": "float32",
+    "attention": "sdpa",
+    "initialization": "base pretrained model with a new 8-label classification head",
+    "full_finetuning": true,
+    "class_weights": false,
+    "oversampling": false,
+    "truncation": false,
+    "tf32": false,
+    "selection": "best epoch per seed by dev macro_f1, then dev loss, then earlier epoch; freeze all selections before test; report all seeds"
+  },
+  "evaluation_scope": "前回からの既知dev/testを保持。追加7件は学習用。未知の実機精度ではない。",
+  "runtime_routing": "画面に川柳が表示されている間、川柳用分類器へ切り替える。接続未実施。",
+  "status": "prepared_not_run"
+}

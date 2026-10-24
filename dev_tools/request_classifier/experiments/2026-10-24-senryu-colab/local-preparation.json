@@ -1,0 +1,47 @@
+{
+  "schema": "colab_local_preparation.v1",
+  "date": "2026-10-24",
+  "material_commit": "3f0250cdb1838d231ca5f7411db8ded23a997be8",
+  "notebook_sha256": "853a2deded9753d762aff005a2c0c3be10ab91ae8186b9297449fe65308a124d",
+  "input_archive_sha256": "bfb3c0302ffd0b26744eaf5154abaf7e5776bd59ad27ed78940e472680591825",
+  "counts": {
+    "train": 349,
+    "dev": 39,
+    "test": 36
+  },
+  "embedded_files": 31,
+  "input_hashes_verified": 30,
+  "unchanged_training_source_files": 5,
+  "code_cells_parsed": 5,
+  "all_seven_additions_in_train": true,
+  "duplicate_ids": 0,
+  "duplicate_normalized_inputs": 0,
+  "cross_split_groups": 0,
+  "data_report_matches_archived_training_reader": true,
+  "old_action_result_columns_removed": true,
+  "display_newlines_correct": true,
+  "tokenizer_sha256": "6a0734cf21c802169defaffe719bc2ef12bb9d0be37e54b61ed27aa89394723d",
+  "token_lengths": {
+    "train": {
+      "min": 16,
+      "max": 35,
+      "over_128": 0
+    },
+    "dev": {
+      "min": 19,
+      "max": 28,
+      "over_128": 0
+    },
+    "test": {
+      "min": 16,
+      "max": 24,
+      "over_128": 0
+    }
+  },
+  "tokenizer_only": true,
+  "model_loaded": false,
+  "training_executed": false,
+  "colab_executed": false,
+  "implementation_tests_run": false,
+  "runtime_changes": false
+}

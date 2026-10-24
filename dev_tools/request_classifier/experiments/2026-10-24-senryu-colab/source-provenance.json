@@ -1,0 +1,21 @@
+{
+  "source_archive_url": "https://github.com/yukincom/AI-Curious-Community/releases/tag/modernbert-research-2026-10-24",
+  "source_archive_sha256": "aae4355c088c0436f3b019fa6674349e8b4091b51998a3f5b39274d9f1a8c2af",
+  "source_archive_head": "54005915153d3f7d7f83226cfb7576f156d3781f",
+  "unchanged_training_sources_sha256": {
+    "dev_tools/request_classifier/dataset.py": "083c91f132502bf397ad9bb66c23a48623c02033335a68fb26f17e6529a58e23",
+    "dev_tools/request_classifier/evaluation.py": "3300083a0b94d682ad05525b9fb066f93143b6d0de40adc842f81f0f87bb97cf",
+    "dev_tools/request_classifier/train.py": "76cc522e8dea62089b48ef678585e9d928894eb21ddc195b6d67adf5651efa80",
+    "dev_tools/request_classifier/labels.json": "237c708a4c5401ec03371ee7bb15b744fd0d6af08cb1f7b53f8864e8988eba9c",
+    "dev_tools/request_classifier/requirements-train.txt": "f45782d28fe9ac8e4123aaf8a8878fbf17d8b38782a8bda21958f0a6cf407ff1"
+  },
+  "template_notebook": "ModernBERT_Ja_30M_23分類890件_2026-10-23.ipynb",
+  "template_notebook_sha256": "fbbb672a851dae92e5e66f7d605b213324513fe00c735a2598d1cdd4b437a0e3",
+  "material_commit": "3f0250cdb1838d231ca5f7411db8ded23a997be8",
+  "notebook_changes": [
+    "8分類424件の固定データ",
+    "川柳8分類のdev推移",
+    "追加7件の学習内確認",
+    "表示用改行の整形"
+  ]
+}
