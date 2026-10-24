@@ -102,7 +102,8 @@
     "max_body_kb": 256
   },
   "request_classifier": {
-    "model_root": null,
+    "normal_model_root": null,
+    "senryu_model_root": null,
     "python": null,
     "load_timeout_ms": 60000,
     "timeout_ms": 5000

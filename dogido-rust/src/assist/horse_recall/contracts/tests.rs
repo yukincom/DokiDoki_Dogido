@@ -22,18 +22,7 @@ fn classified(
     text: &str,
     label: crate::request_classifier::Label,
 ) -> crate::request_classifier::Classification {
-    use crate::request_classifier::{Classification, LABELS, Prediction};
-    Classification {
-        text: text.into(),
-        source: "text".into(),
-        manifest_sha256: "fixture".into(),
-        prediction: Prediction {
-            label,
-            probabilities: LABELS.map(|candidate| if candidate == label { 1.0 } else { 0.0 }),
-            token_count: 1,
-            inference_ms: 0.0,
-        },
-    }
+    crate::request_classifier::fixture(text, "text", label)
 }
 fn prepared(snapshot: Snapshot, text: &str) -> Result<Prepared> {
     Prepared::from_classified(

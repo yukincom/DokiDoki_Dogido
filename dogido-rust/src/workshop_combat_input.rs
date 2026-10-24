@@ -36,16 +36,17 @@ impl Action {
 #[cfg(test)]
 mod bert_tests {
     use super::*;
-    use crate::request_classifier::{Classification, LABEL_COUNT, Label, Prediction};
+    use crate::request_classifier::{Classification, Label, Mode, Prediction};
 
     fn classified(label: Label) -> Classification {
         Classification {
+            mode: Mode::Senryu,
             text: "原文".into(),
             source: "typed".into(),
             manifest_sha256: "fixture".into(),
             prediction: Prediction {
                 label,
-                probabilities: [0.0; LABEL_COUNT],
+                probabilities: vec![0.0; 8],
                 token_count: 3,
                 inference_ms: 1.0,
             },

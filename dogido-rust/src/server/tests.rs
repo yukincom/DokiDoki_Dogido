@@ -49,7 +49,8 @@ async fn text_capability_voice_modes_and_display_ack_use_the_authenticated_actor
     assert_eq!(status, StatusCode::CREATED);
     let sid = created["session_id"].as_str().unwrap();
     let (_, context) = call(&router, "GET", "/api/v1/voice-input/context", None, &auth).await;
-    assert_eq!(context["voice_enabled"], true);
+    // 登録だけでは録音対象の現在観測を確認できない。設定値onでも受付は待機する。
+    assert_eq!(context["voice_enabled"], false);
     let old_generation = context["voice_generation"].clone();
     let off = json!({"session_id":sid,"enabled":false});
     assert_eq!(

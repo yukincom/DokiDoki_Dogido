@@ -81,8 +81,8 @@ impl Queue {
             result.status = AdapterCommandResultStatus::Expired;
             result.detail_code = "server_result_timeout".into();
         } else if result.status == AdapterCommandResultStatus::Succeeded {
-            let in_time = result.executed_at >= command.issued_at
-                && result.executed_at < command.expires_at;
+            let in_time =
+                result.executed_at >= command.issued_at && result.executed_at < command.expires_at;
             if !in_time {
                 result.status = AdapterCommandResultStatus::Failed;
                 result.detail_code = "result_outside_validity_window".into();
@@ -143,18 +143,7 @@ mod tests {
         text: &str,
         label: crate::request_classifier::Label,
     ) -> crate::request_classifier::Classification {
-        use crate::request_classifier::{Classification, LABELS, Prediction};
-        Classification {
-            text: text.into(),
-            source: "text".into(),
-            manifest_sha256: "fixture".into(),
-            prediction: Prediction {
-                label,
-                probabilities: LABELS.map(|candidate| if candidate == label { 1.0 } else { 0.0 }),
-                token_count: 1,
-                inference_ms: 0.0,
-            },
-        }
+        crate::request_classifier::fixture(text, "text", label)
     }
     fn prepared() -> Prepared {
         let snapshot: Snapshot = serde_json::from_value(json!({
@@ -354,8 +343,7 @@ mod tests {
             ),
             (
                 |r: &mut AdapterCommandResult| {
-                    r.executed_at =
-                        (now() - Duration::milliseconds(1)).fixed_offset()
+                    r.executed_at = (now() - Duration::milliseconds(1)).fixed_offset()
                 },
                 "result_outside_validity_window",
             ),
@@ -454,8 +442,7 @@ mod tests {
                     .is_err()
             );
             let mut success = result(&command);
-            success.executed_at =
-                (now() + Duration::milliseconds(4_700)).fixed_offset();
+            success.executed_at = (now() + Duration::milliseconds(4_700)).fixed_offset();
             let out = state.observe_results(
                 &[success.clone()],
                 now() + Duration::milliseconds(receipt_ms),

@@ -8,38 +8,53 @@ struct Fixture {
 }
 impl Fixture {
     fn new(label: usize, delay: f64, fail: bool) -> Self {
+        Self::with_modes(label, delay, fail, &[Mode::Normal])
+    }
+    fn with_modes(label: usize, delay: f64, fail: bool, modes: &[Mode]) -> Self {
         let dir =
             std::env::temp_dir().join(format!("dogido-request-runtime-{}", uuid::Uuid::new_v4()));
         fs::create_dir(&dir).unwrap();
-        fs::write(dir.join("adopted-model.json"), r#"{"schema_version":1,"path_base":"repository_root","evaluated_input":{"max_history_utterances":0,"max_length":128,"truncation":false}}"#).unwrap();
+        for mode in modes {
+            let root = dir.join(mode.name());
+            fs::create_dir(&root).unwrap();
+            fs::write(root.join("adopted-model.json"), serde_json::to_vec(&json!({"schema_version":1,"path_base":"repository_root","classifier_mode":mode,"label_to_id": mode.labels().iter().enumerate().map(|(i,l)| (serde_json::to_value(l).unwrap().as_str().unwrap().to_owned(),i)).collect::<std::collections::BTreeMap<_,_>>(),"evaluated_input":{"max_history_utterances":0,"max_length":128,"truncation":false}})).unwrap()).unwrap();
+        }
         fs::write(
             dir.join("helper.py"),
             "raise AssertionError('no generic helper')\n",
         )
         .unwrap();
         let script = r#"
-import json, sys, time
+import fcntl, json, sys, time
 from pathlib import Path
 base = Path(__file__).parent
 for line in sys.stdin:
     f = json.loads(line)
-    r = {k:f[k] for k in ('schema_version','request_id','manifest_sha256')}
+    r = {k:f[k] for k in ('schema_version','request_id','manifest_sha256','mode')}
+    labels = domains[f['mode']]
     if f['op'] == 'load':
         r.update(ready=True, labels=labels, limits={'max_history_utterances':0,'max_length':128,'truncation':False})
     else:
+        lock = base.joinpath('inference.lock').open('a')
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         blocked = base.joinpath('block-inference').exists()
         with base.joinpath('inputs.jsonl').open('a') as out: out.write(json.dumps(f,ensure_ascii=False)+'\n')
         if blocked: time.sleep(60)
         time.sleep(DELAY)
         if FAIL: r['error'] = 'deliberate test failure'
         else: r['prediction'] = {'label':labels[LABEL], 'probabilities':[int(i==LABEL) for i in range(len(labels))],'token_count':30,'inference_ms':1}
+        fcntl.flock(lock, fcntl.LOCK_UN)
+        lock.close()
     print(json.dumps(r),flush=True)
 "#;
-        let labels = serde_json::to_string(&crate::request_classifier::LABELS).unwrap();
+        let labels = serde_json::to_string(
+            &json!({"normal":Mode::Normal.labels(),"senryu":Mode::Senryu.labels()}),
+        )
+        .unwrap();
         fs::write(
             dir.join("request_classifier_worker.py"),
             format!(
-                "labels={labels}\nLABEL={label}\nDELAY={delay}\nFAIL={}\n{script}",
+                "domains={labels}\nLABEL={label}\nDELAY={delay}\nFAIL={}\n{script}",
                 if fail { "True" } else { "False" }
             ),
         )
@@ -51,7 +66,8 @@ for line in sys.stdin:
             llm_enabled: false,
 
             request_classifier: Settings {
-                model_root: Some(dir.clone()),
+                normal_model_root: modes.contains(&Mode::Normal).then(|| dir.join("normal")),
+                senryu_model_root: modes.contains(&Mode::Senryu).then(|| dir.join("senryu")),
                 python: Some("/usr/bin/python3".into()),
                 ..Settings::default()
             },
@@ -118,7 +134,7 @@ async fn wait_for_file(path: &Path) {
 
 #[tokio::test]
 async fn classified_labels_use_existing_routes_without_legacy_sword_override() {
-    for label in 0..crate::request_classifier::LABEL_COUNT {
+    for label in 0..crate::request_classifier::NORMAL_LABELS.len() {
         let f = Fixture::new(label, 0.0, false);
         f.d.prepare_request_classifier().await.unwrap();
         let text = if label == 2 {
@@ -320,6 +336,7 @@ async fn reconnect_cannot_replay_a_result_even_when_generation_matches() {
             private: false,
         },
         Some(&instance),
+        None,
     );
     assert_eq!(result["reason"], "superseded_session");
     assert!(f.inputs().is_empty());
@@ -341,6 +358,7 @@ async fn reconnect_cannot_replay_a_result_even_when_generation_matches() {
             private: false,
         },
         Some(&instance),
+        None,
     );
     assert_eq!(result["reason"], "superseded_session");
     assert!(f.inputs().is_empty());
@@ -468,5 +486,284 @@ async fn explicit_quiet_does_not_wait_for_the_request_classifier() {
             .reply_queue
             .is_empty()
     );
+    f.finish().await;
+}
+
+fn open_workshop(d: &Arc<Dialogue>, sid: &str) {
+    use crate::haiku_record::{PreparedEmission, Workshop};
+    let lines: Vec<Value> = [("upper","上五","くさちのひ"),("middle","中七","くろきつるぎの"),("lower","下五","かげのさむさ")].iter().enumerate().map(|(i,(position,name,text))| json!({"line_id":format!("line_{}",i+1),"line_index":i,"position":position,"canonical_name":name,"surface_text":text,"reading_text":text,"source_atom_ids":[],"source_atoms":[],"provenance":"fixture"})).collect();
+    let prepared: PreparedEmission = serde_json::from_value(
+        json!({"text":"くさちのひ くろきつるぎの かげのさむさ","lines":lines,"materials":{}}),
+    )
+    .unwrap();
+    d.data
+        .lock()
+        .unwrap()
+        .sessions
+        .get_mut(sid)
+        .unwrap()
+        .haiku
+        .workshop = Some(Workshop::open(
+        prepared.complete(chrono::Utc::now()).unwrap(),
+        None,
+        std::time::Instant::now(),
+    ));
+}
+
+#[tokio::test]
+async fn each_mode_calls_only_its_model_even_for_not_target_and_failures() {
+    for mode in [Mode::Normal, Mode::Senryu] {
+        for fail in [false, true] {
+            let f = Fixture::with_modes(0, 0.0, fail, &[Mode::Normal, Mode::Senryu]);
+            if mode == Mode::Senryu {
+                open_workshop(&f.d, "s");
+            }
+            f.d.prepare_request_classifier().await.unwrap();
+            let a = f.d.submit(Some("s"), "その話を聞かせて", "text");
+            f.idle().await;
+            assert_eq!(f.inputs().len(), 1);
+            assert_eq!(f.inputs()[0]["mode"], json!(mode));
+            let row = f.row(&a["turn_id"]);
+            assert_eq!(row["classifier_mode"], json!(mode));
+            if fail {
+                assert_eq!(row["resolution"], "request_classification_failed");
+            }
+            f.finish().await;
+        }
+    }
+}
+
+#[tokio::test]
+async fn missing_normal_model_refuses_without_using_senryu() {
+    let f = Fixture::with_modes(0, 0.0, false, &[Mode::Senryu]);
+    f.d.prepare_request_classifier().await.unwrap();
+    let a = f.d.submit(Some("s"), "普通の話", "text");
+    assert_eq!(a["accepted"], false);
+    assert_eq!(a["reason"], "classifier_model_unavailable");
+    assert_eq!(a["classifier_mode"], "normal");
+    assert!(f.inputs().is_empty());
+    open_workshop(&f.d, "s");
+    f.d.submit(Some("s"), "句の意味は？", "text");
+    f.idle().await;
+    assert_eq!(f.inputs().len(), 1);
+    assert_eq!(f.inputs()[0]["mode"], "senryu");
+    f.finish().await;
+}
+
+#[tokio::test]
+async fn two_sessions_and_two_models_share_one_inference_lock() {
+    let f = Fixture::with_modes(0, 0.15, false, &[Mode::Normal, Mode::Senryu]);
+    f.d.register("verse", "川柳", true);
+    open_workshop(&f.d, "verse");
+    f.d.prepare_request_classifier().await.unwrap();
+    let a = f.d.submit(Some("s"), "通常の話", "text");
+    let b = f.d.submit(Some("verse"), "句の意味は？", "text");
+    f.idle().await;
+    assert_eq!(f.inputs().len(), 2);
+    for turn in [&a["turn_id"], &b["turn_id"]] {
+        assert!(f.row(turn)["request_classification"].is_object());
+    }
+    f.finish().await;
+}
+
+#[tokio::test]
+async fn delayed_results_never_cross_workshop_start_end_pause_aba_or_revision() {
+    for boundary in ["start", "end", "pause_aba", "revision", "replace"] {
+        let f = Fixture::with_modes(0, 0.0, false, &[Mode::Normal, Mode::Senryu]);
+        if boundary != "start" {
+            open_workshop(&f.d, "s");
+        }
+        fs::write(f.dir.join("block-inference"), "").unwrap();
+        let a = f.d.submit(Some("s"), "同じ原文", "text");
+        wait_for_file(&f.dir.join("inputs.jsonl")).await;
+        if boundary == "start" || boundary == "replace" {
+            open_workshop(&f.d, "s");
+        } else {
+            let mut data = f.d.data.lock().unwrap();
+            let w = data
+                .sessions
+                .get_mut("s")
+                .unwrap()
+                .haiku
+                .workshop
+                .as_mut()
+                .unwrap();
+            match boundary {
+                "end" => w.close("fixture"),
+                "pause_aba" => {
+                    w.pause(std::time::Instant::now());
+                    w.resume(std::time::Instant::now());
+                }
+                "revision" => w.version += 1,
+                _ => unreachable!(),
+            }
+        }
+        f.idle().await;
+        assert!(f.row(&a["turn_id"])["forwarded_input"].is_null());
+        assert_eq!(f.inputs().len(), 1);
+        f.finish().await;
+    }
+}
+
+#[tokio::test]
+async fn voice_generation_rejects_old_recordings_after_pause_resume_and_replacement() {
+    let f = Fixture::with_modes(0, 0.0, false, &[Mode::Normal, Mode::Senryu]);
+    f.d.enable_text_delivery("s", Some(true));
+    let old = voice_generation(&f.d.data.lock().unwrap().sessions["s"]);
+    open_workshop(&f.d, "s");
+    assert_eq!(
+        f.d.submit_voice(Some("s"), "句の話", Some(&old))["reason"],
+        "stale_voice_generation"
+    );
+    assert!(
+        f.d.data.lock().unwrap().sessions["s"]
+            .delivery
+            .voice_inputs
+            .is_empty()
+    );
+    let before_pause = voice_generation(&f.d.data.lock().unwrap().sessions["s"]);
+    {
+        let mut data = f.d.data.lock().unwrap();
+        let w = data
+            .sessions
+            .get_mut("s")
+            .unwrap()
+            .haiku
+            .workshop
+            .as_mut()
+            .unwrap();
+        w.pause(std::time::Instant::now());
+        w.resume(std::time::Instant::now());
+    }
+    assert_eq!(
+        f.d.submit_voice(Some("s"), "句の話", Some(&before_pause))["reason"],
+        "stale_voice_generation"
+    );
+    assert!(f.inputs().is_empty());
+    let current = voice_generation(&f.d.data.lock().unwrap().sessions["s"]);
+    assert_eq!(
+        f.d.submit_voice(Some("s"), "句の話", Some(&current))["accepted"],
+        true
+    );
+    f.idle().await;
+    assert_eq!(f.inputs().len(), 1);
+    assert_eq!(f.inputs()[0]["mode"], "senryu");
+    f.finish().await;
+}
+
+fn playing(f: &Fixture) {
+    let mut d = f.d.data.lock().unwrap();
+    let s = d.sessions.get_mut("s").unwrap();
+    s.current_turn = "old".into();
+    s.cancel = Some(watch::channel(false).0);
+    d.rows
+        .push_back(json!({"session_id":"s","turn_id":"old","playback_status":"started"}));
+}
+fn finish_playing(f: &Fixture) {
+    let mut d = f.d.data.lock().unwrap();
+    d.sessions.get_mut("s").unwrap().cancel = None;
+    d.rows.iter_mut().find(|r| r["turn_id"] == "old").unwrap()["playback_status"] =
+        "completed".into();
+}
+#[tokio::test]
+async fn completed_senryu_queue_waits_for_same_verse_without_another_inference() {
+    let f = Fixture::with_modes(1, 0.0, false, &[Mode::Normal, Mode::Senryu]);
+    open_workshop(&f.d, "s");
+    playing(&f);
+    let a = f.d.submit(Some("s"), "上の意味は", "text");
+    f.idle().await;
+    {
+        let mut d = f.d.data.lock().unwrap();
+        d.sessions
+            .get_mut("s")
+            .unwrap()
+            .haiku
+            .workshop
+            .as_mut()
+            .unwrap()
+            .pause(std::time::Instant::now());
+    }
+    finish_playing(&f);
+    f.d.resume_reply_input("s");
+    assert_eq!(f.d.data.lock().unwrap().sessions["s"].reply_queue.len(), 1);
+    assert_eq!(f.inputs().len(), 1);
+    {
+        let mut d = f.d.data.lock().unwrap();
+        d.sessions
+            .get_mut("s")
+            .unwrap()
+            .haiku
+            .workshop
+            .as_mut()
+            .unwrap()
+            .resume(std::time::Instant::now());
+    }
+    f.d.resume_reply_input("s");
+    f.idle().await;
+    assert!(
+        f.d.data.lock().unwrap().sessions["s"]
+            .reply_queue
+            .is_empty()
+    );
+    assert_eq!(f.inputs().len(), 1);
+    assert_ne!(
+        f.row(&a["turn_id"])["resolution"],
+        "superseded_classifier_mode"
+    );
+    f.finish().await;
+}
+#[tokio::test]
+async fn queued_normal_input_is_cancelled_when_workshop_opens() {
+    let f = Fixture::with_modes(0, 0.0, false, &[Mode::Normal, Mode::Senryu]);
+    playing(&f);
+    let a = f.d.submit(Some("s"), "同じ話", "text");
+    f.idle().await;
+    open_workshop(&f.d, "s");
+    finish_playing(&f);
+    f.d.resume_reply_input("s");
+    f.idle().await;
+    assert!(
+        f.d.data.lock().unwrap().sessions["s"]
+            .reply_queue
+            .is_empty()
+    );
+    assert_eq!(
+        f.row(&a["turn_id"])["resolution"],
+        "superseded_classifier_mode"
+    );
+    assert_eq!(f.inputs().len(), 1);
+    assert_eq!(f.inputs()[0]["mode"], "normal");
+    f.finish().await;
+}
+
+#[tokio::test]
+async fn same_text_during_combat_does_not_deduplicate_into_old_senryu_input() {
+    let f = Fixture::with_modes(1, 0.0, false, &[Mode::Senryu]);
+    open_workshop(&f.d, "s");
+    playing(&f);
+    let before = f.d.submit(Some("s"), "上の意味は", "text");
+    f.idle().await;
+    {
+        let mut d = f.d.data.lock().unwrap();
+        d.sessions
+            .get_mut("s")
+            .unwrap()
+            .haiku
+            .workshop
+            .as_mut()
+            .unwrap()
+            .pause(std::time::Instant::now());
+    }
+    let during = f.d.submit(Some("s"), "上の意味は", "text");
+    assert_eq!(during["reason"], "classifier_model_unavailable");
+    assert_ne!(during["deduplicated"], true);
+    assert_eq!(during["classifier_mode"], "normal");
+    assert_eq!(
+        f.d.data.lock().unwrap().sessions["s"].reply_queue[0]
+            .request
+            .turn,
+        before["turn_id"].as_str().unwrap()
+    );
+    assert_eq!(f.inputs().len(), 1);
     f.finish().await;
 }

@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "model_family": "sbintuitions/modernbert-ja-30m",
+  "data_version": "senryu424",
+  "classifier_mode": "senryu",
+  "seed": 42,
+  "label_to_id": {
+    "not_target": 0,
+    "senryu_change_lower": 6,
+    "senryu_change_middle": 5,
+    "senryu_change_upper": 4,
+    "senryu_end": 7,
+    "senryu_line_lower": 3,
+    "senryu_line_middle": 2,
+    "senryu_line_upper": 1
+  },
+  "checkpoint_path": ".",
+  "path_base": "repository_root",
+  "checkpoint_files_sha256": {
+    "config.json": "a03a244bc4b6da63f6b3e24632ee2165203817a89a18343f093d6a2a5c9053c9",
+    "model.safetensors": "2e95a4f304867161adeff507ca5e5e2e89f13df0b7f0ac6bd257538dfc58411d",
+    "tokenizer.json": "6a0734cf21c802169defaffe719bc2ef12bb9d0be37e54b61ed27aa89394723d",
+    "tokenizer_config.json": "930dd278b2f45e3fdb6814699eaa23297a8ba534e0756ce0d194ec7dd4deccec"
+  },
+  "training": {
+    "selected_epoch": 8,
+    "rows": 424,
+    "train_rows": 349,
+    "dev_rows": 39,
+    "test_rows": 36,
+    "max_length": 128,
+    "max_history_utterances": 0
+  },
+  "evaluated_input": {
+    "format_function": "dev_tools/request_classifier/dataset.py:model_example",
+    "max_history_utterances": 0,
+    "max_length": 128,
+    "truncation": false
+  },
+  "record_type": "user_model_selection",
+  "status": "adopted",
+  "selected_at_utc": "2026-10-24T08:09:44.557761+00:00",
+  "decision": {
+    "chosen_by": "user",
+    "user_statement": "じゃあ、その方針で本体の切替も実装して！川柳は受け取ったseed42を使ってね。",
+    "original_labels_and_metrics_changed": false
+  },
+  "distribution": {
+    "source_checkpoint_path": "dev_tools/request_classifier/experiments/2026-10-24-senryu-colab/artifacts/colab-results/weights/trial-1/best",
+    "checkpoint_bytes_changed": false
+  },
+  "integration": {
+    "document": "docs/2026-10-24-bert-mode-routing.md",
+    "live_minecraft_verified": false
+  }
+}

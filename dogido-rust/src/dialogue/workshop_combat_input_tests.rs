@@ -5,6 +5,17 @@ use super::*;
 fn paused(f: &Fixture, clear: bool) {
     let mut d = f.d.data.lock().unwrap();
     let s = d.sessions.get_mut("s").unwrap();
+    // 戦闘前に川柳側で分類が完了した一件の保留を模擬する。
+    let binding = super::super::request_runtime::Binding::capture(s);
+    let mut classification = crate::request_classifier::fixture(
+        "気にせんで",
+        "text",
+        crate::request_classifier::Label::NotTarget,
+    );
+    classification.mode = crate::request_classifier::Mode::Senryu;
+    classification.prediction.probabilities = vec![1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+    s.request_classification
+        .restore(s.input_generation, binding, Some(classification));
     s.preview = false;
     s.chat_allowed = clear;
     s.received = Some(Instant::now());
@@ -139,6 +150,7 @@ async fn reconnect_with_same_generation_cannot_receive_the_old_combat_input() {
             private: false,
         },
         Some(&instance),
+        None,
     );
     assert_eq!(result["reason"], "superseded_session");
     f.d.resume_reply_input("s");
@@ -171,6 +183,7 @@ async fn held_combat_input_reserves_the_ninth_fifo_slot() {
                     input_at: 0,
                     record_private: false,
                     classification: None,
+                    binding: None,
                 },
                 super::super::workshop_record::Attempt::new(Value::Null, Default::default()),
             );

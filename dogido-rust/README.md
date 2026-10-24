@@ -97,7 +97,7 @@ DOGIDO_MEMORY_DIR=.dogido_memory/rust-migration
 |---|---|
 | `dogido_server/__init__.py` · `dogido_server/config.py` | パッケージ入口と既存設定の解決 |
 | `dogido_server/voice_settings.py` · `dogido_server/voice_capture.py` · `dogido_server/echo_input.py` | 音声設定・録音機器・AECの接続 |
-| `dogido-rust/scripts/request_classifier_worker.py` | 採用記録と重みを検証するModernBERT推論補助。[23分類の共通受付](../docs/2026-10-23-modernbert-23class-integration.md) |
+| `dogido-rust/scripts/request_classifier_worker.py` | 採用記録と重みを検証するModernBERT推論補助。[川柳8分類・通常16分類の共通受付](../docs/2026-10-24-bert-mode-routing.md) |
 | `dogido-rust/scripts/haiku_tokens.py` · `dogido-rust/scripts/tts_tokens_worker.py` | Rustからの辞書token要求を受けるworker。相談・読みの判定・保存はRustが担当 |
 | `dogido-rust/scripts/tts_shared_tokens.py` · `dogido-rust/scripts/tts_unidic_adapter.py` | UniDic token取得。`tts_shared_tokens._reader = Unidic()` をworker内で共有し、辞書は初回利用時に初期化 |
 | `dogido_server/llm/companion_prompts.json` · `dogido_server/llm/reaction_situations.json` | 共有プロンプト・状況文の正本データ |

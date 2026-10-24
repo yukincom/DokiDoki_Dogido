@@ -11,6 +11,7 @@ use std::sync::Arc;
 use tokio::sync::watch;
 
 impl Dialogue {
+    #[cfg(test)]
     pub(super) fn submit_inner(
         self: &Arc<Self>,
         selected: Option<&str>,
@@ -53,6 +54,7 @@ impl Dialogue {
             combat_classified,
             origin,
             None,
+            None,
         )
     }
     /// 非同期分類の再送は世代に加え接続個体を、同じ受付ロック内で照合する。
@@ -67,6 +69,7 @@ impl Dialogue {
         combat_classified: bool,
         origin: workshop_record::Admission,
         expected_instance: Option<&str>,
+        expected_voice: Option<Option<&str>>,
     ) -> Value {
         let sid = selected.map(str::to_owned).or_else(|| self.only_session());
         let (before, private) = {
@@ -95,6 +98,7 @@ impl Dialogue {
             combat_classified,
             private,
             expected_instance,
+            expected_voice,
         );
         if let Some(sid) = sid {
             let (after, mut recorded_input) = {
@@ -154,6 +158,7 @@ impl Dialogue {
         combat_classified: bool,
         private: bool,
         expected_instance: Option<&str>,
+        expected_voice: Option<Option<&str>>,
     ) -> Value {
         if text.trim().is_empty() {
             return json!({"accepted":false,"reason":"empty_text"});
@@ -184,11 +189,30 @@ impl Dialogue {
         if d.stopped {
             return json!({"accepted":false,"reason":"server_stopping"});
         }
+        self.tick_workshop(&mut d, &session_id);
+        self.prune_classifier_inputs(&mut d, &session_id);
+        if let Some(generation) = expected_voice {
+            let Some(s) = d.sessions.get(&session_id) else {
+                return json!({"accepted":false,"reason":"unknown_session_id"});
+            };
+            if let Some(rejection) = super::text_delivery::voice_rejection(s, generation) {
+                return rejection;
+            }
+            Self::record_voice_input_locked(&mut d, Some(&session_id), text, source);
+        }
         let Some(s) = d.sessions.get_mut(&session_id) else {
             return json!({"accepted":false,"reason":"unknown_session_id"});
         };
         if expected_instance.is_some_and(|instance| instance != s.instance_id) {
             return json!({"accepted":false,"reason":"superseded_session"});
+        }
+        // 内部再送の結果失効は終端取消。結果なしへ戻して別BERTで再分類しない。
+        if expected_generation.is_some()
+            && s.request_classification
+                .binding(s.input_generation, text, source)
+                .is_some_and(|binding| !binding.current(s))
+        {
+            return json!({"accepted":false,"reason":"superseded_classifier_mode"});
         }
         if source.trim().eq_ignore_ascii_case("voice")
             && s.delivery.enabled
@@ -222,6 +246,22 @@ impl Dialogue {
                 json!({"accepted":false,"reason":"fresh_safe_snapshot_required"})
             };
         }
+        if !quiet
+            && self.config.request_classifier.enabled()
+            && let Some(binding) = super::request_runtime::Binding::capture(s)
+            && self
+                .config
+                .request_classifier
+                .model_root(binding.mode)
+                .is_none()
+        {
+            return json!({"accepted":false,"reason":"classifier_model_unavailable","classifier_mode":binding.mode});
+        }
+        let current_binding = super::request_runtime::Binding::capture(s);
+        let current_classified_input = !self.config.request_classifier.enabled()
+            || s.request_classification
+                .binding(s.input_generation, text, source)
+                .is_some_and(|b| b.current(s));
         let active_turn = s.current_turn.clone();
         // 非緊急警告が回答の後ろへ待機していても、再送を別の保留質問にしない。
         if s.cancel.is_some()
@@ -229,6 +269,9 @@ impl Dialogue {
                 r["session_id"] == session_id
                     && r["turn_id"] == active_turn
                     && r["player_input_text"] == text
+                    && r["source"] == source
+                    && (!self.config.request_classifier.enabled()
+                        || r["classifier_binding"] == json!(current_binding))
                     && matches!(
                         r["playback_status"].as_str(),
                         Some("generating" | "queued" | "started")
@@ -238,7 +281,11 @@ impl Dialogue {
             return json!({"accepted":true,"deduplicated":true,"turn_id":row["turn_id"]});
         }
         let s = d.sessions.get_mut(&session_id).unwrap();
-        if let Some(p) = s.reply_queue.iter().find(|p| p.request.text == text) {
+        if let Some(p) = s.reply_queue.iter().find(|p| {
+            p.request.text == text
+                && p.request.source == source
+                && p.request.binding.as_ref().is_none_or(|b| b.current(s))
+        }) {
             return json!({"accepted":true,"deduplicated":true,"queued":true,
                 "turn_id":p.request.turn,"session_id":session_id});
         }
@@ -253,13 +300,17 @@ impl Dialogue {
             .and_then(|c| c.original.clone());
         let queued_dispatch =
             s.reply_checked.as_ref().is_some_and(|c| c.dispatch_input) && queued_reply.is_some();
-        if let Some(p) = s.combat_input.as_ref().filter(|p| p.text == text) {
+        if let Some(p) = s.combat_input.as_ref().filter(|p| {
+            p.text == text
+                && p.request.source == source
+                && p.request.binding.as_ref().is_none_or(|b| b.current(s))
+        }) {
             return json!({"accepted":true,"deduplicated":true,"turn_id":p.turn,"session_id":session_id});
         }
         if let Some(p) = s
             .assist_pending
             .as_ref()
-            .filter(|p| p.input.raw_text == text)
+            .filter(|p| p.input.raw_text == text && current_classified_input)
         {
             return json!({"accepted":true,"deduplicated":true,"turn_id":p.turn,"session_id":session_id});
         }
@@ -267,21 +318,26 @@ impl Dialogue {
             .request_classification
             .pending
             .as_ref()
-            .filter(|p| p.text == text && p.source == source)
+            .filter(|p| p.text == text && p.source == source && p.binding.current(s))
         {
             return json!({"accepted":true,"deduplicated":true,"turn_id":p.turn,"session_id":session_id});
         }
-        if s.deferred_input.as_ref().is_some_and(|p| p.text == text) {
+        if s.deferred_input.as_ref().is_some_and(|p| {
+            p.text == text && p.source == source && p.binding.as_ref().is_none_or(|b| b.current(s))
+        }) {
             return json!({"accepted":true,"deduplicated":true,"queued":true,"session_id":session_id});
         }
         if let Some(w) = s
             .warning
             .as_ref()
-            .filter(|w| w.input.as_deref() == Some(text))
+            .filter(|w| w.input.as_deref() == Some(text) && current_classified_input)
         {
             return json!({"accepted":true,"deduplicated":true,"turn_id":w.turn,"session_id":session_id});
         }
-        if s.pending_input.as_deref() == Some(text) && s.pending_warning.is_some() {
+        if current_classified_input
+            && s.pending_input.as_deref() == Some(text)
+            && s.pending_warning.is_some()
+        {
             return json!({"accepted":true,"deduplicated":true,"queued":true,"session_id":session_id});
         }
         // 相槌・くしゃみを含む新入力は、実再生が始まった台詞を切らず既存FIFOへ保持する。
@@ -438,6 +494,8 @@ impl Dialogue {
             Self::cancel_warning(&mut d, &session_id, "new_player_input");
         }
         if !combat_classified
+            && super::request_runtime::classification(&d.sessions[&session_id], text, source)
+                .is_some_and(|c| c.mode == crate::request_classifier::Mode::Senryu)
             && let Some(result) =
                 self.hold_paused_input(&mut d, &mut jobs, &session_id, text, source)
         {
@@ -466,6 +524,15 @@ impl Dialogue {
                     text: text.to_owned(),
                     source: source.to_owned(),
                     previous_turn: None,
+                    generation: s.input_generation,
+                    instance: s.instance_id.clone(),
+                    binding: s
+                        .request_classification
+                        .binding(s.input_generation, text, source)
+                        .cloned()
+                        .or_else(|| super::request_runtime::Binding::capture(s)),
+                    classification: super::request_runtime::classification(s, text, source)
+                        .cloned(),
                 });
                 return json!({"accepted":true,"queued":true,"session_id":session_id,"reason":"after_environment_warning"});
             }
@@ -473,7 +540,6 @@ impl Dialogue {
                 "warning_in_progress"
             } else { "fresh_safe_snapshot_required" }});
         }
-        self.tick_workshop(&mut d, &session_id);
         let replay = queued_reply;
         let text = replay.as_ref().map_or(text, |p| p.text.as_str());
         let source = replay.as_ref().map_or(source, |p| p.source.as_str());
@@ -481,22 +547,28 @@ impl Dialogue {
         // 警告後に元本文を再送するときも、元入力の分類を引き継ぐ。
         if let Some(original) = &replay {
             let s = d.sessions.get_mut(&session_id).unwrap();
-            s.request_classification
-                .restore(s.input_generation, original.classification.clone());
+            s.request_classification.restore(
+                s.input_generation,
+                original.binding.clone(),
+                original.classification.clone(),
+            );
         }
         let s = d.sessions.get_mut(&session_id).unwrap();
         let active_turn = s.current_turn.clone();
         // 同じ進行中入力の二重配送を、割り込みやLLM再呼出しにしない。
-        if let Some(last) = d
-            .rows
-            .iter()
-            .rev()
-            .find(|r| r["turn_id"] == active_turn && r["player_input_text"] == text)
-            && matches!(
-                last["playback_status"].as_str(),
-                Some("generating" | "queued" | "started")
-            )
-        {
+        if let Some(last) = d.rows.iter().rev().find(|r| {
+            r["turn_id"] == active_turn
+                && r["player_input_text"] == text
+                && r["source"] == source
+                && (!self.config.request_classifier.enabled()
+                    || r["classifier_binding"]
+                        == json!(super::request_runtime::Binding::capture(
+                            &d.sessions[&session_id]
+                        )))
+        }) && matches!(
+            last["playback_status"].as_str(),
+            Some("generating" | "queued" | "started")
+        ) {
             return json!({"accepted":true,"deduplicated":true,"turn_id":last["turn_id"]});
         }
         Self::cancel_chat(&mut d, &session_id, "new_player_input");
@@ -607,6 +679,9 @@ impl Dialogue {
             "workshop_id":workshop.as_ref().map(|w| &w["workshop_id"]),"workshop_fixed_close":false,"workshop_state_before":audit_before,"workshop_record_private":private});
         new_row["combat_resumable"] = ordinary_reply.into();
         new_row["request_classification"] = json!(input.request_classification);
+        new_row["classifier_binding"] = json!(super::request_runtime::Binding::capture(
+            &d.sessions[&session_id]
+        ));
         if let Some(original) = &replay {
             d.sessions
                 .get_mut(&session_id)

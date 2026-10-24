@@ -28,13 +28,13 @@ Minecraft Java Edition向けのAIコンパニオンです。ゲーム内の観�
 | :--- | :--- |
 | Fabricアダプター・身体Mod | ゲーム内の観測、身体の動き、画像取得、文字表示、許可された操作の実行 |
 | Rust本体 | 危険・割込みの優先制御、会話状態、操作対象と実行条件の確認、取消、句や記録の保存 |
-| ModernBERT-Ja | 現在の発言を23分類し、モブ情報・剣・呼び戻し・視線・川柳の対象行や変更・終了へ接続 |
+| ModernBERT-Ja | 川柳相談中は専用8分類、それ以外は通常16分類へ一度だけ配送 |
 | 会話・川柳モデル | 発話・沈黙の選択、句・説明・修正案の生成、相談の次手と候補内の身体行動の選択 |
 | Python補助・音声 | モデル・辞書・音声機器への接続、Whisperによる音声入力、VOICEVOXによる読み上げ |
 
-BERTの採用モデルは本体の `models/dogido-request-v7-seed42` に同梱し、重みをGit LFSで配布します。[採用モデルは890件版の元seed42](docs/2026-10-23-modernbert-23class-integration.md)です。OS AIによる分類は撤去し、戦闘中断後の川柳相談は敵の現在観測と警戒解除条件からRustが再開します。
+川柳BERTは424件版seed42、通常BERTは全16分類のseed48-mobを `models/` に同梱し、重みをGit LFSで配布します。[川柳8分類と通常16分類を分離](docs/2026-10-24-bert-mode-routing.md)し、一つの入力は現在の受付状態に対応する片方だけへ渡します。OS AIによる分類は撤去し、戦闘中断後の川柳相談は敵の現在観測と警戒解除条件からRustが再開します。
 
-教材の補強・学習・モデル比較の経緯は、[試行錯誤](https://github.com/yukincom/AI-Curious-Community/blob/main/modernbert-request-classifier-study/README.md)にまとめています。
+通常の取得・家庭用セットには、この採用済み2本だけを含めます。教材の補強・学習・モデル比較の経緯は[研究README](https://github.com/yukincom/AI-Curious-Community/blob/main/modernbert-request-classifier-study/README.md)、旧モデルと実験用の重みは[研究用Releases](https://github.com/yukincom/AI-Curious-Community/blob/main/modernbert-request-classifier-study/full-archive/README.md)で公開しています。
 
 句への指摘は記録として保存し、後の生成時に参考情報として渡します。モデルの重みの更新は伴いません。現在のゲーム観測、一般知識、過去の会話・記録は区別して扱います。
 

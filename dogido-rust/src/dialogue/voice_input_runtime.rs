@@ -1,9 +1,6 @@
 //! 音声入口の叫声・STT文脈。叫声は診断へだけ記録し、会話や句の操作へ流さない。
-use super::{Data, Dialogue, Session, observation_fresh};
-use crate::{
-    events::GameEvent,
-    vocalization,
-};
+use super::{Data, Dialogue, Session};
+use crate::{events::GameEvent, vocalization};
 use chrono::{DateTime, Utc};
 use serde_json::{Value, json};
 use std::time::{Duration, Instant};
@@ -23,7 +20,10 @@ impl Pending {
         event
             .filter(|e| {
                 self.received.elapsed() <= Duration::from_secs(5)
-                    && (e.observed_at.with_timezone(&Utc) - self.at).num_milliseconds().abs() <= 5000
+                    && (e.observed_at.with_timezone(&Utc) - self.at)
+                        .num_milliseconds()
+                        .abs()
+                        <= 5000
             })
             .map_or(vocalization::UNKNOWN, vocalization::observed_note)
     }
@@ -88,13 +88,13 @@ impl Dialogue {
             return json!({"prompt_mode":"normal", "session_id":null,"voice_enabled":false,"voice_generation":null});
         }
         let (sid, s) = d.sessions.iter().next().unwrap();
-        let workshop = observation_fresh(s)
-            && super::workshop_combat_input::allowed(s)
-            && s.haiku
-                .workshop
-                .as_ref()
-                .is_some_and(|w| w.is_open() && !w.combat_paused());
-        json!({"prompt_mode":if workshop {"haiku_workshop"} else {"normal"}, "session_id":sid, "voice_enabled":!s.delivery.enabled || s.delivery.voice_enabled,"voice_generation":s.delivery.generation})
+        let binding = super::request_runtime::Binding::capture(s);
+        let workshop = binding
+            .as_ref()
+            .is_some_and(|b| b.mode == crate::request_classifier::Mode::Senryu);
+        json!({"prompt_mode":if workshop {"haiku_workshop"} else {"normal"}, "session_id":sid,
+            "voice_enabled":binding.is_some() && (!s.delivery.enabled || s.delivery.voice_enabled),
+            "voice_generation":super::request_runtime::voice_generation(s)})
     }
 }
 

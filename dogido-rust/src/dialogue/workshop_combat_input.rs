@@ -8,7 +8,7 @@ use crate::{
 pub(super) struct Pending {
     pub turn: String,
     pub text: String,
-    request: super::reply_queue::Request,
+    pub request: super::reply_queue::Request,
     audit: super::workshop_record::Attempt,
     instance: String,
     generation: u64,
@@ -84,6 +84,11 @@ impl Dialogue {
                 .map_or_else(|| self.clock.elapsed().as_millis() as u64, |r| r.input_at),
             record_private: attempt.input.private,
             classification: super::request_runtime::classification(s, text, source).cloned(),
+            binding: s
+                .request_classification
+                .binding(s.input_generation, text, source)
+                .cloned()
+                .or_else(|| super::request_runtime::Binding::capture(s)),
         };
         let (cancel, rx) = watch::channel(false);
         s.combat_input = Some(Pending {

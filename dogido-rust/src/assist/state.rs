@@ -2,8 +2,7 @@
 //! 対象選択は各支援ドメインへ渡し、剣と馬の実行結果・案内を発行時の種類で分ける。
 use super::{SELECT_HOTBAR_CAPABILITY, horse_recall, selection::*};
 use crate::events::{
-    AdapterCommandResult, AdapterCommandResultCommandType, AdapterCommandResultStatus,
-    GameEvent,
+    AdapterCommandResult, AdapterCommandResultCommandType, AdapterCommandResultStatus, GameEvent,
 };
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
@@ -120,7 +119,8 @@ impl AssistState {
             IntentEvidence {
                 source: "modernbert".into(),
                 evidence: classification.text.clone(),
-                confidence: classification.prediction.probabilities[2],
+                confidence:
+                    classification.probability(crate::request_classifier::Label::EquipSword),
             },
             event,
             now,

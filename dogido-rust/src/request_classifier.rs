@@ -1,4 +1,4 @@
-//! 採用済みModernBERTの依頼23分類を、既存Python Helper経由で受け取る。
+//! 通常16分類と川柳8分類のModernBERTを、既存Python Helper経由で受け取る。
 //! 原文履歴の整形・応答検証・取消はRust、重みの検証と数値計算はPythonが担当する。
 //! 本体の共通受付が結果を使い、実際の操作・会話状態と履歴の確定は各runtimeが所有する。
 use crate::python_worker::Helper;
@@ -9,7 +9,7 @@ use sha2::{Digest, Sha256};
 use std::{path::Path, time::Duration};
 use tokio::sync::watch;
 
-/// 学習時の整数ID順。確信度の閾値や別分類への読み替えは行わない。
+/// 操作の共通名。整数IDはモデルごとのMode::labelsで解決し、別分類へ読み替えない。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Label {
@@ -37,21 +37,13 @@ pub enum Label {
     LookRelativeBackLeft,
     LookRelativeBackRight,
 }
-pub const LABEL_COUNT: usize = 23;
-pub const LABELS: [Label; LABEL_COUNT] = [
+pub const NORMAL_LABELS: [Label; 16] = [
     Label::NotTarget,
     Label::EnemyInformation,
     Label::EquipSword,
     Label::RecallMount,
     Label::DogidoRecall,
-    Label::SenryuLineUpper,
-    Label::SenryuLineMiddle,
-    Label::SenryuLineLower,
-    Label::SenryuChangeUpper,
-    Label::SenryuChangeMiddle,
-    Label::SenryuChangeLower,
     Label::LookDirection,
-    Label::SenryuEnd,
     Label::LookRelativeRight,
     Label::LookTarget,
     Label::LookPlayer,
@@ -63,6 +55,38 @@ pub const LABELS: [Label; LABEL_COUNT] = [
     Label::LookRelativeBackLeft,
     Label::LookRelativeBackRight,
 ];
+pub const SENRYU_LABELS: [Label; 8] = [
+    Label::NotTarget,
+    Label::SenryuLineUpper,
+    Label::SenryuLineMiddle,
+    Label::SenryuLineLower,
+    Label::SenryuChangeUpper,
+    Label::SenryuChangeMiddle,
+    Label::SenryuChangeLower,
+    Label::SenryuEnd,
+];
+
+/// 本体が受付状態から選ぶ分類領域。モデルの結果で領域を切り替えない。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Mode {
+    Normal,
+    Senryu,
+}
+impl Mode {
+    pub fn labels(self) -> &'static [Label] {
+        match self {
+            Self::Normal => &NORMAL_LABELS,
+            Self::Senryu => &SENRYU_LABELS,
+        }
+    }
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Normal => "normal",
+            Self::Senryu => "senryu",
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -121,6 +145,8 @@ impl Input {
 struct Manifest {
     schema_version: u32,
     path_base: String,
+    classifier_mode: Mode,
+    label_to_id: std::collections::BTreeMap<String, usize>,
     evaluated_input: Limits,
 }
 
@@ -135,7 +161,7 @@ pub struct Limits {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Prediction {
     pub label: Label,
-    pub probabilities: [f64; LABEL_COUNT],
+    pub probabilities: Vec<f64>,
     pub token_count: usize,
     pub inference_ms: f64,
 }
@@ -143,6 +169,7 @@ pub struct Prediction {
 /// 原文と入力元に結びついた一回の結果。内部保留・再送も同じ結果を引き継ぐ。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Classification {
+    pub mode: Mode,
     pub text: String,
     pub source: String,
     pub manifest_sha256: String,
@@ -152,6 +179,15 @@ impl Classification {
     pub fn matches(&self, text: &str, source: &str) -> bool {
         self.text == text && self.source == source
     }
+    /// 選択モデルに存在するラベルの確率だけを返す。別領域の同じ整数IDを参照しない。
+    pub fn probability(&self, label: Label) -> f64 {
+        self.mode
+            .labels()
+            .iter()
+            .position(|l| *l == label)
+            .and_then(|index| self.prediction.probabilities.get(index).copied())
+            .unwrap_or(0.0)
+    }
 }
 
 /// 単一モデルを直列に呼ぶ所有ハンドル。失敗後は閉じ、呼出元が再作成を決める。
@@ -159,6 +195,7 @@ pub struct Classifier {
     helper: Option<Helper>,
     manifest_sha256: String,
     limits: Limits,
+    mode: Mode,
 }
 
 impl Classifier {
@@ -168,6 +205,7 @@ impl Classifier {
         script: &Path,
         manifest: &Path,
         model_root: &Path,
+        mode: Mode,
         load_timeout: Duration,
         cancel: &mut watch::Receiver<bool>,
     ) -> Result<Self> {
@@ -178,6 +216,17 @@ impl Classifier {
         ensure!(
             spec.schema_version == 1 && spec.path_base == "repository_root",
             "unsupported model manifest"
+        );
+        let labels: Vec<String> = serde_json::from_value(json!(mode.labels()))?;
+        ensure!(
+            spec.classifier_mode == mode
+                && spec.label_to_id
+                    == labels
+                        .into_iter()
+                        .enumerate()
+                        .map(|(i, l)| (l, i))
+                        .collect(),
+            "classifier mode or label contract mismatch"
         );
         ensure!(
             spec.evaluated_input.max_length > 0
@@ -191,6 +240,7 @@ impl Classifier {
             helper: Some(Helper::start(python, script)?),
             manifest_sha256: format!("{:x}", Sha256::digest(&bytes)),
             limits: spec.evaluated_input,
+            mode,
         };
         let result = async {
             let reply = client
@@ -201,10 +251,10 @@ impl Classifier {
                 )
                 .await?;
             ensure!(reply["ready"] == true, "classifier did not become ready");
-            let labels: [Label; LABEL_COUNT] = serde_json::from_value(reply["labels"].clone())?;
+            let labels: Vec<Label> = serde_json::from_value(reply["labels"].clone())?;
             let limits: Limits = serde_json::from_value(reply["limits"].clone())?;
             ensure!(
-                labels == LABELS && limits == client.limits,
+                labels == mode.labels() && limits == client.limits,
                 "classifier input or label contract mismatch"
             );
             Ok::<_, anyhow::Error>(())
@@ -232,7 +282,7 @@ impl Classifier {
                 .await?;
             let prediction: Prediction = serde_json::from_value(reply["prediction"].clone())
                 .context("invalid classifier prediction")?;
-            prediction.validate(self.limits.max_length)?;
+            prediction.validate(self.mode, self.limits.max_length)?;
             Ok(prediction)
         }
         .await;
@@ -252,6 +302,7 @@ impl Classifier {
         frame["schema_version"] = json!(1);
         frame["request_id"] = json!(request_id);
         frame["manifest_sha256"] = json!(self.manifest_sha256);
+        frame["mode"] = json!(self.mode);
         let helper = self
             .helper
             .as_mut()
@@ -268,10 +319,14 @@ impl Classifier {
                 && reply["manifest_sha256"] == self.manifest_sha256,
             "classifier response identity mismatch"
         );
+        ensure!(
+            reply["mode"] == json!(self.mode),
+            "classifier response mode mismatch"
+        );
         Ok(reply)
     }
 
-    async fn abort(&mut self) {
+    pub(crate) async fn abort(&mut self) {
         if let Some(helper) = self.helper.take() {
             let _ = helper.finish(true).await;
         }
@@ -291,7 +346,12 @@ impl Classifier {
 }
 
 impl Prediction {
-    fn validate(&self, max_length: usize) -> Result<()> {
+    fn validate(&self, mode: Mode, max_length: usize) -> Result<()> {
+        let labels = mode.labels();
+        ensure!(
+            self.probabilities.len() == labels.len(),
+            "classifier probability count mismatch"
+        );
         ensure!(
             self.token_count > 0 && self.token_count <= max_length,
             "invalid classifier token count"
@@ -308,13 +368,13 @@ impl Prediction {
             "invalid classifier probabilities"
         );
         let mut best = 0;
-        for i in 1..LABEL_COUNT {
+        for i in 1..labels.len() {
             if self.probabilities[i] > self.probabilities[best] {
                 best = i;
             }
         }
         ensure!(
-            self.label == LABELS[best],
+            self.label == labels[best],
             "classifier label does not match probabilities"
         );
         Ok(())
@@ -332,3 +392,29 @@ async fn cancelled(cancel: &mut watch::Receiver<bool>) {
 #[cfg(test)]
 #[path = "request_classifier/tests.rs"]
 mod tests;
+
+/// 各consumerの回帰試験用。実入力の領域選択には使わない。
+#[cfg(test)]
+pub(crate) fn fixture(text: &str, source: &str, label: Label) -> Classification {
+    let mode = if NORMAL_LABELS.contains(&label) {
+        Mode::Normal
+    } else {
+        Mode::Senryu
+    };
+    Classification {
+        mode,
+        text: text.into(),
+        source: source.into(),
+        manifest_sha256: "fixture".into(),
+        prediction: Prediction {
+            label,
+            probabilities: mode
+                .labels()
+                .iter()
+                .map(|candidate| if *candidate == label { 1.0 } else { 0.0 })
+                .collect(),
+            token_count: 8,
+            inference_ms: 0.1,
+        },
+    }
+}

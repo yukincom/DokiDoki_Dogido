@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""戦闘後の自動再開と保留入力を、実HTTPと模擬モデル/再生で検査。所有プロセスは回収する。"""
+"""戦闘後の自動再開と通常分類の境界を、実HTTP・模擬モデル/再生で検査する。"""
 from datetime import datetime, timedelta, timezone
 from contextlib import contextmanager
 import json
@@ -26,8 +26,36 @@ BERT_LABELS = {
 
 @contextmanager
 def fixture(*, extra_args=(), **settings):
-    with mock_request_classifier(BERT_LABELS, extra_args=extra_args) as (args, _), haiku_fixture(extra_args=args, **settings) as state:
+    with mock_request_classifier(BERT_LABELS, extra_args=extra_args) as (args, classifier), haiku_fixture(extra_args=args, **settings) as state:
+        state[3]["classifier_requests"] = classifier / "requests.jsonl"
         yield state
+
+
+def classifier_requests(control):
+    path = control["classifier_requests"]
+    return [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
+
+
+def classified_input(base, sid, text):
+    """最初の受付行を返す。危険中の最終拒否も配送結果として検査する。"""
+    response = request(base, "/api/v1/player-input", {"session_id": sid, "source": "voice", "text": text})
+    assert response["accepted"], response
+    turn = response["turn_id"]
+    result = wait_for(lambda: next((r for r in request(base, "/api/v1/rust-dialogue/snapshot")["utterances"]
+        if r["turn_id"] == turn and r.get("request_classification")), None))
+    assert result["classifier_mode"] == "normal", result
+    assert result["request_classification"]["prediction"]["label"] == "not_target", result
+    return turn
+
+
+def rejected_normal_input(base, sid, text):
+    turn = classified_input(base, sid, text)
+    def rejected():
+        item = row(base, turn, {"not_selected"})
+        return item if item and item.get("forwarded_input") else None
+    result = wait_for(rejected)
+    assert result["forwarded_input"] == {"accepted": False, "reason": "fresh_safe_snapshot_required"}, result
+    return turn
 
 
 def event(name):
@@ -65,7 +93,6 @@ def returned(send, rows, sid, count=1):
 
 
 def main():
-    from check_workshop_provisional import done
     passed = []
     with fixture(combat_settings=SETTINGS) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         calls = install(control, lambda text, prompt, n: step(text,"respond","気に入ってもらえてうれしいわ。"))
@@ -74,15 +101,14 @@ def main():
         assert r["workshop_action"] == "respond" and len(calls) == 1 and hud(sid)["state"] == "open"
         assert hud(sid)["canonical_lines"] == LINES and not revisions(folder,sid)
         enter(send, rows, sid)
-        turn = submit(base,sid,"いい句だね")
-        r = wait_for(lambda: row(base,turn,{"queued"}))
-        assert r["combat_input_result"]["analysis"]["action"] == "deferred_input", r
+        rejected_normal_input(base, sid, "いい句だね")
+        classified = classifier_requests(control)
         assert len(calls) == 1 and hud(sid)["state"] == "danger" and not revisions(folder,sid)
         end(send, rows, sid)
-        r = done(base, send, sid, turn, hostile=False)
-        assert r["workshop_action"] == "respond" and len(calls) == 2, r
+        returned(send, rows, sid)
+        assert len(calls) == 1 and classifier_requests(control) == classified
         assert hud(sid)["state"] == "open" and not revisions(folder,sid)
-        passed.append("praise_is_held_without_model_until_clear_then_reaches_same_workshop")
+        passed.append("combat_praise_uses_normal_once_and_never_reenters_workshop")
     # 終了はBERTだけで閉じる。本文モデルを呼ばず、返事を戦闘が消しても復活しない。
     for text in ["終了ー", "お開きー"]:
         with fixture(combat_settings=SETTINGS, interval_ms=5000) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
@@ -228,28 +254,31 @@ def main():
         (folder / "player_mode").write_text("slow")
         send(sid, visual_threats=[MOB], combat={"combat_active_hint": True})
         warning = wait_for(lambda: next((r for r in rows(sid) if r.get("combat_actions") and r["playback_status"] == "started"), None))
-        turn = submit(base,sid,"終了")
+        turn = classified_input(base, sid, "終了")
+        classified = classifier_requests(control)
         assert row(base, warning["turn_id"], {"started"}) and hud(sid)["state"] == "danger"
         (folder / "player_mode").write_text("ok")
-        r = done(base,send,sid,turn)
-        assert r["combat_input_outcome"]=="close_checked",r
-        assert r["combat_input_result"]["provider"]=="modernbert",r
-        assert hud(sid)["state"] == "closed"
-        assert row(base, warning["turn_id"], {"completed"})
-        assert not actions(rows, sid, "workshop_resume")
-        passed.append("explicit_close_during_combat_waits_for_warning_completion")
+        drive(lambda s: send(s, visual_threats=[MOB], combat={"combat_active_hint": True}), sid,
+              lambda: row(base, warning["turn_id"], {"completed"}))
+        assert hud(sid)["state"] == "danger" and row(base, turn, {"waiting_for_warning"})
+        end(send, rows, sid)
+        returned(send, rows, sid)
+        r = wait_for(lambda: row(base, turn, {"cancelled"}))
+        assert r["resolution"] == "superseded_classifier_mode", r
+        assert classifier_requests(control) == classified and hud(sid)["state"] == "open"
+        assert not actions(rows, sid, "workshop_close_feedback") and not revisions(folder, sid)
+        passed.append("combat_end_waits_for_warning_then_expires_without_senryu_reclassification")
 
     with fixture(combat_settings=SETTINGS) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         sid = ready(base, send, rows)
         enter(send, rows, sid)
-        turn = submit(base,sid,"終了")
-        r = wait_for(lambda: row(base,turn,{"quiet"}))
-        assert r["combat_input_outcome"]=="close_checked",r
-        assert r["combat_input_result"]["provider"]=="modernbert",r
-        assert hud(sid)["state"]=="closed"
-        r = wait_for(lambda: next((r for r in actions(rows, sid, "workshop_close_feedback") if r["playback_status"] == "completed"), None))
-        assert r["player_input_text"] == "終了" and not revisions(folder, sid)
-        passed.append("combat_close_acknowledged_after_warning_without_reopening_or_saving")
+        rejected_normal_input(base, sid, "終了")
+        classified = classifier_requests(control)
+        assert hud(sid)["state"] == "danger" and not actions(rows, sid, "workshop_close_feedback")
+        end(send, rows, sid); returned(send, rows, sid)
+        assert hud(sid)["state"] == "open" and not revisions(folder, sid)
+        assert classifier_requests(control) == classified
+        passed.append("combat_end_after_warning_cannot_close_or_save_the_workshop")
 
     with fixture(combat_settings=SETTINGS) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         sid = ready(base, send, rows)
@@ -262,28 +291,21 @@ def main():
         assert not any(r["playback_status"] == "completed" for r in actions(rows, sid, "workshop_resume"))
         passed.append("stale_snapshot_cancels_return_prompt_and_cannot_confirm_resume")
 
-    # not_targetは安全の判定にせず保留し、共通BERT Endだけが終了する。
+    # 戦闘中の新規入力はすべて通常分類だけ。終了の原文も川柳へ再分類しない。
     with fixture(combat_settings=SETTINGS) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         calls = install(control, lambda text, prompt, n: step(text))
         sid = ready(base, send, rows)
         enter(send, rows, sid)
-        previous = None
-        for text in ["いい句だね", "終了しないよ", "『終了』って言っただけ"]:
+        for text in ["いい句だね", "終了しないよ", "『終了』って言っただけ", "終了"]:
             send(sid, visual_threats=[MOB], combat={"combat_active_hint":True})
-            turn = submit(base, sid, text)
-            r = wait_for(lambda: row(base, turn, {"queued"}))
-            assert r["combat_input_result"]["analysis"]["action"] == "deferred_input", r
-            assert r["combat_input_outcome"] == "held" and hud(sid)["state"] == "danger", r
-            if previous: wait_for(lambda: row(base, previous, {"cancelled"}))
-            previous = turn
-        send(sid, visual_threats=[MOB], combat={"combat_active_hint":True})
-        turn = submit(base, sid, "終了")
-        r = done(base, send, sid, turn)
-        assert r["combat_input_outcome"] == "close_checked" and hud(sid)["state"] == "closed", r
+            rejected_normal_input(base, sid, text)
+            assert hud(sid)["state"] == "danger"
+        classified = classifier_requests(control)
+        assert len(classified) == 4 and all(r["mode"] == "normal" for r in classified), classified
+        end(send, rows, sid); returned(send, rows, sid)
         assert not calls and not revisions(folder, sid)
-        assert r["combat_input_result"]["provider"] == "modernbert", r
-        wait_for(lambda: row(base, previous, {"cancelled"}))
-        passed.append("not_target_remains_held_and_bert_end_cancels_pending_without_model")
+        assert classifier_requests(control) == classified and hud(sid)["state"] == "open"
+        passed.append("combat_praise_negation_quote_and_end_remain_normal_without_workshop_effects")
 
     print(json.dumps({"passed": len(passed), "cases": passed, "all_owned_processes_stopped": True}, ensure_ascii=False, indent=2))
 

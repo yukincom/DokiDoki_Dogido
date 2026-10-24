@@ -2,7 +2,7 @@
 //! JSONLの原文履歴を一件ずつ分類し、ID付き結果だけをstdoutへ返す。
 use anyhow::{Context, Result};
 use clap::Parser;
-use dogido_rust::request_classifier::{Classifier, Input};
+use dogido_rust::request_classifier::{Classifier, Input, Mode};
 use serde_json::{Value, json};
 use std::{path::PathBuf, time::Duration};
 use tokio::{
@@ -14,6 +14,9 @@ use tokio::{
 struct Args {
     #[arg(long)]
     manifest: PathBuf,
+    /// 本体が選ぶ領域を明示する。manifestと不一致なら失敗する。
+    #[arg(long, value_parser = ["normal", "senryu"])]
+    mode: String,
     /// checkpoint_pathを相対解決するモデル保管リポジトリ。
     #[arg(long)]
     model_root: PathBuf,
@@ -42,6 +45,11 @@ async fn main() -> Result<()> {
         &args.worker,
         &args.manifest,
         &args.model_root,
+        if args.mode == "senryu" {
+            Mode::Senryu
+        } else {
+            Mode::Normal
+        },
         Duration::from_secs(args.load_timeout_seconds),
         &mut cancel_rx,
     )

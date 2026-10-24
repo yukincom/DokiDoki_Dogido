@@ -115,7 +115,7 @@ impl Context {
         self.requests_sword = result.prediction.label == Label::EquipSword;
         self.assist_intent_source = "modernbert".into();
         self.assist_intent_evidence = result.text.clone();
-        self.assist_intent_confidence = result.prediction.probabilities[2];
+        self.assist_intent_confidence = result.probability(Label::EquipSword);
         self.asks_mob_information = result.prediction.label == Label::EnemyInformation;
         self.knowledge_query = if result.prediction.label == Label::NotTarget {
             query::extract(&self.normalized_text)

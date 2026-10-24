@@ -284,6 +284,16 @@ impl Dialogue {
             workshop_mode,
             s.haiku.active.is_some(),
         );
+        // 掛け軸・STT・BERTは同じ相談受付を投影する。GETで状態を変更しない。
+        if s.haiku.workshop.as_ref().is_some_and(|w| w.open) {
+            hud["state"] = if super::request_runtime::Binding::capture(s)
+                .is_some_and(|b| b.mode == crate::request_classifier::Mode::Senryu)
+            {
+                "open".into()
+            } else {
+                "danger".into()
+            };
+        }
         hud["revision"] = d.revision.into();
         Some(hud)
     }

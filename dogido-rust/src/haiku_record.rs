@@ -262,6 +262,8 @@ pub struct Workshop {
     pub editing: Option<WorkshopEditing>,
     pub revision_id: Option<String>,
     pub version: u64,
+    /// 句の版とは別の入力境界。pause→resumeで戻った古い分類・録音を識別する。
+    pub input_boundary: u64,
     pub emission: Emission,
     pub entry_id: Option<String>,
     pub hud_id: String,
@@ -318,6 +320,7 @@ impl Workshop {
             editing: None,
             revision_id: None,
             version: 0,
+            input_boundary: 0,
             emission,
             entry_id,
             hud_id: format!("workshop_{}", uuid::Uuid::new_v4().simple()),
@@ -353,6 +356,9 @@ impl Workshop {
     }
 
     pub fn close(&mut self, reason: impl Into<String>) {
+        if self.open {
+            self.input_boundary = self.input_boundary.wrapping_add(1);
+        }
         self.editing = None;
         self.conversation_candidate = None;
         self.discussion_target = None;
@@ -367,6 +373,7 @@ impl Workshop {
             return false;
         }
         self.paused_at = Some(now.max(self.completed));
+        self.input_boundary = self.input_boundary.wrapping_add(1);
         self.recovery = crate::workshop_combat::Recovery::default();
         self.followup = crate::workshop_followup::Stage::Discussion;
         true
@@ -378,6 +385,7 @@ impl Workshop {
         let Some(_) = self.paused_at.take() else {
             return false;
         };
+        self.input_boundary = self.input_boundary.wrapping_add(1);
         self.record_activity(now);
         true
     }

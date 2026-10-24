@@ -45,26 +45,26 @@ fn renders_training_format_without_shortening_or_normalizing() {
 fn rejects_invalid_predictions_instead_of_mapping_to_not_target() {
     let valid = || Prediction {
         label: Label::EnemyInformation,
-        probabilities: std::array::from_fn(|i| if i == 1 { 1.0 } else { 0.0 }),
+        probabilities: (0..16).map(|i| if i == 1 { 1.0 } else { 0.0 }).collect(),
         token_count: 20,
         inference_ms: 1.0,
     };
-    assert!(valid().validate(256).is_ok());
+    assert!(valid().validate(Mode::Normal, 256).is_ok());
     let mut p = valid();
     p.label = Label::NotTarget;
-    assert!(p.validate(256).is_err());
+    assert!(p.validate(Mode::Normal, 256).is_err());
     let mut p = valid();
     p.probabilities[0] = f64::NAN;
-    assert!(p.validate(256).is_err());
+    assert!(p.validate(Mode::Normal, 256).is_err());
     let mut p = valid();
     p.probabilities[1] = 0.4;
-    assert!(p.validate(256).is_err());
+    assert!(p.validate(Mode::Normal, 256).is_err());
     let mut p = valid();
     p.token_count = 257;
-    assert!(p.validate(256).is_err());
+    assert!(p.validate(Mode::Normal, 256).is_err());
     let mut p = valid();
     p.inference_ms = -1.0;
-    assert!(p.validate(256).is_err());
+    assert!(p.validate(Mode::Normal, 256).is_err());
 }
 
 struct Fixture {
@@ -75,7 +75,7 @@ impl Fixture {
         let dir =
             std::env::temp_dir().join(format!("dogido-classifier-test-{}", uuid::Uuid::new_v4()));
         fs::create_dir(&dir).unwrap();
-        fs::write(dir.join("manifest.json"), r#"{"schema_version":1,"path_base":"repository_root","evaluated_input":{"max_history_utterances":10,"max_length":256,"truncation":false}}"#).unwrap();
+        fs::write(dir.join("manifest.json"), serde_json::to_vec(&json!({"schema_version":1,"path_base":"repository_root","classifier_mode":"normal","label_to_id": NORMAL_LABELS.iter().enumerate().map(|(i,l)| (serde_json::to_value(l).unwrap().as_str().unwrap().to_owned(),i)).collect::<std::collections::BTreeMap<_,_>>(),"evaluated_input":{"max_history_utterances":10,"max_length":256,"truncation":false}})).unwrap()).unwrap();
         let script = r#"
 import json, os, sys, time
 from pathlib import Path
@@ -83,7 +83,7 @@ base = Path(__file__).parent
 base.joinpath('pid').write_text(str(os.getpid()))
 for line in sys.stdin:
     f = json.loads(line)
-    r = {k:f[k] for k in ('schema_version','request_id','manifest_sha256')}
+    r = {k:f[k] for k in ('schema_version','request_id','manifest_sha256','mode')}
     if f['op'] == 'load':
         if MODE == 'load_hang': time.sleep(60)
         r.update(ready=True, labels=LABELS, limits={'max_history_utterances':10,'max_length':256,'truncation':False})
@@ -99,7 +99,7 @@ for line in sys.stdin:
         if MODE == 'error': r['error'] = 'inference failure'
     print(json.dumps(r), flush=True)
 "#;
-        let labels = serde_json::to_string(&LABELS).unwrap();
+        let labels = serde_json::to_string(&NORMAL_LABELS).unwrap();
         fs::write(
             dir.join("worker.py"),
             format!("LABELS = {labels}\nMODE = {mode:?}\n{script}"),
@@ -117,6 +117,7 @@ for line in sys.stdin:
             &self.dir.join("worker.py"),
             &self.dir.join("manifest.json"),
             &self.dir,
+            Mode::Normal,
             timeout,
             cancel,
         )
