@@ -79,7 +79,7 @@ impl IntoResponse for ApiError {
             "translation_busy" => (StatusCode::CONFLICT, "翻訳中です。完了までお待ちください。"),
             "translation_game_running" => (StatusCode::CONFLICT, "ドギド本体を停止してから翻訳してください。"),
             "translation_failed" => (StatusCode::SERVICE_UNAVAILABLE, "翻訳できませんでした。8080のモデルを確認してから再度ボタンを押してください。"),
-            "data_repository_unconfigured" => (StatusCode::SERVICE_UNAVAILABLE, "非公開リポジトリの接続が未設定です。"),
+            "data_repository_unconfigured" => (StatusCode::SERVICE_UNAVAILABLE, "データリポジトリの接続が未設定です。"),
             "data_repository_busy" => (StatusCode::CONFLICT, "アップロード中です。完了までお待ちください。"),
             "data_repository_archive_unready" => (StatusCode::CONFLICT, "研究保存先への保全を完了してからアップロードしてください。"),
             _ if reason.starts_with("data_repository_failed: ") => (StatusCode::BAD_GATEWAY, reason.trim_start_matches("data_repository_failed: ")),
@@ -190,7 +190,7 @@ fn bootstrap(app: &App) -> Result<Value> {
         );
     }
     Ok(
-        json!({"catalog":catalog,"poems":view["poems"],"player":view["player"],"photos":view["photos"],"corrections":crate::haiku_record::MemoryStore::new(&app.store.memory).reading_corrections()?,"status":{"active":false,"memoryEnabled":app.memory_enabled,"message":"Minecraftを閉じた状態でも閲覧・編集できます。"},"csrf":app.csrf,"biomes":biomes,"biomeEnglish":english,"dataRepository":app.data_repository.as_ref().map(|_|json!({"url":data_repository::URL}))}),
+        json!({"catalog":catalog,"poems":view["poems"],"player":view["player"],"photos":view["photos"],"corrections":crate::haiku_record::MemoryStore::new(&app.store.memory).reading_corrections()?,"status":{"active":false,"memoryEnabled":app.memory_enabled,"message":"Minecraftを閉じた状態でも閲覧・編集できます。"},"csrf":app.csrf,"biomes":biomes,"biomeEnglish":english,"dataRepository":app.data_repository.as_ref().map(|c|json!({"url":data_repository::URL,"mode":c.mode}))}),
     )
 }
 async fn boot(State(app): State<Arc<App>>) -> Result<Response, ApiError> {

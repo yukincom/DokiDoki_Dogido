@@ -67,8 +67,18 @@ class PublishTests(unittest.TestCase):
                 return {'repository':m.REPOSITORY,'checkout':str(checkout),'files':files,'poems':len(rows),'captures':0}
             github=subprocess.CompletedProcess([],0,json.dumps({'private':True,'full_name':m.REPOSITORY}).encode(),b'')
             with patch.object(m,'git',side_effect=local_git), patch.object(m,'run',return_value=github):
+                original_write = m.write_file
+                def interrupted(root, file, **kwargs):
+                    original_write(root, file, **kwargs)
+                    if file['path'].endswith('two-0.json'):
+                        raise RuntimeError('コピー中断の模擬')
+                with patch.object(m, 'write_file', side_effect=interrupted):
+                    with self.assertRaisesRegex(RuntimeError, 'コピー中断'):
+                        m.publish(plan({'one':0,'two':0}))
                 first=m.publish(plan({'one':1,'two':1}))
                 self.assertEqual((first['status'],first['poems']),('uploaded',2))
+                self.assertTrue((checkout/'2026/10251200/snapshots/two-0.json').exists())
+                self.assertEqual(local_git(checkout, 'status', '--porcelain').stdout, b'')
                 calls.clear()
                 same=m.publish(plan({'one':1,'two':1}))
                 self.assertEqual(same['status'],'up_to_date')

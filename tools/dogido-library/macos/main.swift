@@ -106,7 +106,31 @@ final class Bookshelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavi
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         guard let url = action.request.url else { decisionHandler(.cancel); return }
         let local = url.scheme == "http" && url.host == "127.0.0.1" && url.port == baseURL?.port
+        let ownPage = action.sourceFrame.securityOrigin.protocol == "http"
+            && action.sourceFrame.securityOrigin.host == "127.0.0.1"
+            && action.sourceFrame.securityOrigin.port == baseURL?.port
+        let dataPath = url.path == "/yukincom/DokiDoki-Dogido-data"
+            || url.path.range(of: #"^/yukincom/DokiDoki-Dogido-data/pull/[0-9]+$"#, options: .regularExpression) != nil
+        if ownPage, action.navigationType == .linkActivated, url.scheme == "https", url.host == "github.com",
+           url.user == nil, url.password == nil, url.port == nil, url.query == nil, url.fragment == nil, dataPath {
+            NSWorkspace.shared.open(url)
+            decisionHandler(.cancel); return
+        }
         decisionHandler(local || url.scheme == "about" ? .allow : .cancel)
+    }
+
+    func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String,
+                 initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
+        let origin = frame.securityOrigin
+        guard webView === web, frame.isMainFrame, origin.protocol == "http", origin.host == "127.0.0.1",
+              origin.port == baseURL?.port else { completionHandler(false); return }
+        let alert = NSAlert()
+        alert.messageText = "公開するデータの確認"
+        alert.informativeText = message
+        alert.addButton(withTitle: "公開して提供"); alert.addButton(withTitle: "キャンセル")
+        alert.beginSheetModal(for: window) { response in
+            completionHandler(response == .alertFirstButtonReturn)
+        }
     }
 
     // 本棚の主フレームからの固定操作だけ。Web側からパスや任意URLを受け取らない。

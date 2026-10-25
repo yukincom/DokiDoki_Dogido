@@ -91,12 +91,12 @@ def check_files(root, files):
             raise ValueError('保存後のファイル照合に失敗しました: ' + file['path'])
 
 
-def write_file(root, file):
+def write_file(root, file, *, mutable_paths=()):
     target = safe_path(root, file['path'])
     target.parent.mkdir(parents=True, exist_ok=True)
     if target.exists() and target.stat().st_size == file['bytes'] and digest(target) == file['sha256']:
         return
-    if target.exists() and file['path'] not in ('index.json', 'README.md', '.gitattributes', '.gitignore'):
+    if target.exists() and file['path'] not in ('index.json', 'README.md', '.gitattributes', '.gitignore', *mutable_paths):
         raise ValueError('既存の研究記録を上書きしようとしました: ' + file['path'])
     staging = root / '.git/dogido-stage' if (root / '.git').is_dir() else target.parent
     if staging.is_symlink():
@@ -149,6 +149,11 @@ def changed_records(plan, previous):
 def publish(plan):
     if plan['repository'] != REPOSITORY:
         raise ValueError('保存先が指定されたリポジトリではありません。')
+    if plan.get('mode') == 'public':
+        from bookshelf_public_repository import publish_public
+        return publish_public(plan)
+    if plan.get('mode', 'private') != 'private':
+        raise ValueError('アップロード方式が不正です。')
     remote = json.loads(run(['gh', 'api', f'repos/{REPOSITORY}'], timeout=30).stdout)
     if remote.get('private') is not True or remote.get('full_name') != REPOSITORY:
         raise ValueError('保存先が非公開ではありません。アップロードを中止しました。')
@@ -213,6 +218,17 @@ def publish(plan):
             check_destination(root)
             git(root, 'lfs', 'pull', timeout=900)
         files = list(plan['files']) + [text_file('README.md', README), text_file('.gitattributes', '*.f32 filter=lfs diff=lfs merge=lfs -text\n'), text_file('.gitignore', '.DS_Store\n')]
+        # コピー途中で失敗してから句が編集された場合も、処理自身が残した旧snapshotを引き継ぐ。
+        current_paths = {f['path'] for f in files}
+        for path, expected in working.get('files', {}).items():
+            if path in current_paths:
+                continue
+            saved = safe_path(root, path)
+            if not saved.exists():
+                continue
+            if not saved.is_file() or digest(saved) != expected:
+                raise ValueError('前回のアップロード準備記録が変更されています。')
+            files.append({'path': path, 'source': str(saved), 'bytes': saved.stat().st_size, 'sha256': expected})
         paths = [f['path'] for f in files]
         if len(paths) != len(set(paths)):
             raise ValueError('同じパスの記録が重複しています。')

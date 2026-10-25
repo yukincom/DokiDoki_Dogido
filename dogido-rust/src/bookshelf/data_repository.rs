@@ -1,4 +1,4 @@
-//! 明示操作で研究保全を固定し、同じ構造のまま非公開GitHubへ送る。
+//! 明示操作で研究保全を固定し、設定された公開範囲でGitHubへ送る。
 use super::{j_lens, research_archive as archive, store::Store};
 use anyhow::{Context, Result, ensure};
 use serde_json::{Value, json};
@@ -23,7 +23,15 @@ pub const URL: &str = "https://github.com/yukincom/DokiDoki-Dogido-data";
 
 #[derive(Clone, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Config { pub python: PathBuf, pub worker: PathBuf, pub checkout: PathBuf }
+pub struct Config {
+    pub python: PathBuf, pub worker: PathBuf, pub checkout: PathBuf,
+    #[serde(default)]
+    pub mode: Mode,
+}
+
+#[derive(Clone, Default, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Mode { #[default] Private, Public }
 
 fn hash(bytes: &[u8]) -> String { format!("{:x}", Sha256::digest(bytes)) }
 fn inline(files: &mut Vec<Value>, path: &str, bytes: Vec<u8>) -> Result<Value> {
@@ -123,6 +131,7 @@ impl Store {
 pub(super) fn publish(store: &Store, lens: Option<&j_lens::Config>, config: &Config) -> Result<Value> {
     let mut plan = store.data_repository_plan(lens)?;
     plan["checkout"] = json!(config.checkout);
+    plan["mode"] = json!(config.mode);
     let dir = store.memory.join("bookshelf");
     let input = dir.join(format!(".publish-{}.json", uuid::Uuid::new_v4()));
     let output = input.with_extension("result");
@@ -143,7 +152,7 @@ pub(super) fn publish(store: &Store, lens: Option<&j_lens::Config>, config: &Con
         };
         ensure!(fs::metadata(&output)?.len() < 32 * 1024, "data_repository_output_invalid");
         let result: Value = serde_json::from_slice(&fs::read(&output)?)?;
-        ensure!(status.success() && matches!(result["status"].as_str(), Some("uploaded" | "up_to_date")), "data_repository_failed: {}", result["detail"].as_str().unwrap_or("アップロード結果を確認できませんでした"));
+        ensure!(status.success() && matches!(result["status"].as_str(), Some("uploaded" | "submitted" | "up_to_date")), "data_repository_failed: {}", result["detail"].as_str().unwrap_or("アップロード結果を確認できませんでした"));
         Ok(result)
     })();
     let _ = fs::remove_file(input); let _ = fs::remove_file(output);

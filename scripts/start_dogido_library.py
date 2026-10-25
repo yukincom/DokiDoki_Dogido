@@ -31,11 +31,12 @@ def main():
                             "worker": str(ROOT / "dev_tools/haiku_internal_probe/gguf_jlens.py"),
                             "assets": str(readout_assets)}
     publish_settings = ROOT / ".dogido_tools/research-repository.json"
+    # 公開提供は保留中。既存の明示設定がある環境だけ接続し、従来設定はprivateを維持する。
     if publish_settings.is_file():
         publish = json.loads(publish_settings.read_text())
         config["data_repository"] = {"python": str(Path(publish.get("python", sys.executable)).expanduser()),
             "worker": str(ROOT / "scripts/publish_bookshelf_data.py"),
-            "checkout": str(Path(publish["checkout"]).expanduser().absolute())}
+            "checkout": str(Path(publish["checkout"]).expanduser().absolute()), "mode": publish.get("mode", "private")}
     if settings.capture_dir is not None:
         config["capture_dir"] = str(settings.capture_dir.expanduser().resolve())
     if settings.minecraft_screenshots_dir is not None:
