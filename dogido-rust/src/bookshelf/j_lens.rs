@@ -56,7 +56,7 @@ fn validate(value: &Value, header: &Value, processor: &str, binding: &str) -> Re
     Ok(())
 }
 
-fn run_worker(config: &Config, input: Vec<u8>, timeout: Duration) -> Result<Vec<u8>> {
+pub(super) fn run_worker(config: &Config, input: Vec<u8>, timeout: Duration) -> Result<Vec<u8>> {
     let start = Instant::now();
     let mut child = Command::new(&config.python).arg(&config.worker).arg("--config").arg(&config.assets)
         .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn()?;
@@ -87,7 +87,12 @@ fn run_worker(config: &Config, input: Vec<u8>, timeout: Duration) -> Result<Vec<
 impl Store {
     pub(super) fn j_lens(&self, id: &str, index: usize, config: &Config, build: bool) -> Result<Value> {
         // Resolve the existing poem/request/archive route first. Never trust paths from a manifest.
-        let mut file = self.internal_capture_file(id, index, "manifest")?;
+        self.read_j_lens(config, build, |kind| self.internal_capture_file(id, index, kind))
+    }
+
+    pub(super) fn read_j_lens(&self, config: &Config, build: bool,
+        open_capture: impl Fn(&str) -> Result<super::research_archive::CaptureFile>) -> Result<Value> {
+        let mut file = open_capture("manifest")?;
         let mut bytes = Vec::new(); file.file.read_to_end(&mut bytes)?;
         let m = file.manifest;
         ensure!(m["backend"] == "llama.cpp" && m["boundary"] == "decoder_layer_output_pre_final_norm",
@@ -116,7 +121,7 @@ impl Store {
             return Ok(value.clone());
         }
         ensure!(build, "j_lens_not_prepared");
-        let mut captured = self.internal_capture_file(id, index, "hidden")?;
+        let mut captured = open_capture("hidden")?;
         ensure!(captured.manifest == m, "capture_manifest_changed");
         let mut input = serde_json::to_vec(&header)?; input.push(b'\n');
         for position in &selected {

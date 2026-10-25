@@ -247,6 +247,11 @@ impl Archive {
     /// 保存完了時に記録したheadを読む。hash名の辞書順で最新版を推測しない。
     /// pathは閉じた書式に検証し、原句identity・全bytesのhashを照合する。書込みなし。
     pub fn read_snapshot(&self, head: &ArchivedSnapshot) -> Result<Value> {
+        Ok(self.read_snapshot_with_bytes(head)?.0)
+    }
+
+    /// Gitへの保管でも元のhashを保つため、照合した同じsnapshotのbytesを返す。
+    pub fn read_snapshot_with_bytes(&self, head: &ArchivedSnapshot) -> Result<(Value, Vec<u8>)> {
         ensure!(head.archive_id == self.config.archive_id, "archive_snapshot_scope");
         ensure!(valid_hash(&head.sha256), "archive_invalid_hash");
         let parts: Vec<_> = head.relative_path.split('/').collect();
@@ -271,7 +276,7 @@ impl Archive {
             ensure!(hash(&bytes) == head.sha256, "archive_snapshot_changed");
             let value: Value = serde_json::from_slice(&bytes)?;
             ensure!(value["identity"] == identity && value["record"].is_object(), "archive_snapshot_conflict");
-            Ok(value["record"].clone())
+            Ok((value["record"].clone(), bytes))
         }
         #[cfg(not(unix))]
         { anyhow::bail!("archive_platform_unsupported") }

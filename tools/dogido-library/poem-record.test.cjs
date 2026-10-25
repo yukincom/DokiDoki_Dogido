@@ -80,4 +80,7 @@ test('candidate controls keep raw numbers separately folded with no generated in
  assert.match(html,/試験的な読出し/);assert.match(html,/上位16候補/);
  assert.match(html,/value="14" selected/);assert.match(html,/29">30 \/ 30（最終層）/);
  assert.doesNotMatch(html,/<details class="capture-raw-slice"[^>]* open/);
+ assert.doesNotMatch(html,/<details[^>]*\bopen\b/);
+ assert.equal((html.match(/class="j-lens-translate"/g)||[]).length,3);
+ assert.match(html,/>文<\/button>/);
 });

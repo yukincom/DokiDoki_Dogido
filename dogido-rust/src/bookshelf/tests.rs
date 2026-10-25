@@ -1223,7 +1223,45 @@ fn test_app(f: &Fixture) -> Arc<App> {
         memory_enabled: true,
         j_lens: None,
         readout_lock: Arc::new(std::sync::Mutex::new(())),
+        translation_lock: Arc::new(tokio::sync::Mutex::new(())),
+        game_port: 5055,
+        data_repository: None,
+        publish_lock: Arc::new(std::sync::Mutex::new(())),
     })
+}
+
+#[test]
+fn repository_plan_preserves_snapshot_bytes_and_rejects_unconfigured_archive() {
+    use sha2::{Digest, Sha256};
+    let f = Fixture::new(); f.poem("root", "p"); let s = f.store();
+    assert!(s.data_repository_plan(None).is_err());
+    let root = f.root.join("archive"); fs::create_dir(&root).unwrap();
+    s.select_research_storage(research_storage::Selection {root:root.clone(),expected_archive_id:None}).unwrap();
+    let plan = s.data_repository_plan(None).unwrap();
+    assert_eq!(plan["poems"], 1); assert_eq!(plan["captures"], 0);
+    let head = s.read().unwrap()["researchSnapshots"]["root:p"].clone();
+    let saved = plan["files"].as_array().unwrap().iter().find(|f| f["path"] == head["relative_path"]).unwrap();
+    assert_eq!(saved["content"].as_str().unwrap().as_bytes(), fs::read(root.join(head["relative_path"].as_str().unwrap())).unwrap());
+    assert_eq!(saved["sha256"], format!("{:x}", Sha256::digest(saved["content"].as_str().unwrap().as_bytes())));
+    let index = plan["files"].as_array().unwrap().iter().find(|f| f["path"] == "index.json").unwrap();
+    let index: Value = serde_json::from_str(index["content"].as_str().unwrap()).unwrap();
+    assert_eq!(index["poems"][0]["snapshot"]["sha256"], head["sha256"]);
+    assert!(index.to_string().find(root.to_str().unwrap()).is_none());
+}
+
+#[tokio::test]
+async fn repository_upload_and_translation_require_existing_write_guard() {
+    use tower::ServiceExt;
+    let f = Fixture::new(); let app = test_app(&f);
+    for route in ["/api/research-storage", "/api/poems/root%3Ap/internal-capture/1/j-lens-translation"] {
+        for origin in [None, Some("https://evil.invalid")] {
+            let mut req = axum::http::Request::builder().uri(route).method("POST").header("host", "127.0.0.1:45678");
+            if let Some(origin) = origin { req = req.header("origin",origin).header("x-dogido-library","secret-test-token"); }
+            let response = router(app.clone()).oneshot(req.body(Body::empty()).unwrap()).await.unwrap();
+            assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        }
+    }
+    assert!(!f.store().memory.exists());
 }
 async fn call(
     app: Arc<App>,

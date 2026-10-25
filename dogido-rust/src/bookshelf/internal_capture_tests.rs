@@ -233,6 +233,13 @@ print(json.dumps(dict(h,schema='dogido.j_lens.v1',status='exploratory_transfer',
     assert_eq!(result["positions"][2]["position"], 1);
     assert_eq!(fs::read(&original).unwrap(), original_bytes);
     assert_eq!(fs::read(source.join("hidden.f32")).unwrap(), raw);
+    let archive = f.root.join("archive"); fs::create_dir(&archive).unwrap();
+    store.select_research_storage(research_storage::Selection {root:archive,expected_archive_id:None}).unwrap();
+    crate::poem_trash::change(&store.memory,"root:p",false,now()).unwrap();
+    let plan = store.data_repository_plan(Some(&config)).unwrap();
+    assert_eq!(plan["captures"],1);
+    assert!(plan["files"].as_array().unwrap().iter().any(|f| f["path"].as_str().unwrap().contains("/j-lens/")));
+    crate::poem_trash::change(&store.memory,"root:p",true,now()).unwrap();
     fs::remove_file(source.join("hidden.f32")).unwrap();
     assert_eq!(store.j_lens("root:p", 1, &config, false).unwrap(), result);
     assert!(store.j_lens("root:p", 2, &config, true).is_err());

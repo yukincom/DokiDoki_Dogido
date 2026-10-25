@@ -119,6 +119,7 @@ server_base_url=http://127.0.0.1:5055
 - [設定・起動・検証](dogido-rust/README.md)
 - [Minecraftを起動せず、保存した句を相談する](dogido-rust/workshop-text.md)
 - [句と写真を見返す本棚](docs/2026-10-13-bookshelf-integration.md)
+- [句集・J-lens候補・内部表現のデータ保管庫（非公開・閲覧権限が必要）](https://github.com/yukincom/DokiDoki-Dogido-data)
 - [会話への画像入力](docs/2026-10-21-chat-image.md)
 - [仕様・開発記録の一覧](docs/README.md)
 

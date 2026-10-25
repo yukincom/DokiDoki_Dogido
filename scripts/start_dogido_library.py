@@ -22,6 +22,7 @@ def main():
     if not binary.is_file():
         raise SystemExit("本棚用の実行ファイルがありません。先に本体をビルドしてください。")
     config = {"memory": str(settings.memory_dir.resolve()), "memory_enabled": settings.memory_enabled,
+              "game_port": settings.bind_port,
               "photos": str(Path.home() / "Pictures/ドギド"), "ui": str(ROOT / "tools/dogido-library")}
     readout_assets = ROOT / ".dogido_tools/j-lens/assets.json"
     if readout_assets.is_file():
@@ -29,6 +30,12 @@ def main():
         config["j_lens"] = {"python": str(Path(assets.get("python", sys.executable)).expanduser()),
                             "worker": str(ROOT / "dev_tools/haiku_internal_probe/gguf_jlens.py"),
                             "assets": str(readout_assets)}
+    publish_settings = ROOT / ".dogido_tools/research-repository.json"
+    if publish_settings.is_file():
+        publish = json.loads(publish_settings.read_text())
+        config["data_repository"] = {"python": str(Path(publish.get("python", sys.executable)).expanduser()),
+            "worker": str(ROOT / "scripts/publish_bookshelf_data.py"),
+            "checkout": str(Path(publish["checkout"]).expanduser().absolute())}
     if settings.capture_dir is not None:
         config["capture_dir"] = str(settings.capture_dir.expanduser().resolve())
     if settings.minecraft_screenshots_dir is not None:

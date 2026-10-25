@@ -1,5 +1,10 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const {selectLayer,createReader}=require('./j-lens-viewer.js');
+test('kana and symbols copy locally while kanji-only words wait for the shared dictionary',()=>{
+ const {copyOriginal}=require('./j-lens-viewer.js');
+ for(const piece of ['カタカナ','おはよう','▁▁','<turn|>'])assert.equal(copyOriginal(piece),true);
+ for(const piece of ['貴重','谢谢','欢迎','précieux','treasure'])assert.equal(copyOriginal(piece),false);
+});
 test('one saved readout is shared by phase panes and only a missing cache triggers a guarded POST',async()=>{
  const calls=[];let release;const ready=new Promise(resolve=>release=resolve);
  const read=createReader(async(url,options)=>{calls.push({url,options});if(calls.length===1)return {status:404};await ready;return {ok:true,json:async()=>({schema:'data'})};},'csrf-test');

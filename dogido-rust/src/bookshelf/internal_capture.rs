@@ -7,6 +7,7 @@ use std::io::{Read, Seek, SeekFrom};
 #[derive(Default, serde::Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub(super) struct ValuesQuery {
+    pub phase: Option<String>,
     pub position: u64,
     pub layer: u64,
     pub offset: u64,

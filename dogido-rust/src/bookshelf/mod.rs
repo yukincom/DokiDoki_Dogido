@@ -3,6 +3,8 @@ mod research;
 mod research_storage;
 mod internal_capture;
 mod j_lens;
+mod j_lens_translation;
+mod data_repository;
 mod library_view;
 mod player_photos;
 pub mod research_archive;
@@ -34,6 +36,10 @@ struct App {
     memory_enabled: bool,
     j_lens: Option<j_lens::Config>,
     readout_lock: Arc<std::sync::Mutex<()>>,
+    translation_lock: Arc<tokio::sync::Mutex<()>>,
+    game_port: u16,
+    data_repository: Option<data_repository::Config>,
+    publish_lock: Arc<std::sync::Mutex<()>>,
 }
 #[derive(Clone, serde::Deserialize)]
 pub struct Config {
@@ -42,6 +48,10 @@ pub struct Config {
     pub capture_dir: Option<PathBuf>,
     #[serde(default)]
     pub j_lens: Option<j_lens::Config>,
+    #[serde(default = "default_game_port")]
+    pub game_port: u16,
+    #[serde(default)]
+    pub data_repository: Option<data_repository::Config>,
     pub photos: PathBuf,
     #[serde(default = "crate::screenshot::default_directory")]
     pub screenshots: PathBuf,
@@ -52,6 +62,7 @@ pub struct Config {
 fn enabled() -> bool {
     true
 }
+fn default_game_port() -> u16 { 5055 }
 type ApiResult = Result<Json<Value>, ApiError>;
 struct ApiError(anyhow::Error);
 impl<E: Into<anyhow::Error>> From<E> for ApiError {
@@ -64,6 +75,14 @@ impl IntoResponse for ApiError {
         let reason = self.0.to_string();
         let diagnostic = (reason == "research_storage_connection_failed").then(|| format!("{:#}", self.0));
         let (status, detail) = match reason.as_str() {
+            "translation_not_prepared" => (StatusCode::NOT_FOUND, "翻訳はまだ実行していません。"),
+            "translation_busy" => (StatusCode::CONFLICT, "翻訳中です。完了までお待ちください。"),
+            "translation_game_running" => (StatusCode::CONFLICT, "ドギド本体を停止してから翻訳してください。"),
+            "translation_failed" => (StatusCode::SERVICE_UNAVAILABLE, "翻訳できませんでした。8080のモデルを確認してから再度ボタンを押してください。"),
+            "data_repository_unconfigured" => (StatusCode::SERVICE_UNAVAILABLE, "非公開リポジトリの接続が未設定です。"),
+            "data_repository_busy" => (StatusCode::CONFLICT, "アップロード中です。完了までお待ちください。"),
+            "data_repository_archive_unready" => (StatusCode::CONFLICT, "研究保存先への保全を完了してからアップロードしてください。"),
+            _ if reason.starts_with("data_repository_failed: ") => (StatusCode::BAD_GATEWAY, reason.trim_start_matches("data_repository_failed: ")),
             "j_lens_unconfigured" => (StatusCode::SERVICE_UNAVAILABLE, "このモデルのJ-lensはまだ設定されていません。"),
             "j_lens_not_prepared" => (StatusCode::NOT_FOUND, "候補語はまだ読み出していません。"),
             "j_lens_busy" => (StatusCode::CONFLICT, "別の候補語を読み出しています。少し待って開き直してください。"),
@@ -171,7 +190,7 @@ fn bootstrap(app: &App) -> Result<Value> {
         );
     }
     Ok(
-        json!({"catalog":catalog,"poems":view["poems"],"player":view["player"],"photos":view["photos"],"corrections":crate::haiku_record::MemoryStore::new(&app.store.memory).reading_corrections()?,"status":{"active":false,"memoryEnabled":app.memory_enabled,"message":"Minecraftを閉じた状態でも閲覧・編集できます。"},"csrf":app.csrf,"biomes":biomes,"biomeEnglish":english}),
+        json!({"catalog":catalog,"poems":view["poems"],"player":view["player"],"photos":view["photos"],"corrections":crate::haiku_record::MemoryStore::new(&app.store.memory).reading_corrections()?,"status":{"active":false,"memoryEnabled":app.memory_enabled,"message":"Minecraftを閉じた状態でも閲覧・編集できます。"},"csrf":app.csrf,"biomes":biomes,"biomeEnglish":english,"dataRepository":app.data_repository.as_ref().map(|_|json!({"url":data_repository::URL}))}),
     )
 }
 async fn boot(State(app): State<Arc<App>>) -> Result<Response, ApiError> {
@@ -219,6 +238,14 @@ async fn export_poems(
     Ok(Json(
         blocking(move || research::export(&app.store, &period, Utc::now())).await?,
     ))
+}
+async fn publish_research(State(app): State<Arc<App>>) -> ApiResult {
+    Ok(Json(blocking(move || {
+        let config = app.data_repository.as_ref().context("data_repository_unconfigured")?;
+        let _publish = app.publish_lock.try_lock().map_err(|_| anyhow::anyhow!("data_repository_busy"))?;
+        let _readout = app.readout_lock.try_lock().map_err(|_| anyhow::anyhow!("j_lens_busy"))?;
+        data_repository::publish(&app.store, app.j_lens.as_ref(), config)
+    }).await?))
 }
 async fn reading(
     State(app): State<Arc<App>>,
@@ -283,6 +310,14 @@ async fn internal_capture_file(
     Path((id, index, kind)): Path<(String, usize, String)>,
     Query(query): Query<internal_capture::ValuesQuery>,
 ) -> Result<Response, ApiError> {
+    if kind == "j-lens-translation" {
+        let value = blocking(move || {
+            let selection = j_lens_translation::Selection {phase:query.phase.context("translation_selection_invalid")?, layer:query.layer as usize};
+            let p = app.store.translation_source(&id, index, app.j_lens.as_ref().context("j_lens_unconfigured")?, &selection)?;
+            Ok(app.store.translation_cache(&p)?.unwrap_or_else(|| j_lens_translation::originals(&p)))
+        }).await?;
+        return Ok(Json(value).into_response());
+    }
     if kind == "j-lens" {
         let value = blocking(move || app.store.j_lens(&id, index,
             app.j_lens.as_ref().context("j_lens_unconfigured")?, false)).await?;
@@ -302,7 +337,23 @@ async fn internal_capture_file(
 }
 async fn prepare_capture_readout(
     State(app): State<Arc<App>>, Path((id, index, kind)): Path<(String, usize, String)>,
+    body: axum::body::Bytes,
 ) -> ApiResult {
+    if kind == "j-lens-translation" {
+        let selection: j_lens_translation::Selection = serde_json::from_slice(&body)?;
+        let _lock = app.translation_lock.clone().try_lock_owned().map_err(|_| anyhow::anyhow!("translation_busy"))?;
+        let selected = app.clone();
+        let (p, cached) = blocking(move || {
+            let p = selected.store.translation_source(&id,index,selected.j_lens.as_ref().context("j_lens_unconfigured")?,&selection)?;
+            let cached = selected.store.translation_cache(&p)?;
+            Ok((p,cached))
+        }).await?;
+        if let Some(value) = cached { return Ok(Json(value)); }
+        let value = j_lens_translation::translate(&p, app.game_port).await.map_err(|e| {
+            if e.to_string() == "translation_game_running" { e } else { e.context("translation_failed") }
+        })?;
+        return Ok(Json(blocking(move || { app.store.save_translation(&p,&value)?; Ok(value) }).await?));
+    }
     Ok(Json(blocking(move || {
         ensure!(kind == "j-lens", "capture_file_kind_invalid");
         let config = app.j_lens.as_ref().context("j_lens_unconfigured")?;
@@ -330,6 +381,7 @@ const PUBLIC: &[&str] = &[
     "poem-record.js",
     "internal-capture-viewer.js",
     "j-lens-viewer.js",
+    "data-repository.js",
     "poem-export.js",
     "model.js",
     "catalog-player-notes.js",
@@ -377,7 +429,7 @@ fn router(app: Arc<App>) -> Router {
         .route("/api/poems/current", put(edit_poem))
         .route("/api/poems/export", axum::routing::post(export_poems))
         .route("/api/photos", put(photos))
-        .route("/api/research-storage", put(research_storage))
+        .route("/api/research-storage", put(research_storage).post(publish_research))
         .route("/api/readings", put(reading).delete(remove_reading))
         .route("/api/trash", get(trash_list).put(trash_change))
         .route("/api/photos/{id}/image", get(photo_image))
@@ -423,6 +475,10 @@ pub async fn run(config: Config, port: u16) -> Result<()> {
         memory_enabled: config.memory_enabled,
         j_lens: config.j_lens,
         readout_lock: Arc::new(std::sync::Mutex::new(())),
+        translation_lock: Arc::new(tokio::sync::Mutex::new(())),
+        game_port: config.game_port,
+        data_repository: config.data_repository,
+        publish_lock: Arc::new(std::sync::Mutex::new(())),
     });
     let worker = app.store.clone();
     let cleanup = tokio::spawn(async move {
