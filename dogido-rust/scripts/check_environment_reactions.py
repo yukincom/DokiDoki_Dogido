@@ -43,6 +43,7 @@ def main():
         player.chmod(0o700)
         control["environment_action"] = "speak"
         spoken = {
+            "danger": "今の様子、気になるで。",
             "surroundings": "周りの顔ぶれが変わったな。ちょっと気になるわ。",
             "smell": "ええ匂いやな。お腹がすいてきたわ。",
             "place": "昼でも木陰は気になるな。気ぃつけて進もな。",

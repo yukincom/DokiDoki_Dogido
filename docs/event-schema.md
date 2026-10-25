@@ -147,6 +147,12 @@
 - `same`
 - `below`
 
+### `player.motion` と無敵の実測
+
+Fabricは同じplayer snapshotに `motion` を添える。`fall_distance` はnativeの累積落下距離（block、非負）、`vertical_velocity` は垂直速度（block/tick、負が下降）、`climbing / gliding / flying` は現在の登攀・滑空・飛行。各値の省略／nullは未測定。座標差から補完せず、着地先や被害は確定しない。`player.invulnerable` はabilitiesの無敵またはspectatorを表す。
+
+これらと既存の `health / active_status_effects / world.air_supply` を共通観測の本人 `motion / vitals` に保持する。身体本人の未測定値へコピーしない。落下・炎上・溶岩・息不足の発話機会は[環境の危険反応](2026-10-25-environment-hazards.md)のコード条件で選ぶ。
+
 ### `distance_band`
 
 - `touching`
@@ -190,12 +196,13 @@
 | `submerged_in_water` | その個体の頭まで水に沈んでいる |
 | `touching_water_or_rain` | 水またはその個体に降る雨に触れている |
 | `touching_rain` | 同じ個体の足元・身体上端で雨が当たっている。水との接触・雪・濡れの残留とは別 |
+| `touching_lava` | その個体が流体の溶岩に触れている。近隣熱源・マグマブロック・炎上とは別 |
 | `on_ground` | その個体が地面に接している。水中の底でもtrueになり得る |
 | `on_fire` | その個体が現在燃えている |
 
 各項目は省略／nullが未確認。`touching_water=false`だけでは陸上と決めず、地面の観測も併用する。
 
-2026-10-25: ドギド自身の接水・眼の水没・雨への接触は、既存の `body_observation.sample.senses.environment` に同じ項目名で載せる。身体の同じserver姿勢・眼・実寸とclient世界から採り、接地・炎上の未測定値は省略する。共通観測の `subject_states.player / dogido` に、それぞれの降水・接触・遮蔽と整理済みの関係を載せる。詳細は[主体別の環境観測](2026-10-25-subject-environment.md)。
+2026-10-25: ドギド自身の接水・眼の水没・雨・溶岩への接触は、既存の `body_observation.sample.senses.environment` に同じ項目名で載せる。身体の同じserver姿勢・眼・実寸とclient世界から採り、接地・炎上の未測定値は省略する。共通観測の `subject_states.player / dogido` に、それぞれの降水・接触・遮蔽と整理済みの関係を載せる。詳細は[主体別の環境観測](2026-10-25-subject-environment.md)。
 天候の雨区分だけでは、屋根の下の個体まで濡れているとは扱わない。
 視認保持中の敵が遮蔽物に隠れた場合、Fabricは空の`environment`を送って新しい環境実測を伏せる。
 この明示的な欠測を旧`in_water/on_fire`から復元しない。音だけの対象には環境実測を添えない。

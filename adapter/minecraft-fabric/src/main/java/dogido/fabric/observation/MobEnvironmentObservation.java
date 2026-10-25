@@ -7,21 +7,22 @@ import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 
-/** 個体の現在の接水・水没・雨への接触・接地・炎上を採る。乾燥や行動の意図は推定しない。 */
+/** 個体の現在の接水・水没・雨・溶岩への接触・接地・炎上を採る。乾燥や行動の意図は推定しない。 */
 public record MobEnvironmentObservation(
     boolean touchingWater,
     boolean submergedInWater,
     boolean touchingWaterOrRain,
     boolean onGround,
     boolean onFire,
-    boolean touchingRain
+    boolean touchingRain,
+    boolean touchingLava
 ) {
     /** 同じ個体の現在値だけを返す。雨と接水を別々に採り、水の中でも雨への接触を失わない。 */
     public static MobEnvironmentObservation capture(Entity entity) {
         return new MobEnvironmentObservation(
             entity.isTouchingWater(), entity.isSubmergedInWater(),
             entity.isTouchingWaterOrRain(), entity.isOnGround(), entity.isOnFire(),
-            touchingRain(entity.getEntityPos(), entity.getBoundingBox(), entity.getEntityWorld())
+            touchingRain(entity.getEntityPos(), entity.getBoundingBox(), entity.getEntityWorld()), entity.isInLava()
         );
     }
 
@@ -42,6 +43,7 @@ public record MobEnvironmentObservation(
         value.addProperty("submerged_in_water", submergedInWater);
         value.addProperty("touching_water_or_rain", touchingWaterOrRain);
         value.addProperty("touching_rain", touchingRain);
+        value.addProperty("touching_lava", touchingLava);
         value.addProperty("on_ground", onGround);
         value.addProperty("on_fire", onFire);
         return value;

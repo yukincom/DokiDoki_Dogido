@@ -183,6 +183,12 @@ pub(super) fn focus(
 /// 静止画像は同じ入力へ添える。周期通知の比較差分とrevisionは保持し、未提示の差分の消費を防ぐ。
 pub(super) fn refresh_dialogue_context(s: &Session, actions: &mut [Speech]) -> bool {
     for action in actions {
+        if let Some(raw) = s.environment_latest.as_ref().or(s.latest.as_ref()) {
+            let event = super::body_runtime::event(s, raw);
+            if !crate::environment::reaction::refresh_danger(action, &event) {
+                return false;
+            }
+        }
         if !crate::reaction_leaf::is_model_reaction(action) {
             continue;
         }
@@ -367,7 +373,9 @@ impl Dialogue {
         if actions.is_empty() {
             return;
         }
-        if super::workshop_focus::active(&d.sessions[sid]) {
+        if super::workshop_focus::active(&d.sessions[sid])
+            && !actions.iter().all(|a| a.kind == "player_hazard")
+        {
             return;
         }
         if reserved_reply(&d.sessions[sid]) {
@@ -388,7 +396,9 @@ impl Dialogue {
             let event = super::body_runtime::event(s, event);
             for action in &mut actions {
                 crate::environment::reaction::attach(action, &event, &recent, &self.config.combat);
-                if let Some(leaf) = action.leaf.as_mut() {
+                if !crate::environment::danger::player::player_origin(action)
+                    && let Some(leaf) = action.leaf.as_mut()
+                {
                     leaf.details["__body_context"] =
                         json!(event.body_origin().and_then(|o| o.context.as_ref()));
                 }
@@ -461,6 +471,36 @@ impl Dialogue {
         combat_priority: CombatPriority,
     ) {
         let speaking = super::reply_queue::playback_started(d, sid);
+        let s = d.sessions.get_mut(sid).unwrap();
+        // 被弾だけのpanicでも、本人の危険実測は扱う。戦闘判定や被弾原因は書き換えず、
+        // 実際の敵・先行中の緊急警告・本人への予約済み応答がある間はこの機会を消費しない。
+        let occupied = reserved_reply(s)
+            || s.warning
+                .as_ref()
+                .map(|w| w.actions.as_slice())
+                .into_iter()
+                .chain(s.pending_warning.as_deref())
+                .flatten()
+                .any(|a| matches!(a.delivery, Delivery::Combat | Delivery::UrgentEnvironment));
+        if !occupied
+            && observation_fresh(s)
+            && !s.foreground.game_paused
+            && s.latest
+                .as_ref()
+                .is_none_or(|e| !danger::player::hostile_observed(e))
+            && s.audio_latest
+                .as_ref()
+                .is_none_or(|e| !danger::player::hostile_observed(e))
+            && let Some(raw) = s.environment_latest.as_ref()
+        {
+            let event = super::body_runtime::event(s, raw);
+            let mut candidate = s.danger.clone();
+            if let Some(action) = candidate.player_hazard(&event) {
+                s.danger = candidate;
+                self.queue_environment(d, jobs, sid, vec![action], true);
+                return;
+            }
+        }
         let s = d.sessions.get_mut(sid).unwrap();
         if super::workshop_focus::active(s) {
             // update済みの現在観測は保持し、発話候補やCDは消費しない。
@@ -700,6 +740,100 @@ mod tests {
     use super::*;
     use crate::dialogue::{DialogueConfig, empty_event};
     use std::time::Instant;
+
+    #[tokio::test]
+    async fn player_hazard_waits_for_reply_and_preserves_workshop_and_pending_revision() {
+        let f = super::super::workshop_record::tests::fixture();
+        let mut wire = empty_event("試験");
+        wire["player"]["environment"] = json!({"touching_lava":true,"on_fire":true});
+        wire["combat"] = json!({"recent_damage_ms":0,"combat_active_hint":true});
+        let raw = GameEvent::parse(wire).unwrap();
+        let mut jobs = Vec::new();
+        // 配送枠の飽和を使い、生成や音声を起動せず本物の待機列を検査する。
+        for _ in 0..16 {
+            jobs.push(tokio::spawn(std::future::pending::<()>()));
+        }
+        {
+            let mut data = f.d.data.lock().unwrap();
+            let s = data.sessions.get_mut("s").unwrap();
+            let w = s.haiku.workshop.as_mut().unwrap();
+            let mut proposed = w.current_lines.clone();
+            proposed[0].surface_text = "さくらいろ".into();
+            proposed[0].reading_text = "さくらいろ".into();
+            proposed[0].provenance = "player_explicit".into();
+            w.pending = Some(
+                crate::workshop_edit::Pending::stage(&w.current_lines, &w.current_lines, proposed, 0)
+                    .unwrap(),
+            );
+            let expected = (w.current_lines.clone(), w.version, json!(w.pending));
+            s.preview = false;
+            s.received = Some(Instant::now());
+            s.latest = Some(raw.clone());
+            s.environment_latest = Some(raw.clone());
+            s.mode = crate::combat::model::Mode::Panic;
+            let sensed = super::super::body_runtime::event(s, &raw);
+            s.danger.update(&sensed, 0, true, &f.d.config.combat);
+            let mut reply = Speech::new("combat_query", "先に受けた質問の返答");
+            reply.delivery = Delivery::PlayerReply;
+            s.pending_warning = Some(vec![reply]);
+            f.d.process_environment(&mut data, &mut jobs, "s", 0, CombatPriority::Selected);
+            assert_eq!(
+                data.sessions["s"].pending_warning.as_ref().unwrap()[0].kind,
+                "combat_query"
+            );
+            data.sessions.get_mut("s").unwrap().pending_warning = None;
+            // 同じ実測のまま予約が空けば機会を取得できる。workshopを閉じたり案を採用しない。
+            f.d.process_environment(&mut data, &mut jobs, "s", 1, CombatPriority::Selected);
+            let s = data.sessions.get_mut("s").unwrap();
+            let mut actions = s.pending_warning.clone().unwrap();
+            assert_eq!(actions[0].kind, "player_hazard");
+            assert_eq!(actions[0].delivery, Delivery::UrgentEnvironment);
+            let w = s.haiku.workshop.as_ref().unwrap();
+            assert_eq!(
+                (w.current_lines.clone(), w.version, json!(w.pending)),
+                expected
+            );
+            assert!(super::super::warnings::applicable(
+                &actions[0],
+                s,
+                &f.d.config.warnings,
+                &f.d.config.combat
+            ));
+            s.foreground.game_paused = true;
+            assert!(!super::super::warnings::applicable(
+                &actions[0],
+                s,
+                &f.d.config.warnings,
+                &f.d.config.combat
+            ));
+            s.foreground.game_paused = false;
+            s.received = Some(Instant::now() - std::time::Duration::from_secs(60));
+            assert!(!super::super::warnings::applicable(
+                &actions[0],
+                s,
+                &f.d.config.warnings,
+                &f.d.config.combat
+            ));
+            s.received = Some(Instant::now());
+            let mut current = json!(s.environment_latest.as_ref().unwrap());
+            current["player"]["health"] = json!(8);
+            s.environment_latest = Some(GameEvent::parse(current.clone()).unwrap());
+            assert!(refresh_dialogue_context(s, &mut actions));
+            assert_eq!(
+                actions[0].leaf.as_ref().unwrap().details["reaction_context"]["observations"]["subject_states"]
+                    ["player"]["vitals"]["health"],
+                8.0
+            );
+            current["player"]["environment"]["touching_lava"] = json!(false);
+            s.environment_latest = Some(GameEvent::parse(current).unwrap());
+            assert!(!refresh_dialogue_context(s, &mut actions));
+        }
+        for job in jobs {
+            job.abort();
+            let _ = job.await;
+        }
+        f.finish().await;
+    }
 
     #[test]
     fn rain_after_uses_ordinary_notice_priority_and_keeps_the_shared_normal_smell() {

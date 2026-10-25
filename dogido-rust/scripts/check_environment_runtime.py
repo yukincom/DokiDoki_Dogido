@@ -388,7 +388,8 @@ def main():
             wait_for(lambda: row(base, old, {"generating"}))
             send(sid, world=heat, player_state={"health": 20}, combat={"recent_damage_ms": 60000})
             warning = wait_for(lambda: match(sid, "damaging_light", "completed"))
-            assert warning["text"] == "触るとあちちやで！", warning
+            assert warning["text"] == control["leaf"] and warning["environment_reaction_outcome"] == "speak", warning
+            assert warning["combat_actions"][0]["leaf"]["kind"] == "environment_reaction", warning
             new = wait_for(lambda: next((r for r in rows(sid) if r.get("player_input_text") == "火のそばでも話を続けよう"
                 and r["playback_status"] == "completed"), None))
             assert old != new["turn_id"] and row(base, old, {"cancelled"}), rows(sid)

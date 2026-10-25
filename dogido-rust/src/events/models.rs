@@ -739,6 +739,9 @@ pub struct MobEnvironment {
     /// 同じ個体の足元・身体上端でworld.hasRainを照合した現在の雨への接触。雪や濡れの残留は表さない。
     #[serde(default)]
     pub touching_rain: Option<bool>,
+    /// entity.isInLava()の現在実測。身体感覚では同じ姿勢の箱と溶岩面を照合する。近隣熱源・炎上とは別。
+    #[serde(default)]
+    pub touching_lava: Option<bool>,
     #[serde(default)]
     pub on_ground: Option<bool>,
     #[serde(default)]
@@ -836,6 +839,12 @@ pub struct PlayerState {
     /// ゲームの体力値。ハートの表示個数ではなく、Noneは体力未取得。
     #[serde(default)]
     pub health: Option<f64>,
+    /// 自由落下・登攀・滑空・飛行の現在実測。Noneは未測定で、座標差から補完しない。
+    #[serde(default)]
+    pub motion: Option<PlayerMotion>,
+    /// player abilitiesの無敵、またはspectatorの実測。欠測を無敵なしへ補完しない。
+    #[serde(default)]
+    pub invulnerable: Option<bool>,
     /// MinecraftのFoodLevel値。Noneは空腹度未取得。
     #[serde(default)]
     pub hunger: Option<i64>,
@@ -858,6 +867,34 @@ pub struct PlayerState {
     pub active_status_effects: Vec<String>,
     #[serde(flatten)]
     pub extra: BTreeMap<String, Value>,
+}
+/// 同じplayer snapshotの移動状態。距離はblock、垂直速度はblock/tick（負が下降）。
+/// 行動の意図、着地位置、落下ダメージの有無はこの契約から確定しない。
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PlayerMotion {
+    #[serde(default)]
+    pub fall_distance: Option<f64>,
+    #[serde(default)]
+    pub vertical_velocity: Option<f64>,
+    #[serde(default)]
+    pub climbing: Option<bool>,
+    #[serde(default)]
+    pub gliding: Option<bool>,
+    #[serde(default)]
+    pub flying: Option<bool>,
+}
+impl Validate for PlayerMotion {
+    fn validate(&self) -> Result<(), String> {
+        ensure(
+            self.fall_distance.is_none_or(|v| v.is_finite() && v >= 0.0),
+            "PlayerMotion.fall_distance must be finite and nonnegative",
+        )?;
+        ensure(
+            self.vertical_velocity.is_none_or(f64::is_finite),
+            "PlayerMotion.vertical_velocity must be finite",
+        )
+    }
 }
 impl Default for PlayerState {
     fn default() -> Self {
@@ -1576,6 +1613,7 @@ impl Validate for PassiveMob {
 }
 impl Validate for PlayerState {
     fn validate(&self) -> Result<(), String> {
+        self.motion.validate()?;
         self.environment.validate()?;
         self.position.validate()?;
         self.hotbar.validate()?;

@@ -163,6 +163,25 @@ def main():
                     assert state["observed_at"], state
                 passed.append(f"{sheltered}_shelter_and_other_subject_rain_reach_existing_single_call")
 
+            # 保護中でも接触の実測は残る。危険発話を抑え、通常会話へ渡る二者の分離を確かめる。
+            for touching in ("player", "dogido"):
+                value = event()
+                value["player"]["invulnerable"] = True
+                value["player"]["environment"] = {"touching_lava": touching == "player", "on_fire": True}
+                value["body_observation"]["sample"]["senses"]["environment"] = {"touching_lava": touching == "dogido"}
+                send(value)
+                context, _ = ask("今のそれぞれの様子を話して")
+                states = context["observations"]["subject_states"]
+                for who, name in (("player", "プレイヤー"), ("dogido", "ドギド")):
+                    state = states[who]
+                    assert state["contact"]["touching_lava"] == (who == touching), state
+                    if who == touching:
+                        assert name + "は溶岩に触れ" in state["relations"]["heat"], state
+                assert states["player"]["contact"]["on_fire"] is True, states
+                assert states["dogido"]["contact"]["on_fire"] is None, states
+                assert states["dogido"]["vitals"] is None, states
+                passed.append(f"{touching}_lava_contact_is_separate_from_other_subject_and_fire")
+
             for label in ("unavailable", "owner_mismatch", "stale", "senses_unavailable"):
                 value = event()
                 if label == "unavailable":

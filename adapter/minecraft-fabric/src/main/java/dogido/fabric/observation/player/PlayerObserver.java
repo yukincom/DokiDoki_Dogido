@@ -72,6 +72,15 @@ public final class PlayerObserver {
         JsonObject json = new JsonObject();
         json.addProperty("name", resolvePlayerName(player));
         json.add("environment", MobEnvironmentObservation.capture(player).toJson());
+        // 同じsnapshotの実移動。距離はblock、垂直速度はblock/tick。着地先・被害量・落下原因は推測しない。
+        JsonObject motion = new JsonObject();
+        motion.addProperty("fall_distance", player.fallDistance);
+        motion.addProperty("vertical_velocity", player.getVelocity().y);
+        motion.addProperty("climbing", player.isClimbing());
+        motion.addProperty("gliding", player.isGliding());
+        motion.addProperty("flying", player.getAbilities().flying);
+        json.add("motion", motion);
+        json.addProperty("invulnerable", player.getAbilities().invulnerable || player.isSpectator());
 
         JsonObject position = new JsonObject();
         position.addProperty("x", round(player.getX()));

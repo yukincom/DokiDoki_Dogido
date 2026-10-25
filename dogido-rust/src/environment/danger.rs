@@ -1,6 +1,8 @@
-//! Dangerous environment policy. `update` receives one observation before selection.
-//! Partial notifications never replace full geometry, create an entry edge, or end a dark push.
+//! 現在の環境・本人の実測から危険の発話機会を選ぶ。updateが状態を更新し、配送・生成はdialogueが担う。
+//! 部分通知では完全な地形観測を置換せず、入口の変化や暗闇反応の終了を確定しない。
 mod geometry;
+pub(crate) mod materials;
+pub(crate) mod player;
 mod weather;
 mod words;
 use crate::{
@@ -59,6 +61,7 @@ pub struct LightContext {
 
 #[derive(Clone, Default)]
 pub struct Danger {
+    player_hazards: player::State,
     body_context: Option<crate::body::contracts::Context>,
     dimension: Option<String>,
     complete: bool,
@@ -115,6 +118,13 @@ impl Danger {
                 _ => true,
             }
     }
+    /// 敵の警告を先に確保した呼出側から、本人の接触・落下・空気の機会だけを取り出す。
+    pub(crate) fn player_hazard(&mut self, event: &GameEvent) -> Option<Speech> {
+        if !self.complete || self.dimension_changed {
+            return None;
+        }
+        self.player_hazards.take(event)
+    }
     pub fn dark_push_active(&self) -> bool {
         self.active || self.stage >= 1
     }
@@ -143,6 +153,9 @@ impl Danger {
     }
     pub fn update(&mut self, e: &GameEvent, _now: u64, complete: bool, s: &Settings) {
         self.complete = complete;
+        if complete {
+            self.player_hazards.observe(e);
+        }
         self.dimension_changed = false;
         if let Some(origin) = e.body_origin() {
             if !origin.available || origin.context != self.body_context {
@@ -455,9 +468,12 @@ impl Danger {
             } else {
                 "advice"
             };
-            return vec![Speech::new(
-                "emergency_shelter_advice",
-                text("darkness", &["emergency_shelter", key]),
+            return vec![materials::retain_branch(
+                Speech::new(
+                    "emergency_shelter_advice",
+                    text("darkness", &["emergency_shelter", key]),
+                ),
+                e,
             )];
         }
         if self.ominous_presence {
@@ -731,30 +747,24 @@ impl Danger {
 
 /// Revalidate present-tense facts before audio delivery. Thunder is a past observed event.
 pub fn still_applicable(a: &Speech, e: &GameEvent, s: &Settings) -> bool {
+    if a.leaf
+        .as_ref()
+        .and_then(|leaf| leaf.details.get("__reaction_guard"))
+        .and_then(|guard| guard.get("danger_branch"))
+        .is_some_and(|branch| *branch != materials::guard(a.kind, e))
+    {
+        return false;
+    }
     match a.kind {
+        "player_hazard" => player::applicable(a, e),
         "occluded_entry_with_light" => zone(e, s) && torch(e),
         "occluded_entry_no_light" => zone(e, s) && !torch(e),
         "dark_push_no_light" | "dark_push_breath" => zone(e, s),
         "submerged_darkness" => water_dark(e, s),
         "emergency_shelter_relief" => shelter(e, s) && night(e, s),
         "emergency_shelter_morning" => shelter(e, s) && morning(e, s),
-        "emergency_shelter_advice" => {
-            Danger::default().shelter_advice(e, s)
-                && a.text
-                    == text(
-                        "darkness",
-                        &[
-                            "emergency_shelter",
-                            if bed(e) {
-                                "advice_with_bed"
-                            } else if e.world.nearby_bed_count.unwrap_or(0) > 0 {
-                                "advice_nearby_bed"
-                            } else {
-                                "advice"
-                            },
-                        ],
-                    )
-        }
+        // LLM本文の一致ではなく、選択したベッド条件を生成側の観測guardで照合する。
+        "emergency_shelter_advice" => Danger::default().shelter_advice(e, s),
         "dark_push_after_breath" => {
             e.visual_threats.is_empty()
                 && e.auditory_threats.is_empty()
@@ -787,15 +797,6 @@ pub fn still_applicable(a: &Speech, e: &GameEvent, s: &Settings) -> bool {
         "night_warning_cave" => {
             Danger::default().cave_night(e)
                 && matches!(phase(e), Some(TimePhase::Evening | TimePhase::Night))
-                && a.text
-                    == text("darkness", &["night_warning", "cave_or_submerged"]).replace(
-                        "{phase_label}",
-                        if phase(e) == Some(TimePhase::Evening) {
-                            "夕方"
-                        } else {
-                            "夜"
-                        },
-                    )
         }
         "darkness_advice" | "darkness_escape" => {
             !submerged(e)

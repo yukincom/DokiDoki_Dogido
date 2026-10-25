@@ -374,9 +374,7 @@ fn sensory_questions_combat_and_severe_darkness_keep_the_original_path() {
     for kind in [
         "dark_push_no_light",
         "dark_push_breath",
-        "night_warning_surface",
         "thunder_cue",
-        "damaging_light",
         "aftermath",
     ] {
         let mut a = action(kind, json!({}));
@@ -476,4 +474,76 @@ fn unified_contract_allows_silent_movement_without_repairing_invalid_speech() {
         json!({"action":"silent","speech":"","body_action":body,"tool":"invented"})] {
         assert!(parse_reply(&invalid.to_string(),true).is_err());
     }
+}
+
+#[test]
+fn fixed_environment_danger_texts_share_existing_model_contract_and_keep_fallback_only_for_failure()
+{
+    let e = event(json!({}));
+    for kind in [
+        "darkness_advice",
+        "submerged_darkness",
+        "night_warning_surface",
+        "night_warning_cave",
+        "emergency_shelter_advice",
+        "emergency_shelter_morning",
+        "magma_block",
+        "damaging_light",
+        "end_portal_frame",
+    ] {
+        let mut a = Speech::new(kind, "元の失敗時案内");
+        a.delivery = Delivery::UrgentEnvironment;
+        attach(&mut a, &e, &json!({}));
+        assert_eq!(a.leaf.as_ref().unwrap().kind, KIND);
+        let p = prepared(&a);
+        assert_eq!(
+            outcome(&p, "足元が気になるな。"),
+            ("足元が気になるな。".into(), "speak")
+        );
+        assert_eq!(
+            p.finish(Some(&generated(json!({"action":"silent","speech":""})))),
+            (String::new(), "silent")
+        );
+        assert_eq!(
+            p.finish(None),
+            ("元の失敗時案内".into(), "generation_error")
+        );
+    }
+    for kind in ["thunder_cue", "dark_push_breath", "dark_push_stop"] {
+        let mut a = Speech::new(kind, "cue");
+        a.delivery = Delivery::UrgentEnvironment;
+        attach(&mut a, &e, &json!({}));
+        assert!(a.leaf.is_none());
+    }
+}
+
+#[test]
+fn shelter_and_night_branches_use_observed_facts_not_generated_words() {
+    let settings = Settings::default();
+    let e = event(
+        json!({"world":{"biome":"dripstone_caves","time_phase":"night","sky_visible":false,
+        "ceiling_height":12,"local_light":0,"danger_darkness_score":0.9}}),
+    );
+    let mut night = Speech::new("night_warning_cave", "自由な本文");
+    night.delivery = Delivery::Ambient;
+    attach(&mut night, &e, &json!({}));
+    night.text.clear();
+    assert!(still_applicable(&night, &e));
+    assert!(crate::environment::danger::still_applicable(
+        &night, &e, &settings
+    ));
+    let mut wire = json!(e);
+    wire["world"]["time_phase"] = json!("evening");
+    assert!(!still_applicable(&night, &GameEvent::parse(wire).unwrap()));
+    let mut shelter = Speech::new("emergency_shelter_advice", "本文は検証に使わない");
+    shelter.delivery = Delivery::Ambient;
+    attach(&mut shelter, &e, &json!({}));
+    shelter.text.clear();
+    assert!(still_applicable(&shelter, &e));
+    let mut wire = json!(e);
+    wire["inventory"] = json!({"red_bed":1});
+    assert!(!still_applicable(
+        &shelter,
+        &GameEvent::parse(wire).unwrap()
+    ));
 }

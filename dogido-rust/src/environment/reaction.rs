@@ -36,6 +36,7 @@ pub(crate) fn attach(action: &mut Speech, event: &GameEvent, recent: &Value, set
         "thunder_reaction" => "thunder",
         "smell" => "smell",
         "occluded_entry_with_light" | "occluded_entry_no_light" => "place",
+        kind if super::danger::materials::supports(kind) => "danger",
         _ => return,
     };
     let mut details = action
@@ -46,7 +47,9 @@ pub(crate) fn attach(action: &mut Speech, event: &GameEvent, recent: &Value, set
     let mut observations = json!({});
     let mut properties = json!({});
     let mut guard = json!({"dimension":normalized(event.player.dimension.as_deref())});
-    if let Some(origin) = event.body_origin() {
+    if !super::danger::player::player_origin(action)
+        && let Some(origin) = event.body_origin()
+    {
         guard["body_context"] = json!(origin.context);
     }
     match topic {
@@ -58,6 +61,19 @@ pub(crate) fn attach(action: &mut Speech, event: &GameEvent, recent: &Value, set
             properties["note"] = "雷鳴だけでは落雷地点や距離は未確認。".into();
         }
         "surroundings" | "reassurance" => {}
+        "danger" => {
+            observations = super::danger::materials::observations(
+                action.kind,
+                &details["player_hazard"],
+                event,
+            );
+            properties = super::danger::materials::properties(action.kind);
+            guard["danger_branch"] = details
+                .get("__reaction_guard")
+                .and_then(|guard| guard.get("danger_branch"))
+                .cloned()
+                .unwrap_or_else(|| super::danger::materials::guard(action.kind, event));
+        }
         "smell" => {
             let smell = match action.rain_after_window {
                 Some(window) => super::ambient::rain_after_context(event, window),
@@ -151,7 +167,8 @@ pub(crate) fn still_applicable(action: &Speech, event: &GameEvent) -> bool {
         return false;
     }
     let g = &leaf.details["__reaction_guard"];
-    if let Some(origin) = event.body_origin()
+    if !super::danger::player::player_origin(action)
+        && let Some(origin) = event.body_origin()
         && (!origin.available
             || g.get("body_context")
                 .is_some_and(|value| *value != json!(origin.context)))
@@ -162,6 +179,14 @@ pub(crate) fn still_applicable(action: &Speech, event: &GameEvent) -> bool {
         .as_str()
         .is_some_and(|d| !d.is_empty() && d != normalized(event.player.dimension.as_deref()))
     {
+        return false;
+    }
+    if g.get("danger_branch")
+        .is_some_and(|branch| *branch != super::danger::materials::guard(action.kind, event))
+    {
+        return false;
+    }
+    if action.kind == "player_hazard" && !super::danger::player::applicable(action, event) {
         return false;
     }
     // 通知の「新着判定」と違い、再生待ちの発話は強度・発生源属性を含む全観測に照合する。
@@ -186,6 +211,22 @@ pub(crate) fn still_applicable(action: &Speech, event: &GameEvent) -> bool {
     {
         return false;
     }
+    true
+}
+
+/// 待機後は危険の同じ分岐を照合し、本人の現在値だけ更新する。guardを新しい事実に付け替えない。
+pub(crate) fn refresh_danger(action: &mut Speech, event: &GameEvent) -> bool {
+    if !action.leaf.as_ref().is_some_and(|leaf| {
+        leaf.kind == KIND && leaf.details["reaction_context"]["topic"] == "danger"
+    }) {
+        return true;
+    }
+    if !still_applicable(action, event) {
+        return false;
+    }
+    let leaf = action.leaf.as_mut().unwrap();
+    leaf.details["reaction_context"]["observations"] =
+        super::danger::materials::observations(action.kind, &leaf.details["player_hazard"], event);
     true
 }
 
@@ -221,7 +262,7 @@ impl Prepared {
         ensure!(
             matches!(
                 context.get("topic").and_then(Value::as_str),
-                Some("surroundings" | "thunder" | "smell" | "place" | "reassurance")
+                Some("surroundings" | "thunder" | "smell" | "place" | "reassurance" | "danger")
             ),
             "unknown reaction topic"
         );

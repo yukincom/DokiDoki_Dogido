@@ -46,18 +46,23 @@ public record ObservationOrigin(UUID id, UUID threatTargetId, Vec3d position, Ve
     public boolean touchingWater(ClientWorld world) {
         if (!body()) return player.isTouchingWater();
         // 身体の実寸をserver姿勢へ移した箱と水面を照合する。水のあるblockに足元が入るだけでは接水にしない。
-        return sampleWater(bounds, pos -> {
+        return sampleFluid(bounds, pos -> {
             var fluid = world.getFluidState(pos);
             return fluid.isIn(FluidTags.WATER) ? pos.getY() + fluid.getHeight(world, pos) : Double.NEGATIVE_INFINITY;
         });
     }
-    /** Nativeと同じ縮小箱・上端を含まないblock範囲で調べる。probeは水面Y、非水は負の無限大を返す。 */
-    static boolean sampleWater(Box bounds, java.util.function.ToDoubleFunction<BlockPos> waterSurface) {
+    /** Nativeと同じ縮小箱・上端を含まないblock範囲で調べる。probeは対象の流体面Y、対象外は負の無限大を返す。 */
+    static boolean sampleFluid(Box bounds, java.util.function.ToDoubleFunction<BlockPos> fluidSurface) {
+        return sampleFluid(bounds, fluidSurface, false);
+    }
+    /** 溶岩のisInLavaは流体の正の深さを要する。水のisTouchingWaterは面との一致も含む。 */
+    static boolean sampleFluid(Box bounds, java.util.function.ToDoubleFunction<BlockPos> fluidSurface, boolean positiveDepth) {
         Box contact = bounds.contract(0.001);
         BlockPos last = new BlockPos((int)Math.ceil(contact.maxX)-1, (int)Math.ceil(contact.maxY)-1,
             (int)Math.ceil(contact.maxZ)-1);
         for (BlockPos pos : BlockPos.iterate(BlockPos.ofFloored(contact.minX, contact.minY, contact.minZ), last)) {
-            if (waterSurface.applyAsDouble(pos) >= contact.minY) return true;
+            double surface = fluidSurface.applyAsDouble(pos);
+            if (positiveDepth ? surface > contact.minY : surface >= contact.minY) return true;
         }
         return false;
     }
@@ -66,10 +71,15 @@ public record ObservationOrigin(UUID id, UUID threatTargetId, Vec3d position, Ve
         if (!body()) return MobEnvironmentObservation.capture(player).toJson();
         boolean water = touchingWater(world);
         boolean rain = MobEnvironmentObservation.touchingRain(position, bounds, world);
+        boolean lava = sampleFluid(bounds, pos -> {
+            var fluid = world.getFluidState(pos);
+            return fluid.isIn(FluidTags.LAVA) ? pos.getY() + fluid.getHeight(world, pos) : Double.NEGATIVE_INFINITY;
+        }, true);
         var value = new com.google.gson.JsonObject();
         value.addProperty("touching_water", water);
         value.addProperty("submerged_in_water", submerged(world));
         value.addProperty("touching_rain", rain);
+        value.addProperty("touching_lava", lava);
         value.addProperty("touching_water_or_rain", water || rain);
         return value;
     }

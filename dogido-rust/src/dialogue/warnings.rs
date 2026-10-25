@@ -61,6 +61,17 @@ pub(super) fn active_applicable(
         if !active.started || !can_finish(action) {
             return applicable(action, session, settings, environment_settings);
         }
+        // 本人の危険も開始した一言は終える。被弾だけで途中停止せず、実際の敵が来たら戦闘へ譲る。
+        if action.kind == "player_hazard" {
+            return session
+                .latest
+                .as_ref()
+                .is_none_or(|e| !crate::environment::danger::player::hostile_observed(e))
+                && session
+                    .audio_latest
+                    .as_ref()
+                    .is_none_or(|e| !crate::environment::danger::player::hostile_observed(e));
+        }
         // 再生開始後の対象消失・方向・個数・明るさ等は、発話の途中停止にしない。
         // 観測の更新停止だけでも切らない。平時の台詞中の敵・被弾は従来どおり停止する。
         applicable(action, session, settings, environment_settings)
@@ -80,7 +91,8 @@ pub(super) fn active_applicable(
 }
 
 fn workshop_blocked(action: &Speech, session: &Session) -> bool {
-    super::workshop_focus::active(session)
+    action.kind != "player_hazard"
+        && super::workshop_focus::active(session)
         && (matches!(
             action.delivery,
             Delivery::Ambient | Delivery::UrgentEnvironment
@@ -138,6 +150,19 @@ pub(super) fn applicable(
     if workshop_blocked(action, session) {
         return false;
     }
+    if action.kind == "player_hazard"
+        && (session.foreground.game_paused
+            || session
+                .latest
+                .as_ref()
+                .is_some_and(crate::environment::danger::player::hostile_observed)
+            || session
+                .audio_latest
+                .as_ref()
+                .is_some_and(crate::environment::danger::player::hostile_observed))
+    {
+        return false;
+    }
     if matches!(
         action.delivery,
         Delivery::Ambient | Delivery::UrgentEnvironment
@@ -155,7 +180,7 @@ pub(super) fn applicable(
         };
         let event = super::body_runtime::event(session, event);
         if event.body_origin().is_some_and(|o| !o.available)
-            && action.kind != "magma_block"
+            && !crate::environment::danger::player::player_origin(action)
             && !(action.kind == "smell" && action.delivery == Delivery::PlayerReply)
         {
             return false;

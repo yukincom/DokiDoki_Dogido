@@ -25,7 +25,7 @@ class MobEnvironmentObservationTest {
     @Test void bodyContactDoesNotReadTheNextBlockWhenBoxEndsOnAnInteger() {
         var box = new net.minecraft.util.math.Box(0,0,0,1.001,1.001,1.001);
         List<String> blocks = new ArrayList<>();
-        assertFalse(ObservationOrigin.sampleWater(box, p -> {
+        assertFalse(ObservationOrigin.sampleFluid(box, p -> {
             blocks.add(p.getX()+":"+p.getY()+":"+p.getZ());
             return p.getX() == 1 ? 1 : Double.NEGATIVE_INFINITY;
         }));
@@ -33,14 +33,28 @@ class MobEnvironmentObservationTest {
     }
     @Test void fluidBelowTheBodyDoesNotCountButContactAtTheSurfaceDoes() {
         var box = new net.minecraft.util.math.Box(0,0.5,0,0.9,1.4,0.9);
-        assertFalse(ObservationOrigin.sampleWater(box, p -> 0.4));
-        assertTrue(ObservationOrigin.sampleWater(box, p -> 0.501));
+        assertFalse(ObservationOrigin.sampleFluid(box, p -> 0.4));
+        assertTrue(ObservationOrigin.sampleFluid(box, p -> 0.501));
+    }
+    @Test void lavaRequiresPositiveDepthWhileWaterIncludesSurfaceContact() {
+        var box = new net.minecraft.util.math.Box(0,0.5,0,0.9,1.4,0.9);
+        assertTrue(ObservationOrigin.sampleFluid(box, p -> 0.501));
+        assertFalse(ObservationOrigin.sampleFluid(box, p -> 0.501, true));
+        assertTrue(ObservationOrigin.sampleFluid(box, p -> 0.502, true));
+    }
+    @Test void lavaContactAndFireAreIndependentInTheWireObservation() {
+        var burningAfterExit = new MobEnvironmentObservation(false, false, false, true, true, false, false).toJson();
+        assertTrue(burningAfterExit.get("on_fire").getAsBoolean());
+        assertFalse(burningAfterExit.get("touching_lava").getAsBoolean());
+        var lavaContact = new MobEnvironmentObservation(false, false, false, false, false, false, true).toJson();
+        assertTrue(lavaContact.get("touching_lava").getAsBoolean());
+        assertFalse(lavaContact.get("on_fire").getAsBoolean());
     }
     @Test void waterAndRainRemainIndependentInTheWireObservation() {
-        var submergedUnderRoof = new MobEnvironmentObservation(true, true, true, false, false, false).toJson();
+        var submergedUnderRoof = new MobEnvironmentObservation(true, true, true, false, false, false, false).toJson();
         assertTrue(submergedUnderRoof.get("touching_water_or_rain").getAsBoolean());
         assertFalse(submergedUnderRoof.get("touching_rain").getAsBoolean());
-        var both = new MobEnvironmentObservation(true, false, true, false, false, true).toJson();
+        var both = new MobEnvironmentObservation(true, false, true, false, false, true, false).toJson();
         assertTrue(both.get("touching_rain").getAsBoolean());
         assertFalse(both.get("submerged_in_water").getAsBoolean());
     }

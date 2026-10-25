@@ -53,6 +53,7 @@ impl Danger {
         } else {
             return vec![];
         };
+        a = materials::retain_branch(a, e);
         a.interrupt = interrupt;
         self.night_pending = false;
         self.night_spoken = true;
