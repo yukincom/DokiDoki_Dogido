@@ -119,8 +119,9 @@ impl State {
         self.active = current(event);
         self.considered.retain(|kind| self.active.contains(kind));
     }
-    /// 配送枠が使えると確認した複製上で呼び、採用されたときだけDangerへ反映する。
-    pub(crate) fn take(&mut self, event: &GameEvent) -> Option<Speech> {
+    /// 現在も続く未考慮の危険を返す。予約中の重複はdialogueの警告待ち列が防ぐ。
+    /// ここでは消費せず、生成前に取消された候補は次の現在観測で再び選べる。
+    pub(crate) fn candidate(&self, event: &GameEvent) -> Option<Speech> {
         if hostile_observed(event) {
             return None;
         }
@@ -130,7 +131,6 @@ impl State {
             .iter()
             .copied()
             .find(|kind| !self.considered.contains(kind) && current.contains(kind))?;
-        self.considered.insert(kind);
         let text = match kind {
             Kind::Lava => "溶岩に触れてるで！",
             Kind::LowAir => "息が続かんようになりそうやで！",
@@ -145,6 +145,14 @@ impl State {
             temperature: 0.65,
         });
         Some(action)
+    }
+
+    /// 現在の警告所有権と適用条件を再照合した配送側が、生成の開始直前に呼ぶ。
+    /// 生成を始めた機会だけを消費し、沈黙・生成後の取消でも同じ危険を繰り返さない。
+    pub(crate) fn begin_generation(&mut self, action: &Speech) {
+        if let Some(kind) = kind(action).filter(|kind| self.active.contains(kind)) {
+            self.considered.insert(kind);
+        }
     }
 }
 

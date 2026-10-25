@@ -35,19 +35,20 @@ fn lava_fire_and_nearby_heat_are_different_episode_facts() {
     );
     let mut state = State::default();
     state.observe(&lava);
-    let action = state.take(&lava).unwrap();
+    let action = state.candidate(&lava).unwrap();
     assert_eq!(kind(&action), Some(Kind::Lava));
+    state.begin_generation(&action);
     for _ in 0..3 {
         state.observe(&lava);
-        assert!(state.take(&lava).is_none());
+        assert!(state.candidate(&lava).is_none());
     }
     state.observe(&fire);
     assert!(!applicable(&action, &fire));
-    assert_eq!(kind(&state.take(&fire).unwrap()), Some(Kind::Fire));
+    assert_eq!(kind(&state.candidate(&fire).unwrap()), Some(Kind::Fire));
     state.observe(&safe);
-    assert!(state.take(&safe).is_none());
+    assert!(state.candidate(&safe).is_none());
     state.observe(&lava);
-    assert!(state.take(&lava).is_some());
+    assert!(state.candidate(&lava).is_some());
     let mut nearby = json!(safe);
     nearby["world"]["nearby_damaging_light_source_count"] = json!(1);
     nearby["world"]["nearest_damaging_light_source_distance"] = json!(1.0);
@@ -128,14 +129,14 @@ fn damage_alone_does_not_create_or_block_a_known_hazard_but_real_hostiles_take_p
     let lava = GameEvent::parse(wire.clone()).unwrap();
     let mut state = State::default();
     state.observe(&lava);
-    assert!(state.take(&lava).is_some());
+    assert!(state.candidate(&lava).is_some());
     wire["combat"]["hostiles_within_10"] = json!(1);
     let hostile = GameEvent::parse(wire).unwrap();
     let mut state = State::default();
     state.observe(&hostile);
-    assert!(state.take(&hostile).is_none());
+    assert!(state.candidate(&hostile).is_none());
     state.observe(&lava);
-    assert!(state.take(&lava).is_some());
+    assert!(state.candidate(&lava).is_some());
     assert!(current(&event(json!({}), Value::Null, None)).is_empty());
 }
 
@@ -157,4 +158,25 @@ fn death_immunity_and_fire_resistance_do_not_raise_contact_danger() {
         wire["player"][field] = value;
         assert!(current(&GameEvent::parse(wire).unwrap()).is_empty());
     }
+}
+
+#[test]
+fn unstarted_candidates_remain_available_until_generation_begins() {
+    let lava = event(json!({"touching_lava":true}), Value::Null, None);
+    let safe = event(json!({"touching_lava":false}), Value::Null, None);
+    let mut state = State::default();
+    state.observe(&lava);
+    // 待機や取消に相当する候補の破棄では、同じ実測の発話機会を消費しない。
+    let first = state.candidate(&lava).unwrap();
+    state.observe(&lava);
+    let resumed = state.candidate(&lava).unwrap();
+    assert_eq!(kind(&first), kind(&resumed));
+    state.begin_generation(&resumed);
+    state.observe(&lava);
+    assert!(state.candidate(&lava).is_none());
+    // 危険が解消した後の別の発生は、通常どおり新しい機会になる。
+    state.observe(&safe);
+    assert!(state.candidate(&safe).is_none());
+    state.observe(&lava);
+    assert!(state.candidate(&lava).is_some());
 }

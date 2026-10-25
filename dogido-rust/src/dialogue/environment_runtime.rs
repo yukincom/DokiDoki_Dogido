@@ -494,9 +494,7 @@ impl Dialogue {
             && let Some(raw) = s.environment_latest.as_ref()
         {
             let event = super::body_runtime::event(s, raw);
-            let mut candidate = s.danger.clone();
-            if let Some(action) = candidate.player_hazard(&event) {
-                s.danger = candidate;
+            if let Some(action) = s.danger.player_hazard(&event) {
                 self.queue_environment(d, jobs, sid, vec![action], true);
                 return;
             }

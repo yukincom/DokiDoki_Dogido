@@ -119,11 +119,15 @@ impl Danger {
             }
     }
     /// 敵の警告を先に確保した呼出側から、本人の接触・落下・空気の機会だけを取り出す。
-    pub(crate) fn player_hazard(&mut self, event: &GameEvent) -> Option<Speech> {
+    pub(crate) fn player_hazard(&self, event: &GameEvent) -> Option<Speech> {
         if !self.complete || self.dimension_changed {
             return None;
         }
-        self.player_hazards.take(event)
+        self.player_hazards.candidate(event)
+    }
+    /// 配送側が生成直前に確定した本人の危険だけを、この継続中の考慮済みにする。
+    pub(crate) fn begin_player_hazard_generation(&mut self, action: &Speech) {
+        self.player_hazards.begin_generation(action);
     }
     pub fn dark_push_active(&self) -> bool {
         self.active || self.stage >= 1

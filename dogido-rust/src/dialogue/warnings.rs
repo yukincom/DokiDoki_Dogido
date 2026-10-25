@@ -869,6 +869,19 @@ impl Dialogue {
                     let input=json!({"op":"combat_leaf","model":config.model,"max_tokens":config.max_tokens,
                         "reading_engine":config.reading_engine,"kind":leaf.kind,"details":details,
                         "temperature":leaf.temperature,"fallback_text":text});
+                    if action.kind == "player_hazard" {
+                        let mut data = self.data.lock().unwrap();
+                        let s = data.sessions.get_mut(&sid).ok_or_else(|| anyhow::anyhow!("session closed"))?;
+                        // 待機中に取り消された古いturnが、新しい警告の機会を消費しないよう所有権を確認する。
+                        anyhow::ensure!(s.warning.as_ref().is_some_and(|w| w.turn == turn), "cancelled");
+                        if !applicable(action, s, &config.warnings, &config.combat) {
+                            Self::cancel_warning(&mut data, &sid, "stale_environment_reaction");
+                            anyhow::bail!("stale environment reaction");
+                        }
+                        // 共有生成枠を取得し、現在性も確認した時点で初めて考慮済みにする。
+                        // 待ち列への予約だけでは消費しないため、生成前の取消後も再開できる。
+                        s.danger.begin_player_hazard_generation(action);
+                    }
                     let result=if let Some(image)=action.image.as_deref() {
                         super::reaction_runtime::render_image(&config,&self.llm,&input,&mut cancel,Some(image)).await
                     } else {bridge::render(&config,&self.llm,input,&mut cancel).await};

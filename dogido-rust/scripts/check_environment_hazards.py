@@ -39,6 +39,8 @@ def main():
                 if control["hazard_gate"]:
                     entered.set()
                     assert release.wait(10), "test gate expired"
+                if control.get("hazard_silent"):
+                    return {"action": "silent", "speech": ""}
                 return {"action": "speak", "speech": "今の足元、気になるで。"}
             return None
 
@@ -47,7 +49,7 @@ def main():
                      haiku_settings={"enabled": False, "memory_enabled": False}) as (base, _, _):
             sequence = 0
 
-            def send(sid, contact, *, motion=None, air=None, hostile=False, invulnerable=False):
+            def send(sid, contact, *, motion=None, air=None, hostile=False, invulnerable=False, paused=False):
                 nonlocal sequence
                 sequence += 1
                 event = {"schema_version": "2026-05-24", "adapter": "fixture", "sequence": sequence,
@@ -56,7 +58,7 @@ def main():
                          "player": {"name": "試験", "dimension": "minecraft:overworld", "health": 19,
                                     "environment": contact, "motion": motion, "invulnerable": invulnerable},
                          "world": {"biome": "plains", "weather": "clear", "sky_visible": True,
-                                   "local_light": 15, "time_phase": "day", "air_supply": air},
+                                   "local_light": 15, "time_phase": "day", "air_supply": air, "game_paused": paused},
                          "combat": {"combat_active_hint": True, "recent_damage_ms": 0,
                                     "hostiles_within_10": 1 if hostile else 0},
                          "visual_threats": ([{"type": "zombie", "entity_id": "z", "distance": 3,
@@ -127,6 +129,82 @@ def main():
                 assert not any(r["playback_status"] == "completed" for r in rows(sid)), rows(sid)
                 request(base, "/api/v1/adapter-sessions/" + sid, method="DELETE")
                 passed.append("unplayed_hazard_cancelled_when_" + reason)
+            # 別sessionで共有生成枠を保持し、対象の警告がモデル未実行であることを保証する。
+            # 取消を二度繰り返しても、再開時の現在観測だけで再予約できる。
+            for persists in (True, False):
+                blocker = register(base, preview=False)
+                sid = register(base, preview=False)
+                entered.clear(); release.clear(); control["hazard_gate"] = True
+                try:
+                    send(blocker, lava)
+                    assert entered.wait(5), "blocker did not hold generation"
+                    count = len(requests)
+                    for attempt in range(2):
+                        send(sid, lava)
+                        pending = wait_for(lambda: next(iter(rows(sid)[attempt:]), None), timeout=3)
+                        assert len(requests) == count, "queued hazard reached the model"
+                        send(sid, lava, paused=True)
+                        wait_for(lambda: row(base, pending["turn_id"], {"cancelled"}))
+                        assert len(requests) == count, "cancelled hazard reached the model"
+                        assert rows(sid)[attempt].get("environment_reaction_outcome") is None
+                finally:
+                    release.set(); control["hazard_gate"] = False
+                complete(blocker)
+                request(base, "/api/v1/adapter-sessions/" + blocker, method="DELETE")
+                send(sid, lava if persists else safe)
+                if persists:
+                    resumed = complete(sid, 2)
+                    assert resumed["environment_reaction_outcome"] == "speak", resumed
+                    assert len(requests) == count + 1 and len(rows(sid)) == 3
+                    for _ in range(3):
+                        send(sid, lava)
+                    time.sleep(.15)
+                    assert len(requests) == count + 1 and len(rows(sid)) == 3
+                else:
+                    time.sleep(.15)
+                    assert len(requests) == count and len(rows(sid)) == 2
+                    send(sid, lava)
+                    complete(sid, 2)
+                    assert len(requests) == count + 1
+                request(base, "/api/v1/adapter-sessions/" + sid, method="DELETE")
+                passed.append("generation_wait_cancel_then_resume_" + ("continuing_hazard_once" if persists else "resolved_hazard_stays_quiet"))
+
+            # 確定した沈黙は考慮済み。ポーズ／再開しても同じ危険を再生成しない。
+            sid = register(base, preview=False)
+            count = len(requests)
+            control["hazard_silent"] = True
+            try:
+                send(sid, lava)
+                silent = wait_for(lambda: next((r for r in rows(sid) if r["playback_status"] == "not_selected"), None))
+                assert silent["environment_reaction_outcome"] == "silent", silent
+                send(sid, lava, paused=True)
+                for _ in range(3):
+                    send(sid, lava)
+                time.sleep(.15)
+                assert len(requests) == count + 1 and len(rows(sid)) == 1
+            finally:
+                control["hazard_silent"] = False
+            request(base, "/api/v1/adapter-sessions/" + sid, method="DELETE")
+            passed.append("chosen_silence_is_not_regenerated_after_resume")
+
+            # 生成を開始した機会は、途中取消でも従来どおり同じ継続中に再生成しない。
+            sid = register(base, preview=False)
+            count = len(requests)
+            entered.clear(); release.clear(); control["hazard_gate"] = True
+            try:
+                send(sid, lava)
+                assert entered.wait(5)
+                pending = wait_for(lambda: next(iter(rows(sid)), None))
+                send(sid, lava, paused=True)
+                wait_for(lambda: row(base, pending["turn_id"], {"cancelled"}))
+            finally:
+                release.set(); control["hazard_gate"] = False
+            for _ in range(3):
+                send(sid, lava)
+            time.sleep(.15)
+            assert len(requests) == count + 1 and len(rows(sid)) == 1
+            request(base, "/api/v1/adapter-sessions/" + sid, method="DELETE")
+            passed.append("generation_started_cancel_is_not_regenerated_after_resume")
     print(json.dumps({"passed": passed, "model": "mock", "all_owned_processes_stopped": True}, ensure_ascii=False, indent=2))
 
 
