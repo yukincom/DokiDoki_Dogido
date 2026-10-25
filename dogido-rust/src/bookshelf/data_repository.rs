@@ -114,6 +114,7 @@ impl Store {
             let bytes = encoded(result)?;
             saved.push(inline(files, &format!("{base}/j-lens/translations/{}.json", hash(&bytes)), bytes)?);
         }
+        saved.sort_by(|a, b| a["path"].as_str().cmp(&b["path"].as_str()));
         Ok(json!(saved))
     }
 }
@@ -142,7 +143,7 @@ pub(super) fn publish(store: &Store, lens: Option<&j_lens::Config>, config: &Con
         };
         ensure!(fs::metadata(&output)?.len() < 32 * 1024, "data_repository_output_invalid");
         let result: Value = serde_json::from_slice(&fs::read(&output)?)?;
-        ensure!(status.success() && result["status"] == "uploaded", "data_repository_failed: {}", result["detail"].as_str().unwrap_or("アップロード結果を確認できませんでした"));
+        ensure!(status.success() && matches!(result["status"].as_str(), Some("uploaded" | "up_to_date")), "data_repository_failed: {}", result["detail"].as_str().unwrap_or("アップロード結果を確認できませんでした"));
         Ok(result)
     })();
     let _ = fs::remove_file(input); let _ = fs::remove_file(output);
