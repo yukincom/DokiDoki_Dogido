@@ -81,19 +81,28 @@ impl Dialogue {
         true
     }
 
-    /// 読み取り専用。観測が失効したsessionや戦闘中の句へSTTを寄せない。
+    /// 現在観測を持つ接続が一つのときだけ録音先を返す読み取り専用投影。
+    /// 退出済みの登録は残っていても数えず、複数の有効接続がある場合は選ばない。
     pub fn voice_context(&self) -> Value {
         let d = self.data.lock().unwrap();
-        if d.stopped || d.sessions.len() != 1 {
-            return json!({"prompt_mode":"normal", "session_id":null,"voice_enabled":false,"voice_generation":null});
+        let disabled = json!({"prompt_mode":"normal", "session_id":null,"voice_enabled":false,"voice_generation":null});
+        if d.stopped {
+            return disabled;
         }
-        let (sid, s) = d.sessions.iter().next().unwrap();
-        let binding = super::request_runtime::Binding::capture(s);
-        let workshop = binding
-            .as_ref()
-            .is_some_and(|b| b.mode == crate::request_classifier::Mode::Senryu);
+        // 入り直したワールドの観測だけを、分類受付と同じ有効性で選ぶ。
+        // voice offの接続も候補に数え、別プレイヤーへ録音先を付け替えない。
+        let mut current = d.sessions.iter().filter_map(|(sid, s)| {
+            super::request_runtime::Binding::capture(s).map(|binding| (sid, s, binding))
+        });
+        let Some((sid, s, binding)) = current.next() else {
+            return disabled;
+        };
+        if current.next().is_some() {
+            return disabled;
+        }
+        let workshop = binding.mode == crate::request_classifier::Mode::Senryu;
         json!({"prompt_mode":if workshop {"haiku_workshop"} else {"normal"}, "session_id":sid,
-            "voice_enabled":binding.is_some() && (!s.delivery.enabled || s.delivery.voice_enabled),
+            "voice_enabled":!s.delivery.enabled || s.delivery.voice_enabled,
             "voice_generation":super::request_runtime::voice_generation(s)})
     }
 }
@@ -141,6 +150,99 @@ mod tests {
             assert!(s.history.rows().is_empty());
             assert!(d.rows.is_empty());
         }
+        dialogue.shutdown().await;
+    }
+
+    fn observe_for_voice(dialogue: &Dialogue, sid: &str, age_seconds: u64) {
+        let mut data = dialogue.data.lock().unwrap();
+        let session = data.sessions.get_mut(sid).unwrap();
+        session.latest = Some(event(Utc::now()));
+        session.received = Some(Instant::now() - Duration::from_secs(age_seconds));
+    }
+
+    #[tokio::test]
+    async fn voice_rejoins_current_world_without_reusing_old_recording() {
+        let dialogue = Dialogue::new(super::super::DialogueConfig::default()).unwrap();
+        dialogue.register("old", "試験", false);
+        dialogue.enable_text_delivery("old", Some(true));
+        observe_for_voice(&dialogue, "old", 0);
+        let old = dialogue.voice_context();
+        assert_eq!(old["voice_enabled"], true);
+        observe_for_voice(&dialogue, "old", 11);
+        dialogue.register("new", "試験", false);
+        dialogue.enable_text_delivery("new", Some(true));
+        assert_eq!(dialogue.voice_context()["session_id"], Value::Null);
+        observe_for_voice(&dialogue, "new", 0);
+        let current = dialogue.voice_context();
+        assert_eq!(current["session_id"], "new");
+        assert_eq!(current["voice_enabled"], true);
+        assert_ne!(current["voice_generation"], old["voice_generation"]);
+        for sid in ["old", "new"] {
+            assert_eq!(
+                dialogue.submit_voice(Some(sid), "うおおお", old["voice_generation"].as_str())["reason"],
+                "stale_voice_generation"
+            );
+        }
+        {
+            let data = dialogue.data.lock().unwrap();
+            assert_eq!(data.sessions.len(), 2);
+            assert!(
+                data.sessions
+                    .values()
+                    .all(|s| s.delivery.voice_inputs.is_empty())
+            );
+        }
+        assert_eq!(
+            dialogue.submit_voice(
+                Some("new"),
+                "うおおお",
+                current["voice_generation"].as_str()
+            )["accepted"],
+            true
+        );
+        assert_eq!(
+            dialogue.data.lock().unwrap().sessions["new"]
+                .delivery
+                .voice_inputs
+                .len(),
+            1
+        );
+        dialogue.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn voice_does_not_choose_between_two_current_worlds_even_if_one_is_muted() {
+        let dialogue = Dialogue::new(super::super::DialogueConfig::default()).unwrap();
+        for sid in ["a", "b"] {
+            dialogue.register(sid, "試験", false);
+            dialogue.enable_text_delivery(sid, Some(sid == "a"));
+            observe_for_voice(&dialogue, sid, 0);
+        }
+        assert_eq!(dialogue.voice_context()["session_id"], Value::Null);
+        observe_for_voice(&dialogue, "a", 11);
+        let muted = dialogue.voice_context();
+        assert_eq!(muted["session_id"], "b");
+        assert_eq!(muted["voice_enabled"], false);
+        dialogue.set_voice_enabled("b", true);
+        assert_eq!(dialogue.voice_context()["voice_enabled"], true);
+        dialogue.shutdown().await;
+        assert_eq!(dialogue.voice_context()["voice_enabled"], false);
+    }
+
+    #[tokio::test]
+    async fn voice_requires_recent_observed_time_as_well_as_recent_receipt() {
+        let dialogue = Dialogue::new(super::super::DialogueConfig::default()).unwrap();
+        dialogue.register("s", "試験", false);
+        observe_for_voice(&dialogue, "s", 0);
+        dialogue
+            .data
+            .lock()
+            .unwrap()
+            .sessions
+            .get_mut("s")
+            .unwrap()
+            .latest = Some(event(Utc::now() - chrono::Duration::seconds(11)));
+        assert_eq!(dialogue.voice_context()["voice_enabled"], false);
         dialogue.shutdown().await;
     }
 }

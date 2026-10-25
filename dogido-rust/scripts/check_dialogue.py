@@ -315,6 +315,8 @@ def check_text_delivery(binary, passed):
 
             request(base, "/api/v1/adapter-sessions/" + sid, method="DELETE")
             sid = register(base, preview=False, voice_enabled=False, body=True)
+            # 環境警告は現在の共通モデル経路。配送検査の本文は模擬モデルから返す。
+            control["leaf"] = "触るとあちちやで！"
             audio_before = len([r for r in seen if r["path"].startswith(("/audio_query", "/synthesis"))])
             from body_senses_fixture import attach_body
             request(base, "/api/v1/game-events", attach_body({
@@ -335,7 +337,7 @@ def check_text_delivery(binary, passed):
             wait_for(lambda: row(base, warning["turn_id"], {"audio_disabled"}))
             assert len([r for r in history() if r["text"] == warning["text"]]) == 1, history()
             assert len([r for r in seen if r["path"].startswith(("/audio_query", "/synthesis"))]) == audio_before
-            passed.append("fixed_warning_text_ack_enters_history_once_without_tts")
+            passed.append("environment_warning_text_ack_enters_history_once_without_tts")
 
 
 def main():

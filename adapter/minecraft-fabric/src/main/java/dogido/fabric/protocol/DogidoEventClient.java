@@ -219,11 +219,34 @@ public final class DogidoEventClient {
         return isCurrent(ref) ? this.screenshotState.results() : new JsonArray();
     }
 
+    /** 退出時はローカル世代を進め、旧接続だけを既存APIで非同期に解放する。 */
     public synchronized void disconnected() {
+        String disconnectedSession = this.sessionId;
         this.sessionId = null;
         this.screenshotState.clearResults();
         this.nextRegistrationNanos = 0;
         invalidateDisplayRequests();
+        releaseSession(disconnectedSession);
+    }
+
+    /** 対象IDは退出時または旧登録応答で固定し、再入場後のsessionIdを参照しない。 */
+    private void releaseSession(String releasedSession) {
+        if (releasedSession == null || releasedSession.isBlank()) return;
+        try {
+            HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(this.config.sessionEndpoint()
+                + "/" + java.net.URLEncoder.encode(releasedSession, java.nio.charset.StandardCharsets.UTF_8)))
+                .timeout(Duration.ofSeconds(3)).DELETE();
+            if (this.config.hasAuthToken()) request.header("Authorization", "Bearer " + this.config.authToken);
+            this.httpClient.sendAsync(request.build(), HttpResponse.BodyHandlers.discarding())
+                .whenComplete((response, error) -> {
+                    if (error != null || (response.statusCode() / 100 != 2 && response.statusCode() != 404)) {
+                        this.logger.warn("Dogido session close failed: {}",
+                            error != null ? error.getMessage() : response.statusCode());
+                    }
+                });
+        } catch (RuntimeException error) {
+            this.logger.warn("Dogido session close failed: {}", error.getMessage());
+        }
     }
 
     public void pollWorkshopDisplay(Consumer<WorkshopDisplayPayload.Snapshot> handler) {
@@ -327,7 +350,6 @@ public final class DogidoEventClient {
                 .whenComplete((response, error) -> {
                     try {
                         synchronized (this) {
-                            if (registrationEpoch != this.worldEpoch.get()) return;
                             if (error != null || response.statusCode() / 100 != 2) {
                                 this.logger.warn("Dogido session create failed: {}",
                                     error != null ? error.getMessage() : response.statusCode());
@@ -336,6 +358,11 @@ public final class DogidoEventClient {
                             JsonObject body = JsonParser.parseString(response.body()).getAsJsonObject();
                             String created = body.get("session_id").getAsString();
                             if (!created.isBlank()) {
+                                // 登録完了前に退出した接続も解放し、上限を消費したままにしない。
+                                if (registrationEpoch != this.worldEpoch.get()) {
+                                    releaseSession(created);
+                                    return;
+                                }
                                 this.sessionId = created;
                                 this.logger.info("Dogido session created: {}", this.sessionId);
                             }
