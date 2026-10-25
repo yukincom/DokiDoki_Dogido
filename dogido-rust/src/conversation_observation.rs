@@ -81,8 +81,10 @@ pub fn project(
     )?;
     let climate = catalog.climate(event.world.biome.as_deref())?;
     let precipitation = environment::precipitation::from_event(event, &climate)?;
-    let weather = if projection.include_sky_context {
-        // Climate resolves rain/snow. A world thunder setting is not a heard thunderclap.
+    // 空の可視性・頭上の遮蔽は別項目。木下へ入っても観測済みの雨を消さず、
+    // 雨からnullへの差分を「雨が止んだ」と解釈させない。未取得だけは不明のまま残す。
+    let weather = if event.world.weather.is_some() || projection.include_sky_context {
+        // 気候と高度で雨雪を区別する。世界の雷設定は実際に聞いた雷鳴ではない。
         json!({"label":chat_world::weather_label_from_context(event,&precipitation),
             "precipitation_kind":precipitation.precipitation_kind,
             "precipitation_possible":precipitation.precipitation_possible,

@@ -28,7 +28,7 @@ impl State {
         if !self.done.iter().any(|v| v == id) { self.done.push_back(id.into()); }
         while self.done.len() > 256 { self.done.pop_front(); }
     }
-    /// 次の停止を予約する。10秒の命令更新は撮影周期ではなく、切断時に予約が残り続けないための期限。
+    /// 次の静止観測を予約する。命令の10秒期限は切断対策で、静止中の撮影更新周期はFabricが所有する。
     /// 身体・世界・接続が失効した画像を別の状態へ持ち越さず、停止番号で再撮影を抑える。
     pub fn arm(&mut self, sid: &str, context: Option<Context>, now: DateTime<Utc>) {
         if self.context != context || !self.enabled {
@@ -47,7 +47,7 @@ impl State {
         self.pending = Some(Pending {command,context,issued:now,expires});
     }
     pub fn snapshot(&self) -> Value {
-        json!({"supported":self.enabled,"capture_trigger":"body_stopped","pending":self.pending.as_ref().map(|p| json!({
+        json!({"supported":self.enabled,"capture_trigger":"body_stopped_or_stationary_refresh","pending":self.pending.as_ref().map(|p| json!({
             "command_id":p.command["command_id"],"phase":"waiting_for_stop","issued_at":p.issued,"expires_at":p.expires})),
             "latest":self.latest.as_ref().map(|v| json!({"capture_id":v.capture_id,"motion_sequence":v.sequence,
                 "captured_at":v.image.captured_at,"sha256":v.image.sha256,"change":v.change})),"notice_pending":self.ready})
@@ -90,7 +90,8 @@ fn parse_image(result: &AdapterCommandResult, pending: &Pending, now: DateTime<U
     if !changed && !compared { return None; }
     let image = Attachment { png_base64:v["png_base64"].as_str()?.into(), sha256:v["sha256"].as_str()?.into(),
         width:v["width"].as_u64()?.try_into().ok()?, height:v["height"].as_u64()?.try_into().ok()?,
-        captured_at:v["captured_at"].as_str()?.into(), annotation_status:v["annotation_status"].as_str()?.into() };
+        captured_at:v["captured_at"].as_str()?.into(), annotation_status:v["annotation_status"].as_str()?.into(),
+        scene_comparison:Some(crate::chat_image::SceneComparison {visual_change:changed,compared_to_four_before:compared}) };
     image.validate().ok()?;
     Some(Captured { image,context:pending.context.clone(),capture_id:format!("view_{capture_id}"),sequence,
         change:json!({"visual_change":changed,"compared_to_four_before":compared,"captured_at":captured}) })
@@ -101,19 +102,39 @@ fn parse_image(result: &AdapterCommandResult, pending: &Pending, now: DateTime<U
 pub(super) fn opportunity(s: &mut Session) -> Option<crate::combat::model::Speech> {
     if !s.visual.ready || s.preview || s.foreground.game_paused || s.foreground.combat_active
         || !matches!(s.foreground.route,crate::foreground::Route::None|crate::foreground::Route::Casual) { return None; }
-    let captured = s.visual.latest.as_ref()?;
-    let sample = s.body_observation.accepted(Instant::now())?;
-    if sample.context != captured.context { return None; }
-    let at = DateTime::parse_from_rfc3339(&captured.image.captured_at).ok()?.with_timezone(&Utc);
-    if Utc::now()-at > chrono::Duration::seconds(IMAGE_FRESH_SECONDS) { s.visual.ready=false;return None; }
+    let Some(captured) = latest(s) else { s.visual.ready=false;return None; };
     let mut action = crate::environment::notice::action();
     action.image = Some(Arc::new(captured.image.clone()));
     let details = &mut action.leaf.as_mut().unwrap().details;
-    details["visual_capture"] = json!({"capture_id":captured.capture_id,"captured_at":captured.image.captured_at,
-        "motion_sequence":captured.sequence,"previous_sha256":captured.change["previous_sha256"]});
+    details["visual_capture"] = capture_metadata(captured);
+    details["visual_change_trigger"] = json!(true);
     action.text.clear(); // 画像の意味をコード固定文で代弁しない。
     s.visual.ready = false;
     Some(action)
+}
+
+/// 通常会話と環境判断で同じ一枚を使う。同一身体世代かつ30秒以内だけを現在画像として渡す。
+fn latest(s: &Session) -> Option<&Captured> {
+    if !s.visual.enabled { return None; }
+    let captured = s.visual.latest.as_ref()?;
+    if s.body_observation.accepted(Instant::now())?.context != captured.context { return None; }
+    let at = DateTime::parse_from_rfc3339(&captured.image.captured_at).ok()?.with_timezone(&Utc);
+    let age = Utc::now()-at;
+    (age >= chrono::Duration::zero() && age < chrono::Duration::seconds(IMAGE_FRESH_SECONDS)).then_some(captured)
+}
+fn capture_metadata(captured: &Captured) -> Value {
+    json!({"capture_id":captured.capture_id,"captured_at":captured.image.captured_at,
+        "motion_sequence":captured.sequence,"previous_sha256":captured.change["previous_sha256"],
+        "visual_change":captured.change["visual_change"],"compared_to_four_before":captured.change["compared_to_four_before"]})
+}
+/// 変化がなくても既存の判断に画像を添える。画像の添付だけでは変化・新規判断を作らない。
+/// 生成待ちの間に既に選んだ一枚は差し替えず、撮影情報と対応表を同じ画像へ固定する。
+pub(super) fn attach_latest(s: &Session, action: &mut crate::combat::model::Speech) {
+    if action.image.is_some() { return; }
+    let Some(captured) = latest(s) else { return; };
+    let Some(leaf) = action.leaf.as_mut() else { return; };
+    leaf.details["visual_capture"] = capture_metadata(captured);
+    action.image = Some(Arc::new(captured.image.clone()));
 }
 
 /// 通常会話も最後に受信した一枚を参照する。会話ごとの新規撮影要求は発行しない。
@@ -134,8 +155,8 @@ impl Source {
             {
                 let data=owner.data.lock().unwrap();let s=data.sessions.get(&self.sid)?;
                 if !self.current(s) || s.preview || !s.visual.enabled || s.foreground.game_paused { return None; }
-                let context=&s.body_observation.accepted(Instant::now())?.context;
-                if let Some(captured)=s.visual.latest.as_ref().filter(|v| &v.context==context) { return Some(captured.clone()); }
+                s.body_observation.accepted(Instant::now())?;
+                if let Some(captured)=latest(s) { return Some(captured.clone()); }
             }
             if tokio::time::Instant::now()>=deadline { return None; }
             tokio::select! {biased;_=bridge::cancelled(cancel)=>return None,_=tokio::time::sleep(Duration::from_millis(25))=>{}}

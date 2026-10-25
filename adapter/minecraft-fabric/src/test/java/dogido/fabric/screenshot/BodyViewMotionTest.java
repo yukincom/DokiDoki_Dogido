@@ -3,12 +3,28 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 class BodyViewMotionTest {
     private BodyViewMotion.Pose pose(double x,double yaw) {return new BodyViewMotion.Pose(x,64,0,yaw,0);}
-    @Test void initialStopIsOnePhotoAndMotionNeverBecomesAnInterval() {
+    @Test void initialStopAndMovementStillUseTheSameQuietBoundary() {
         var motion=new BodyViewMotion();motion.observe("world",pose(0,0));motion.observe("world",pose(0,0));assertEquals(0,motion.sequence());
         motion.observe("world",pose(0,0));assertEquals(1,motion.sequence());
         for(int i=0;i<100;i++)motion.observe("world",pose(0,0));assertEquals(1,motion.sequence());
         for(int i=1;i<20;i++){motion.observe("world",pose(i*.1,0));assertFalse(motion.still(pose(i*.1,0)));}
         assertEquals(1,motion.sequence());motion.observe("world",pose(1.9,0));motion.observe("world",pose(1.9,0));assertEquals(2,motion.sequence());
+    }
+    @Test void stationaryViewRefreshesEveryTenSecondsWithoutInventingTranslation() {
+        var motion=new BodyViewMotion();for(int i=0;i<3;i++)motion.observe("world",pose(0,0));
+        long translation=motion.translation();
+        for(int i=1;i<BodyViewMotion.REFRESH_TICKS;i++)motion.observe("world",pose(0,0));
+        assertEquals(1,motion.sequence());
+        motion.observe("world",pose(0,0));assertEquals(2,motion.sequence());assertEquals(translation,motion.translation());
+        for(int i=0;i<BodyViewMotion.REFRESH_TICKS;i++)motion.observe("world",pose(0,0));
+        assertEquals(3,motion.sequence());assertTrue(motion.still(pose(0,0)));
+    }
+    @Test void periodicRefreshStillWaitsUntilMotionStops() {
+        var motion=new BodyViewMotion();for(int i=0;i<3;i++)motion.observe("world",pose(0,0));
+        for(int i=1;i<=250;i++)motion.observe("world",pose(i*.1,0));
+        assertEquals(1,motion.sequence());
+        motion.observe("world",pose(25,0));assertEquals(1,motion.sequence());
+        motion.observe("world",pose(25,0));assertEquals(2,motion.sequence());
     }
     @Test void turningStopsOnceAndWrappedAnglesDoNotCreateFalseMotion() {
         var motion=new BodyViewMotion();for(int i=0;i<3;i++)motion.observe("world",pose(0,179));

@@ -138,7 +138,8 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             ref -> this.eventClient != null && this.eventClient.isCurrent(ref));
         this.bodyInspect = new dogido.fabric.body.BodyInspectRuntime(this.bodyConnection,this.bodySenses,
             result -> this.eventClient.rememberCommandResult(result),ref -> this.eventClient != null && this.eventClient.isCurrent(ref),
-            (ref,command,request) -> this.eventClient.submitBodyInspect(ref,command,request,this.bodyConnection::moveTo));
+            (ref,command,request) -> this.eventClient.submitBodyInspect(ref,command,request,this.bodyConnection::moveTo),
+            (ref,command,request) -> this.eventClient.submitBodyInspect(ref,command,request,this.bodyConnection::lookAt));
         this.bodyRequests = new dogido.fabric.body.BodyRequestRuntime(this.bodyConnection,
             (ref,generation) -> this.eventClient != null && this.eventClient.isCurrentBodyRequest(ref,generation),
             (ref,command,sender) -> this.eventClient.submitBodyRequest(ref,command,sender),

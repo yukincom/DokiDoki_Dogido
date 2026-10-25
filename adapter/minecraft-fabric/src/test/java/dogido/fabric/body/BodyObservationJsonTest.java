@@ -119,9 +119,11 @@ class BodyObservationJsonTest {
             var runtimeType = loader.loadClass("dogido.fabric.body.BodyInspectRuntime");
             var submissionType = loader.loadClass("dogido.fabric.body.BodyInspectRuntime$Submission");
             var submission = java.lang.reflect.Proxy.newProxyInstance(loader,new Class<?>[]{submissionType},(proxy,call,args) -> "unavailable");
-            var runtime = runtimeType.getConstructor(connection,collectorType,java.util.function.Consumer.class,java.util.function.Predicate.class,submissionType)
+            var lookType = loader.loadClass("dogido.fabric.body.BodyInspectRuntime$LookSubmission");
+            var lookSubmission = java.lang.reflect.Proxy.newProxyInstance(loader,new Class<?>[]{lookType},(proxy,call,args) -> "unavailable");
+            var runtime = runtimeType.getConstructor(connection,collectorType,java.util.function.Consumer.class,java.util.function.Predicate.class,submissionType,lookType)
                 .newInstance(instance,collector,(java.util.function.Consumer<com.google.gson.JsonObject>) value -> {},
-                    (java.util.function.Predicate<dogido.fabric.protocol.DogidoEventClient.SessionRef>) ref -> false,submission);
+                    (java.util.function.Predicate<dogido.fabric.protocol.DogidoEventClient.SessionRef>) ref -> false,submission,lookSubmission);
             runtimeType.getMethod("clear").invoke(runtime);
             assertNotNull(loader.loadClass("dogido.fabric.DogidoClientAdapter").getConstructor().newInstance());
         }

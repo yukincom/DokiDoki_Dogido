@@ -73,6 +73,11 @@ public final class DogidoEntity extends PathAwareEntity {
 
     public DogidoEntity(EntityType<? extends DogidoEntity> type, World world) {
         super(type, world);
+        // 身体のyaw/pitchは下のupdateOrientationが所有する。標準LookControlの水平復帰が
+        // 毎tick pitchを0へ戻すと、上下の注視が4度から進まず完了できない。
+        lookControl = new net.minecraft.entity.ai.control.LookControl(this) {
+            @Override public void tick() { /* 身体controllerの実角度を次tickへ保持する。 */ }
+        };
         setNoGravity(true); setPersistent(); noClip = true;
     }
     public static DefaultAttributeContainer.Builder attributes() {
@@ -270,6 +275,7 @@ public final class DogidoEntity extends PathAwareEntity {
                 new BodySpace((ServerWorld)getEntityWorld(),this).safety(player,getEntityPos()).threatened(getEntityPos()));
         }
         if (request.action() == Action.MOVE_TO) {
+            if (directedLook.active()) return "requested_look_holding";
             BodySpace space = new BodySpace((ServerWorld)getEntityWorld(),this);
             if (control.mode() == Mode.FOLLOW) {
                 ServerPlayerEntity player = owner();
@@ -605,27 +611,31 @@ public final class DogidoEntity extends PathAwareEntity {
             control.completeAction(Outcome.SUCCEEDED,activity == Activity.RESTING ? "resting" : "waiting");
         if (step.lengthSquared() < 1e-9 && active && position.distanceTo(target) > .4) reason = "path_blocked";
         Vec3d facing = activity == Activity.CALLING && player != null ? player.getEntityPos().subtract(getEntityPos()) : step;
-        // 待機時の見回しも実yawへ反映する。次の身体snapshotの視野・遮蔽判定はこの向きを使う。
+        // 明示注視を発話中注視・モデルが選んだowner注視より優先する。
         Vec3d gaze = control.enabled() && activity != Activity.CALLING && activity != Activity.DOWNED
             && activity != Activity.RESTING ? (directedLook.active() ? directedLook.target() : speechGaze.target(serverTick())) : null;
         if (gaze == null && safeFollow && controller.lookingAtOwner(serverTick())) gaze = player.getEyePos();
-        Float idleYaw = gaze == null && safeFollow && activity == Activity.HOLDING ? controller.idleYaw(serverTick(),getYaw()) : null;
+        updateOrientation(gaze,facing);
+        UUID looked = directedLook.reached(getEyePos(),getYaw(),getPitch(),serverTick());
+        if (looked != null) control.completeAction(looked,Outcome.SUCCEEDED,"facing_target");
+        snapshotRevision++;
+    }
+
+    /**
+     * 目標は世界座標、移動量はblock/tick。注視はyaw最大6度・pitch最大4度ずつ近づける。
+     * 目標なしで実際に水平移動する時だけ進行方向へ向く。待機と上下の浮遊は直前の向きを保つ。
+     */
+    void updateOrientation(Vec3d gaze, Vec3d facing) {
         if (gaze != null) {
             var angles = dogido.lab.api.perception.BodyVisionGeometry.facing(gaze.subtract(getEyePos()),getYaw(),getPitch());
             setYaw(MathHelper.stepUnwrappedAngleTowards(getYaw(),(float)angles.yaw(),6));
-            setBodyYaw(getYaw()); setHeadYaw(getYaw());
             setPitch(MathHelper.stepTowards(getPitch(),(float)angles.pitch(),4));
-        } else if (idleYaw != null) {
-            setYaw(idleYaw); setBodyYaw(idleYaw); setHeadYaw(idleYaw);
-            if (controller.lookingAround()) reason = "follow_lookaround";
         } else if (facing.horizontalLengthSquared() > 1e-6) {
             float yaw = (float)Math.toDegrees(Math.atan2(-facing.x,facing.z));
-            setYaw(MathHelper.stepUnwrappedAngleTowards(getYaw(),yaw,6)); setBodyYaw(getYaw()); setHeadYaw(getYaw());
+            setYaw(MathHelper.stepUnwrappedAngleTowards(getYaw(),yaw,6));
+            setPitch(MathHelper.stepTowards(getPitch(),0,4));
         }
-        if (gaze == null) setPitch(MathHelper.stepTowards(getPitch(),0,4));
-        UUID looked = directedLook.reached(getEyePos(),getYaw(),getPitch());
-        if (looked != null) control.completeAction(looked,Outcome.SUCCEEDED,"facing_target");
-        snapshotRevision++;
+        setBodyYaw(getYaw()); setHeadYaw(getYaw());
     }
 
     @Override protected void writeCustomData(WriteView view) {

@@ -42,6 +42,7 @@ class BodyInspectControllerTest {
         BodyApproachGeometry.Bounds shape=new BodyApproachGeometry.Bounds(-.4,0,-.4,.4,.8,.4);
         BodyApproachGeometry.Bounds targetBounds=new BodyApproachGeometry.Bounds(7.5,64,-.5,8.5,65,.5);
         List<BodyConnection.MoveRequest> requests=new ArrayList<>(); List<JsonObject> results=new ArrayList<>();
+        List<BodyConnection.LookRequest> looks=new ArrayList<>();
         BodyInspectController controller=new BodyInspectController(this,ref -> current && SESSION.equals(ref),results::add,clock);
         public BodyInspectController.Live capture() { onCapture.run(); return new BodyInspectController.Live(observation,new Point(0,64,0),owner,1.62); }
         public BodyInspectController.ResolvedTarget resolve(Target target,BodyInspectController.Live live) {
@@ -51,12 +52,44 @@ class BodyInspectControllerTest {
         public Target imageTarget(Command command,SessionRef session,BodyInspectController.Live live) {return grounded;}
         public boolean collisionFree(BodyApproachGeometry.Bounds destination) { onCollision.run(); return clear; }
         public String moveTo(SessionRef session,Command command,BodyConnection.MoveRequest request) { requests.add(request); return submission; }
+        public BodyLookController.Result lookOwner(SessionRef session,Command command) {
+            return new BodyLookController(new BodyLookController.Access() {
+                public BodyLookController.Live capture() {
+                    return new BodyLookController.Live(CONTEXT,100,0,0,new Point(0,64.5,0),0,
+                        new Point(owner.x(),owner.y()+1.62,owner.z()));
+                }
+                public String submit(BodyConnection.LookRequest request) { looks.add(request); return submission; }
+            }).player(command.context(),command.commandId());
+        }
         void outcome(Command command,String outcome) {
             JsonObject result=new JsonObject(); result.addProperty("action_id",command.commandId().toString());
-            result.addProperty("sequence",requests.getFirst().sequence()); result.addProperty("outcome",outcome);
-            result.addProperty("reason","arrived"); observation.add("action_result",result);
+            result.addProperty("sequence",looks.isEmpty()?requests.getFirst().sequence():looks.getFirst().sequence()); result.addProperty("outcome",outcome);
+            result.addProperty("reason",looks.isEmpty()?"arrived":"facing_target"); observation.add("action_result",result);
         }
         String detail() { return results.getFirst().get("detail_code").getAsString(); }
+    }
+    @Test void stationaryOwnerLookUsesCurrentEyeWithoutMovementAndWaitsForTheSameResult() {
+        Fake fake=new Fake(); fake.owner=new Point(3,66,2);
+        fake.observation.getAsJsonObject("reassurance").addProperty("owner_working",true);
+        Command command=new Command(UUID.randomUUID(),NOW,NOW.plusSeconds(4),CONTEXT,null,Purpose.LOOK_OWNER);
+        fake.controller.handle(command,SESSION,NOW);fake.controller.handle(command,SESSION,NOW);
+        assertTrue(fake.requests.isEmpty());assertEquals(1,fake.looks.size());
+        assertEquals(new Point(3,67.62,2),fake.looks.getFirst().target());
+        fake.outcome(command,"accepted");fake.controller.tick(NOW.plusMillis(10));assertTrue(fake.results.isEmpty());
+        fake.outcome(command,"succeeded");fake.controller.tick(NOW.plusMillis(20));fake.controller.tick(NOW.plusMillis(30));
+        assertEquals(1,fake.results.size());assertEquals("facing_target",fake.detail());
+    }
+    @Test void ownerLookCannotBypassContextOrSubmissionGuards() {
+        for (String guard:List.of("stale_context","body_action_pending","requested_look_holding")) {
+            Fake fake=new Fake(); fake.submission=guard;
+            if(guard.equals("stale_context"))fake.observation.getAsJsonObject("context").addProperty("epoch",UUID.randomUUID().toString());
+            if(guard.equals("requested_look_holding")) {
+                fake.submission="queued";fake.observation.addProperty("reason","requested_look");
+            }
+            fake.controller.handle(new Command(UUID.randomUUID(),NOW,NOW.plusSeconds(4),CONTEXT,null,Purpose.LOOK_OWNER),SESSION,NOW);
+            assertEquals(guard,fake.detail());assertTrue(fake.requests.isEmpty());assertFalse(fake.controller.pending());
+            if(!guard.equals("body_action_pending"))assertTrue(fake.looks.isEmpty());
+        }
     }
     @Test void queuedAndAcceptedAreNotArrivalAndRepeatedCommandDoesNotMoveAgain() {
         Fake fake=new Fake(); Command command=command();

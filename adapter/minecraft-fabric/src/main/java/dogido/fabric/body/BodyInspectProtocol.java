@@ -9,9 +9,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-/** 身体の観察移動に限定したwire契約。モデル由来の対象を不変値へ変換し、実行器で現在候補へ再照合する。 */
+/** 身体の観察移動と本人への注視に限定したwire契約。対象は不変値へ変換し、現在候補へ再照合する。 */
 public final class BodyInspectProtocol {
-    public static final String CAPABILITY = "body.inspect_target.v2";
+    public static final String CAPABILITY = "body.inspect_target.v3";
     public static final int MAX_CANDIDATES = 24;
     private BodyInspectProtocol() {}
     public record Point(double x, double y, double z) {
@@ -39,8 +39,8 @@ public final class BodyInspectProtocol {
             if (entityId != null) row.addProperty("entity_id",entityId.toString()); return row;
         }
     }
-    /** モデルは対象座標を作らず、ownerへの接近目的だけを指定できる。 */
-    public enum Purpose { INSPECT, OWNER_NEAR, OWNER_FACE }
+    /** 本人への接近・注視は目的だけを指定し、座標は現在の実体から取得する。 */
+    public enum Purpose { INSPECT, OWNER_NEAR, OWNER_FACE, LOOK_OWNER }
     /** 見た目による申請。descriptionは説明用で、実物照合は閉じた属性と撮影時の対応表で行う。 */
     public record ImageTarget(String captureId,String description,String kind,String color,String horizontal,String vertical) {
         public ImageTarget {
@@ -81,6 +81,7 @@ public final class BodyInspectProtocol {
                         case "inspect" -> Purpose.INSPECT;
                         case "owner_near" -> Purpose.OWNER_NEAR;
                         case "owner_face" -> Purpose.OWNER_FACE;
+                        case "look_owner" -> Purpose.LOOK_OWNER;
                         default -> throw new IllegalArgumentException("purpose");
                     };
                     if (!row.has("target")) throw new IllegalArgumentException("target_missing");

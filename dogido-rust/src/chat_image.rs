@@ -20,6 +20,14 @@ pub struct Attachment {
     pub height: u32,
     pub captured_at: String,
     pub annotation_status: String,
+    pub scene_comparison: Option<SceneComparison>,
+}
+
+/// Fabricが同じ身体世代・地点の4枚前と比較した結果。未比較を「変化なし」へ補完しない。
+#[derive(Clone, Debug, serde::Serialize)]
+pub struct SceneComparison {
+    pub visual_change: bool,
+    pub compared_to_four_before: bool,
 }
 
 impl fmt::Debug for Attachment {
@@ -31,6 +39,7 @@ impl fmt::Debug for Attachment {
             .field("height", &self.height)
             .field("captured_at", &self.captured_at)
             .field("annotation_status", &self.annotation_status)
+            .field("scene_comparison", &self.scene_comparison)
             .finish()
     }
 }
@@ -90,6 +99,8 @@ impl Attachment {
             ),
             "chat_image_invalid_annotation_status"
         );
+        ensure!(self.scene_comparison.as_ref().is_none_or(|c| c.visual_change || c.compared_to_four_before),
+            "chat_image_unverified_no_change");
         Ok(())
     }
 
@@ -101,6 +112,10 @@ impl Attachment {
                 "viewpoint":"dogido_client_render_eye", "media_type":"image/png",
                 "captured_at":self.captured_at, "width":self.width, "height":self.height,
                 "sha256":self.sha256, "annotation_status":self.annotation_status,
+                "scene_comparison":self.scene_comparison,
+                "scene_change":self.scene_comparison.as_ref().map(|c| if !c.compared_to_four_before {
+                    "not_compared"
+                } else if c.visual_change { "changed" } else { "unchanged" }),
             })
         )
     }
@@ -124,6 +139,7 @@ pub(crate) mod tests {
             height: 1,
             captured_at: "2026-10-21T02:00:00Z".into(),
             annotation_status: "available".into(),
+            scene_comparison: None,
         }
     }
 

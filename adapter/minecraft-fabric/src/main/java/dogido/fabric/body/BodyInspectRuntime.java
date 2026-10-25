@@ -15,7 +15,7 @@ import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 import static dogido.fabric.body.BodyInspectProtocol.*;
 
-/** HTTP callbackをclient threadへ渡し、候補の現物を検査して既存BodyBridgeのMOVE_TOへ接続する。 */
+/** HTTP callbackをclient threadへ渡し、候補の現物を検査して既存MOVE_TO・本人へのLOOK_ATへ接続する。 */
 public final class BodyInspectRuntime {
     private final BodyInspectController controller;
     private final BodySensesCollector senses;
@@ -26,8 +26,11 @@ public final class BodyInspectRuntime {
     @FunctionalInterface public interface Submission {
         String moveTo(SessionRef session,Command command,BodyConnection.MoveRequest request);
     }
+    @FunctionalInterface public interface LookSubmission {
+        String lookAt(SessionRef session,Command command,BodyConnection.LookRequest request);
+    }
     public BodyInspectRuntime(BodyConnection connection,BodySensesCollector senses,
-            Consumer<JsonObject> resultSink,Predicate<SessionRef> current,Submission submission) {
+            Consumer<JsonObject> resultSink,Predicate<SessionRef> current,Submission submission,LookSubmission lookSubmission) {
         this.senses=senses;
         this.controller=new BodyInspectController(new BodyInspectController.Access() {
             public long nextSequence(Context context,long prior,long tick,long last) { return connection.nextActionSequence(context,prior,tick); }
@@ -48,6 +51,11 @@ public final class BodyInspectRuntime {
             }
             public BodyInspectController.ResolvedTarget resolveImage(Target target,BodyInspectController.Live live) { return resolveCurrent(target,live,true); }
             public boolean collisionFree(BodyApproachGeometry.Bounds destination) { return clearSpace(destination); }
+            public BodyLookController.Result lookOwner(SessionRef session,Command command) {
+                // 同一commandの再送は上位台帳で除外済み。BERTと同じ実測・鮮度・共有sequenceを使う。
+                return BodyLookRuntime.create(connection,request -> lookSubmission.lookAt(session,command,request))
+                    .player(command.context(),command.commandId());
+            }
             public String moveTo(SessionRef session,Command command,BodyConnection.MoveRequest request) {
                 String result=submission.moveTo(session,command,request);
                 if ("queued".equals(result)) senses.focus(command,request.observedServerTick(),request.sequence(),() -> current.test(session));

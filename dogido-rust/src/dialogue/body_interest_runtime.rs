@@ -150,7 +150,7 @@ pub(super) fn apply(s: &mut Session, turn: &str, result: Option<&Value>, now_ms:
         return;
     };
     // 画像から移動する判断には相手への一言も必要。語句や理由の意味は検査せず、発話なしなら移動も保留する。
-    if pending.image_choice && choice["action"] != "stay"
+    if pending.image_choice && matches!(choice["action"].as_str(), Some("inspect"|"inspect_image"|"owner_near"|"owner_face"))
         && result.and_then(|r| r["text"].as_str()).is_none_or(|text| text.trim().is_empty()) {
         s.body_autonomy.cancel_preparation();return;
     }

@@ -73,7 +73,7 @@ class BodyAttentionTest {
         var attention=new BodyAttention();
         assertTrue(attention.view(EYE,0,frame(100,"following","distance_follow")).narrow());
         assertTrue(attention.view(EYE,0,frame(100,"holding","follow_settling")).narrow());
-        assertFalse(attention.view(EYE,0,frame(100,"holding","follow_lookaround")).narrow());
+        assertFalse(attention.view(EYE,0,frame(100,"holding","within_follow_distance")).narrow());
         var disabled=frame(100,"holding","within_follow_distance"); disabled.addProperty("enabled",false);
         assertNull(attention.view(EYE,0,disabled));
     }
@@ -91,7 +91,7 @@ class BodyAttentionTest {
         attention.observe(arrived); assertNotNull(attention.view(EYE,0,arrived).target());
         arrived.addProperty("server_tick",689); attention.observe(arrived);
         assertNotNull(attention.view(EYE,0,arrived).target());
-        arrived.addProperty("server_tick",690); arrived.addProperty("reason","follow_lookaround"); attention.observe(arrived);
+        arrived.addProperty("server_tick",690); arrived.addProperty("reason","within_follow_distance"); attention.observe(arrived);
         assertNull(attention.view(EYE,0,arrived).target());
     }
     @Test void lateArrivalReceiptDoesNotStartAnotherFiveSeconds() {
@@ -149,7 +149,7 @@ class BodyAttentionTest {
         }
     }
     @Test void reassuranceRoundsEachDimensionAndKeepsTheMinimumWindow() {
-        var attention=new BodyAttention(); var row=frame(100,"holding","follow_lookaround");
+        var attention=new BodyAttention(); var row=frame(100,"holding","within_follow_distance");
         // 安心度、前方、左右それぞれ、上下それぞれ。半端な寸法の直前と四捨五入後を比較する。
         double[][] cases={{0,5,1,2},{25,5,1,2},{49.999,5,1,2},{50,5,2,2},
             {64,5,2,2},{65,6,2,2},{74.999,6,2,2},{75,6,2,3},{78,6,2,3},
@@ -182,7 +182,7 @@ class BodyAttentionTest {
         assertTrue(attention.view(EYE,0,moving).narrow()); assertNull(attention.view(EYE,0,moving).target());
         var arrived=frame(130,"holding","owner_face_dwell"); outcome(arrived,command,"succeeded","arrived"); attention.observe(arrived);
         assertTrue(attention.view(EYE,0,arrived).narrow()); assertEquals("narrow",attention.observation(arrived).get("scope").getAsString());
-        arrived.addProperty("reason","follow_lookaround"); attention.observe(arrived);
+        arrived.addProperty("reason","within_follow_distance"); attention.observe(arrived);
         assertFalse(attention.view(EYE,0,arrived).narrow());
     }
 }

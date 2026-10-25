@@ -1,5 +1,5 @@
 //! 既存Chat Completionsへ一要求を一回送信し、本文と終了情報だけを返す。
-//! 任意画像は通常会話の最後のuser入力にだけ添付し、履歴・保存・取消の判断は呼出側が所有する。
+//! 任意画像は通常会話・既存の環境反応の最後のuser入力にだけ添付し、履歴・保存・取消の判断は呼出側が所有する。
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail, ensure};
@@ -64,7 +64,7 @@ impl RigLlm {
         Ok(self.complete(input, &[], &[], false, None, false).await?.0)
     }
 
-    /// 検証した画像一枚を同じ通常会話の要求へ添え、一回だけ送信する。
+    /// 検証した画像一枚を同じ会話・環境反応の要求へ添え、一回だけ送信する。
     /// 不正画像・通信失敗でも画像なしの再送はせず、画像本文を結果やログへ戻さない。
     pub async fn generate_with_image(
         &self,
@@ -184,7 +184,8 @@ fn request_with_image(
     let mut request = to_rig_request(input);
     if let Some(image) = image {
         ensure!(
-            matches!(input.kind.as_str(), "player_chat" | "environment_reaction"),
+            matches!(input.kind.as_str(), "player_chat" | "environment_reaction")
+                || crate::reaction_leaf::KINDS.contains(&input.kind.as_str()),
             "chat_image_wrong_generation_kind"
         );
         image.validate()?;

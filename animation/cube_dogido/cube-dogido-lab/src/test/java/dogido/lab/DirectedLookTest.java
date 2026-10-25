@@ -11,19 +11,19 @@ class DirectedLookTest {
     @Test void completesOnlyAfterRotationAndHoldsUntilDeadline() {
         var look = new DirectedLook(); UUID id = UUID.randomUUID();
         look.begin(id,new Position(-8,0,0),10);
-        assertNull(look.reached(Vec3d.ZERO,0,0));
-        assertEquals(id,look.reached(Vec3d.ZERO,90,0));
-        assertNull(look.reached(Vec3d.ZERO,90,0));
-        assertNull(look.stop(109,null)); assertTrue(look.active());
-        assertNull(look.stop(110,null)); assertFalse(look.active());
+        assertNull(look.reached(Vec3d.ZERO,0,0,10));
+        assertEquals(id,look.reached(Vec3d.ZERO,90,0,90));
+        assertNull(look.reached(Vec3d.ZERO,90,0,90));
+        assertNull(look.stop(189,null)); assertTrue(look.active());
+        assertNull(look.stop(190,null)); assertFalse(look.active());
     }
     @Test void checksVerticalPitchAndTimeoutBeforeSuccess() {
         var look = new DirectedLook(); look.begin(UUID.randomUUID(),new Position(0,8,8),0);
-        assertNull(look.reached(Vec3d.ZERO,0,0));
-        assertNotNull(look.reached(Vec3d.ZERO,0,-45));
+        assertNull(look.reached(Vec3d.ZERO,0,0,10));
+        assertNotNull(look.reached(Vec3d.ZERO,0,-45,20));
         look.begin(UUID.randomUUID(),new Position(0,0,-8),10);
         var result = look.stop(110,null); assertEquals(Outcome.EXPIRED,result.outcome());
-        assertFalse(look.active()); assertNull(look.reached(Vec3d.ZERO,180,0));
+        assertFalse(look.active()); assertNull(look.reached(Vec3d.ZERO,180,0,110));
     }
     @Test void yieldsToPrioritiesAndCancelsWithoutSuccess() {
         assertNull(DirectedLook.priority(true,false,false,false,Activity.HOLDING,false,false));

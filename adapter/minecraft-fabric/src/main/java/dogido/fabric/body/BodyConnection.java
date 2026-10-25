@@ -89,7 +89,7 @@ public final class BodyConnection {
         try { String result=source.moveTo(request); if (!"queued".equals(result)) release(request.actionId()); return result; }
         catch (RuntimeException | LinkageError error) { release(request.actionId()); return "bridge_error"; }
     }
-    /** 学習済み分類で作った注視点を既存LOOK_ATへ送る。 */
+    /** 明示分類または許可済み行動の実測注視点を既存LOOK_ATへ送る。 */
     public String lookAt(LookRequest request) {
         resolve();
         if (source == null) return "unavailable";

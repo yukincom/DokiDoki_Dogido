@@ -52,7 +52,7 @@ class BodyInspectProtocolTest {
         assertThrows(IllegalArgumentException.class,() -> new Point(30_000_001,0,0));
     }
     @Test void ownerPurposesAreClosedAndCannotSmuggleATarget() {
-        for (String purpose : java.util.List.of("owner_near","owner_face")) {
+        for (String purpose : java.util.List.of("owner_near","owner_face","look_owner")) {
             var row=wire(); row.addProperty("purpose",purpose);
             assertTrue(parseCommands(envelope(row)).isEmpty());
             row.add("target",com.google.gson.JsonNull.INSTANCE);

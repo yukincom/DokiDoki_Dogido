@@ -186,6 +186,7 @@ pub(super) fn refresh_dialogue_context(s: &Session, actions: &mut [Speech]) -> b
         if !crate::reaction_leaf::is_model_reaction(action) {
             continue;
         }
+        super::visual_runtime::attach_latest(s, action);
         let leaf = action.leaf.as_mut().unwrap();
         let kind = if leaf.kind == crate::environment::reaction::KIND {
             action.kind
@@ -200,10 +201,10 @@ pub(super) fn refresh_dialogue_context(s: &Session, actions: &mut [Speech]) -> b
         if !leaf.details[key].is_object() {
             leaf.details[key] = json!({});
         }
-        // 定期比較の表だけを固定する。画像の判断は生成時点の全観測を他の環境反応と共有し、
+        // 定期比較の表は画像添付の有無によらず固定する。画像変化による判断は現在の全観測を共有し、
         // 撮影後に変わった天候・匂い・モブ等を古い値に戻さない。画像自体は撮影時刻付きで固定する。
         let periodic_notice =
-            action.kind == crate::environment::notice::KIND && action.image.is_none();
+            action.kind == crate::environment::notice::KIND && leaf.details["visual_change_trigger"] != true;
         if !periodic_notice || !leaf.details[key]["world_context"].is_object() {
             let mut context = if periodic_notice {
                 let Some(context) = s.conversation_observation.noticing_context() else {
@@ -213,7 +214,7 @@ pub(super) fn refresh_dialogue_context(s: &Session, actions: &mut [Speech]) -> b
             } else {
                 super::body_runtime::context(s).unwrap_or_default()
             };
-            if let Some(image) = &action.image {
+            if let Some(image) = &action.image && leaf.details["visual_change_trigger"] == true {
                 let capture = leaf.details["visual_capture"].clone();
                 context
                     .changes
@@ -255,6 +256,9 @@ pub(super) fn refresh_dialogue_context(s: &Session, actions: &mut [Speech]) -> b
                 .get("sensory_status")
                 .cloned()
                 .unwrap_or_else(|| json!("unavailable"));
+        }
+        if action.image.is_some() {
+            leaf.details[key]["visual_capture"] = leaf.details["visual_capture"].clone();
         }
         if action.rain_after_window.is_some() {
             // この一件の匂いだけ雨上がりへ集中する。通常の会話snapshotは触らないので、

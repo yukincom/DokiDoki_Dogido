@@ -61,7 +61,6 @@ class BodyCallTest {
             assertEquals(Activity.HOLDING,normal.activity());
             assertEquals(moved.target(),normal.target());
             assertFalse(c.takeArrived()); assertNull(c.takeCallEnd());
-            assertNotNull(c.idleYaw(tick,0));
         }
         c.inspect(UUID.randomUUID(),new Vec3d(5,1,3),600);
         assertEquals(Activity.MOVING,plan(c,moved.target(),owner(3,false),301,open).activity());

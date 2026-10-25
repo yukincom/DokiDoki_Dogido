@@ -156,7 +156,7 @@ fn remove_namespace_lower(value: &str) -> String {
 }
 
 /// Exact closed rules from state_machine.precipitation.resolve_precipitation_context.
-/// Sky visibility is a separate environment projection; it must gate prompt publication.
+/// Sky visibility and shelter are separate facts; they do not turn ongoing precipitation into clear weather.
 pub fn resolve_precipitation_context(input: &Input) -> Result<PrecipitationContext> {
     let current_y = input.current_y.map(rounded_y).transpose()?;
     let dimension = remove_namespace_lower(input.dimension.as_deref().unwrap_or(""));

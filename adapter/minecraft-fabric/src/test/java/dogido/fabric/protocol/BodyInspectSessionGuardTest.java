@@ -28,6 +28,20 @@ class BodyInspectSessionGuardTest {
     static BodyConnection.MoveRequest request(BodyInspectProtocol.Command command) {
         return new BodyConnection.MoveRequest(command.context(),101,command.commandId(),100,100,new BodyInspectProtocol.Point(6,64,0),BodyInspectProtocol.Purpose.INSPECT);
     }
+    @Test void ownerLookChecksPurposeIdentityExpiryAndSessionAtTheActualQueue() throws Exception {
+        var client=client(); var base=command(Instant.now());var calls=new AtomicInteger();
+        var command=new BodyInspectProtocol.Command(base.commandId(),base.issuedAt(),base.expiresAt(),base.context(),null,BodyInspectProtocol.Purpose.LOOK_OWNER);
+        var request=new BodyConnection.LookRequest(command.context(),101,command.commandId(),100,20,new BodyInspectProtocol.Point(0,66,2));
+        java.util.function.Function<BodyConnection.LookRequest,String> sender=r -> {calls.incrementAndGet();return "queued";};
+        var ref=client.currentSession();assertEquals("queued",client.submitBodyInspect(ref,command,request,sender));
+        assertEquals("invalid_action",client.submitBodyInspect(ref,base,request,sender));
+        var mismatch=new BodyConnection.LookRequest(request.context(),101,UUID.randomUUID(),100,20,request.target());
+        assertEquals("invalid_action",client.submitBodyInspect(ref,command,mismatch,sender));
+        var expired=new BodyInspectProtocol.Command(command.commandId(),Instant.now().minusSeconds(10),Instant.now().minusSeconds(6),command.context(),null,BodyInspectProtocol.Purpose.LOOK_OWNER);
+        assertEquals("expired",client.submitBodyInspect(ref,expired,request,sender));
+        client.invalidateDisplayRequests();assertEquals("stale_session",client.submitBodyInspect(ref,command,request,sender));
+        assertEquals(1,calls.get());
+    }
     @Test void staleSessionAndExpiredCommandNeverReachTheBodyQueue() throws Exception {
         var client=client(); var ref=client.currentSession(); var calls=new AtomicInteger();
         var expired=command(Instant.now().minusSeconds(10));

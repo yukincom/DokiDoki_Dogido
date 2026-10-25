@@ -98,7 +98,7 @@ public final class DogidoWorkshopHud {
                 context.fill(left + 1, upper + 1, right - 1, lower - 1, color(0xf4dab0, opacity));
             }
             for (int cp : line.codePoints().toArray()) {
-                drawCentered(context, client.textRenderer, new String(Character.toChars(cp)), cx, cy, glyph, color(0x27291f, opacity));
+                drawVerticalGlyph(context, client.textRenderer, cp, cx, cy, glyph, color(0x27291f, opacity));
                 cy += glyph * 1.04f;
             }
         }
@@ -123,6 +123,20 @@ public final class DogidoWorkshopHud {
             float size = Math.min(bottom * .62f, width * .87f * client.textRenderer.fontHeight / Math.max(1, client.textRenderer.getWidth(caption)));
             drawCentered(context, client.textRenderer, caption, x + width / 2f, y + height - bottom * .8f, size, color(0x302b21, opacity));
         }
+    }
+
+    /** 本文だけの縦組み。長音符は字枠の中心で90度回し、原文・読み・保存値には触れない。 */
+    private static void drawVerticalGlyph(DrawContext context, TextRenderer renderer, int cp, float cx, float y, float height, int color) {
+        String text = new String(Character.toChars(cp));
+        if (cp != 0x30FC) { drawCentered(context,renderer,text,cx,y,height,color); return; }
+        float scale = height / renderer.fontHeight;
+        context.getMatrices().pushMatrix();
+        context.getMatrices().translate(cx,y+height/2);
+        context.getMatrices().rotate((float)(Math.PI/2));
+        context.getMatrices().scale(scale,scale);
+        context.getMatrices().translate(-renderer.getWidth(text)/2f,-renderer.fontHeight/2f);
+        context.drawText(renderer,text,0,0,color,false);
+        context.getMatrices().popMatrix();
     }
 
     private static void drawCentered(DrawContext context, TextRenderer renderer, String text, float cx, float y, float height, int color) {

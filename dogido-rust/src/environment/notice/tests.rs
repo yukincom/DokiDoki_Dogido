@@ -117,7 +117,7 @@ fn actual_precipitation_and_underground_biome_stay_separate() {
                 .unwrap();
         assert_eq!(c.observations["location_biome"]["id"], "taiga");
         assert_eq!(c.observations["biome_scene_visible"], false);
-        assert!(c.observations["weather"].is_null());
+        assert_eq!(c.observations["weather"]["precipitation_kind"], expected);
     }
 }
 
@@ -261,4 +261,43 @@ fn smell_strength_source_and_component_order_do_not_make_new_arrivals() {
         after.observations["smell"]["components"][1]["effective_strength"],
         3
     );
+}
+
+#[test]
+fn shelter_and_rain_sound_expiry_never_turn_world_rain_into_weather_ending() {
+    let mut wire=json!({"schema_version":"2026-05-24","adapter":"fixture","observed_at":"2026-10-25T00:00:00Z",
+        "event":{"name":"status_snapshot","source_kind":"system","priority_hint":"background","certainty":"high"},
+        "player":{"dimension":"minecraft:overworld","position":{"y":64}},
+        "world":{"biome":"plains","weather":"rain","sky_visible":true,"rain_sound_recent_ms":100}});
+    let project=|v:Value| conversation_observation::project(&GameEvent::parse(v).unwrap(),None,32.0,7.0,5000).unwrap();
+    let outside=project(wire.clone());
+    wire["world"]["sky_visible"]=json!(false); wire["world"]["overhead_cover_type"]=json!("foliage");
+    wire["world"]["rain_sound_recent_ms"]=json!(6000);
+    let sheltered=project(wire.clone());
+    assert_eq!(sheltered.observations["weather"],outside.observations["weather"]);
+    assert_eq!(sheltered.observations["weather"]["label"],"雨");
+    assert_eq!(sheltered.observations["overhead_cover"],"foliage");
+    assert_eq!(sheltered.observations["rain_heard"],false);
+    for (before,after) in [(&outside,&sheltered),(&sheltered,&outside)] {
+        assert!(!changes(&snapshot(before),after).iter().any(|c|c.kind=="weather"));
+    }
+    wire["world"]["weather"]=json!("clear");
+    let cleared=project(wire.clone());
+    assert!(changes(&snapshot(&sheltered),&cleared).iter().any(|c|c.kind=="weather"));
+    assert_eq!(cleared.observations["weather"]["precipitation_kind"],"none");
+    wire["world"].as_object_mut().unwrap().remove("weather");
+    assert!(project(wire).observations["weather"].is_null());
+}
+
+#[test]
+fn covered_weather_preserves_dry_biome_and_dimension_boundaries() {
+    for (dimension,biome) in [("minecraft:overworld","desert"),("minecraft:the_nether","nether_wastes"),("minecraft:the_end","the_end")] {
+        let event=GameEvent::parse(json!({"schema_version":"2026-05-24","adapter":"fixture","observed_at":"2026-10-25T00:00:00Z",
+            "event":{"name":"status_snapshot","source_kind":"system","priority_hint":"background","certainty":"high"},
+            "player":{"dimension":dimension,"position":{"y":64}},
+            "world":{"biome":biome,"weather":"rain","sky_visible":false,"overhead_cover_type":"stone"}})).unwrap();
+        let context=conversation_observation::project(&event,None,32.0,7.0,5000).unwrap();
+        assert_eq!(context.observations["weather"]["precipitation_kind"],"none");
+        assert_eq!(context.observations["weather"]["precipitation_possible"],false);
+    }
 }

@@ -264,3 +264,77 @@ async fn refresh_rechecks_the_body_in_the_same_snapshot() {
     d.observe("s", crate::events::GameEvent::parse(newer).unwrap(), None);
     assert!(!source.refresh(&input, Some(&original)).unwrap().1);
 }
+
+#[tokio::test]
+async fn unchanged_image_is_attached_to_periodic_and_ordinary_decisions_without_a_fake_change() {
+    let (d,source)=server(100); let (_,mut receipt,_)=pending();
+    let mut action=crate::environment::notice::action();
+    action.delivery=crate::combat::model::Delivery::Ambient;
+    let frozen;
+    {
+        let mut data=d.data.lock().unwrap(); let s=data.sessions.get_mut("s").unwrap();
+        receipt.command_id=s.visual.commands(Utc::now())[0]["command_id"].as_str().unwrap().into();
+        let v=&mut receipt.body_view.as_mut().unwrap().0;
+        v["captured_at"]=json!(Utc::now()); v["visual_change"]=json!(false); v["compared_to_four_before"]=json!(true);
+        s.visual.receive(&receipt,Utc::now()); assert!(opportunity(s).is_none());
+        let mut frame=super::super::body_runtime::context(s).unwrap();
+        s.conversation_observation.observe(frame.clone()); s.conversation_observation.sample_notice(10,1,true);
+        frame.observations["weather"]=json!("rain");
+        s.conversation_observation.observe(frame); s.conversation_observation.sample_notice(11,1,true);
+        let event=super::super::body_runtime::event(s,s.latest.as_ref().unwrap());
+        crate::environment::reaction::attach(&mut action,&event,&json!({}),&d.config.combat);
+        assert!(super::super::environment_runtime::refresh_dialogue_context(s,std::slice::from_mut(&mut action)));
+        frozen=action.leaf.as_ref().unwrap().details["reaction_context"]["world_context"].clone();
+        assert!(action.image.is_some());
+        assert!(!frozen["changes"].as_array().unwrap().iter().any(|c|c["kind"]=="body_view"));
+        assert!(frozen["changes"].as_array().unwrap().iter().any(|c|c["kind"]=="weather"));
+        assert_eq!(action.leaf.as_ref().unwrap().details["reaction_context"]["visual_capture"]["visual_change"],false);
+        let mut changed=s.conversation_observation.context().unwrap(); changed.observations["weather"]=json!("clear");
+        s.conversation_observation.observe(changed);
+        assert!(super::super::environment_runtime::refresh_dialogue_context(s,std::slice::from_mut(&mut action)));
+        let preserved=&action.leaf.as_ref().unwrap().details["reaction_context"]["world_context"];
+        assert_eq!(preserved["revision"],frozen["revision"]); assert_eq!(preserved["changes"],frozen["changes"]);
+        assert_eq!(preserved["observations"]["weather"],"rain");
+    }
+    let (_tx,mut cancel)=watch::channel(false);
+    let image=source.capture(&mut cancel).await.unwrap().image;
+    assert_eq!(image.sha256,action.image.as_ref().unwrap().sha256);
+    assert!(image.metadata_text().contains("unchanged"));
+    // 比較結果を付けた同じPNGが実際のモデル要求へ入ることまで確認する。
+    let sent=Arc::new(std::sync::Mutex::new(Vec::<Value>::new())); let recorded=sent.clone();
+    let app=axum::Router::new().route("/v1/chat/completions",axum::routing::post(move |axum::Json(v):axum::Json<Value>| {
+        recorded.lock().unwrap().push(v);async {axum::Json(json!({"id":"fixture","object":"chat.completion","created":0,"model":"fixture","choices":[{"index":0,"message":{"role":"assistant","content":"{\"action\":\"silent\",\"speech\":\"\"}"},"finish_reason":"stop"}]}))}
+    }));
+    let socket=tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let llm=crate::llm::RigLlm::new(&format!("http://{}/v1",socket.local_addr().unwrap()),None,Duration::from_secs(2)).unwrap();
+    let http=tokio::spawn(async move {axum::serve(socket,app).await.unwrap();});
+    let config=super::super::DialogueConfig {model:"fixture".into(),reading_engine:"off".into(),..Default::default()};
+    let input=json!({"kind":"environment_reaction","model":"fixture","max_tokens":200,"fallback_text":"","details":action.leaf.as_ref().unwrap().details});
+    super::super::reaction_runtime::render_image(&config,&llm,&input,&mut cancel,Some(&image)).await.unwrap();
+    for kind in ["portal_appearance","darkness_escape","emergency_shelter_relief"] {
+        let input=json!({"kind":kind,"model":"fixture","max_tokens":config.max_tokens,"temperature":0.65,"fallback_text":"",
+            "details":{"conversation_context":{"world_context":frozen}}});
+        super::super::reaction_runtime::render_image(&config,&llm,&input,&mut cancel,Some(&image)).await.unwrap();
+    }
+    let requests=sent.lock().unwrap(); assert_eq!(requests.len(),4);
+    for request in requests.iter() {
+        let content=&request["messages"].as_array().unwrap().last().unwrap()["content"];
+        assert_eq!(content[1]["image_url"]["url"],format!("data:image/png;base64,{PNG}"));
+        assert!(content[0]["text"].as_str().unwrap().contains("unchanged"));
+        assert!(request["messages"][0]["content"].as_str().unwrap().contains(crate::companion_prompt::chat_image()));
+    }
+    http.abort();
+}
+
+#[tokio::test]
+async fn old_image_cannot_claim_the_current_scene_is_unchanged() {
+    let (d,source)=server(100); let (mut state,mut receipt,now)=pending();
+    let v=&mut receipt.body_view.as_mut().unwrap().0;
+    v["visual_change"]=json!(false); v["compared_to_four_before"]=json!(true);
+    state.receive(&receipt,now);
+    state.latest.as_mut().unwrap().image.captured_at=(Utc::now()-chrono::Duration::seconds(31)).to_rfc3339();
+    d.data.lock().unwrap().sessions.get_mut("s").unwrap().visual=state;
+    let (_tx,mut cancel)=watch::channel(false); assert!(source.capture(&mut cancel).await.is_none());
+    let mut action=crate::environment::notice::action();
+    let data=d.data.lock().unwrap();attach_latest(&data.sessions["s"],&mut action);assert!(action.image.is_none());
+}

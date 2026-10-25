@@ -95,7 +95,20 @@ public final class DogidoEventClient {
         String timeError=command.timeError(java.time.Instant.now());
         if (timeError != null) return timeError;
         if (!command.commandId().equals(request.actionId()) || !command.context().equals(request.context())) return "invalid_action";
+        if (command.purpose() == dogido.fabric.body.BodyInspectProtocol.Purpose.LOOK_OWNER) return "invalid_action";
         return bodyMoveSender.apply(request);
+    }
+
+    /** 自発的な本人注視も移動と同じsession monitorで、期限・対象・用途を照合してqueueへ渡す。 */
+    public synchronized String submitBodyInspect(SessionRef ref,dogido.fabric.body.BodyInspectProtocol.Command command,
+            dogido.fabric.body.BodyConnection.LookRequest request,
+            java.util.function.Function<dogido.fabric.body.BodyConnection.LookRequest,String> sender) {
+        if (!this.config.enabled || !isCurrent(ref)) return "stale_session";
+        String timeError=command.timeError(java.time.Instant.now());
+        if (timeError != null) return timeError;
+        if (command.purpose() != dogido.fabric.body.BodyInspectProtocol.Purpose.LOOK_OWNER
+                || !command.commandId().equals(request.actionId()) || !command.context().equals(request.context())) return "invalid_action";
+        return sender.apply(request);
     }
 
     public synchronized boolean isCurrentBodyRequest(SessionRef ref,long generation) {

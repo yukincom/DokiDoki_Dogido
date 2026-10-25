@@ -36,7 +36,7 @@ public final class BodyController {
     private boolean inspectionStarted;
     private InspectionResult inspectionResult;
 
-    public BodyController(long seed) { random = new Random(seed); attention = new FollowAttention(seed ^ 0x6f627365727665L); }
+    public BodyController(long seed) { random = new Random(seed); attention = new FollowAttention(); }
     public void reset() {
         target = anchorOwner = null; callId = null; nextTarget = callStarted = 0;
         callFinished = false; callEnd = null; previous = Activity.HOLDING;
@@ -99,9 +99,6 @@ public final class BodyController {
         if (attention.dwelling(tick)) return "inspection_dwell";
         return attention.settling(tick) ? "follow_settling" : null;
     }
-    public boolean lookingAround() { return idleAttention && attention.looking(); }
-    /** planが安全なFOLLOW待機を確定したtickだけ実yawを更新する。移動や呼び寄せの向きには介入しない。 */
-    public Float idleYaw(long tick, float currentYaw) { return idleAttention ? attention.yaw(tick,currentYaw) : null; }
     public InspectionResult takeInspectionResult() {
         InspectionResult value = inspectionResult; inspectionResult = null; return value;
     }

@@ -436,7 +436,7 @@ fn arrival_cools_only_the_visited_object_and_not_unselected_objects_of_the_same_
 fn arrival_dwell_and_follow_settling_delay_selection() {
     let at = Instant::now();
     let mut state = State::default();
-    for (i, reason) in ["inspection_dwell", "owner_near_dwell", "owner_face_dwell", "follow_settling"].into_iter().enumerate() {
+    for (i, reason) in ["inspection_dwell", "owner_near_dwell", "owner_face_dwell", "follow_settling", "requested_look"].into_iter().enumerate() {
         let s = sample(i as u64 + 1);
         let mut o = observation(&s);
         data(&mut o).reason = reason.into();
@@ -444,7 +444,7 @@ fn arrival_dwell_and_follow_settling_delay_selection() {
         assert!(state.available(at));
         assert!(state.prepare(at).is_none());
     }
-    for reason in ["inspection_dwell", "owner_near_dwell", "owner_face_dwell", "follow_settling"] {
+    for reason in ["inspection_dwell", "owner_near_dwell", "owner_face_dwell", "follow_settling", "requested_look"] {
         let (mut state, p) = prepared(at);
         let s = sample(2);
         let mut o = observation(&s);
@@ -461,12 +461,12 @@ fn looking_around_allows_a_choice_but_does_not_restore_a_lost_target() {
         let mut state = State::default();
         let s = sample(1);
         let mut o = observation(&s);
-        data(&mut o).reason = "follow_lookaround".into();
+        data(&mut o).reason = "within_follow_distance".into();
         state.observe(Some(&o), Some(&s), at, Some(0));
         let p = state.prepare(at).expect("a lookaround can start selection");
         let latest = sample(2);
         let mut o = observation(&latest);
-        data(&mut o).reason = "follow_lookaround".into();
+        data(&mut o).reason = "within_follow_distance".into();
         if disappears { data(&mut o).candidates.clear(); }
         state.observe(Some(&o), Some(&latest), at, Some(0));
         let result = state.choose(&p, r#"{"action":"inspect","target_id":"c1","reason":"近くで見る"}"#, at, utc());
@@ -1019,7 +1019,7 @@ fn a_real_follow_arrival_can_choose_face_during_settling_once() {
     assert!(state.owner_arrival_pending(now)); assert!(state.ready_reassurance(now).is_some());
     let prepared=state.prepare(now).unwrap();
     assert!(prepared.after_owner_arrival);
-    assert_eq!(prepared.available_actions,vec!["stay","owner_face"]);
+    assert_eq!(prepared.available_actions,vec!["stay","look_owner","owner_face"]);
     assert!(prepared.candidates.is_empty()); assert_eq!(prepared.model_candidates,json!([]));
     assert!(!state.owner_arrival_pending(now));
     let command=state.choose(&prepared,r#"{"action":"owner_face","target_id":null}"#,now,utc()).unwrap().unwrap();
@@ -1074,7 +1074,7 @@ fn an_arrival_rereads_working_state_and_excludes_other_moves() {
         data(&mut o).reassurance.owner_working=true;
         state.observe(Some(&o),Some(&s),at+Duration::from_millis(200),Some(0));
         let p=state.prepare(at+Duration::from_millis(200)).unwrap();
-        assert_eq!(p.available_actions,vec!["stay"]);
+        assert_eq!(p.available_actions,vec!["stay","look_owner"]);
         assert!(state.choose(&p,&json!({"action":output,"target_id":null}).to_string(),at+Duration::from_millis(200),utc()).is_err());
         assert!(!state.owner_arrival_pending(at+Duration::from_millis(200)));
     }
@@ -1118,7 +1118,7 @@ fn looking_around_preserves_a_real_return_but_a_stale_gap_never_revives_it() {
     for prepared_before_look in [false,true] {
         let at=Instant::now(); let mut state=State::default(); returned_from_follow(&mut state,at);
         let p=prepared_before_look.then(|| state.prepare(at+Duration::from_millis(100)).unwrap());
-        let s=sample(3); let mut o=observation(&s); data(&mut o).reason="follow_lookaround".into();
+        let s=sample(3); let mut o=observation(&s); data(&mut o).reason="within_follow_distance".into();
         state.observe(Some(&o),Some(&s),at+Duration::from_secs(1),Some(0));
         let p=p.unwrap_or_else(|| {
             assert!(state.owner_arrival_pending(at+Duration::from_secs(1)));
@@ -1148,4 +1148,26 @@ fn image_choice_has_no_invented_coordinates_and_keeps_existing_availability_chec
             assert_eq!(command["image_target"]["color"],"yellow");assert!(command["image_target"].get("x").is_none());assert!(command["image_target"].get("position").is_none());}
         else {assert!(result.is_err(),"{invalid}");}
     }
+}
+
+#[test]
+fn stationary_owner_look_is_available_while_working_and_only_facing_target_finishes_it() {
+    let at=Instant::now(); let mut state=State::default(); let sample=sample(1);
+    let mut observation=observation(&sample);
+    data(&mut observation).reassurance.owner_working=true;
+    data(&mut observation).candidates.clear();
+    state.observe(Some(&observation),Some(&sample),at,Some(0));
+    let p=state.prepare(at).unwrap();
+    assert_eq!(p.model_actions()["look_owner"],"その場でプレイヤーを見る");
+    assert!(!p.available_actions.contains(&"owner_face".into()));
+    let command=state.choose(&p,r#"{"action":"look_owner","target_id":null}"#,at,utc()).unwrap().unwrap();
+    assert_eq!(command["purpose"],"look_owner"); assert!(command["target"].is_null());
+    assert!(command.get("destination").is_none());
+    let mut receipt=result(&command);
+    assert!(state.observe_results(&[receipt.clone()],at+Duration::from_secs(1),utc()+UtcDuration::seconds(1)).is_empty());
+    receipt.detail_code="facing_target".into();
+    assert_eq!(state.observe_results(&[receipt.clone()],at+Duration::from_secs(1),utc()+UtcDuration::seconds(1)).len(),1);
+    assert!(state.observe_results(&[receipt],at+Duration::from_secs(1),utc()+UtcDuration::seconds(1)).is_empty());
+    assert!(!state.owner_arrival_pending(at+Duration::from_secs(1)));
+    assert!(state.commands(at+Duration::from_secs(1),utc()+UtcDuration::seconds(1)).is_empty());
 }

@@ -97,11 +97,15 @@ pub(super) async fn render_image(
         }
         return read_speech(config, result, cancel, deadline).await;
     }
-    let leaf = Leaf::prepare(input, &config.model, config.max_tokens)?;
+    let mut leaf = Leaf::prepare(input, &config.model, config.max_tokens)?;
+    if image.is_some() {
+        leaf.request.messages[0].content.push_str("\n\n");
+        leaf.request.messages[0].content.push_str(crate::companion_prompt::chat_image());
+    }
     let mut result = tokio::time::timeout_at(
         deadline,
         generate_once(&leaf, cancel, |request| async move {
-            llm.generate(&request).await
+            match image { Some(image)=>llm.generate_with_image(&request,image).await, None=>llm.generate(&request).await }
         }),
     )
     .await

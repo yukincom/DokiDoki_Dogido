@@ -41,7 +41,7 @@ fn server(mock: &Mock, capability: bool) -> Arc<Dialogue> {
     let d = Dialogue::new(c).unwrap();
     d.register("s","呼称",false);
     d.bind_body_owner("s",Some(OWNER));
-    if capability { d.set_execution_capabilities("s", &["body.inspect_target.v2".into()]); }
+    if capability { d.set_execution_capabilities("s", &["body.inspect_target.v3".into()]); }
     d
 }
 fn wire(sequence: i64) -> Value {
@@ -84,9 +84,13 @@ fn leave_range(d: &Arc<Dialogue>) -> Value {
 /// 通常範囲内での見物は、既存の周囲変化による判断機会へつなぐ。
 /// 退出通知では範囲外の見物候補を出せないため、命令配送の検査とは入口を分ける。
 fn environment_decision(d: &Arc<Dialogue>, value: Value) -> Value {
+    environment_decision_with_image(d,value,None)
+}
+fn environment_decision_with_image(d: &Arc<Dialogue>, value: Value, image: Option<crate::chat_image::Attachment>) -> Value {
     let event=GameEvent::parse(value.clone()).unwrap();
     let response=observe(d,value);
     let mut action=Speech::new("surroundings_notice","");
+    action.image=image.map(Arc::new);
     action.delivery=Delivery::Ambient;
     action.scope=crate::combat::model::Scope::Safe;
     let (turn,cancel)={
@@ -353,7 +357,7 @@ fn direct_decision() -> (Arc<Dialogue>, String) {
     let d = Dialogue::new(DialogueConfig { llm_enabled:false, audio_enabled:false, ..Default::default() }).unwrap();
     d.register("s","呼称",false);
     d.bind_body_owner("s",Some(OWNER));
-    d.set_execution_capabilities("s", &["body.inspect_target.v2".into()]);
+    d.set_execution_capabilities("s", &["body.inspect_target.v3".into()]);
     let event=GameEvent::parse(outside_wire(1)).unwrap();
     let mut data=d.data.lock().unwrap();
     let s=data.sessions.get_mut("s").unwrap();
@@ -569,7 +573,7 @@ async fn return_arrival_uses_one_existing_request_with_only_current_face_or_stay
             assert_eq!(input["trigger"]["kind"],"owner_arrived_near");
             let options=&input["body_options"];
             assert_eq!(options["candidates"],json!([]));
-            assert_eq!(options["available_actions"].as_object().unwrap().len(),if working {1} else {2});
+            assert_eq!(options["available_actions"].as_object().unwrap().len(),if working {2} else {3});
             assert!(options["available_actions"].get("stay").is_some());
             assert_eq!(options["available_actions"].get("owner_face").is_some(),!working);
             assert_eq!(input["world_context"]["observations"]["reassurance"]["owner_working"],working);
@@ -612,8 +616,41 @@ async fn a_queued_return_checks_work_and_departure_again_before_generation() {
         else {
             assert_eq!(requests.len(),1);
             let input:Value=serde_json::from_str(requests[0]["messages"][1]["content"].as_str().unwrap()).unwrap();
-            assert_eq!(input["body_options"]["available_actions"],json!({"stay":"その場におる"}));
+            assert_eq!(input["body_options"]["available_actions"],json!({"stay":"その場におる","look_owner":"その場でプレイヤーを見る"}));
         }
         drop(requests); d.shutdown().await;
     }
+}
+
+#[tokio::test]
+async fn model_can_silently_look_at_owner_with_unchanged_image_and_covered_rain() {
+    let mock=Mock::new(Duration::ZERO,r#"{"action":"silent","speech":"","body_action":{"action":"look_owner","target_id":null}}"#).await;
+    let d=server(&mock,true);
+    let mut frame=wire(1);
+    frame["world"]["weather"]=json!("rain"); frame["world"]["sky_visible"]=json!(false);
+    frame["world"]["overhead_cover_type"]=json!("foliage");
+    // 身体を感覚の正とする現行経路でも、同じ雨と葉の遮蔽を保持する。
+    frame["body_observation"]["sample"]["senses"]["world"]["weather"]=json!("rain");
+    frame["body_observation"]["sample"]["senses"]["world"]["sky_visible"]=json!(false);
+    frame["body_observation"]["sample"]["senses"]["world"]["overhead_cover_type"]=json!("foliage");
+    frame["body_autonomy"]["reassurance"]["owner_working"]=json!(true);
+    let mut image=crate::chat_image::tests::image(); image.captured_at=chrono::Utc::now().to_rfc3339();
+    image.scene_comparison=Some(crate::chat_image::SceneComparison{visual_change:false,compared_to_four_before:true});
+    environment_decision_with_image(&d,frame,Some(image));completed(&d,&mock).await;
+    let command=d.data.lock().unwrap().sessions["s"].body_autonomy.commands(Instant::now(),chrono::Utc::now())[0].clone();
+    assert_eq!(command["purpose"],"look_owner"); assert!(command["target"].is_null());
+    {
+        let requests=mock.seen.lock().unwrap();assert_eq!(requests.len(),1);
+        let content=&requests[0]["messages"].as_array().unwrap().last().unwrap()["content"];
+        let text=content[0]["text"].as_str().unwrap();assert!(text.contains("unchanged"));
+        let context:Value=serde_json::from_str(text.split_once("\n\nimage_observation: ").unwrap().0).unwrap();
+        assert_eq!(context["body_options"]["available_actions"]["look_owner"],"その場でプレイヤーを見る");
+        assert_eq!(context["world_context"]["observations"]["weather"]["label"],"雨");
+        assert_eq!(context["world_context"]["observations"]["overhead_cover"],"foliage");
+        assert!(content[1]["image_url"]["url"].as_str().unwrap().starts_with("data:image/png;base64,"));
+    }
+    let mut receipt=arrived(&command,2);receipt["command_results"][0]["detail_code"]=json!("facing_target");
+    observe(&d,receipt);
+    assert!(d.data.lock().unwrap().sessions["s"].body_autonomy.commands(Instant::now(),chrono::Utc::now()).is_empty());
+    d.shutdown().await;
 }

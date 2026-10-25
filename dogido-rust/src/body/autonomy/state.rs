@@ -75,7 +75,8 @@ impl Prepared {
         Value::Object(self.available_actions.iter().map(|action| {
             let meaning = match action.as_str() {
                 "owner_near" => "そばへ戻る",
-                "owner_face" => "顔を見る",
+                "owner_face" => "顔が見える位置へ近づく",
+                "look_owner" => "その場でプレイヤーを見る",
                 "inspect" => "見物",
                 "inspect_image" => "画像の気になる所を見物",
                 "stay" => "その場におる",
@@ -134,6 +135,7 @@ enum Action {
     InspectImage,
     OwnerNear,
     OwnerFace,
+    LookOwner,
     Stay,
 }
 
@@ -273,7 +275,7 @@ impl State {
     fn owner_arrival_holding(data: &Observed) -> bool {
         data.enabled && data.mode == Mode::Follow && data.activity == Activity::Holding
             && data.reassurance.owner_distance <= data.follow_distance
-            && matches!(data.reason.as_str(), "owner_near_dwell" | "follow_settling" | "within_follow_distance" | "follow_lookaround")
+            && matches!(data.reason.as_str(), "owner_near_dwell" | "follow_settling" | "within_follow_distance")
     }
     /// 実到着を観測した後の一件だけ。休止や制御変更は呼出側も明示的に失効させる。
     pub fn owner_arrival_pending(&self, now: Instant) -> bool {
@@ -281,11 +283,11 @@ impl State {
             && self.current.as_ref().is_some_and(|r| Self::owner_arrival_holding(&r.data))
     }
     pub fn cancel_owner_arrival(&mut self) { self.owner_arrival_pending = false; }
-    /// 到着後の二択だけは帰還直後の間にも進める。通常の見物・次の接近は従来の待機を守る。
+    /// 到着後のそばに留まる・その場の注視・顔への接近は帰還直後の間にも進める。通常の見物・次の接近は従来の待機を守る。
     fn ready_activity(data: &Observed, after_owner_arrival: bool) -> bool {
         if after_owner_arrival { return Self::owner_arrival_holding(data); }
         data.activity == Activity::Holding
-            && !matches!(data.reason.as_str(), "inspection_dwell" | "owner_near_dwell" | "owner_face_dwell" | "follow_settling")
+            && !matches!(data.reason.as_str(), "inspection_dwell" | "owner_near_dwell" | "owner_face_dwell" | "follow_settling" | "requested_look")
     }
     /// 見物候補の半径・同一対象の再訪間隔は、判断機会と実際の候補準備で同じ条件を使う。
     fn inspect_candidates(&self, data: &Observed, now: Instant) -> Vec<Candidate> {
@@ -334,7 +336,7 @@ impl State {
         }
         self.visits.retain(|v| now.saturating_duration_since(v.arrived) < REVISIT_INTERVAL);
         let candidates = if after_owner_arrival { Vec::new() } else { self.inspect_candidates(data, now) };
-        let mut available_actions = vec!["stay".to_owned()];
+        let mut available_actions = vec!["stay".to_owned(), "look_owner".to_owned()];
         if !after_owner_arrival { available_actions.push("owner_near".to_owned()); }
         if !data.reassurance.owner_working { available_actions.push("owner_face".to_owned()); }
         if !candidates.is_empty() { available_actions.push("inspect".to_owned()); }
@@ -353,7 +355,7 @@ impl State {
             image_capture: None,
             attempt,
         };
-        // 二択のstay・沈黙・失敗や顔への到着で再通知しない。新しい実帰還だけが次を作る。
+        // 帰還後のstay・注視・沈黙・失敗や顔への到着で再通知しない。新しい実帰還だけが次を作る。
         self.owner_arrival_pending = false;
         self.last_attempt = Some(now);
         self.prepared = Some(attempt);
@@ -418,7 +420,7 @@ impl State {
                 ensure!(choice.target_id.is_none(), "body_autonomy_stay_target");
                 None
             }
-            Action::OwnerNear | Action::OwnerFace => {
+            Action::OwnerNear | Action::OwnerFace | Action::LookOwner => {
                 ensure!(choice.target_id.is_none(), "body_autonomy_owner_target");
                 ensure!(choice.action != Action::OwnerFace || !current.reassurance.owner_working,
                     "body_autonomy_owner_working");
@@ -505,7 +507,7 @@ impl State {
             .unwrap_or_default()
     }
     /// 自分の命令ID・種類・body/epochと発行後35秒内の終端だけを一度受理する。
-    /// 受付通知を到着へ昇格させず、成功はarrivedの実行結果に限定する。ACKは呼出元の共有台帳が担当する。
+    /// 受付を成功へ昇格させず、移動はarrived・その場の注視はfacing_targetを待つ。ACKは共有台帳が担当する。
     pub fn observe_results(
         &mut self,
         incoming: &[AdapterCommandResult],
@@ -541,7 +543,7 @@ impl State {
                 continue;
             }
             if result.status == AdapterCommandResultStatus::Succeeded
-                && result.detail_code != "arrived"
+                && result.detail_code != if pending.command["purpose"] == "look_owner" { "facing_target" } else { "arrived" }
             {
                 continue;
             }

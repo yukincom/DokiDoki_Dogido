@@ -17,17 +17,14 @@ class BodyFollowTest {
     private BodyController.Plan plan(BodyController controller, Vec3d body, long tick, BodySafety safety) {
         return controller.plan(body,owner,tick,true,Mode.FOLLOW,false,tuning,open,safety);
     }
-    @Test void inspectionArrivalDwellsAtItsPositionThenLooksWithoutMovingOrChangingTheOwner() {
+    @Test void inspectionArrivalDwellsThenRemainsAtItsPosition() {
         BodyController controller = new BodyController(14);
         Vec3d destination = new Vec3d(5,1,0);
         controller.inspect(UUID.randomUUID(),destination,600);
         plan(controller,new Vec3d(2,1,0),0,BodySafety.EMPTY);
-        assertNull(controller.idleYaw(0,25));
         var arrival = plan(controller,destination,590,BodySafety.EMPTY);
         assertEquals("inspection_dwell",arrival.reason());
         assertEquals(Outcome.SUCCEEDED,controller.takeInspectionResult().outcome());
-        float yaw = 25;
-        boolean looked = false;
         for (int tick = 590; tick < 1200; tick++) {
             var waiting = plan(controller,destination,tick,BodySafety.EMPTY);
             assertEquals(Activity.HOLDING,waiting.activity());
@@ -36,30 +33,22 @@ class BodyFollowTest {
                 assertEquals("inspection_dwell",waiting.reason());
                 assertTrue(controller.inspectionDwelling(tick));
             } else assertFalse(controller.inspectionDwelling(tick));
-            float next = controller.idleYaw(tick,yaw);
-            if (next != yaw) looked = true;
-            yaw = next;
         }
-        assertTrue(looked);
         assertFalse(controller.inspectionDwelling(1200));
     }
 
-    @Test void catchingUpWaitsThreeSecondsAndAnInspectionStopsOnlyTheLookaround() {
+    @Test void catchingUpWaitsThreeSecondsBeforeAnotherInspection() {
         BodyController controller=new BodyController(21);
         var follow=plan(controller,new Vec3d(20,1,0),0,BodySafety.EMPTY);
         Vec3d body=follow.target();
         assertEquals("follow_settling",plan(controller,body,10,BodySafety.EMPTY).reason());
         assertEquals("follow_settling",plan(controller,body,69,BodySafety.EMPTY).reason());
         assertEquals("within_follow_distance",plan(controller,body,70,BodySafety.EMPTY).reason());
-        controller.idleYaw(70,0);
-        assertTrue(controller.lookingAround());
         controller.inspect(UUID.randomUUID(),new Vec3d(3,1,2),700);
-        assertFalse(controller.lookingAround());
         assertEquals(Activity.MOVING,plan(controller,body,71,BodySafety.EMPTY).activity());
-        assertNull(controller.idleYaw(71,0));
     }
 
-    @Test void followCallDangerAndModeChangesPreemptDwellAndLookaround() {
+    @Test void followCallDangerAndModeChangesPreemptDwell() {
         for (String priority : List.of("distance","call","danger","direct","disabled","owner")) {
             BodyController controller = new BodyController(15);
             Vec3d body = new Vec3d(5,1,0);
@@ -72,7 +61,6 @@ class BodyFollowTest {
                 priority.equals("owner") ? null : owner,1,!priority.equals("disabled"),
                 priority.equals("direct") ? Mode.DIRECT : Mode.FOLLOW,false,tuning,open,danger);
             assertFalse(controller.inspectionDwelling(1),priority);
-            assertNull(controller.idleYaw(1,30),priority);
         }
     }
     @Test void emergencyFollowStartsBeyondTwelveAndContinuesUntilBesideTheOwner() {

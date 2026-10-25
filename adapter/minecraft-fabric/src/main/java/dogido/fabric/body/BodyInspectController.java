@@ -25,6 +25,10 @@ final class BodyInspectController {
         default ResolvedTarget resolveImage(Target target,Live live) { return resolve(target,live); }
         boolean collisionFree(BodyApproachGeometry.Bounds destination);
         String moveTo(SessionRef session,Command command,BodyConnection.MoveRequest request);
+        /** BERT注視と同じ実測・LOOK_AT送信器を使い、受付番号を既存の結果待ちへ返す。 */
+        default BodyLookController.Result lookOwner(SessionRef session,Command command) {
+            return new BodyLookController.Result(command.commandId(),-1,"look_unavailable");
+        }
     }
     private record Pending(Command command,SessionRef session,long sequence,Instant deadline) {}
     private final Access access;
@@ -50,6 +54,10 @@ final class BodyInspectController {
         try {
             Live live=access.capture(); String invalid=invalid(live,command.context());
             if (invalid != null) { finish(command,"rejected",invalid,now); return; }
+            // モデルの生成後にBERT注視が完了しても、その保持時間を遅配の自発注視で上書きしない。
+            if (command.purpose() == Purpose.LOOK_OWNER && "requested_look".equals(string(live.autonomy(),"reason"))) {
+                finish(command,"rejected","requested_look_holding",now); return;
+            }
             boolean fromImage=command.imageTarget()!=null;
             if(fromImage) {
                 Target grounded=access.imageTarget(command,session,live);
@@ -96,25 +104,31 @@ final class BodyInspectController {
                     finish(command,"rejected","outside_owner_range",now); return;
                 }
             }
-            long tick=live.autonomy().get("server_tick").getAsLong();
-            long prior=live.autonomy().has("action_result") ? live.autonomy().getAsJsonObject("action_result").get("sequence").getAsLong() : 0;
-            long sequence=access.nextSequence(command.context(),prior,tick,lastSequence);
-            if (sequence <= 0) { finish(command,"rejected","invalid_sequence",now); return; }
-            var request=new BodyConnection.MoveRequest(command.context(),sequence,command.commandId(),tick,100,destination,command.purpose());
             // 視認と衝突検査の間にもHTTP callbackは世代を更新できる。送信直前に世代と実時計を再照合する。
             if (!current.test(session)) return;
             Instant submittedAt=clock.instant();
             String finalTimeError=command.timeError(submittedAt);
             if (finalTimeError != null) { finish(command,"expired",finalTimeError,submittedAt); return; }
             // 本番AccessはEventClientの同じsession monitor内でも再照合し、世代切替とqueueを線形化する。
-            String submission=access.moveTo(session,command,request);
+            String submission; long sequence;
+            if (command.purpose() == Purpose.LOOK_OWNER) {
+                var look=access.lookOwner(session,command);
+                submission=look.status(); sequence=look.sequence();
+            } else {
+                long tick=live.autonomy().get("server_tick").getAsLong();
+                long prior=live.autonomy().has("action_result") ? live.autonomy().getAsJsonObject("action_result").get("sequence").getAsLong() : 0;
+                sequence=access.nextSequence(command.context(),prior,tick,lastSequence);
+                if (sequence <= 0) { finish(command,"rejected","invalid_sequence",now); return; }
+                var request=new BodyConnection.MoveRequest(command.context(),sequence,command.commandId(),tick,100,destination,command.purpose());
+                submission=access.moveTo(session,command,request);
+            }
             if ("stale_session".equals(submission)) return;
             if (!"queued".equals(submission)) {
                 String status=java.util.Set.of("expired","issued_in_future","invalid_lifetime").contains(submission) ? "expired" : "rejected";
                 finish(command,status,submission,clock.instant()); return;
             }
             lastSequence=sequence;
-            // QUEUEDは配送受付。身体側のSUCCEEDEDを受信するまで到着の結果を作らない。
+            // QUEUEDは配送受付。身体側の同じactionのSUCCEEDEDまで到着・注視完了を作らない。
             pending=new Pending(command,session,sequence,command.issuedAt().plusSeconds(35));
         } catch (RuntimeException | LinkageError error) { finish(command,"failed","bridge_error",now); }
     }
