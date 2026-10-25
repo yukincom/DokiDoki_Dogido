@@ -1,0 +1,41 @@
+{
+  "schema": "dogido.gguf_j_lens_binding.v1",
+  "status": "exploratory_transfer",
+  "model_sha256": "a7c5bc715f5ff8e99a3e8901ce7d2b42b402c669bf24f7c5250747633d0f5891",
+  "lens_sha256": "932c048050d9d028d27df7ec2b8204c2e73a3c47f6c020b0f22e20b9353e5cf2",
+  "lens_source": "https://huggingface.co/solarkyle/jspace-lenses/tree/main/gemma-4-26b-a4b-it",
+  "training_model": "google/gemma-4-26B-A4B-it",
+  "target_layer_zero_based": 29,
+  "collector_source_revision": "6190802c8d3391ee908fb254d12fc243ad4540c6",
+  "native_head_validation": {
+    "response_id": "chatcmpl-1DA94Q2g4Mhz4zM7kyKmHwNpYFr2HPTo",
+    "generated_positions": 8,
+    "top1_token_matches": 8,
+    "native_top16_available_positions": [
+      0,
+      7
+    ],
+    "all_available_top16_ids_order_equal": true,
+    "max_logprob_error": 2.1344344574458773e-05,
+    "note": "MTP accepted tokens omit top_logprobs; only available rows are compared."
+  },
+  "gguf_files": {
+    "gguf/__init__.py": "3ccfc0104cd7ea88c6028743b7bf3f2c89b5f474425de03a217a6072320d7c2f",
+    "gguf/constants.py": "304ffbe04757e347595c09e067b470bfbe92317297518b004e02e516f1c94e49",
+    "gguf/gguf.py": "f0c0eeedad0911784b52ffed8e162a0eb5ae6d535ce35705bc16196e46597a72",
+    "gguf/gguf_reader.py": "d0ea743200e19d7ef0a4c969edcc4a6dba8e3656a790b217e3bdc7b31170718e",
+    "gguf/gguf_writer.py": "b12d746e1199861736432a897f1487ef50cda7e8a41df5bb8f41b653bf97fb9d",
+    "gguf/lazy.py": "dbc98e3ee9ef8606df34e9d91f98ab29c2697e6824995f1dd8952938c135ad85",
+    "gguf/metadata.py": "7cedac3b8457271a3f58e5531a7e6958fdecb9ea072f7895ba5d7f6693c9db29",
+    "gguf/quants.py": "2c927a1b3d9f0920dcf4007fb686e1b0999333e9f65ce43dcc689900c0beae8b",
+    "gguf/scripts/gguf_convert_endian.py": "6be91de3af4d9b3fc2c90dafb3d1d8eed7e9dd72b3d6b52d245f005c76ece280",
+    "gguf/scripts/gguf_dump.py": "d8b8fc28e96d15d8a4d6f05cdff4a747f5a06f31172efee9dfc971998ed0203f",
+    "gguf/scripts/gguf_editor_gui.py": "6e9d70e850268fff5d4108d9ecbc2b4d90e70b61f08e71f7d37ac20916d854bb",
+    "gguf/scripts/gguf_hash.py": "9f277c9338d12a73857a4e54683d7da4d5de01531751f14401267c9289e4197f",
+    "gguf/scripts/gguf_new_metadata.py": "972499d35957b4721b9243828d5547d1c84def8d4e6fc641887c6578bf765255",
+    "gguf/scripts/gguf_set_metadata.py": "c8612a7109428a677ea55976dd5eeed6088934ddef7ef01246a5bc7a6e585b3b",
+    "gguf/tensor_mapping.py": "595a1147fd35cd2522e1c897542e1f63866bdd2f742e3f6497d8aa78ab0eb064",
+    "gguf/utility.py": "da920e2c62166ec9f30e407e9fb35ec29fda671310ffbf0f8ce856b62f1c70d7",
+    "gguf/vocab.py": "353c35e8a52c2afdd113a7a8ce0ddade6cf9b5bb9cf150f965269ea41af3e5fd"
+  }
+}

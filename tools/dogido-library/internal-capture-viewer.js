@@ -45,16 +45,16 @@
   if(typeof module!=='undefined'&&module.exports){module.exports=api;return;}
   const load=createLoader((...args)=>root.fetch(...args));
   document.addEventListener('toggle',event=>{
-    if(event.target.matches('.capture-slice')&&event.target.open)load(event.target);
+    if(event.target.matches('.capture-raw-slice')&&event.target.open)load(event.target);
   },true);
   document.addEventListener('change',event=>{
-    const view=event.target.closest('.capture-slice');
+    const view=event.target.closest('.capture-raw-slice');
     if(view&&event.target.matches('.capture-selectors input'))load(view);
   });
   document.addEventListener('click',event=>{
     const button=event.target.closest('[data-capture-offset]');
     if(!button)return;
-    const view=button.closest('.capture-slice'),field=view.querySelector('[name="offset"]');
+    const view=button.closest('.capture-raw-slice'),field=view.querySelector('[name="offset"]');
     field.value=String(Number(field.value)+Number(button.dataset.captureOffset));load(view);
   });
 })(typeof window==='undefined'?globalThis:window);

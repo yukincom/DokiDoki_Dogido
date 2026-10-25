@@ -2,7 +2,7 @@
 
 Gemma 4 26B A4Bの生成時活性をMLX／GGUFで採取する。本体の自動発句は明示設定で有効にし、生成要求と保存句の記録へ関連付ける。[接続仕様・起動・検証範囲](../../docs/2026-10-24-haiku-internal-capture.md)。数値から感情ラベルを推定する処理は持たない。
 
-`measure.py` 以下のJ-lens比較は独立実験として維持する。本体の採取にレンズ学習・Jacobian計算を挟まず、モデル・形式・採取位置が変わった場合は分析用bindingを別に検証する。
+[本棚のJ-lens読出し](../../docs/2026-10-25-bookshelf-j-lens.md)は保存済みGGUF活性の後処理として接続した。`measure.py` 以下のJ-lens比較は独立実験として維持する。本体の採取にレンズ学習・Jacobian計算を挟まず、モデル・形式・採取位置が変わった場合は分析用bindingを別に検証する。
 
 [実測・限界・モデル変更時の方針](https://github.com/yukincom/AI-Curious-Community/blob/main/j-lens-study/docs/2026-10-16-haiku-internal-representations.md)
 

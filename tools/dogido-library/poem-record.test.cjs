@@ -72,3 +72,12 @@ test('capture models use recorded GGUF or MLX assets instead of API aliases',()=
   assert(html.includes(expected));assert.doesNotMatch(html,/default_model|custom_api_alias|\/models\/|abcdef/);
  }
 });
+
+test('candidate controls keep raw numbers separately folded with no generated interpretation',()=>{
+ const html=record.render({id:'p',internalCapture:{requests:[{request_index:1,kind:'haiku_irony',status:'complete',artifact:{hidden_verified:true,shape:[300,30,2816]}}]}});
+ assert.equal((html.match(/class="j-lens"/g)||[]).length,3);
+ assert.equal((html.match(/class="capture-raw-slice"/g)||[]).length,3);
+ assert.match(html,/試験的な読出し/);assert.match(html,/上位16候補/);
+ assert.match(html,/value="14" selected/);assert.match(html,/29">30 \/ 30（最終層）/);
+ assert.doesNotMatch(html,/<details class="capture-raw-slice"[^>]* open/);
+});

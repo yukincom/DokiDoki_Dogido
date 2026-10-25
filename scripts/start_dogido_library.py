@@ -23,6 +23,12 @@ def main():
         raise SystemExit("本棚用の実行ファイルがありません。先に本体をビルドしてください。")
     config = {"memory": str(settings.memory_dir.resolve()), "memory_enabled": settings.memory_enabled,
               "photos": str(Path.home() / "Pictures/ドギド"), "ui": str(ROOT / "tools/dogido-library")}
+    readout_assets = ROOT / ".dogido_tools/j-lens/assets.json"
+    if readout_assets.is_file():
+        assets = json.loads(readout_assets.read_text())
+        config["j_lens"] = {"python": str(Path(assets.get("python", sys.executable)).expanduser()),
+                            "worker": str(ROOT / "dev_tools/haiku_internal_probe/gguf_jlens.py"),
+                            "assets": str(readout_assets)}
     if settings.capture_dir is not None:
         config["capture_dir"] = str(settings.capture_dir.expanduser().resolve())
     if settings.minecraft_screenshots_dir is not None:

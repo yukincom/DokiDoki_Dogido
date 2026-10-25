@@ -2,6 +2,7 @@
 mod research;
 mod research_storage;
 mod internal_capture;
+mod j_lens;
 mod library_view;
 mod player_photos;
 pub mod research_archive;
@@ -31,12 +32,16 @@ struct App {
     origin: String,
     authority: String,
     memory_enabled: bool,
+    j_lens: Option<j_lens::Config>,
+    readout_lock: Arc<std::sync::Mutex<()>>,
 }
 #[derive(Clone, serde::Deserialize)]
 pub struct Config {
     pub memory: PathBuf,
     #[serde(default)]
     pub capture_dir: Option<PathBuf>,
+    #[serde(default)]
+    pub j_lens: Option<j_lens::Config>,
     pub photos: PathBuf,
     #[serde(default = "crate::screenshot::default_directory")]
     pub screenshots: PathBuf,
@@ -59,6 +64,11 @@ impl IntoResponse for ApiError {
         let reason = self.0.to_string();
         let diagnostic = (reason == "research_storage_connection_failed").then(|| format!("{:#}", self.0));
         let (status, detail) = match reason.as_str() {
+            "j_lens_unconfigured" => (StatusCode::SERVICE_UNAVAILABLE, "このモデルのJ-lensはまだ設定されていません。"),
+            "j_lens_not_prepared" => (StatusCode::NOT_FOUND, "候補語はまだ読み出していません。"),
+            "j_lens_busy" => (StatusCode::CONFLICT, "別の候補語を読み出しています。少し待って開き直してください。"),
+            "j_lens_unsupported_capture" => (StatusCode::UNPROCESSABLE_ENTITY, "この採取記録に対応するJ-lensはありません。"),
+            "j_lens_worker_failed" | "j_lens_timeout" => (StatusCode::SERVICE_UNAVAILABLE, "候補語を読み出せませんでした。モデルとJ-lensの設定・対応を確認してください。"),
             "changed" | "reading_changed" | "saved_poem_changed" | "source_poem_changed"
             | "parent_revision_mismatch" | "revision_id_conflict" => (
                 StatusCode::CONFLICT,
@@ -273,6 +283,11 @@ async fn internal_capture_file(
     Path((id, index, kind)): Path<(String, usize, String)>,
     Query(query): Query<internal_capture::ValuesQuery>,
 ) -> Result<Response, ApiError> {
+    if kind == "j-lens" {
+        let value = blocking(move || app.store.j_lens(&id, index,
+            app.j_lens.as_ref().context("j_lens_unconfigured")?, false)).await?;
+        return Ok(Json(value).into_response());
+    }
     if kind == "values" {
         let values = blocking(move || app.store.internal_capture_values(&id, index, query)).await?;
         return Ok(Json(values).into_response());
@@ -284,6 +299,16 @@ async fn internal_capture_file(
         (header::CONTENT_LENGTH, result.bytes.to_string()),
         (header::CONTENT_DISPOSITION, format!("attachment; filename=\"{}\"", result.name))],
         Body::from_stream(stream)).into_response())
+}
+async fn prepare_capture_readout(
+    State(app): State<Arc<App>>, Path((id, index, kind)): Path<(String, usize, String)>,
+) -> ApiResult {
+    Ok(Json(blocking(move || {
+        ensure!(kind == "j-lens", "capture_file_kind_invalid");
+        let config = app.j_lens.as_ref().context("j_lens_unconfigured")?;
+        let _lock = app.readout_lock.try_lock().map_err(|_| anyhow::anyhow!("j_lens_busy"))?;
+        app.store.j_lens(&id, index, config, true)
+    }).await?))
 }
 const PUBLIC: &[&str] = &[
     "research-settings.js",
@@ -304,6 +329,7 @@ const PUBLIC: &[&str] = &[
     "poem-record.css",
     "poem-record.js",
     "internal-capture-viewer.js",
+    "j-lens-viewer.js",
     "poem-export.js",
     "model.js",
     "catalog-player-notes.js",
@@ -355,7 +381,7 @@ fn router(app: Arc<App>) -> Router {
         .route("/api/readings", put(reading).delete(remove_reading))
         .route("/api/trash", get(trash_list).put(trash_change))
         .route("/api/photos/{id}/image", get(photo_image))
-        .route("/api/poems/{id}/internal-capture/{index}/{kind}", get(internal_capture_file))
+        .route("/api/poems/{id}/internal-capture/{index}/{kind}", get(internal_capture_file).post(prepare_capture_readout))
         .fallback(static_file)
         .layer(DefaultBodyLimit::max(128 * 1024))
         .layer(middleware::from_fn_with_state(app.clone(), guard))
@@ -395,6 +421,8 @@ pub async fn run(config: Config, port: u16) -> Result<()> {
         origin: origin.clone(),
         authority,
         memory_enabled: config.memory_enabled,
+        j_lens: config.j_lens,
+        readout_lock: Arc::new(std::sync::Mutex::new(())),
     });
     let worker = app.store.clone();
     let cleanup = tokio::spawn(async move {

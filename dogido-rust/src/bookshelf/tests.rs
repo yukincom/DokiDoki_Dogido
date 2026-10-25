@@ -1221,6 +1221,8 @@ fn test_app(f: &Fixture) -> Arc<App> {
         origin: "http://127.0.0.1:45678".into(),
         authority: "127.0.0.1:45678".into(),
         memory_enabled: true,
+        j_lens: None,
+        readout_lock: Arc::new(std::sync::Mutex::new(())),
     })
 }
 async fn call(

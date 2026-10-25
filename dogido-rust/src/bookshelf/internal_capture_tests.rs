@@ -192,3 +192,82 @@ async fn capture_values_read_exact_coordinates_from_archive_and_reject_invalid_q
         .body(Body::empty()).unwrap()).await.unwrap();
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
 }
+
+#[test]
+fn j_lens_mock_worker_keeps_source_unchanged_and_cache_survives_raw_offload() {
+    let f = Fixture::new(); captured(&f, "complete"); let store = f.store();
+    let source = store.capture_dir.as_ref().unwrap().join("reply_1");
+    let raw = vec![0u8; 2 * 30 * 2816 * 4];
+    fs::write(source.join("hidden.f32"), &raw).unwrap();
+    let mut manifest: Value = serde_json::from_slice(&fs::read(source.join("manifest.json")).unwrap()).unwrap();
+    manifest["shape"] = json!([2,30,2816]); manifest["hidden_bytes"] = raw.len().into();
+    manifest["hidden_sha256"] = format!("{:x}", Sha256::digest(&raw)).into();
+    manifest["identity"] = json!({"model":{"sha256":"test-model"}});
+    let bytes = serde_json::to_vec(&manifest).unwrap(); fs::write(source.join("manifest.json"), &bytes).unwrap();
+    let original = store.memory.join("long_term/haiku_entries.jsonl");
+    let mut entry: Value = serde_json::from_slice(&fs::read(&original).unwrap()).unwrap();
+    let a = &mut entry["internal_capture"]["requests"][0]["artifact"];
+    a["shape"] = manifest["shape"].clone(); a["hidden_bytes"] = manifest["hidden_bytes"].clone();
+    a["hidden_sha256"] = manifest["hidden_sha256"].clone();
+    a["manifest_sha256"] = format!("{:x}", Sha256::digest(&bytes)).into();
+    fs::write(&original, serde_json::to_vec(&entry).unwrap()).unwrap();
+    let original_bytes = fs::read(&original).unwrap();
+    let binding = f.root.join("binding.json"); fs::write(&binding, b"{}").unwrap();
+    let assets = f.root.join("assets.json"); fs::write(&assets, format!("{{\"binding\":{}}}", json!(binding))).unwrap();
+    let worker = f.root.join("worker.py");
+    fs::write(&worker, r#"import sys,json,hashlib
+from pathlib import Path
+h=json.loads(sys.stdin.buffer.readline()); raw=sys.stdin.buffer.read()
+assert len(raw)==len(h['positions'])*30*2816*4
+config=json.loads(Path(sys.argv[2]).read_text())
+def sha(p): return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+for position in h['positions']:
+ position['predicted_piece']='test'
+ position['layers']=[{'layer':i,'method':'native_final_head' if i==29 else 'transferred_j_lens','candidates':[{'id':k,'piece':'<test>','score':float(16-k),'logprob':float(-k)} for k in range(16)]} for i in range(30)]
+print(json.dumps(dict(h,schema='dogido.j_lens.v1',status='exploratory_transfer',processor_sha256=sha(__file__),binding_sha256=sha(config['binding']))))
+"#).unwrap();
+    let config = j_lens::Config {python:"python3".into(),worker,assets};
+    assert_eq!(store.j_lens("root:p", 1, &config, false).unwrap_err().to_string(), "j_lens_not_prepared");
+    assert!(!store.memory.join("bookshelf/j-lens").exists());
+    let result = store.j_lens("root:p", 1, &config, true).unwrap();
+    assert_eq!(result["positions"][2]["position"], 1);
+    assert_eq!(fs::read(&original).unwrap(), original_bytes);
+    assert_eq!(fs::read(source.join("hidden.f32")).unwrap(), raw);
+    fs::remove_file(source.join("hidden.f32")).unwrap();
+    assert_eq!(store.j_lens("root:p", 1, &config, false).unwrap(), result);
+    assert!(store.j_lens("root:p", 2, &config, true).is_err());
+    let cache = fs::read_dir(store.memory.join("bookshelf/j-lens")).unwrap().next().unwrap().unwrap().path();
+    let mut corrupt: Value = serde_json::from_slice(&fs::read(&cache).unwrap()).unwrap();
+    corrupt["result"]["positions"][0]["layers"][0]["candidates"][0]["piece"] = "changed".into();
+    fs::write(&cache, serde_json::to_vec(&corrupt).unwrap()).unwrap();
+    assert_eq!(store.j_lens("root:p", 1, &config, false).unwrap_err().to_string(), "j_lens_cache_changed");
+    #[cfg(unix)] {
+        let outside = f.root.join("outside-bookshelf");
+        fs::rename(store.memory.join("bookshelf"), &outside).unwrap();
+        std::os::unix::fs::symlink(&outside, store.memory.join("bookshelf")).unwrap();
+        let before = fs::read(&outside.join("j-lens").join(cache.file_name().unwrap())).unwrap();
+        assert!(store.j_lens("root:p", 1, &config, true).is_err());
+        assert_eq!(fs::read(&outside.join("j-lens").join(cache.file_name().unwrap())).unwrap(), before);
+    }
+
+}
+
+#[tokio::test]
+async fn j_lens_preparation_uses_existing_origin_and_csrf_guard() {
+    use tower::ServiceExt;
+    let f = Fixture::new(); captured(&f, "complete"); let app = test_app(&f);
+    let route = "/api/poems/root%3Ap/internal-capture/1/j-lens";
+    for (method, token, origin, expected) in [
+        ("GET", "", None, StatusCode::SERVICE_UNAVAILABLE),
+        ("POST", "", None, StatusCode::FORBIDDEN),
+        ("POST", "secret-test-token", Some("https://evil.invalid"), StatusCode::FORBIDDEN),
+        ("POST", "secret-test-token", None, StatusCode::SERVICE_UNAVAILABLE),
+    ] {
+        let mut req = axum::http::Request::builder().uri(route).method(method)
+            .header("host", "127.0.0.1:45678").header("x-dogido-library", token);
+        if let Some(origin) = origin { req = req.header("origin", origin); }
+        let response = router(app.clone()).oneshot(req.body(Body::empty()).unwrap()).await.unwrap();
+        assert_eq!(response.status(), expected);
+    }
+    assert!(!f.store().memory.join("bookshelf/j-lens").exists());
+}
