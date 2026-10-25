@@ -2,6 +2,7 @@
 use super::{Data, Dialogue, Session, id, observation_fresh};
 use crate::{
     body::requests::{Mode, Report},
+    combat::model::{LeafRequest, Speech},
     events::GameEvent,
     request_classifier::Label,
 };
@@ -91,7 +92,17 @@ impl Dialogue {
             "body_request_status":status,"body_request_command_id":command["command_id"],
             "body_request_detail":detail,"body_request_mode":mode,"input_generation":generation}),
         );
-        if status == "rejected" {
+        if status == "queued" && mode == Mode::Recall {
+            // 命令を受け付けた時点で呼びかけへの返事を始める。到着ACKは待たず、
+            // 命令の配送は既存event経路で並行する。到着したという事実はここで作らない。
+            let mut reply = Speech::new("body_recall", "今行くで。");
+            reply.leaf = Some(LeafRequest {
+                kind: "body_recall".into(),
+                details: json!({"player_input":text}),
+                temperature: 0.65,
+            });
+            self.queue_reply(d, jobs, sid, reply, Some(text));
+        } else if status == "rejected" {
             self.queue_fixed_reply(
                 d,
                 jobs,
@@ -154,6 +165,10 @@ pub(super) fn commands(s: &mut Session) -> Vec<Value> {
         chrono::Utc::now(),
     )
 }
+
+#[cfg(test)]
+#[path = "body_request_runtime_tests.rs"]
+mod reply_tests;
 
 #[cfg(test)]
 mod tests {

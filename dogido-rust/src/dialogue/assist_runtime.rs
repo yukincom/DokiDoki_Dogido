@@ -57,11 +57,22 @@ impl Dialogue {
         text: String,
         input: Option<&str>,
     ) {
+        self.queue_reply(d, jobs, sid, Speech::new("assist_feedback", text), input);
+    }
+
+    /// 固定文・一回生成の返事を共通の配送へ載せる。履歴は実出力の完了後に確定する。
+    pub(super) fn queue_reply(
+        self: &Arc<Self>,
+        d: &mut Data,
+        jobs: &mut Vec<JoinHandle<()>>,
+        sid: &str,
+        mut speech: Speech,
+        input: Option<&str>,
+    ) {
         let s = d.sessions.get_mut(sid).unwrap();
         if s.warning.is_some() || s.pending_warning.is_some() {
             return;
         }
-        let mut speech = Speech::new("assist_feedback", text);
         speech.delivery = Delivery::PlayerReply;
         s.pending_warning = Some(vec![speech]);
         s.pending_input = input.map(str::to_owned);

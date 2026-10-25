@@ -7,7 +7,8 @@ use crate::types::{GeneratedText, GenerationRequest};
 use anyhow::{Context, Result, ensure};
 use serde_json::Value;
 
-pub const KINDS: [&str; 17] = [
+pub const KINDS: [&str; 18] = [
+    "body_recall",
     "death",
     "aftermath",
     "daylight_water",

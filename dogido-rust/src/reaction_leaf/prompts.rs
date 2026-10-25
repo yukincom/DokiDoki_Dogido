@@ -81,6 +81,10 @@ fn selected(d: &Value, fields: &[&str]) -> serde_json::Map<String, Value> {
 
 pub(super) fn context(kind: &str, d: &Value) -> Result<Value> {
     let mut context = json!({"event":kind,"situation":situation(kind, d)?});
+    if kind == "body_recall" {
+        // 呼びかけの原文を、観測事実や到着結果とは別の入力として渡す。
+        context["player_input"] = d["player_input"].clone();
+    }
     if kind == "thunder_reaction"
         && let Some(status) = d["scream_status"].as_str()
     {
@@ -210,7 +214,11 @@ pub(super) fn messages(kind: &str, d: &Value) -> Result<Vec<ChatMessage>> {
             role: Role::System,
             content: crate::companion_prompt::dialogue(
                 mode(kind, d),
-                crate::companion_prompt::DialoguePurpose::Ambient,
+                if kind == "body_recall" {
+                    crate::companion_prompt::DialoguePurpose::Reply
+                } else {
+                    crate::companion_prompt::DialoguePurpose::Ambient
+                },
                 context["world_context"]["observations"]["smell"]["status"] == "present",
             ),
         },

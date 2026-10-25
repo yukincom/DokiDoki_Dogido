@@ -247,14 +247,15 @@ impl State {
             }
             let feedback = if success {
                 if p.mode == Mode::Recall {
-                    "来たで。"
+                    // 呼びかけへの返事は受付時に生成を開始する。到着結果は記録だけにし、二度返事しない。
+                    None
                 } else {
-                    "そっち向いたで。"
+                    Some("そっち向いたで。")
                 }
             } else if p.mode == Mode::Recall {
-                "今はそっちへ行けへんかったわ。"
+                Some("今はそっちへ行けへんかったわ。")
             } else {
-                "今はそっちを向けへんかったわ。"
+                Some("今はそっちを向けへんかったわ。")
             };
             self.finish(
                 match r.status {
@@ -264,7 +265,7 @@ impl State {
                     AdapterCommandResultStatus::Expired => "expired",
                 },
                 &r.detail_code,
-                Some(feedback),
+                feedback,
             );
         }
         self.reports.drain(..).collect()
@@ -684,7 +685,9 @@ mod tests {
         result["epoch"] = json!(NEXT_EPOCH);
         let reports = f.observe(vec![result]);
         assert_eq!(reports.len(), 1);
-        assert_eq!(reports[0].feedback, Some("来たで。"));
+        assert_eq!(reports[0].value["status"], "succeeded");
+        assert_eq!(reports[0].value["detail_code"], "arrived");
+        assert_eq!(reports[0].feedback, None);
 
         let mut f = Fixture::new();
         let command = f
