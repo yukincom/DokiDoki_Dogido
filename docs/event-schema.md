@@ -189,10 +189,13 @@
 | `touching_water` | その個体が水に触れている |
 | `submerged_in_water` | その個体の頭まで水に沈んでいる |
 | `touching_water_or_rain` | 水またはその個体に降る雨に触れている |
+| `touching_rain` | 同じ個体の足元・身体上端で雨が当たっている。水との接触・雪・濡れの残留とは別 |
 | `on_ground` | その個体が地面に接している。水中の底でもtrueになり得る |
 | `on_fire` | その個体が現在燃えている |
 
 各項目は省略／nullが未確認。`touching_water=false`だけでは陸上と決めず、地面の観測も併用する。
+
+2026-10-25: ドギド自身の接水・眼の水没・雨への接触は、既存の `body_observation.sample.senses.environment` に同じ項目名で載せる。身体の同じserver姿勢・眼・実寸とclient世界から採り、接地・炎上の未測定値は省略する。共通観測の `subject_states.player / dogido` に、それぞれの降水・接触・遮蔽と整理済みの関係を載せる。詳細は[主体別の環境観測](2026-10-25-subject-environment.md)。
 天候の雨区分だけでは、屋根の下の個体まで濡れているとは扱わない。
 視認保持中の敵が遮蔽物に隠れた場合、Fabricは空の`environment`を送って新しい環境実測を伏せる。
 この明示的な欠測を旧`in_water/on_fire`から復元しない。音だけの対象には環境実測を添えない。

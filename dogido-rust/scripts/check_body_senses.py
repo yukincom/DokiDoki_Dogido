@@ -140,6 +140,29 @@ def main():
             del control["structured_handler"]
             passed.append("position_is_in_every_first_request_changes_ack_only_offered_revision")
 
+            # 二者の遮蔽を入れ替えても、既存の一回生成へそれぞれの接触と整理済み材料が届く。
+            for sheltered in ("player", "dogido"):
+                value = event()
+                body_senses = value["body_observation"]["sample"]["senses"]
+                for who, world, holder in (("player", value["world"], value["player"]),
+                                           ("dogido", body_senses["world"], body_senses)):
+                    under_leaves = who == sheltered
+                    world.update(biome="forest", weather="rain", overhead_cover_type="foliage" if under_leaves else "none",
+                                 sky_visible=not under_leaves, depth_below_surface=0)
+                    holder["environment"] = {"touching_water": False, "submerged_in_water": False,
+                                             "touching_rain": not under_leaves, "touching_water_or_rain": not under_leaves}
+                send(value)
+                context, _ = ask("今のそれぞれの様子を話して")
+                obs = context["observations"]
+                assert "player_environment" not in obs, obs
+                for who, name in (("player", "プレイヤー"), ("dogido", "ドギド")):
+                    state = obs["subject_states"][who]
+                    assert state["subject"] == name and state["precipitation_kind"] == "rain", state
+                    assert state["contact"]["touching_rain"] == (who != sheltered), state
+                    assert "木の葉の下" in state["relations"]["rain_and_cover"] if who == sheltered else "雨が当たっている" in state["relations"]["rain_and_cover"], state
+                    assert state["observed_at"], state
+                passed.append(f"{sheltered}_shelter_and_other_subject_rain_reach_existing_single_call")
+
             for label in ("unavailable", "owner_mismatch", "stale", "senses_unavailable"):
                 value = event()
                 if label == "unavailable":
@@ -163,6 +186,7 @@ def main():
                     assert "current" not in obs["body_observation"], obs
                 assert context.get("changes", []) == [], (label, context)
                 assert "location_biome" not in obs and "smell" not in obs and "nearby_mob_types" not in obs, (label, obs)
+                assert "subject_states" not in obs, (label, obs)
                 assert "cactus" not in json.dumps(obs) and "pig" not in json.dumps(obs), (label, obs)
                 passed.append(label + "_never_falls_back_to_player_senses")
 

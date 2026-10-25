@@ -34,6 +34,7 @@ pub fn snapshot(context: &Context) -> Snapshot {
         "rain_heard",
         "time_phase",
         "smell",
+        "subject_states",
     ]
     .into_iter()
     .map(|key| (key.to_owned(), observations[key].clone()))
@@ -44,6 +45,9 @@ pub fn snapshot(context: &Context) -> Snapshot {
     );
     if let Some(smell) = table.get_mut("smell") {
         *smell = super::ambient::smell_change_signature(smell);
+    }
+    if let Some(states) = table.get_mut("subject_states") {
+        *states = crate::conversation_observation::subjects::signature(states);
     }
     Snapshot {
         revision: context.revision,

@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 OWNER_ID = "11111111-1111-4111-8111-111111111111"
 SENSE_FIELDS = (
-    "world", "passive_mobs", "visual_threats", "nearby_resources", "dropped_items",
+    "world", "environment", "passive_mobs", "visual_threats", "nearby_resources", "dropped_items",
     "nearby_composition", "smell_observation", "auditory_threats", "ambient_sounds",
 )
 
@@ -35,7 +35,7 @@ def attach_body(event, *, senses=None, body_position=None, visibility="visible",
                             reason="in_view" if visibility == "visible" else "outside_fov")
     fields = event if senses is None else senses
     defaults = {field: [] for field in SENSE_FIELDS}
-    defaults.update(world={}, nearby_composition={"mobs": [], "blocks": [],
+    defaults.update(world={}, environment=None, nearby_composition={"mobs": [], "blocks": [],
                     "mobs_truncated": False, "blocks_truncated": False},
                     smell_observation={"status": "none", "components": [], "basis": "smell_policy_v2"})
     for field in SENSE_FIELDS:

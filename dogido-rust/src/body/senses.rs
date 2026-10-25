@@ -24,6 +24,9 @@ pub struct Sample {
     pub basis: Basis,
     pub source_server_tick: u64,
     pub world: events::WorldState,
+    /// 同じserver姿勢とclient世界で採った身体自身の接触。省略は未測定でplayerから補完しない。
+    #[serde(default)]
+    pub environment: Option<events::MobEnvironment>,
     pub passive_mobs: Vec<events::PassiveMob>,
     pub visual_threats: Vec<events::VisualThreat>,
     pub nearby_resources: Vec<events::NearbyResource>,
@@ -66,6 +69,7 @@ pub(crate) struct Origin {
     pub age_ms: u64,
     pub body: Value,
     pub player_safety: events::WorldState,
+    pub environment: Option<events::MobEnvironment>,
     pub player_observed_at: chrono::DateTime<chrono::FixedOffset>,
 }
 impl Senses {
@@ -129,6 +133,10 @@ impl Senses {
             return Err("body hearing requires original age".into());
         }
         s.world.validate()?;
+        s.environment.validate()?;
+        if s.environment.as_ref().is_some_and(|e| !e.extra.is_empty()) {
+            return Err("body environment contains unknown fields".into());
+        }
         s.passive_mobs.validate()?;
         s.visual_threats.validate()?;
         s.nearby_resources.validate()?;

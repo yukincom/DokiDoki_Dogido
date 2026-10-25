@@ -294,7 +294,7 @@ async fn unchanged_image_is_attached_to_periodic_and_ordinary_decisions_without_
         assert!(super::super::environment_runtime::refresh_dialogue_context(s,std::slice::from_mut(&mut action)));
         let preserved=&action.leaf.as_ref().unwrap().details["reaction_context"]["world_context"];
         assert_eq!(preserved["revision"],frozen["revision"]); assert_eq!(preserved["changes"],frozen["changes"]);
-        assert_eq!(preserved["observations"]["weather"],"rain");
+        assert_eq!(preserved["observations"]["weather"],"clear");
     }
     let (_tx,mut cancel)=watch::channel(false);
     let image=source.capture(&mut cancel).await.unwrap().image;

@@ -199,8 +199,12 @@ pub(crate) fn build_place_context(
         String::new()
     };
     let home = home_evidence(event, home_bed_prompt_distance);
-    let (kind, ja) = if w.is_submerged == Some(true) {
-        ("underwater", "水中".into())
+    let contact = event.observer_environment();
+    let (kind, ja) = if contact.is_some_and(|e| e.submerged_in_water == Some(true)) {
+        ("underwater", "水中（眼の位置も水面より下）".into())
+    } else if w.is_submerged == Some(true) {
+        // worldの旧名is_submergedは接水も含む。眼の水没実測がないときは水中へ強めない。
+        ("water_contact", "水に触れている場所".into())
     } else if environment.mining_state == MiningState::Active {
         ("active_mining", "採掘中".into())
     } else if !home.is_empty() {

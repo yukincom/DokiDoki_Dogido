@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 mod body_changes;
+pub(crate) mod subjects;
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
@@ -137,7 +138,7 @@ pub fn project(
         observations: json!({
             "observed_at":event.observed_at,
             "dimension":event.player.dimension,
-            "player_environment":event.player.environment,
+            "subject_states":subjects::project(event, &precipitation)?,
             "place":place.place_line,
             "location_biome":event.world.biome.as_deref().map(|id| json!({
                 "id":id,"label":environment::ambient::biome_label(id)})),
@@ -302,12 +303,16 @@ impl State {
                 "sky_visible",
                 "local_light",
                 "darkness_observed",
+                "subject_states",
             ] {
                 let before = &previous.observations[key];
                 let after = &next.observations[key];
                 // Smell direction may move while the identity stays the same. The
                 // current direction is available without creating endless new turns.
                 let signature = |value: &Value| {
+                    if key == "subject_states" {
+                        return subjects::signature(value);
+                    }
                     if key == "nearby_mob_types" {
                         return notice::mob_kind_signature(value);
                     }

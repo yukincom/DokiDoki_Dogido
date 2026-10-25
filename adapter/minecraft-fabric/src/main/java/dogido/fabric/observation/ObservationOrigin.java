@@ -45,7 +45,32 @@ public record ObservationOrigin(UUID id, UUID threatTargetId, Vec3d position, Ve
     }
     public boolean touchingWater(ClientWorld world) {
         if (!body()) return player.isTouchingWater();
-        BlockPos pos = blockPosition();
-        return world.getFluidState(pos).isIn(FluidTags.WATER);
+        // 身体の実寸をserver姿勢へ移した箱と水面を照合する。水のあるblockに足元が入るだけでは接水にしない。
+        return sampleWater(bounds, pos -> {
+            var fluid = world.getFluidState(pos);
+            return fluid.isIn(FluidTags.WATER) ? pos.getY() + fluid.getHeight(world, pos) : Double.NEGATIVE_INFINITY;
+        });
+    }
+    /** Nativeと同じ縮小箱・上端を含まないblock範囲で調べる。probeは水面Y、非水は負の無限大を返す。 */
+    static boolean sampleWater(Box bounds, java.util.function.ToDoubleFunction<BlockPos> waterSurface) {
+        Box contact = bounds.contract(0.001);
+        BlockPos last = new BlockPos((int)Math.ceil(contact.maxX)-1, (int)Math.ceil(contact.maxY)-1,
+            (int)Math.ceil(contact.maxZ)-1);
+        for (BlockPos pos : BlockPos.iterate(BlockPos.ofFloored(contact.minX, contact.minY, contact.minZ), last)) {
+            if (waterSurface.applyAsDouble(pos) >= contact.minY) return true;
+        }
+        return false;
+    }
+    /** 身体の同じ位置・眼・実寸で接触を採る。client補間位置やplayerの接地・炎上を借用しない。 */
+    public com.google.gson.JsonObject environment(ClientWorld world) {
+        if (!body()) return MobEnvironmentObservation.capture(player).toJson();
+        boolean water = touchingWater(world);
+        boolean rain = MobEnvironmentObservation.touchingRain(position, bounds, world);
+        var value = new com.google.gson.JsonObject();
+        value.addProperty("touching_water", water);
+        value.addProperty("submerged_in_water", submerged(world));
+        value.addProperty("touching_rain", rain);
+        value.addProperty("touching_water_or_rain", water || rain);
+        return value;
     }
 }

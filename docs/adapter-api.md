@@ -140,7 +140,7 @@ adapter の起動時に session を作る。
 
 座標はblock、yawは度（-180以上180未満）、pitchは-90〜90度で正が下。Minecraftの+xは東、+yは上、+zは南、yaw=0は南、+90は西。`pose_basis=server_pose`の自他姿勢と、`vision.basis=body_eye_raycast_fov`のowner可視性は同一server tickで採る。視覚は`visible/not_visible/unavailable`と理由を持つ。範囲・材質・壁内視点は[視認仕様](2026-10-13-body-vision-phase1.md#所有者の視認)を参照する。
 
-`senses`は`version:1,status,basis:"body_pose_client_world",source_server_tick`を必須とし、tickは姿勢の値と一致する。観測済みなら身体地点の`world`、`passive_mobs`、`visual_threats`、`nearby_resources`、`dropped_items`、`nearby_composition`、`smell_observation`、`auditory_threats`、`ambient_sounds`、`hearing_basis:"body_server_and_positioned_client_sounds"`、`hearing_truncated`を持つ。各内容は既存型を使う。`world`にplayer専用の酸素・リスポーンや未知fieldを混ぜない。未取得はデータ配列を空で偽装せず、`reason=area_unloaded|body_downed|invalid_pose|not_sampled|budget_exhausted`を送る。
+`senses`は`version:1,status,basis:"body_pose_client_world",source_server_tick`を必須とし、tickは姿勢の値と一致する。観測済みなら身体地点の`world`、`passive_mobs`、`visual_threats`、`nearby_resources`、`dropped_items`、`nearby_composition`、`smell_observation`、`auditory_threats`、`ambient_sounds`、`hearing_basis:"body_server_and_positioned_client_sounds"`、`hearing_truncated`を持つ。各内容は既存型を使う。身体本人の接触は同じsample内の任意の`environment`に載せ、`touching_water / submerged_in_water / touching_rain / touching_water_or_rain`を採る。欠測は省略／nullで、playerの値から補完しない。接地・炎上はこの身体感覚では未測定。`world`にplayer専用の酸素・リスポーンや未知fieldを混ぜない。未取得はデータ配列を空で偽装せず、`reason=area_unloaded|body_downed|invalid_pose|not_sampled|budget_exhausted`を送る。
 
 身体Modは10client tickごとに採取要求を送り、HTTPは既存周期（既定20tick）を使う。adapterは検証済み姿勢からclient worldの感覚を一度採り、同じcontext/tick/revisionの姿勢・視認・感覚をまとめて保持する。感覚だけ新しい姿勢へ付け替えない。`age_ms`は同じ観測の再送でも増え続ける。内側の音の経過msは採取tick基準で固定し、Rustが判断時の身体観測年齢を一度だけ加える。
 

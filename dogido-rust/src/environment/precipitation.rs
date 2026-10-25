@@ -214,28 +214,46 @@ pub fn resolve_precipitation_context(input: &Input) -> Result<PrecipitationConte
 /// 現在イベントと呼出側が取得した気候を、降水判定への入力に投影する。
 /// カタログ検索・状態変更は行わない。積雪の実測根拠にはtypeがblockの近接資源だけを使う。
 pub fn from_event(event: &GameEvent, climate: &Climate) -> Result<PrecipitationContext> {
+    from_observation(
+        &event.world,
+        event.player.dimension.as_deref(),
+        event.observer_y(),
+        climate,
+        &event.nearby_resources,
+    )
+}
+
+
+/// 一人分の世界・高さ・気候・近接資源を既存の降水判定へ渡す。主体を跨いで値を補完しない。
+pub fn from_observation(
+    world: &crate::events::WorldState,
+    dimension: Option<&str>,
+    current_y: Option<f64>,
+    climate: &Climate,
+    nearby_resources: &[crate::events::NearbyResource],
+) -> Result<PrecipitationContext> {
     resolve_precipitation_context(&Input {
-        current_y: event.observer_y(),
+        current_y,
         biome_temperature: climate.biome_temperature,
         snow_start_y: climate.snow_start_y,
         biome_group_id: climate.biome_group_id.clone(),
         biome_downfall: climate.biome_downfall,
-        weather: match event.world.weather {
+        weather: match world.weather {
             Some(Weather::Clear) => "clear",
             Some(Weather::Rain) => "rain",
             Some(Weather::Thunder) => "thunder",
             None => "unknown",
         }
         .into(),
-        dimension: event.player.dimension.clone(),
-        nearby_block_names: event
-            .nearby_resources
+        dimension: dimension.map(str::to_owned),
+        nearby_block_names: nearby_resources
             .iter()
             .filter(|r| r.r#type.to_lowercase() == "block")
             .map(|r| r.name.clone())
             .collect(),
     })
 }
+
 
 #[cfg(test)]
 #[path = "precipitation_tests.rs"]

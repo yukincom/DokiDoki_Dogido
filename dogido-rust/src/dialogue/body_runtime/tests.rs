@@ -619,7 +619,7 @@ async fn paused_and_invalidated_body_do_not_expose_last_position_or_changes() {
 }
 
 #[tokio::test]
-async fn notice_refreshes_body_but_preserves_periodic_table_and_ack_revision() {
+async fn notice_refreshes_current_observations_but_preserves_periodic_changes_and_ack_revision() {
     let d = server();
     let permit = d.serial.acquire().await.unwrap();
     let a = event(1, 100, 23.0);
@@ -646,7 +646,8 @@ async fn notice_refreshes_body_but_preserves_periodic_table_and_ack_revision() {
         assert!(super::super::environment_runtime::refresh_dialogue_context(s, std::slice::from_mut(&mut action)));
         let refreshed = &action.leaf.as_ref().unwrap().details["reaction_context"]["world_context"];
         assert_eq!(refreshed["observations"]["body_observation"]["current"]["position_relation"]["distance_blocks"], 9.0);
-        assert_eq!(refreshed["observations"]["nearby_mob_types"], json!(["cow"]));
+        assert_eq!(refreshed["observations"]["nearby_mob_types"], json!([]));
+        assert_eq!(refreshed["changes"][0]["now"],json!(["cow"]));
         assert_eq!(refreshed["changes"], json!(periodic.changes));
         assert_eq!(refreshed["revision"], periodic.revision);
         s.conversation_observation.considered(periodic.revision);

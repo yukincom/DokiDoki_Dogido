@@ -124,6 +124,7 @@ public final class BodySensesCollector {
             senses.addProperty("basis","body_pose_client_world");
             senses.addProperty("source_server_tick",serverTick);
             senses.add("world",localWorld);
+            senses.add("environment",origin.environment(client.world));
             senses.add("passive_mobs",EventJsonBuilder.buildPassiveMobs(passive.stream().limit(64).toList()));
             senses.add("visual_threats",EventJsonBuilder.buildVisualThreats(hostile.stream().limit(64).toList()));
             senses.add("nearby_resources",blocks.get("resources"));

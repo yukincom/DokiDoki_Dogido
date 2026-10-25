@@ -202,6 +202,7 @@ fn light_generated_for_an_old_body_epoch_is_discarded() {
         e.with_body_senses(
             None,
             crate::body::senses::Origin {
+                environment: None,
                 context: Some(crate::body::contracts::Context {
                     owner_id: "owner".into(),
                     body_id: "body".into(),

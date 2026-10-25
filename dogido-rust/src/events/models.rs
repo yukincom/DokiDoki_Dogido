@@ -736,6 +736,9 @@ pub struct MobEnvironment {
     /// entity.isTouchingWaterOrRain()の実測。falseでも他の生存条件は保証しない。
     #[serde(default)]
     pub touching_water_or_rain: Option<bool>,
+    /// 同じ個体の足元・身体上端でworld.hasRainを照合した現在の雨への接触。雪や濡れの残留は表さない。
+    #[serde(default)]
+    pub touching_rain: Option<bool>,
     #[serde(default)]
     pub on_ground: Option<bool>,
     #[serde(default)]

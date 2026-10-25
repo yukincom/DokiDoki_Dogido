@@ -97,6 +97,13 @@ impl GameEvent {
     pub(crate) fn body_origin(&self) -> Option<&crate::body::senses::Origin> {
         self.2.as_ref()
     }
+    /// 共通観測の受け手本人の接触。身体が未測定ならplayerの値へ戻さずNoneを返す。
+    pub(crate) fn observer_environment(&self) -> Option<&MobEnvironment> {
+        match self.body_origin() {
+            Some(origin) => origin.environment.as_ref(),
+            None => self.player.environment.as_ref(),
+        }
+    }
     pub(crate) fn observer_y(&self) -> Option<f64> {
         self.2
             .as_ref()

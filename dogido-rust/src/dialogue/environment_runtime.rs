@@ -180,7 +180,7 @@ pub(super) fn focus(
 }
 
 /// 環境判断の全観測・変化・履歴を一箇所で組み立て、生成直前にも更新する。
-/// 静止画像は同じ入力へ添える。周期通知だけは当回の比較表を保持し、未提示の差分の消費を防ぐ。
+/// 静止画像は同じ入力へ添える。周期通知の比較差分とrevisionは保持し、未提示の差分の消費を防ぐ。
 pub(super) fn refresh_dialogue_context(s: &Session, actions: &mut [Speech]) -> bool {
     for action in actions {
         if !crate::reaction_leaf::is_model_reaction(action) {
@@ -201,10 +201,10 @@ pub(super) fn refresh_dialogue_context(s: &Session, actions: &mut [Speech]) -> b
         if !leaf.details[key].is_object() {
             leaf.details[key] = json!({});
         }
-        // 定期比較の表は画像添付の有無によらず固定する。画像変化による判断は現在の全観測を共有し、
+        // 定期比較の差分は画像添付の有無によらず固定する。現在の全観測は生成直前へ揃え、
         // 撮影後に変わった天候・匂い・モブ等を古い値に戻さない。画像自体は撮影時刻付きで固定する。
-        let periodic_notice =
-            action.kind == crate::environment::notice::KIND && leaf.details["visual_change_trigger"] != true;
+        let periodic_notice = action.kind == crate::environment::notice::KIND
+            && leaf.details["visual_change_trigger"] != true;
         if !periodic_notice || !leaf.details[key]["world_context"].is_object() {
             let mut context = if periodic_notice {
                 let Some(context) = s.conversation_observation.noticing_context() else {
@@ -214,7 +214,9 @@ pub(super) fn refresh_dialogue_context(s: &Session, actions: &mut [Speech]) -> b
             } else {
                 super::body_runtime::context(s).unwrap_or_default()
             };
-            if let Some(image) = &action.image && leaf.details["visual_change_trigger"] == true {
+            if let Some(image) = &action.image
+                && leaf.details["visual_change_trigger"] == true
+            {
                 let capture = leaf.details["visual_capture"].clone();
                 context
                     .changes
@@ -231,31 +233,34 @@ pub(super) fn refresh_dialogue_context(s: &Session, actions: &mut [Speech]) -> b
             leaf.details[key]["world_context"] = json!(context.for_reaction(kind, &leaf.details));
         }
         if periodic_notice {
-            // 周期の環境差分とrevisionは固定し、身体の現在値だけを生成時点へ揃える。
-            // 最新の会話Context全体へ置換すると、未提示の差分まで消費してしまう。
-            let current = super::body_runtime::context(s).unwrap_or_default();
-            let observations = &mut leaf.details[key]["world_context"]["observations"];
-            observations["body_observation"] = current
-                .observations
-                .get("body_observation")
-                .cloned()
-                .unwrap_or_else(|| json!({"status":"unavailable","reason":"not_sampled"}));
-            observations["reassurance"] = current
-                .observations
-                .get("reassurance")
-                .cloned()
-                .unwrap_or_default();
-            observations["attention"] = current
-                .observations
-                .get("attention")
-                .cloned()
-                .unwrap_or_default();
-            observations["observer"] = json!("dogido");
-            observations["sensory_status"] = current
-                .observations
-                .get("sensory_status")
-                .cloned()
-                .unwrap_or_else(|| json!("unavailable"));
+            // 比較した差分とrevisionは固定し、観測本文だけを生成直前へ揃える。
+            // 古い遮蔽・接触と最新姿勢を混在させず、未提示の差分を考慮済みにすることも防ぐ。
+            let current = super::body_runtime::context(s)
+                .unwrap_or_default()
+                .for_reaction(kind, &leaf.details);
+            let context = &mut leaf.details[key]["world_context"];
+            context["observations"] = if current.observations.is_object() {
+                current.observations
+            } else {
+                json!({"body_observation":{"status":"unavailable","reason":"not_sampled"},
+                    "observer":"dogido","sensory_status":"unavailable"})
+            };
+            for (key, value) in [
+                (
+                    "catalog_knowledge",
+                    current.catalog_knowledge.map(|v| json!(v)),
+                ),
+                (
+                    "villager_routines",
+                    current.villager_routines.map(|v| json!(v)),
+                ),
+            ] {
+                if let Some(value) = value {
+                    context[key] = value;
+                } else if let Some(context) = context.as_object_mut() {
+                    context.remove(key);
+                }
+            }
         }
         if action.image.is_some() {
             leaf.details[key]["visual_capture"] = leaf.details["visual_capture"].clone();
@@ -274,6 +279,7 @@ pub(super) fn refresh_dialogue_context(s: &Session, actions: &mut [Speech]) -> b
     }
     true
 }
+
 
 impl Dialogue {
     pub(super) fn resume_deferred(self: &Arc<Self>, sid: &str) {
@@ -1113,6 +1119,93 @@ mod tests {
 mod noticing_tests {
     use super::*;
     use crate::conversation_observation::Context;
+    #[test]
+    fn queued_notice_refreshes_rain_cover_and_subjects_together_but_keeps_offered_revision() {
+        let dialogue = Dialogue::new(super::super::DialogueConfig::default()).unwrap();
+        dialogue.register("rain-refresh", "試験", false);
+        let mut data = dialogue.data.lock().unwrap();
+        let s = data.sessions.get_mut("rain-refresh").unwrap();
+        let observe = |s: &mut Session, tick: u64, covered: bool| {
+            let event = crate::body::tests::with_senses(
+                json!({
+                    "schema_version":"2026-05-24","adapter":"test","observed_at":chrono::Utc::now(),
+                    "event":{"name":"status_snapshot","source_kind":"system","priority_hint":"background","certainty":"high"},
+                    "player":{"dimension":"minecraft:overworld","position":{"y":64},
+                        "environment":{"touching_water":false,"touching_rain":false,"touching_water_or_rain":false}},
+                    "world":{"biome":"forest","weather":"rain","sky_visible":true,"overhead_cover_type":"none"}
+                }),
+                tick,
+            );
+            let mut wire = json!(event);
+            let senses = &mut wire["body_observation"]["sample"]["senses"];
+            senses["world"]["sky_visible"] = json!(!covered);
+            senses["world"]["overhead_cover_type"] = json!(if covered { "foliage" } else { "none" });
+            senses["environment"] = json!({"touching_water":false,"touching_rain":!covered,
+                "submerged_in_water":false,"touching_water_or_rain":!covered});
+            let raw = GameEvent::parse(wire).unwrap();
+            s.player_uuid = Some("11111111-1111-4111-8111-111111111111".into());
+            super::super::body_runtime::observe(s, &raw);
+            s.latest = Some(raw.clone());
+            s.environment_latest = Some(raw.clone());
+            let event = super::super::body_runtime::event(s, &raw);
+            s.conversation_observation.observe(
+                crate::conversation_observation::project(&event, None, 32., 7., 5000).unwrap(),
+            );
+        };
+        observe(s, 1, false);
+        s.conversation_observation.sample_notice(0, 180000, true);
+        observe(s, 2, true);
+        s.conversation_observation
+            .sample_notice(180000, 180000, true);
+        let mut actions = vec![crate::environment::notice::action()];
+        assert!(refresh_dialogue_context(s, &mut actions));
+        let offered =
+            actions[0].leaf.as_ref().unwrap().details["reaction_context"]["world_context"].clone();
+        assert_eq!(
+            offered["observations"]["subject_states"]["dogido"]["contact"]["touching_rain"],
+            false
+        );
+        s.conversation_observation.finish_notice_opportunity();
+        observe(s, 3, false);
+        let latest_revision = s.conversation_observation.context().unwrap().revision;
+        assert!(latest_revision > offered["revision"].as_u64().unwrap());
+        assert!(refresh_dialogue_context(s, &mut actions));
+        let input = &actions[0].leaf.as_ref().unwrap().details["reaction_context"]["world_context"];
+        assert_eq!(input["revision"], offered["revision"]);
+        assert_eq!(input["changes"], offered["changes"]);
+        assert_eq!(input["observations"]["overhead_cover"], "none");
+        assert_eq!(
+            input["observations"]["weather"]["precipitation_kind"],
+            "rain"
+        );
+        assert_eq!(
+            input["observations"]["subject_states"]["dogido"]["contact"]["touching_rain"],
+            true
+        );
+        s.conversation_observation
+            .considered(offered["revision"].as_u64().unwrap());
+        assert!(
+            s.conversation_observation
+                .context()
+                .unwrap()
+                .changes
+                .iter()
+                .any(|c| c.revision > offered["revision"].as_u64().unwrap())
+        );
+        for paused in [false, true] {
+            s.foreground.game_paused = paused;
+            if !paused {
+                s.body_observation = Default::default();
+            }
+            assert!(refresh_dialogue_context(s, &mut actions));
+            let input = &actions[0].leaf.as_ref().unwrap().details["reaction_context"]["world_context"];
+            assert_eq!(input["observations"]["sensory_status"], "unavailable");
+            assert!(input["observations"].get("subject_states").is_none());
+            assert!(input["observations"].get("overhead_cover").is_none());
+            assert_eq!(input["revision"], offered["revision"]);
+        }
+    }
+
     #[test]
     fn queued_notice_keeps_periodic_table_after_opportunity_and_movement() {
         let dialogue = Dialogue::new(super::super::DialogueConfig::default()).unwrap();

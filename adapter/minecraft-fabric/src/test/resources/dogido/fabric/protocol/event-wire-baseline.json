@@ -70,7 +70,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "certainty": "high"
         }
@@ -117,7 +118,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 3.0,
           "direction": {
@@ -142,7 +144,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 4.0,
           "direction": {
@@ -164,7 +167,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 5.0,
           "direction": {
@@ -186,7 +190,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 6.0,
           "direction": {
@@ -210,7 +215,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 7.0,
           "direction": {
@@ -323,7 +329,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "certainty": "high"
         }
@@ -356,7 +363,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 3.0,
           "direction": {
@@ -381,7 +389,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 4.0,
           "direction": {
@@ -403,7 +412,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 5.0,
           "direction": {
@@ -425,7 +435,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 6.0,
           "direction": {
@@ -449,7 +460,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 7.0,
           "direction": {
@@ -567,7 +579,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 3.0,
           "direction": {
@@ -592,7 +605,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 4.0,
           "direction": {
@@ -614,7 +628,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 5.0,
           "direction": {
@@ -636,7 +651,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 6.0,
           "direction": {
@@ -660,7 +676,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 7.0,
           "direction": {
@@ -764,7 +781,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 3.0,
           "direction": {
@@ -789,7 +807,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 4.0,
           "direction": {
@@ -811,7 +830,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 5.0,
           "direction": {
@@ -833,7 +853,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 6.0,
           "direction": {
@@ -857,7 +878,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 7.0,
           "direction": {
@@ -970,7 +992,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "certainty": "high"
         }
@@ -1003,7 +1026,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 3.0,
           "direction": {
@@ -1028,7 +1052,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 4.0,
           "direction": {
@@ -1050,7 +1075,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 5.0,
           "direction": {
@@ -1072,7 +1098,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 6.0,
           "direction": {
@@ -1096,7 +1123,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 7.0,
           "direction": {
@@ -1210,7 +1238,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "certainty": "high"
         }
@@ -1243,7 +1272,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 3.0,
           "direction": {
@@ -1268,7 +1298,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 4.0,
           "direction": {
@@ -1290,7 +1321,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 5.0,
           "direction": {
@@ -1312,7 +1344,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 6.0,
           "direction": {
@@ -1336,7 +1369,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 7.0,
           "direction": {
@@ -1457,7 +1491,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "certainty": "high"
         }
@@ -1490,7 +1525,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 3.0,
           "direction": {
@@ -1515,7 +1551,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 4.0,
           "direction": {
@@ -1537,7 +1574,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 5.0,
           "direction": {
@@ -1559,7 +1597,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 6.0,
           "direction": {
@@ -1583,7 +1622,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 7.0,
           "direction": {
@@ -1695,7 +1735,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 3.0,
           "direction": {
@@ -1720,7 +1761,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 4.0,
           "direction": {
@@ -1742,7 +1784,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 5.0,
           "direction": {
@@ -1764,7 +1807,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 6.0,
           "direction": {
@@ -1788,7 +1832,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 7.0,
           "direction": {
@@ -1901,7 +1946,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "certainty": "high"
         }
@@ -1948,7 +1994,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 3.0,
           "direction": {
@@ -1973,7 +2020,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 4.0,
           "direction": {
@@ -1995,7 +2043,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 5.0,
           "direction": {
@@ -2017,7 +2066,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 6.0,
           "direction": {
@@ -2041,7 +2091,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 7.0,
           "direction": {
@@ -2171,7 +2222,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "certainty": "high"
         }
@@ -2204,7 +2256,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 3.0,
           "direction": {
@@ -2229,7 +2282,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 4.0,
           "direction": {
@@ -2251,7 +2305,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 5.0,
           "direction": {
@@ -2273,7 +2328,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 6.0,
           "direction": {
@@ -2297,7 +2353,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 7.0,
           "direction": {
@@ -2432,7 +2489,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 3.0,
           "direction": {
@@ -2457,7 +2515,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 4.0,
           "direction": {
@@ -2479,7 +2538,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 5.0,
           "direction": {
@@ -2501,7 +2561,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 6.0,
           "direction": {
@@ -2525,7 +2586,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 7.0,
           "direction": {
@@ -2646,7 +2708,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 3.0,
           "direction": {
@@ -2671,7 +2734,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 4.0,
           "direction": {
@@ -2693,7 +2757,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 5.0,
           "direction": {
@@ -2715,7 +2780,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 6.0,
           "direction": {
@@ -2739,7 +2805,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 7.0,
           "direction": {
@@ -2869,7 +2936,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "certainty": "high"
         }
@@ -2902,7 +2970,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 3.0,
           "direction": {
@@ -2927,7 +2996,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 4.0,
           "direction": {
@@ -2949,7 +3019,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 5.0,
           "direction": {
@@ -2971,7 +3042,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 6.0,
           "direction": {
@@ -2995,7 +3067,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 7.0,
           "direction": {
@@ -3126,7 +3199,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "certainty": "high"
         }
@@ -3159,7 +3233,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 3.0,
           "direction": {
@@ -3184,7 +3259,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 4.0,
           "direction": {
@@ -3206,7 +3282,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 5.0,
           "direction": {
@@ -3228,7 +3305,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 6.0,
           "direction": {
@@ -3252,7 +3330,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 7.0,
           "direction": {
@@ -3390,7 +3469,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "certainty": "high"
         }
@@ -3423,7 +3503,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 3.0,
           "direction": {
@@ -3448,7 +3529,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 4.0,
           "direction": {
@@ -3470,7 +3552,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 5.0,
           "direction": {
@@ -3492,7 +3575,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 6.0,
           "direction": {
@@ -3516,7 +3600,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 7.0,
           "direction": {
@@ -3645,7 +3730,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 3.0,
           "direction": {
@@ -3670,7 +3756,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 4.0,
           "direction": {
@@ -3692,7 +3779,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 5.0,
           "direction": {
@@ -3714,7 +3802,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 6.0,
           "direction": {
@@ -3738,7 +3827,8 @@
             "submerged_in_water": false,
             "touching_water_or_rain": false,
             "on_ground": true,
-            "on_fire": false
+            "on_fire": false,
+            "touching_rain": false
           },
           "distance": 7.0,
           "direction": {

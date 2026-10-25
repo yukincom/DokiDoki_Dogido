@@ -135,6 +135,14 @@ fn chat_world_place_and_weather_match_canonical_complete_event_projection() {
         )
         .unwrap();
         let mut expected = value(row, 3).clone();
+        // 凍結fixtureは接水を水中と呼んでいた。眼の水没が未測定の旧caseだけを
+        // 固定期待値から補正する。現在の場所判定を使って期待値を逆算しない。
+        if expected["space_kind"] == "underwater" {
+            assert!(event.player.environment.is_none());
+            expected["space_kind"] = json!("water_contact");
+            expected["place_line"] = json!(expected["place_line"]
+                .as_str().unwrap().replace("水中", "水に触れている場所"));
+        }
         // Intentional correction to the frozen Python baseline: a measured
         // surface canopy retains its biome even below low leaves.
         if event.world.overhead_cover_type.as_deref() == Some("foliage")

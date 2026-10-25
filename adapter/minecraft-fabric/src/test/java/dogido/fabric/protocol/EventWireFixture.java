@@ -11,7 +11,7 @@ import java.util.*;
 public final class EventWireFixture {
     public static final String TIME = "2026-10-09T00:00:00Z";
     public static final UUID ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
-    public static final MobEnvironmentObservation ENV = new MobEnvironmentObservation(false, false, false, true, false);
+    public static final MobEnvironmentObservation ENV = new MobEnvironmentObservation(false, false, false, true, false, false);
     public static final MobIdentityObservation IDENTITY = new MobIdentityObservation(ID.toString(), "テスト", false);
     public static final SmellPolicy.Observation SMELL = new SmellPolicy.Observation("present",
         List.of(new SmellPolicy.Component("soup", "food", "pleasant", "hotbar", 3)), 0, true, null,
