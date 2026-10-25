@@ -2,6 +2,15 @@
 use super::{research_archive as archive, store::Store};
 use anyhow::{Context, Result, ensure};
 use serde_json::{Value, json};
+use std::io::{Read, Seek, SeekFrom};
+
+#[derive(Default, serde::Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub(super) struct ValuesQuery {
+    pub position: u64,
+    pub layer: u64,
+    pub offset: u64,
+}
 
 pub(super) fn archive_requests(
     store: &Store, poem: &archive::PoemArchive, record: &Value, previous: &Value,
@@ -30,6 +39,33 @@ pub(super) fn archive_requests(
 }
 
 impl Store {
+    /// 一位置・一層から最大64次元だけを読む。元のfloat32値をJSONへ渡す。
+    pub(super) fn internal_capture_values(&self, id: &str, index: usize, query: ValuesQuery) -> Result<Value> {
+        let mut captured = self.internal_capture_file(id, index, "hidden")?;
+        let manifest = &captured.manifest;
+        let [positions, layers, width]: [u64; 3] = serde_json::from_value(manifest["shape"].clone())?;
+        ensure!(query.position < positions && query.layer < layers && query.offset < width,
+            "capture_values_out_of_bounds");
+        let count = (width - query.offset).min(64) as usize;
+        let start = query.position.checked_mul(layers).and_then(|n| n.checked_add(query.layer))
+            .and_then(|n| n.checked_mul(width)).and_then(|n| n.checked_add(query.offset))
+            .and_then(|n| n.checked_mul(4)).context("capture_shape_overflow")?;
+        ensure!(start.checked_add((count * 4) as u64).is_some_and(|n| n <= captured.bytes),
+            "capture_values_out_of_bounds");
+        captured.file.seek(SeekFrom::Start(start))?;
+        let mut bytes = vec![0u8; count * 4];
+        captured.file.read_exact(&mut bytes)?;
+        let values: Vec<f32> = bytes.as_chunks::<4>().0.iter().map(|b| f32::from_le_bytes(*b)).collect();
+        ensure!(values.iter().all(|v| v.is_finite()), "capture_nonfinite_hidden");
+        let position = manifest["positions"].as_array().and_then(|p| p.get(query.position as usize))
+            .context("capture_position_missing")?;
+        ensure!(position["generation_index"].as_u64() == Some(query.position), "capture_token_position_mismatch");
+        Ok(json!({"response_id":manifest["response_id"],"shape":[positions,layers,width],
+            "position":query.position,"layer":query.layer,"offset":query.offset,
+            "input_position":position["input_position"],"predicted_token_id":position["predicted_token_id"],
+            "values":values}))
+    }
+
     /// 句ID・要求順・固定ファイル種だけを受け付ける。GETは同期・修復を行わない。
     pub(super) fn internal_capture_file(&self, id: &str, index: usize, kind: &str) -> Result<archive::CaptureFile> {
         ensure!(matches!(kind, "manifest" | "hidden"), "capture_file_kind_invalid");

@@ -142,7 +142,8 @@ def observe_model(model, core, decoder_class, session):
             first = len(session.store.record["prompt_token_ids"]) - 1
             if first < 0:
                 raise ValueError("native prompt was not observed")
-            if first <= position < first + session.store.max_positions:
+            if position >= first and (session.store.max_positions is None or
+                                      position < first + session.store.max_positions):
                 session.current = (position, {})
         session.safe(begin)
         try:
@@ -239,7 +240,8 @@ def install(server, environ=None, binding=native_binding, model_identity=None):
         session = None
         if root and self.body.get("dogido_capture") is True:
             try:
-                session = Session(CaptureStore(root, self.request_id, "mlx-lm", limit))
+                request_limit = None if self.body.get("dogido_capture_full") is True else limit
+                session = Session(CaptureStore(root, self.request_id, "mlx-lm", request_limit))
                 with lock:
                     registry[self.request_id] = session
                 request._dogido_capture_id = self.request_id

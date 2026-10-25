@@ -120,6 +120,9 @@ impl RigLlm {
         let mut request = request_with_image(input, image)?;
         if capture {
             request.additional_params.as_mut().unwrap()["dogido_capture"] = true.into();
+            if input.kind == "haiku_irony" {
+                request.additional_params.as_mut().unwrap()["dogido_capture_full"] = true.into();
+            }
         }
         if !tools.is_empty() {
             let params = request.additional_params.as_mut().unwrap();
@@ -326,12 +329,17 @@ mod tests {
         }
         let rows = seen.lock().unwrap();
         assert_eq!(rows.len(), 8);
-        for pair in rows.as_chunks::<2>().0 {
+        for (index, pair) in rows.as_chunks::<2>().0.iter().enumerate() {
             assert!(pair[0].get("dogido_capture").is_none());
+            assert!(pair[0].get("dogido_capture_full").is_none());
             let mut captured = pair[1].clone();
             assert_eq!(
                 captured.as_object_mut().unwrap().remove("dogido_capture"),
                 Some(json!(true))
+            );
+            assert_eq!(
+                captured.as_object_mut().unwrap().remove("dogido_capture_full"),
+                (index == 0).then(|| json!(true))
             );
             assert_eq!(pair[0], captured);
         }

@@ -8,6 +8,7 @@ pub struct CaptureFile {
     pub file: File,
     pub bytes: u64,
     pub name: &'static str,
+    pub manifest: Value,
 }
 
 fn request(value: &Value) -> Result<RequestObservation> {
@@ -92,13 +93,14 @@ fn files(dir: &safe::Dir, row: &RequestObservation, open_hidden: bool, verify_hi
 fn selected(dir: &safe::Dir, row: &RequestObservation, kind: &str) -> Result<CaptureFile> {
     ensure!(matches!(kind, "manifest" | "hidden"), "capture_file_kind_invalid");
     let (manifest, hidden) = files(dir, row, kind == "hidden", kind == "hidden")?;
+    let metadata = serde_json::from_slice(&manifest)?;
     if kind == "hidden" {
         Ok(CaptureFile {file:hidden.context("capture_numbers_unavailable")?,
-            bytes:row.artifact.as_ref().unwrap().hidden_bytes.unwrap(), name:"hidden.f32"})
+            bytes:row.artifact.as_ref().unwrap().hidden_bytes.unwrap(), name:"hidden.f32", manifest:metadata})
     } else {
         let mut file = dir.existing_file("manifest.json")?;
         verify_file(&mut file, manifest.len() as u64, &row.artifact.as_ref().unwrap().manifest_sha256)?;
-        Ok(CaptureFile {file, bytes:manifest.len() as u64, name:"manifest.json"})
+        Ok(CaptureFile {file, bytes:manifest.len() as u64, name:"manifest.json", manifest:metadata})
     }
 }
 

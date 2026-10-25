@@ -14,7 +14,7 @@ use anyhow::{Context, Result, ensure};
 use axum::{
     Json, Router,
     body::Body,
-    extract::{DefaultBodyLimit, Path, Request, State},
+    extract::{DefaultBodyLimit, Path, Query, Request, State},
     http::{StatusCode, header},
     middleware::{self, Next},
     response::{IntoResponse, Response},
@@ -271,7 +271,12 @@ async fn photo_image(
 async fn internal_capture_file(
     State(app): State<Arc<App>>,
     Path((id, index, kind)): Path<(String, usize, String)>,
+    Query(query): Query<internal_capture::ValuesQuery>,
 ) -> Result<Response, ApiError> {
+    if kind == "values" {
+        let values = blocking(move || app.store.internal_capture_values(&id, index, query)).await?;
+        return Ok(Json(values).into_response());
+    }
     let result = blocking(move || app.store.internal_capture_file(&id, index, &kind)).await?;
     let mime = if result.name == "manifest.json" { "application/json" } else { "application/octet-stream" };
     let stream = tokio_util::io::ReaderStream::new(tokio::fs::File::from_std(result.file));
@@ -298,6 +303,7 @@ const PUBLIC: &[&str] = &[
     "bookshelf-controls.css",
     "poem-record.css",
     "poem-record.js",
+    "internal-capture-viewer.js",
     "poem-export.js",
     "model.js",
     "catalog-player-notes.js",

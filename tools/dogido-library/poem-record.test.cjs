@@ -42,7 +42,18 @@ test('capture records show stages and partial dimensions with escaped links and 
  assert.match(html,/情景/);assert.match(html,/一部採取/);assert.match(html,/32 トークン × 30 層 × 2816 次元/);
  assert.doesNotMatch(html,/保全|default_model/);assert.match(html,/数値データを保存/);assert.match(html,/root%3A%3Cpoem%3E\/internal-capture\/2\/hidden/);
  assert.match(html,/一対一には対応しません/);assert.match(html,/&lt;model&gt;/);assert.doesNotMatch(html,/<model>|<reply>|<job>/);
+ assert.match(html,/<summary>前 — 応答開始直前<\/summary>/);assert.match(html,/<summary>中 — 生成中<\/summary>/);
+ assert.match(html,/生成末尾までの数値は記録されていません/);assert.equal((html.match(/class="capture-slice"/g)||[]).length,2);
+ assert.doesNotMatch(html,/<details class="capture-slice"[^>]*\bopen\b/);
  assert.equal(JSON.stringify(e),before);
+});
+test('complete capture exposes its first, selectable middle and actual last position without rewriting output',()=>{
+ const text='{"description":"<生の生成文>"}';
+ const html=record.render({id:'p',internalCapture:{requests:[{request_index:1,kind:'haiku_irony',status:'complete',api_output:{text},artifact:{hidden_verified:true,shape:[300,30,2816]}}]}});
+ assert.equal((html.match(/class="capture-slice"/g)||[]).length,3);
+ assert.match(html,/max="300" value="1" readonly/);assert.match(html,/max="300" value="150"/);assert.match(html,/max="300" value="300" readonly/);
+ assert.match(html,/&quot;description&quot;:&quot;&lt;生の生成文&gt;&quot;/);
+ assert.doesNotMatch(html,/未採取|生成末尾までの数値は記録されていません/);
 });
 test('failed and missing captures never claim numeric data or display archive status',()=>{
  for(const status of ['failed','cancelled','missing','invalid','request_failed','requested']){

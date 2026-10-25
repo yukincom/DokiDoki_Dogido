@@ -78,7 +78,12 @@ struct dogido_capture {
                     throw std::runtime_error("capture limit must be 1..4096");
                 }
             }
-            result->manifest["max_positions"] = result->limit;
+            if (task.params.dogido_capture_full) {
+                result->limit = 0;
+                result->manifest["max_positions"] = nullptr;
+            } else {
+                result->manifest["max_positions"] = result->limit;
+            }
             // Identity is prepared once by the launcher, including weight/template hashes.
             const char * identity_path = std::getenv("DOGIDO_CAPTURE_IDENTITY");
             if (!identity_path) {
@@ -148,7 +153,7 @@ struct dogido_capture {
             return;
         }
         manifest["total_generated_tokens"] = generation_index + 1;
-        if (!active || manifest["positions"].size() >= limit) {
+        if (!active || (limit != 0 && manifest["positions"].size() >= limit)) {
             return;
         }
         try {

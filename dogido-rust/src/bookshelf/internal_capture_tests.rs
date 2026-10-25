@@ -12,7 +12,10 @@ fn captured(f: &Fixture, status: &str) -> (Value, Vec<u8>) {
     let manifest = json!({"schema":"dogido.internal_capture.v1","response_id":"reply_1",
         "choice_index":0,"backend":"llama.cpp","boundary":"decoder_layer_output_pre_final_norm",
         "status":status,"dtype":"float32-le","shape":[2,2,3],"hidden_file":"hidden.f32",
-        "hidden_bytes":bytes.len(),"hidden_sha256":digest});
+        "hidden_bytes":bytes.len(),"hidden_sha256":digest,"max_positions":null,
+        "total_generated_tokens":2,"prompt_token_ids":[1,2],"predicted_token_ids":[7,0],
+        "positions":[{"generation_index":0,"input_position":1,"predicted_token_id":7},
+                     {"generation_index":1,"input_position":2,"predicted_token_id":0}]});
     let manifest_bytes = serde_json::to_vec(&manifest).unwrap();
     fs::write(source.join("manifest.json"), &manifest_bytes).unwrap();
     if numbers { fs::write(source.join("hidden.f32"), &bytes).unwrap(); }
@@ -159,4 +162,33 @@ async fn capture_download_uses_existing_origin_guard_and_streams_exact_bytes() {
             .header("host", host).header("origin", origin).body(Body::empty()).unwrap()).await.unwrap();
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
     }
+}
+
+#[tokio::test]
+async fn capture_values_read_exact_coordinates_from_archive_and_reject_invalid_queries() {
+    use tower::ServiceExt;
+    let f = Fixture::new(); captured(&f, "complete"); archive(&f);
+    let store = f.store();
+    fs::remove_dir_all(store.capture_dir.as_ref().unwrap()).unwrap();
+    let app = test_app(&f);
+    let route = "/api/poems/root%3Ap/internal-capture/1/values";
+    let response = router(app.clone()).oneshot(axum::http::Request::builder()
+        .uri(format!("{route}?position=1&layer=1&offset=1")).header("host", "127.0.0.1:45678")
+        .body(Body::empty()).unwrap()).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), 4096).await.unwrap();
+    let value: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(value["values"], json!([10.0,11.0]));
+    assert_eq!(value["predicted_token_id"], 0);
+    assert_eq!(value["input_position"], 2);
+    for query in ["position=2", "layer=2", "offset=3", "position=-1", "offset=18446744073709551615", "count=1000000"] {
+        let response = router(app.clone()).oneshot(axum::http::Request::builder()
+            .uri(format!("{route}?{query}")).header("host", "127.0.0.1:45678")
+            .body(Body::empty()).unwrap()).await.unwrap();
+        assert!(!response.status().is_success(), "{query}");
+    }
+    let response = router(app).oneshot(axum::http::Request::builder().uri(route)
+        .header("host", "127.0.0.1:45678").header("origin", "https://evil.invalid")
+        .body(Body::empty()).unwrap()).await.unwrap();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
 }

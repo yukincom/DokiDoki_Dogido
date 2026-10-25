@@ -92,6 +92,24 @@ class StorageTests(unittest.TestCase):
             cancelled.finish(status="cancelled")
             self.assertEqual(cancelled.record["status"], "cancelled")
 
+    def test_full_capture_keeps_rows_beyond_the_default_cap_and_the_final_token(self):
+        with TemporaryDirectory() as root:
+            store = CaptureStore(root, "full", "mlx-lm", None)
+            store.configure(1, 1, {})
+            store.set_prompt([1, 2])
+            for index in range(300):
+                self.assertTrue(store.wants_frame)
+                store.append_token(0 if index == 299 else 7, floats([index]), index + 1)
+            store.finish("本文", "stop")
+            record = store.record
+            self.assertIsNone(record["max_positions"])
+            self.assertEqual(record["status"], "complete")
+            self.assertEqual(record["shape"], [300, 1, 1])
+            self.assertEqual(record["total_generated_tokens"], 300)
+            self.assertEqual(record["predicted_token_ids"][-1], 0)
+            self.assertEqual(record["positions"][-1]["input_position"], 300)
+            self.assertEqual(struct.unpack("<300f", (store.directory / "hidden.f32").read_bytes())[-1], 299)
+
     def test_ids_cannot_escape_operator_root(self):
         with TemporaryDirectory() as root:
             for name in ["../escape", "/absolute", "two/parts", "", "a" * 129]:
@@ -269,13 +287,29 @@ class HookTests(unittest.TestCase):
                 self.assertEqual(model.calls, 5 if cached == 0 else 4)
 
     def test_strict_opt_in_and_no_new_model_calls(self):
-        for body in [{}, {"dogido_capture": False}, {"dogido_capture": "true"}, {"dogido_capture": 1}]:
+        for body in [{}, {"dogido_capture": False}, {"dogido_capture": "true"},
+                     {"dogido_capture": 1}, {"dogido_capture_full": True}]:
             with self.subTest(body=body), TemporaryDirectory() as root:
                 handler, model, record = self.run_request(root, body)
                 self.assertTrue(handler.batchable)
                 self.assertIsNone(record)
                 self.assertEqual(model.calls, 5)
                 self.assertEqual(list(Path(root).iterdir()), [])
+
+    def test_full_capture_overrides_only_its_own_cap_and_keeps_native_eos_lookahead(self):
+        for full in [True, False, "true", 1]:
+            with self.subTest(full=full), TemporaryDirectory() as root:
+                _, model, record = self.run_request(root,
+                    {"dogido_capture": True, "dogido_capture_full": full}, cap=1)
+                self.assertEqual(record["status"], "complete" if full is True else "partial")
+                self.assertEqual(record["predicted_token_ids"], [7, 8, 0] if full is True else [7])
+                self.assertEqual(record["max_positions"], None if full is True else 1)
+                self.assertEqual(model.calls, 5)
+        # A following ordinary capture must retain the server's normal prefix limit.
+        with TemporaryDirectory() as root:
+            _, _, record = self.run_request(root, {"dogido_capture": True}, cap=1)
+            self.assertEqual(record["status"], "partial")
+            self.assertEqual(record["shape"][0], 1)
 
     def test_streaming_and_cap_keep_prefix_and_native_generation(self):
         with TemporaryDirectory() as root:
@@ -301,11 +335,13 @@ class HookTests(unittest.TestCase):
                 self.assertEqual(model.calls, 5)
 
     def test_cancellation_and_disconnect(self):
-        for cancel, disconnected in [(True, False), (False, True)]:
-            with self.subTest(cancel=cancel), TemporaryDirectory() as root:
-                _, _, record = self.run_request(root, {"dogido_capture": True},
-                                               cancel=cancel, disconnected=disconnected)
-                self.assertEqual(record["status"], "cancelled")
+        for full in [False, True]:
+            for cancel, disconnected in [(True, False), (False, True)]:
+                with self.subTest(full=full,cancel=cancel), TemporaryDirectory() as root:
+                    _, _, record = self.run_request(root,
+                        {"dogido_capture": True, "dogido_capture_full": full},
+                        cancel=cancel, disconnected=disconnected)
+                    self.assertEqual(record["status"], "cancelled")
 
     def test_observer_filters_owned_layers_and_restores_on_error(self):
         core = Model().core

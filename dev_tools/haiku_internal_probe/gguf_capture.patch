@@ -207,28 +207,31 @@ index 9a9c0c9..b1f2954 100644
                  if (!process_token(result, slot)) {
                      slot.print_timings();
 diff --git a/tools/server/server-schema.cpp b/tools/server/server-schema.cpp
-index 54e126a..dc36daf 100644
+index 54e126a..47d4171 100644
 --- a/tools/server/server-schema.cpp
 +++ b/tools/server/server-schema.cpp
-@@ -14,6 +14,9 @@ std::vector<std::unique_ptr<field>> make_llama_cmpl_schema(const common_params &
+@@ -14,6 +14,11 @@ std::vector<std::unique_ptr<field>> make_llama_cmpl_schema(const common_params &
          fields.emplace_back(f);
      };
  
 +    add((new field_bool("dogido_capture", params.dogido_capture))
-+        ->set_desc("Record bounded decoder residuals to the server-configured capture directory"));
++        ->set_desc("Record decoder residuals to the server-configured capture directory"));
++    add((new field_bool("dogido_capture_full", params.dogido_capture_full))
++        ->set_desc("Record all accepted tokens when dogido_capture is enabled"));
 +
      add((new field_bool("verbose", params.verbose))
          ->set_desc("Include __verbose field in the response with additional debug information"));
  
 diff --git a/tools/server/server-task.h b/tools/server/server-task.h
-index b8d6a3b..d807994 100644
+index b8d6a3b..01bfaca 100644
 --- a/tools/server/server-task.h
 +++ b/tools/server/server-task.h
-@@ -54,6 +54,7 @@ struct task_params {
+@@ -54,6 +54,8 @@ struct task_params {
      bool cache_prompt    = true; // remember the prompt to avoid reprocessing all prompt
      bool return_tokens   = false;
      bool return_progress = false;
 +    bool dogido_capture  = false; // opt-in decoder residual recording
++    bool dogido_capture_full = false; // record until native generation stops
  
      int32_t sse_ping_interval = 30; // seconds between SSE comment pings while the stream stays silent, -1 disables
  

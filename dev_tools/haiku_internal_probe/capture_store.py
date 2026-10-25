@@ -21,8 +21,8 @@ class CaptureStore:
     def __init__(self, root, response_id, backend, max_positions=256, model=None):
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}", response_id):
             raise ValueError("invalid response id")
-        if type(max_positions) is not int or not 1 <= max_positions <= 4096:
-            raise ValueError("capture position limit must be 1..4096")
+        if max_positions is not None and (type(max_positions) is not int or not 1 <= max_positions <= 4096):
+            raise ValueError("capture position limit must be 1..4096 or None for full capture")
         self.directory = Path(root) / response_id
         self.directory.mkdir(parents=True, exist_ok=False)
         self.hidden = (self.directory / "hidden.f32").open("xb")
@@ -63,7 +63,8 @@ class CaptureStore:
 
     @property
     def wants_frame(self):
-        return not self.finished and self.error is None and self.record["total_generated_tokens"] < self.max_positions
+        return not self.finished and self.error is None and (
+            self.max_positions is None or self.record["total_generated_tokens"] < self.max_positions)
 
     def append_token(self, token, frame_bytes=None, input_position=None):
         with self.lock:
@@ -71,7 +72,7 @@ class CaptureStore:
                 return
             index = self.record["total_generated_tokens"]
             self.record["total_generated_tokens"] += 1
-            if self.error is not None or index >= self.max_positions:
+            if self.error is not None or (self.max_positions is not None and index >= self.max_positions):
                 return
             if type(token) is not int or token < 0:
                 raise ValueError("invalid predicted token")
