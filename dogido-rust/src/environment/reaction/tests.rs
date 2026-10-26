@@ -547,3 +547,33 @@ fn shelter_and_night_branches_use_observed_facts_not_generated_words() {
         &GameEvent::parse(wire).unwrap()
     ));
 }
+
+#[test]
+fn spontaneous_history_labels_speakers_without_changing_stored_roles_or_events() {
+    let conversation = json!([
+        {"turn_id":"player","role":"user","text":"石炭が見えるな。"},
+        {"turn_id":"dogido:reply","role":"assistant","text":"山へ行こうや。"},
+        {"turn_id":"silence","role":"event","reaction":"silent","text":""},
+        {"turn_id":"story","role":"event","reaction":"story","text":"句を表示した"}
+    ]);
+    let mut a = action("surroundings_notice", json!({}));
+    attach(&mut a, &event(json!({})), &json!({"conversation":conversation}));
+    let details = a.leaf.as_ref().unwrap().details.clone();
+    let p = prepared(&a);
+    let context: Value = serde_json::from_str(&p.request.messages[1].content).unwrap();
+    let rows = context["recent"]["conversation"].as_array().unwrap();
+    for (index, speaker) in ["プレイヤー", "ドギド", "出来事", "出来事"]
+        .into_iter()
+        .enumerate()
+    {
+        assert_eq!(rows[index]["speaker"], speaker);
+        let mut original = rows[index].clone();
+        original.as_object_mut().unwrap().remove("speaker");
+        assert_eq!(original, conversation[index]);
+    }
+    assert_eq!(a.leaf.as_ref().unwrap().details, details);
+    let situation = context["situation"].as_str().unwrap();
+    assert!(situation.contains("今はプレイヤーから新しい発言を受けてへん"));
+    assert!(situation.contains("自分の発言に相づちや返事をせず"));
+    assert!(situation.contains("言葉を変えただけなら、同じ話として扱ってな"));
+}
