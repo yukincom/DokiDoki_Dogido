@@ -292,7 +292,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.lastPlayerZ = player.getZ();
 
         this.tickCounter += 1;
-        if (this.tickCounter % 5 == 0) this.bodyConnection.observeOwnerWork(PlayerObserver.blockBreakingActive(client));
+        if (this.tickCounter % 5 == 0) this.bodyConnection.observeOwnerWork(bodyFrame,PlayerObserver.blockBreakingActive(client));
         this.bodyObservation = this.bodySenses.capture(bodyFrame,client,bodyEntity);
         this.bodyAutonomy = this.bodySenses.autonomy(bodyFrame,this.bodyObservation);
         this.bodyInspect.tick(bodyFrame,this.bodyAutonomy);

@@ -9,15 +9,15 @@ import static dogido.fabric.body.BodyInspectProtocol.*;
 class BodyConnectionActionTest {
     private final Context context=new Context(UUID.randomUUID(),UUID.randomUUID(),UUID.randomUUID(),"minecraft:overworld");
     private static final class Source implements BodyConnection.Source {
-        int looks,moves,recalls;
+        int looks,moves,recalls,receiptReads;
         JsonObject lookResults=new JsonObject();
         JsonObject autonomy=BodyInspectProtocol.unavailable("test");
         BodyConnection.RecallResult recall;
-        public BodyConnection.Frame capture(UUID owner,String dimension) { return new BodyConnection.Frame(BodyConnection.unavailable("test"),BodyConnection.Hearing.unavailable(),autonomy,lookResults); }
+        public BodyConnection.Frame capture(UUID owner,String dimension) { return new BodyConnection.Frame(BodyConnection.unavailable("test"),BodyConnection.Hearing.unavailable(),autonomy,lookResults,null); }
         public String lookAt(BodyConnection.LookRequest request) { looks++; return "queued"; }
         public String moveTo(BodyConnection.MoveRequest request) { moves++; return "queued"; }
         public String recall(BodyConnection.RecallRequest request) { recalls++; return "queued"; }
-        public BodyConnection.RecallResult recallResult(UUID actionId) { return recall!=null && actionId.equals(recall.actionId())?recall:null; }
+        public BodyConnection.RecallResult recallResult(UUID actionId) { receiptReads++; return recall!=null && actionId.equals(recall.actionId())?recall:null; }
     }
     private BodyConnection connection(Source source) throws Exception {
         var connection=new BodyConnection();
@@ -79,4 +79,24 @@ class BodyConnectionActionTest {
         connection.captureFrame(context.ownerId(),context.dimension());
         assertEquals("queued",connection.lookAt(new BodyConnection.LookRequest(context,202,UUID.randomUUID(),100,20,new Point(1,65,2))));
     }
+    @Test void recallReceiptIsReadOncePerFrameIncludingNotArrivedAndTerminalResults() throws Exception {
+        var source=new Source(); var connection=connection(source);
+        UUID id=UUID.randomUUID(),connectionId=UUID.randomUUID();
+        var request=new BodyConnection.RecallRequest(context.ownerId(),connectionId,id,context.dimension());
+        assertEquals("queued",connection.recall(request));
+        var empty=connection.captureFrame(context.ownerId(),context.dimension());
+        assertNull(connection.recallResult(empty,id)); assertEquals(1,source.receiptReads);
+        source.recall=new BodyConnection.RecallResult(context.ownerId(),connectionId,id,context.dimension(),context,7,"accepted","queued");
+        var accepted=connection.captureFrame(context.ownerId(),context.dimension());
+        assertSame(source.recall,connection.recallResult(accepted,id)); assertEquals(2,source.receiptReads);
+        source.recall=new BodyConnection.RecallResult(context.ownerId(),connectionId,id,context.dimension(),null,-1,"rejected","no_safe_spawn_destination");
+        var terminal=connection.captureFrame(context.ownerId(),context.dimension());
+        assertSame(source.recall,connection.recallResult(terminal,id)); assertEquals(3,source.receiptReads);
+        // 別の受付が終端を先に観測して枠を解放しても、未配送の結果は専用台帳から回収する。
+        var next=connection.captureFrame(context.ownerId(),context.dimension());
+        assertNull(next.recall()); assertEquals(3,source.receiptReads);
+        assertSame(source.recall,connection.recallResult(next,id)); assertEquals(4,source.receiptReads);
+        assertNull(connection.recallResult(terminal,UUID.randomUUID())); assertEquals(5,source.receiptReads);
+    }
+
 }

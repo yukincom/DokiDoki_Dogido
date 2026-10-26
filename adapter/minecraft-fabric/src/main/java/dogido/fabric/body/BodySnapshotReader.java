@@ -18,7 +18,7 @@ final class BodySnapshotReader {
                 if (snapshot.isEmpty()) return BodyConnection.Frame.unavailable("stale_or_missing");
                 var value = snapshot.get();
                 var observation = BodyObservationJson.observed(value,bridge.snapshotAgeMillis(),owner,dimension);
-                return new BodyConnection.Frame(observation,hearing(value),autonomy(value,observation),lookResults(value));
+                return new BodyConnection.Frame(observation,hearing(value),autonomy(value,observation),lookResults(value),null);
             }
             public String recall(BodyConnection.RecallRequest request) {
                 var snapshot=bridge.snapshot().orElse(null);
@@ -52,8 +52,8 @@ final class BodySnapshotReader {
                     BodyProtocol.MovePurpose.valueOf(request.purpose().name())))
                     .name().toLowerCase(java.util.Locale.ROOT);
             }
-            public void observeOwnerWork(boolean working) {
-                BodySnapshotReader.observeOwnerWork(bridge,working);
+            public void observeOwnerWork(BodyConnection.Frame frame,boolean working) {
+                BodySnapshotReader.observeOwnerWork(bridge,frame,working);
             }
             public void observeSpeechGaze(BodyInspectProtocol.Context context,long sequence,long tick,net.minecraft.util.math.Vec3d point) {
                 bridge.observeSpeechGaze(new BodyProtocol.SpeechGazeObservation(
@@ -63,12 +63,16 @@ final class BodySnapshotReader {
         };
     }
     /** 現在の身体frameに束縛して送り、古いsnapshotのtickを現在時刻へ書き換えない。falseも送って作業終了を伝える。 */
-    static void observeOwnerWork(BodyBridge bridge, boolean working) {
-        if (!bridge.available()) return;
-        var snapshot = bridge.snapshot().orElse(null);
-        if (snapshot == null || snapshot.presence() != BodyProtocol.Presence.PRESENT
-                || snapshot.context() == null || bridge.snapshotAgeMillis() > 750) return;
-        bridge.observeOwnerWork(new BodyProtocol.OwnerWorkObservation(snapshot.context(),snapshot.serverTick(),working));
+    static void observeOwnerWork(BodyBridge bridge, BodyConnection.Frame frame, boolean working) {
+        if (!bridge.available() || frame == null) return;
+        var observation=frame.observation();
+        if (!"observed".equals(BodyInspectProtocol.string(observation,"status"))
+                || observation.get("age_ms").getAsLong()>750 || bridge.snapshotAgeMillis()>750) return;
+        var sample=observation.getAsJsonObject("sample");
+        var c=BodyInspectProtocol.context(sample.getAsJsonObject("context"));
+        // 配送境界のbridge側照合は残し、観測のcontext/tickを現在snapshotで取り直さない。
+        bridge.observeOwnerWork(new BodyProtocol.OwnerWorkObservation(
+            new BodyProtocol.Context(c.ownerId(),c.bodyId(),c.epoch(),c.dimension()),sample.get("server_tick").getAsLong(),working));
     }
     /** HTTP v3観測の検証を共有し、制御状態だけを独立のv2封筒へ投影する。 */
     static com.google.gson.JsonObject autonomy(BodyProtocol.Snapshot value,com.google.gson.JsonObject observation) {

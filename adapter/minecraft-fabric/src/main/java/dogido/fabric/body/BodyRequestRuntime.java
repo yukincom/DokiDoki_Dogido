@@ -95,7 +95,7 @@ public final class BodyRequestRuntime {
         }
         return hitPoint;
     }
-    /** 完了確認はrootが取得した現在frameを使う。RECALLの専用結果照会は従来の台帳へ行う。 */
+    /** 完了確認はrootが取得した現在frameを使い、照会済みのRECALL結果も共有する。 */
     public void tick(BodyConnection.Frame frame) {
         Pending work=pending; if (work==null) return;
         if (!current.test(work.session(),work.command().inputGeneration())) { discardPending(); return; }
@@ -105,7 +105,7 @@ public final class BodyRequestRuntime {
             String outcome=null, reason=null; Context resolved=work.command().context();
             BodyConnection.Frame completedFrame=null;
             if (work.command().mode()==Mode.RECALL) {
-                var result=connection.recallResult(work.command().commandId());
+                var result=connection.recallResult(frame,work.command().commandId());
                 if (result==null || !work.command().commandId().equals(result.actionId()) || !work.connectionId().equals(result.connectionId())
                         || !work.command().ownerId().equals(result.ownerId()) || !work.command().dimension().equals(result.dimension())) return;
                 resolved=result.context(); outcome=result.outcome(); reason=result.reason();

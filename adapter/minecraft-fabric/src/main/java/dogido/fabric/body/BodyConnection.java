@@ -14,7 +14,9 @@ public final class BodyConnection {
         public Hearing { sounds = List.copyOf(sounds); }
         public static Hearing unavailable() { return new Hearing(false,-1,List.of(),false); }
     }
-    public record Frame(JsonObject observation, Hearing hearing, JsonObject autonomy, JsonObject lookResults) {
+    /** 同じ周期で照会したIDと未到着を含む結果。別IDの要求へ流用しない。 */
+    public record RecallObservation(UUID actionId, RecallResult result) {}
+    public record Frame(JsonObject observation, Hearing hearing, JsonObject autonomy, JsonObject lookResults, RecallObservation recall) {
         /** この観測周期の身体現物を一度解決し、感覚・撮影へ渡す。次周期へentityを保持しない。 */
         public net.minecraft.entity.Entity resolveBody(net.minecraft.client.world.ClientWorld world) {
             if (world == null || !"observed".equals(BodyInspectProtocol.string(observation,"status"))) return null;
@@ -23,7 +25,7 @@ public final class BodyConnection {
             return null;
         }
         public JsonObject lookResult(UUID actionId) { return lookResults==null?null:lookResults.getAsJsonObject(actionId.toString()); }
-        static Frame unavailable(String reason) { return new Frame(BodyConnection.unavailable(reason),Hearing.unavailable(),BodyInspectProtocol.unavailable(reason),null); }
+        static Frame unavailable(String reason) { return new Frame(BodyConnection.unavailable(reason),Hearing.unavailable(),BodyInspectProtocol.unavailable(reason),null,null); }
     }
     public record MoveRequest(BodyInspectProtocol.Context context, long sequence, UUID actionId,
             long observedServerTick, int validForTicks, BodyInspectProtocol.Point destination, BodyInspectProtocol.Purpose purpose) {}
@@ -39,7 +41,7 @@ public final class BodyConnection {
         default RecallResult recallResult(UUID actionId) { return null; }
         default String lookAt(LookRequest request) { return "unavailable"; }
         default String moveTo(MoveRequest request) { return "unavailable"; }
-        default void observeOwnerWork(boolean working) {}
+        default void observeOwnerWork(Frame frame,boolean working) {}
         default void observeSpeechGaze(BodyInspectProtocol.Context context,long sequence,long tick,net.minecraft.util.math.Vec3d point) {}
     }
     private Source source;
@@ -115,7 +117,9 @@ public final class BodyConnection {
         try { String result=source.recall(request); if (!"queued".equals(result)) release(request.actionId()); return result; }
         catch (RuntimeException | LinkageError error) { release(request.actionId()); return "bridge_error"; }
     }
-    public RecallResult recallResult(UUID actionId) {
+    /** 同じframeで照会済みなら未到着も共有する。他の受付で枠が解放済みなら専用台帳から現在結果を読む。 */
+    public RecallResult recallResult(Frame frame,UUID actionId) {
+        if (frame.recall()!=null && actionId.equals(frame.recall().actionId())) return frame.recall().result();
         resolve(); if (source == null) return null;
         try { return source.recallResult(actionId); }
         catch (RuntimeException | LinkageError error) { return null; }
@@ -125,12 +129,13 @@ public final class BodyConnection {
         if (source == null) return Frame.unavailable(reason);
         try {
             Frame frame=source.capture(owner,dimension);
-            UUID active; synchronized (this) { active=activeAction; }
+            UUID active; synchronized (this) { active=activeKind==ActionKind.RECALL?activeAction:null; }
             RecallResult recall=active == null ? null : source.recallResult(active);
             if (recall != null && !"accepted".equals(recall.outcome())) release(active);
             releaseCompleted(frame.autonomy().getAsJsonObject("action_result"));
             if(frame.lookResults()!=null)for(var result:frame.lookResults().entrySet())releaseCompleted(result.getValue().getAsJsonObject());
-            return frame;
+            return new Frame(frame.observation(),frame.hearing(),frame.autonomy(),frame.lookResults(),
+                active==null?null:new RecallObservation(active,recall));
         }
         catch (RuntimeException | LinkageError error) { return Frame.unavailable("bridge_error"); }
     }
@@ -140,10 +145,10 @@ public final class BodyConnection {
         if(id!=null)release(UUID.fromString(id));
     }
     /** client tickで取得した既存作業観測を任意身体へ送る。未導入・版違いは通常観測を止めない。 */
-    public void observeOwnerWork(boolean working) {
+    public void observeOwnerWork(Frame frame,boolean working) {
         resolve();
         if (source == null) return;
-        try { source.observeOwnerWork(working); }
+        try { source.observeOwnerWork(frame,working); }
         catch (RuntimeException | LinkageError ignored) { }
     }
     /** 同じ任意APIに実再生中の注視点を渡す。nullは終了で、移動要求には変換しない。 */
