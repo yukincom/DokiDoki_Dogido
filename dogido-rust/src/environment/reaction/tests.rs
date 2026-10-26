@@ -1,7 +1,10 @@
 use super::*;
 
 fn attach(action: &mut Speech, event: &GameEvent, recent: &Value) {
-    super::attach(action, event, recent, &Settings::default());
+    super::attach(action, event, &Settings::default());
+    if let Some(leaf) = action.leaf.as_mut().filter(|leaf| leaf.kind == KIND) {
+        leaf.details["reaction_context"]["recent"] = recent.clone();
+    }
 }
 
 fn event(fields: Value) -> GameEvent {

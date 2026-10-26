@@ -97,7 +97,7 @@ fn environment_decision_with_image(d: &Arc<Dialogue>, value: Value, image: Optio
         let mut data=d.data.lock().unwrap();
         let s=data.sessions.get_mut("s").unwrap();
         let sensed=super::super::body_runtime::event(s,&event);
-        crate::environment::reaction::attach(&mut action,&sensed,&json!({}),&d.config.combat);
+        crate::environment::reaction::attach(&mut action,&sensed,&d.config.combat);
         s.conversation_observation.sample_notice(1000,1,true);
         let mut changed=s.conversation_observation.context().unwrap();
         changed.observations["structure"]=json!("fixture_notice");
@@ -370,7 +370,7 @@ fn direct_decision() -> (Arc<Dialogue>, String) {
     s.environment_latest=Some(event.clone());
     let mut action=Speech::new(KIND,"");
     action.delivery=Delivery::Ambient;
-    crate::environment::reaction::attach(&mut action,&event,&json!({}),&d.config.combat);
+    crate::environment::reaction::attach(&mut action,&event,&d.config.combat);
     action.leaf.as_mut().unwrap().details["reaction_context"]["world_context"]=json!({"observations":{}});
     let (turn,_rx)=Dialogue::queue_actions(&mut data,"s",&[action.clone()],None);
     let s=data.sessions.get_mut("s").unwrap();

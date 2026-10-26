@@ -1163,7 +1163,7 @@ mod tests {
                 .priority_smell(&old, 1100, Mode::Normal, false, settings)
                 .unwrap();
             action.delivery = Delivery::Ambient;
-            crate::environment::reaction::attach(&mut action, &old, &json!({}), settings);
+            crate::environment::reaction::attach(&mut action, &old, settings);
             let current = super::super::body_runtime::install_test_senses(session, &current, 2);
             session.received = Some(Instant::now());
             session.ambient.update(&current, 1200, true, settings);

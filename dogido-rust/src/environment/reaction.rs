@@ -21,9 +21,9 @@ pub(crate) fn is_model_reaction(action: &Speech) -> bool {
     action.leaf.as_ref().is_some_and(|l| l.kind == KIND)
 }
 
-/// Decorate only the selected environmental candidate. Its original domain state
-/// has consumed a consideration opportunity, not asserted successful playback.
-pub(crate) fn attach(action: &mut Speech, event: &GameEvent, recent: &Value, settings: &Settings) {
+/// 採用した環境候補へ状況と観測を添える。発話成功はまだ確定しない。
+/// 現在の全観測・画像・履歴はdialogue runtimeが生成前の更新時に揃える。
+pub(crate) fn attach(action: &mut Speech, event: &GameEvent, settings: &Settings) {
     if !matches!(
         action.delivery,
         Delivery::Ambient | Delivery::UrgentEnvironment
@@ -115,7 +115,7 @@ pub(crate) fn attach(action: &mut Speech, event: &GameEvent, recent: &Value, set
     details["__reaction_guard"] = guard;
     // 現在の全観測と画像の撮影情報は、画像の有無によらず共通runtimeで添える。
     details["reaction_context"] =
-        json!({"topic":topic,"observations":observations,"properties":properties,"recent":recent});
+        json!({"topic":topic,"observations":observations,"properties":properties});
     action.leaf = Some(LeafRequest {
         kind: KIND.into(),
         details,

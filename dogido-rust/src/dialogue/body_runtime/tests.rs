@@ -364,7 +364,7 @@ async fn body_senses_feed_chat_smell_environment_and_haiku_without_player_fallba
         assert!(reply.text.contains("ゾンビ") && !reply.text.contains("パン"));
         let mut reaction = crate::combat::model::Speech::new("smell", "");
         reaction.delivery = crate::combat::model::Delivery::Ambient;
-        crate::environment::reaction::attach(&mut reaction, sensory, &json!({}), &d.config.combat);
+        crate::environment::reaction::attach(&mut reaction, sensory, &d.config.combat);
         let mut reactions = [reaction.clone()];
         assert!(super::super::environment_runtime::refresh_dialogue_context(
             s,

@@ -132,7 +132,7 @@ fn environment_with_image() -> (Arc<Dialogue>, crate::combat::model::Speech) {
     let mut action = opportunity(s).unwrap();
     action.delivery = crate::combat::model::Delivery::Ambient;
     let event = super::super::body_runtime::event(s, s.latest.as_ref().unwrap());
-    crate::environment::reaction::attach(&mut action, &event, &json!({}), &d.config.combat);
+    crate::environment::reaction::attach(&mut action, &event, &d.config.combat);
     assert!(super::super::environment_runtime::refresh_dialogue_context(s, std::slice::from_mut(&mut action)));
     drop(data);
     (d, action)
@@ -285,7 +285,7 @@ async fn unchanged_image_is_attached_to_periodic_and_ordinary_decisions_without_
         frame.observations["weather"]=json!("rain");
         s.conversation_observation.observe(frame); s.conversation_observation.sample_notice(11,1,true);
         let event=super::super::body_runtime::event(s,s.latest.as_ref().unwrap());
-        crate::environment::reaction::attach(&mut action,&event,&json!({}),&d.config.combat);
+        crate::environment::reaction::attach(&mut action,&event,&d.config.combat);
         assert!(super::super::environment_runtime::refresh_dialogue_context(s,std::slice::from_mut(&mut action)));
         frozen=action.leaf.as_ref().unwrap().details["reaction_context"]["world_context"].clone();
         assert!(action.image.is_some());

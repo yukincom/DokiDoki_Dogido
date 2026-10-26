@@ -179,6 +179,8 @@ fn focus(
 /// 環境判断の全観測・変化・履歴を一箇所で組み立て、生成直前にも更新する。
 /// 静止画像は同じ入力へ添える。周期通知の比較差分とrevisionは保持し、未提示の差分の消費を防ぐ。
 pub(super) fn refresh_dialogue_context(s: &Session, actions: &mut [Speech]) -> bool {
+    // 同一更新の全actionへ同じ履歴を渡す。次の更新では待機中に確定した発話・沈黙も取り込む。
+    let mut recent = None;
     for action in actions {
         if let Some(raw) = s.environment_latest.as_ref().or(s.latest.as_ref()) {
             let event = super::body_runtime::event(s, raw);
@@ -278,7 +280,9 @@ pub(super) fn refresh_dialogue_context(s: &Session, actions: &mut [Speech]) -> b
                 changes.retain(|change| change["kind"] != "smell");
             }
         }
-        leaf.details[key]["recent"] = json!({"conversation":s.model_history()});
+        leaf.details[key]["recent"] = recent
+            .get_or_insert_with(|| json!({"conversation":s.model_history()}))
+            .clone();
     }
     true
 }
@@ -385,14 +389,12 @@ impl Dialogue {
                 Delivery::Ambient
             };
         }
-        // Player replies and environmental opportunities share the same history
-        // (including chosen silence) and the same code-owned world projection.
+        // 候補固有の材料を添えた後、共通runtimeで現在観測と履歴を一度更新する。
         let s = &d.sessions[sid];
-        let recent = json!({"conversation":s.model_history()});
         if let Some(event) = s.environment_latest.as_ref() {
             let event = super::body_runtime::event(s, event);
             for action in &mut actions {
-                crate::environment::reaction::attach(action, &event, &recent, &self.config.combat);
+                crate::environment::reaction::attach(action, &event, &self.config.combat);
                 if !crate::environment::danger::player::player_origin(action)
                     && let Some(leaf) = action.leaf.as_mut()
                 {
@@ -743,6 +745,41 @@ mod tests {
     use std::time::Instant;
 
     #[test]
+    fn one_refresh_shares_current_history_and_next_refresh_reads_new_delivery() {
+        let dialogue = Dialogue::new(DialogueConfig::default()).unwrap();
+        dialogue.register("shared-history", "試験", false);
+        let mut data = dialogue.data.lock().unwrap();
+        let s = data.sessions.get_mut("shared-history").unwrap();
+        let raw = GameEvent::parse(empty_event("試験")).unwrap();
+        let event = super::super::body_runtime::install_test_senses(s, &raw, 1);
+        s.history.push("first", "user", "雨かな");
+        s.history.silent("first");
+        let mut thunder = Speech::new("thunder_reaction", "雷や");
+        thunder.delivery = Delivery::Ambient;
+        crate::environment::reaction::attach(&mut thunder, &event, &dialogue.config.combat);
+        let mut portal = Speech::new("portal_appearance", "入口や");
+        portal.leaf = Some(crate::combat::model::LeafRequest {
+            kind: "portal_appearance".into(), temperature: 0.65, details: json!({}),
+        });
+        let mut actions = [thunder, portal, Speech::new("fixed", "気をつけて")];
+        assert!(refresh_dialogue_context(s, &mut actions));
+        let expected = json!({"conversation":s.model_history()});
+        assert_eq!(expected["conversation"][1]["reaction"], "silent");
+        assert_eq!(actions[0].leaf.as_ref().unwrap().details["reaction_context"]["recent"], expected);
+        assert_eq!(actions[1].leaf.as_ref().unwrap().details["conversation_context"]["recent"], expected);
+        assert!(actions[2].leaf.is_none());
+        actions[0].leaf.as_mut().unwrap().details["reaction_context"]["recent"]["conversation"] = json!([]);
+        assert_eq!(actions[1].leaf.as_ref().unwrap().details["conversation_context"]["recent"], expected);
+        s.history.push("second", "user", "聞こえたね");
+        s.history.push("second", "assistant", "雷の音やな");
+        assert!(refresh_dialogue_context(s, &mut actions));
+        let updated = json!({"conversation":s.model_history()});
+        assert_ne!(updated, expected);
+        assert_eq!(actions[0].leaf.as_ref().unwrap().details["reaction_context"]["recent"], updated);
+        assert_eq!(actions[1].leaf.as_ref().unwrap().details["conversation_context"]["recent"], updated);
+    }
+
+    #[test]
     fn focus_uses_same_body_projection_without_losing_player_danger_or_next_update() {
         let dialogue = Dialogue::new(DialogueConfig::default()).unwrap();
         dialogue.register("shared-focus", "試験", false);
@@ -898,7 +935,6 @@ mod tests {
         crate::environment::reaction::attach(
             &mut action,
             &event,
-            &json!({}),
             &dialogue.config.combat,
         );
         assert_eq!(
@@ -964,7 +1000,6 @@ mod tests {
                     crate::environment::reaction::attach(
                         &mut action,
                         &event,
-                        &json!({}),
                         &crate::combat::model::Settings::default(),
                     );
                 }
@@ -1072,7 +1107,6 @@ mod tests {
                 crate::environment::reaction::attach(
                     &mut action,
                     &event,
-                    &json!({}),
                     &crate::combat::model::Settings::default(),
                 );
             }
