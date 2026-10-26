@@ -60,7 +60,9 @@ public final class EventObservationCapture {
                     captureNearbyKinds ? this.ambientMobObserver.copyNearbyComposition() : null,
                     this.worldObserver.buildDroppedItems(player, world),
                     this.worldObserver.buildRecentBlockBreaks(tick), this.playerObserver.buildLookTarget(player, world));
-            });
+            }, bounds -> world.getOtherEntities(null, bounds).stream().map(entity ->
+                new WorldObservationFrame.EntitySample(MobIdentityObservation.entityTypeName(entity),
+                    new net.minecraft.util.math.Vec3d(entity.getX(), entity.getY(), entity.getZ()), entity)).toList());
     }
 
     private EventJsonBuilder baseEnvelope(String name, String source, String priority, String certainty,
@@ -95,7 +97,7 @@ public final class EventObservationCapture {
         root.auditoryThreats(audioThreats);
         root.ambientSounds(ambientSounds);
         root.passiveMobs(ambientMobs);
-        root.combat(this.combatObserver.buildCombat(player, world, threats, audioThreats));
+        root.combat(this.combatObserver.buildCombat(player, world, worldFrame, threats, audioThreats));
         root.meta(EventJsonBuilder.buildMeta(null));
         return root.finish();
     }
@@ -112,7 +114,7 @@ public final class EventObservationCapture {
         root.visualThreats(threats);
         root.auditoryThreats(audioThreats);
         root.passiveMobs(ambientMobs);
-        root.combat(this.combatObserver.buildCombat(player, world, threats, audioThreats));
+        root.combat(this.combatObserver.buildCombat(player, world, worldFrame, threats, audioThreats));
         root.meta(EventJsonBuilder.buildMeta(null));
         return root.finish();
     }
@@ -129,7 +131,7 @@ public final class EventObservationCapture {
         root.visualThreats(List.of());
         root.auditoryThreats(audioThreats);
         root.passiveMobs(ambientMobs);
-        root.combat(this.combatObserver.buildCombat(player, world, threats, audioThreats));
+        root.combat(this.combatObserver.buildCombat(player, world, worldFrame, threats, audioThreats));
         root.meta(EventJsonBuilder.buildMeta(null));
         return root.finish();
     }
@@ -144,7 +146,7 @@ public final class EventObservationCapture {
         root.visualThreats(List.of());
         root.auditoryThreats(List.of());
         root.passiveMobs(ambientMobs);
-        root.combat(this.combatObserver.buildCombat(player, world, List.of(), List.of()));
+        root.combat(this.combatObserver.buildCombat(player, world, worldFrame, List.of(), List.of()));
         root.meta(EventJsonBuilder.buildMeta(null));
         return root.finish();
     }
@@ -161,7 +163,7 @@ public final class EventObservationCapture {
         root.visualThreats(threats);
         root.auditoryThreats(audioThreats);
         root.passiveMobs(ambientMobs);
-        root.combat(this.combatObserver.buildCombat(player, world, threats, audioThreats));
+        root.combat(this.combatObserver.buildCombat(player, world, worldFrame, threats, audioThreats));
         root.meta(EventJsonBuilder.buildMeta(this.playerObserver.resolveDeathCause(player)));
         return root.finish();
     }
@@ -179,7 +181,7 @@ public final class EventObservationCapture {
         root.visualThreats(threats);
         root.auditoryThreats(audioThreats);
         root.passiveMobs(ambientMobs);
-        JsonObject combat = this.combatObserver.buildCombat(player, world, threats, audioThreats);
+        JsonObject combat = this.combatObserver.buildCombat(player, world, worldFrame, threats, audioThreats);
         root.combatOutcomes(combat, detonations);
         root.meta(EventJsonBuilder.buildMeta(null));
         return root.finish();
@@ -198,7 +200,7 @@ public final class EventObservationCapture {
         root.visualThreats(threats);
         root.auditoryThreats(audioThreats);
         root.passiveMobs(ambientMobs);
-        JsonObject combat = this.combatObserver.buildCombat(player, world, threats, audioThreats);
+        JsonObject combat = this.combatObserver.buildCombat(player, world, worldFrame, threats, audioThreats);
         root.combatOutcomes(combat, outcomes);
         root.meta(EventJsonBuilder.buildMeta(null));
         return root.finish();
@@ -214,7 +216,7 @@ public final class EventObservationCapture {
         root.visualThreats(List.of());
         root.auditoryThreats(List.of());
         root.passiveMobs(ambientMobs);
-        root.combat(this.combatObserver.buildCombat(player, world, List.of(), List.of()));
+        root.combat(this.combatObserver.buildCombat(player, world, worldFrame, List.of(), List.of()));
         root.meta(EventJsonBuilder.buildMeta(null));
         return root.finish();
     }

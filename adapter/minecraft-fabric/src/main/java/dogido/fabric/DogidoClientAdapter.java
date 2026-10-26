@@ -315,7 +315,9 @@ public final class DogidoClientAdapter implements ClientModInitializer {
                 newHostileDefeats.add(outcome);
             }
         }
-        this.bossObserver.observeWardenSpecialSetups(player, world, threats);
+        boolean captureNearbyKinds = this.eventClient.consumeFreshSnapshotRequest() || shouldSendSnapshot();
+        WorldObservationFrame worldFrame = this.eventCapture.frame(player, world, captureNearbyKinds);
+        this.bossObserver.observeWardenSpecialSetups(player, worldFrame, threats);
         this.bossObserver.observeTrackedWardenDefeat(world);
         this.bossObserver.observeTrackedDragonDefeat(world);
         List<ThreatObservation> visibleThreats = this.threatObserver.filterVisibleThreats(threats);
@@ -324,11 +326,9 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         List<AudioThreatObservation> ambientSounds = this.soundObserver.scanAmbientSounds(player, currentSoundSources);
         List<AudioThreatObservation> unseenAudioThreats = filterUnseenAudioThreats(visibleThreats, audioThreats);
         this.smellObserver.observe(player, world, this.tickCounter, this.config.snapshotIntervalTicks);
-        boolean captureNearbyKinds = this.eventClient.consumeFreshSnapshotRequest() || shouldSendSnapshot();
         List<AmbientMobObservation> ambientMobs = this.ambientMobObserver.scanAmbientMobs(player, world, captureNearbyKinds);
         this.threatObserver.updateCombatTracking(visibleThreats, audioThreats);
         boolean deadNow = this.playerObserver.isPlayerDead(player);
-        WorldObservationFrame worldFrame = this.eventCapture.frame(player, world, captureNearbyKinds);
 
         if (captureNearbyKinds) {
             JsonObject snapshot = this.eventCapture.buildStatusSnapshot(player, world, worldFrame, visibleThreats, audioThreats, ambientSounds, ambientMobs);

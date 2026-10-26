@@ -91,7 +91,7 @@ class EventJsonBuilderTest {
                 String[] descriptor = EVENTS[index];
                 WorldObservationFrame frame = new WorldObservationFrame(() -> object("world"), () -> blocks(detail),
                     () -> new WorldObservationFrame.Materials(object("player"), object("inventory"),
-                        detail ? mobComposition() : null, array("dropped"), array("breaks"), detail ? object("look") : null));
+                        detail ? mobComposition() : null, array("dropped"), array("breaks"), detail ? object("look") : null), area -> List.of());
                 var materials = frame.materials();
                 JsonObject nearby = frame.blocks();
                 EventJsonBuilder builder = new EventJsonBuilder(descriptor[0], descriptor[1], descriptor[2], descriptor[3],

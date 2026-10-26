@@ -1,6 +1,8 @@
 package dogido.fabric.observation.mobs;
 
 import com.google.gson.JsonObject;
+import dogido.fabric.observation.WorldObservationFrame;
+import net.minecraft.util.math.Box;
 import dogido.fabric.observation.mobs.BossTracker;
 import dogido.fabric.observation.mobs.ThreatObservation;
 import java.util.List;
@@ -13,12 +15,12 @@ import net.minecraft.entity.boss.dragon.phase.PhaseType;
 import net.minecraft.registry.Registries;
 import net.minecraft.util.math.Vec3d;
 
-import static dogido.fabric.observation.MobIdentityObservation.entityTypeName;
 import static dogido.fabric.observation.ObservationGeometry.classifyHorizontal;
 import static dogido.fabric.observation.ObservationGeometry.classifyVertical;
 import static dogido.fabric.observation.ObservationNumbers.round;
 import static dogido.fabric.observation.ObservationTime.ticksSince;
 
+/** ボスの観測履歴とイベント情報を作る。周辺entityの実取得はtick所有のframeへ集約し、履歴だけをこの観測器が更新する。 */
 public final class BossObserver {
     private static final int WARDEN_SPECIAL_LATCH_TICKS = 100;
     // ドラゴン戦: 視覚脅威の30マス制限とは別に、アリーナ全域を追跡する
@@ -38,7 +40,7 @@ public final class BossObserver {
 
     public void observeWardenSpecialSetups(
         ClientPlayerEntity player,
-        ClientWorld world,
+        WorldObservationFrame frame,
         List<ThreatObservation> threats
     ) {
         ThreatObservation warden = nearestThreatOfType(threats, "warden");
@@ -48,16 +50,16 @@ public final class BossObserver {
             return;
         }
 
-        int nearbyEndCrystalCount = countNearbyEntityTypeAroundPlayer(world, player, "end_crystal", 32.0);
-        int nearbyTntMinecartCount = countNearbyEntityTypeAroundPlayer(world, player, "tnt_minecart", 28.0)
-            + countNearbyEntityTypeAroundPlayer(world, player, "tnt", 28.0);
+        int nearbyEndCrystalCount = countNearbyEntityTypeAroundPlayer(frame, player, "end_crystal", 32.0);
+        int nearbyTntMinecartCount = countNearbyEntityTypeAroundPlayer(frame, player, "tnt_minecart", 28.0)
+            + countNearbyEntityTypeAroundPlayer(frame, player, "tnt", 28.0);
         if (warden != null) {
-            nearbyEndCrystalCount += countNearbyEntityType(world, warden, "end_crystal", 32.0);
-            nearbyTntMinecartCount += countNearbyEntityType(world, warden, "tnt_minecart", 28.0);
-            nearbyTntMinecartCount += countNearbyEntityType(world, warden, "tnt", 28.0);
+            nearbyEndCrystalCount += countNearbyEntityType(frame, warden, "end_crystal", 32.0);
+            nearbyTntMinecartCount += countNearbyEntityType(frame, warden, "tnt_minecart", 28.0);
+            nearbyTntMinecartCount += countNearbyEntityType(frame, warden, "tnt", 28.0);
         } else if (this.bossTracker.lastWardenSeenTick() >= 0 && this.tickSource.getAsLong() - this.bossTracker.lastWardenSeenTick() <= 200) {
             nearbyEndCrystalCount += countNearbyEntityTypeAroundPoint(
-                world,
+                frame,
                 this.bossTracker.lastWardenSeenX(),
                 this.bossTracker.lastWardenSeenY(),
                 this.bossTracker.lastWardenSeenZ(),
@@ -65,7 +67,7 @@ public final class BossObserver {
                 32.0
             );
             nearbyTntMinecartCount += countNearbyEntityTypeAroundPoint(
-                world,
+                frame,
                 this.bossTracker.lastWardenSeenX(),
                 this.bossTracker.lastWardenSeenY(),
                 this.bossTracker.lastWardenSeenZ(),
@@ -73,7 +75,7 @@ public final class BossObserver {
                 28.0
             );
             nearbyTntMinecartCount += countNearbyEntityTypeAroundPoint(
-                world,
+                frame,
                 this.bossTracker.lastWardenSeenX(),
                 this.bossTracker.lastWardenSeenY(),
                 this.bossTracker.lastWardenSeenZ(),
@@ -99,73 +101,19 @@ public final class BossObserver {
         return null;
     }
 
-    private int countNearbyEntityType(ClientWorld world, ThreatObservation origin, String entityType, double radius) {
-        int count = 0;
-        for (Entity entity : world.getOtherEntities(
-            null,
-            new net.minecraft.util.math.Box(
-                origin.x() - radius, origin.y() - radius, origin.z() - radius,
-                origin.x() + radius, origin.y() + radius, origin.z() + radius
-            )
-        )) {
-            if (!entityType.equals(entityTypeName(entity))) {
-                continue;
-            }
-            double dx = entity.getX() - origin.x();
-            double dy = entity.getY() - origin.y();
-            double dz = entity.getZ() - origin.z();
-            if (Math.sqrt(dx * dx + dy * dy + dz * dz) <= radius) {
-                count += 1;
-            }
-        }
-        return count;
+    private int countNearbyEntityType(WorldObservationFrame frame, ThreatObservation origin, String type, double radius) {
+        return countNearbyEntityTypeAroundPoint(frame, origin.x(), origin.y(), origin.z(), type, radius);
     }
 
-    private int countNearbyEntityTypeAroundPlayer(
-        ClientWorld world,
-        ClientPlayerEntity player,
-        String entityType,
-        double radius
-    ) {
-        int count = 0;
-        for (Entity entity : world.getOtherEntities(
-            null,
-            player.getBoundingBox().expand(radius, radius, radius)
-        )) {
-            if (entityType.equals(entityTypeName(entity))) {
-                count += 1;
-            }
-        }
-        return count;
+    private int countNearbyEntityTypeAroundPlayer(WorldObservationFrame frame, ClientPlayerEntity player,
+            String type, double radius) {
+        return frame.countEntities(player.getBoundingBox().expand(radius, radius, radius), null, 0, type);
     }
 
-    private int countNearbyEntityTypeAroundPoint(
-        ClientWorld world,
-        double centerX,
-        double centerY,
-        double centerZ,
-        String entityType,
-        double radius
-    ) {
-        int count = 0;
-        for (Entity entity : world.getOtherEntities(
-            null,
-            new net.minecraft.util.math.Box(
-                centerX - radius, centerY - radius, centerZ - radius,
-                centerX + radius, centerY + radius, centerZ + radius
-            )
-        )) {
-            if (!entityType.equals(entityTypeName(entity))) {
-                continue;
-            }
-            double dx = entity.getX() - centerX;
-            double dy = entity.getY() - centerY;
-            double dz = entity.getZ() - centerZ;
-            if (Math.sqrt(dx * dx + dy * dy + dz * dz) <= radius) {
-                count += 1;
-            }
-        }
-        return count;
+    private int countNearbyEntityTypeAroundPoint(WorldObservationFrame frame, double x, double y, double z,
+            String type, double radius) {
+        return frame.countEntities(new Box(x-radius, y-radius, z-radius, x+radius, y+radius, z+radius),
+            new Vec3d(x, y, z), radius, type);
     }
 
     public void observeTrackedDragonDefeat(ClientWorld world) {
@@ -195,17 +143,14 @@ public final class BossObserver {
         return false;
     }
 
-    private EnderDragonEntity findNearestDragon(ClientPlayerEntity player, ClientWorld world) {
+    private EnderDragonEntity findNearestDragon(ClientPlayerEntity player, WorldObservationFrame frame) {
         EnderDragonEntity nearest = null;
         double nearestDistance = DRAGON_SCAN_RADIUS;
-        for (Entity entity : world.getOtherEntities(
-            player,
-            player.getBoundingBox().expand(DRAGON_SCAN_RADIUS),
-            candidate -> candidate instanceof EnderDragonEntity
-        )) {
-            double distance = Math.sqrt(player.squaredDistanceTo(entity));
+        for (var sample : frame.entities(player.getBoundingBox().expand(DRAGON_SCAN_RADIUS))) {
+            if (!(sample.entity() instanceof EnderDragonEntity entity)) continue;
+            double distance = Math.sqrt(player.squaredDistanceTo(sample.position()));
             if (distance <= nearestDistance) {
-                nearest = (EnderDragonEntity) entity;
+                nearest = entity;
                 nearestDistance = distance;
             }
         }
@@ -247,14 +192,14 @@ public final class BossObserver {
         return "holding_pattern";
     }
 
-    private void appendDragonCombatInfo(JsonObject json, ClientPlayerEntity player, ClientWorld world) {
+    private void appendDragonCombatInfo(JsonObject json, ClientPlayerEntity player, ClientWorld world, WorldObservationFrame frame) {
         String dimensionId = world.getRegistryKey().getValue().toString();
         boolean dragonPossible = "minecraft:the_end".equals(dimensionId)
             || (this.bossTracker.lastDragonSeenTick() >= 0 && this.tickSource.getAsLong() - this.bossTracker.lastDragonSeenTick() <= DRAGON_DEFEAT_WINDOW_TICKS);
         if (!dragonPossible) {
             return;
         }
-        EnderDragonEntity dragon = findNearestDragon(player, world);
+        EnderDragonEntity dragon = findNearestDragon(player, frame);
         if (dragon != null) {
             this.bossTracker.observeDragon(this.tickSource.getAsLong(), dragon.getId());
             Vec3d dragonPosition = new Vec3d(dragon.getX(), dragon.getY(), dragon.getZ());
@@ -264,7 +209,7 @@ public final class BossObserver {
             json.addProperty("dragon_vertical", classifyVertical(player, dragonPosition));
             json.addProperty(
                 "end_crystal_count",
-                countNearbyEntityTypeAroundPlayer(world, player, "end_crystal", DRAGON_SCAN_RADIUS)
+                countNearbyEntityTypeAroundPlayer(frame, player, "end_crystal", DRAGON_SCAN_RADIUS)
             );
         }
         if (this.bossTracker.lastDragonSeenTick() >= 0 && this.tickSource.getAsLong() - this.bossTracker.lastDragonSeenTick() <= DRAGON_DEFEAT_WINDOW_TICKS) {
@@ -308,22 +253,22 @@ public final class BossObserver {
         return player.getY() - warden.y() >= 5.0 && warden.distance() >= 8.0;
     }
 
-    void appendCombatInfo(JsonObject json, ClientPlayerEntity player, ClientWorld world,
+    void appendCombatInfo(JsonObject json, ClientPlayerEntity player, ClientWorld world, WorldObservationFrame frame,
             List<ThreatObservation> threats) {
         ThreatObservation warden = nearestThreatOfType(threats, "warden");
         if (warden != null) {
             // ウォーデン周辺とプレイヤー周辺で同じ個体を二重に数えないよう max を取る
             int nearbyIronGolemCount = Math.max(
-                countNearbyEntityType(world, warden, "iron_golem", 20.0),
-                countNearbyEntityTypeAroundPlayer(world, player, "iron_golem", 20.0));
+                countNearbyEntityType(frame, warden, "iron_golem", 20.0),
+                countNearbyEntityTypeAroundPlayer(frame, player, "iron_golem", 20.0));
             int nearbyEndCrystalCount = Math.max(
-                countNearbyEntityType(world, warden, "end_crystal", 32.0),
-                countNearbyEntityTypeAroundPlayer(world, player, "end_crystal", 32.0));
+                countNearbyEntityType(frame, warden, "end_crystal", 32.0),
+                countNearbyEntityTypeAroundPlayer(frame, player, "end_crystal", 32.0));
             int nearbyTntMinecartCount = Math.max(
-                countNearbyEntityType(world, warden, "tnt_minecart", 28.0)
-                    + countNearbyEntityType(world, warden, "tnt", 28.0),
-                countNearbyEntityTypeAroundPlayer(world, player, "tnt_minecart", 28.0)
-                    + countNearbyEntityTypeAroundPlayer(world, player, "tnt", 28.0));
+                countNearbyEntityType(frame, warden, "tnt_minecart", 28.0)
+                    + countNearbyEntityType(frame, warden, "tnt", 28.0),
+                countNearbyEntityTypeAroundPlayer(frame, player, "tnt_minecart", 28.0)
+                    + countNearbyEntityTypeAroundPlayer(frame, player, "tnt", 28.0));
             long recentExplosionMs = ticksSince(this.tickSource.getAsLong(), this.lastExplosionTick.getAsLong());
             json.addProperty("warden_recently_hurt", warden.recentlyHurt());
             json.addProperty("warden_ranged_trap_active", isWardenRangedTrapActive(player, warden));
@@ -346,16 +291,16 @@ public final class BossObserver {
         } else if (this.bossTracker.lastWardenSeenTick() >= 0 && this.tickSource.getAsLong() - this.bossTracker.lastWardenSeenTick() <= 200) {
             // 同上: プレイヤー周辺と最終目撃地点周辺の二重計上を避ける
             int nearbyIronGolemCount = Math.max(
-                countNearbyEntityTypeAroundPlayer(world, player, "iron_golem", 20.0),
-                countNearbyEntityTypeAroundPoint(world, this.bossTracker.lastWardenSeenX(), this.bossTracker.lastWardenSeenY(), this.bossTracker.lastWardenSeenZ(), "iron_golem", 20.0));
+                countNearbyEntityTypeAroundPlayer(frame, player, "iron_golem", 20.0),
+                countNearbyEntityTypeAroundPoint(frame, this.bossTracker.lastWardenSeenX(), this.bossTracker.lastWardenSeenY(), this.bossTracker.lastWardenSeenZ(), "iron_golem", 20.0));
             int nearbyEndCrystalCount = Math.max(
-                countNearbyEntityTypeAroundPlayer(world, player, "end_crystal", 32.0),
-                countNearbyEntityTypeAroundPoint(world, this.bossTracker.lastWardenSeenX(), this.bossTracker.lastWardenSeenY(), this.bossTracker.lastWardenSeenZ(), "end_crystal", 32.0));
+                countNearbyEntityTypeAroundPlayer(frame, player, "end_crystal", 32.0),
+                countNearbyEntityTypeAroundPoint(frame, this.bossTracker.lastWardenSeenX(), this.bossTracker.lastWardenSeenY(), this.bossTracker.lastWardenSeenZ(), "end_crystal", 32.0));
             int nearbyTntMinecartCount = Math.max(
-                countNearbyEntityTypeAroundPlayer(world, player, "tnt_minecart", 28.0)
-                    + countNearbyEntityTypeAroundPlayer(world, player, "tnt", 28.0),
-                countNearbyEntityTypeAroundPoint(world, this.bossTracker.lastWardenSeenX(), this.bossTracker.lastWardenSeenY(), this.bossTracker.lastWardenSeenZ(), "tnt_minecart", 28.0)
-                    + countNearbyEntityTypeAroundPoint(world, this.bossTracker.lastWardenSeenX(), this.bossTracker.lastWardenSeenY(), this.bossTracker.lastWardenSeenZ(), "tnt", 28.0));
+                countNearbyEntityTypeAroundPlayer(frame, player, "tnt_minecart", 28.0)
+                    + countNearbyEntityTypeAroundPlayer(frame, player, "tnt", 28.0),
+                countNearbyEntityTypeAroundPoint(frame, this.bossTracker.lastWardenSeenX(), this.bossTracker.lastWardenSeenY(), this.bossTracker.lastWardenSeenZ(), "tnt_minecart", 28.0)
+                    + countNearbyEntityTypeAroundPoint(frame, this.bossTracker.lastWardenSeenX(), this.bossTracker.lastWardenSeenY(), this.bossTracker.lastWardenSeenZ(), "tnt", 28.0));
             long recentExplosionMs = ticksSince(this.tickSource.getAsLong(), this.lastExplosionTick.getAsLong());
             json.addProperty("warden_nearby_iron_golem_count", nearbyIronGolemCount);
             json.addProperty(
@@ -379,7 +324,7 @@ public final class BossObserver {
         } else {
             json.addProperty("warden_defeat_confirmed", isRecentWardenDefeatConfirmed(world));
         }
-        appendDragonCombatInfo(json, player, world);
+        appendDragonCombatInfo(json, player, world, frame);
     }
 
 }

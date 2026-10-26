@@ -8,13 +8,13 @@ import dogido.fabric.observation.sound.SoundObserver;
 import java.util.List;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.world.ClientWorld;
-import net.minecraft.entity.Entity;
+import dogido.fabric.observation.WorldObservationFrame;
 
-import static dogido.fabric.observation.MobIdentityObservation.entityTypeName;
 import static dogido.fabric.observation.ObservationNumbers.round;
 import static dogido.fabric.observation.ObservationTime.ticksSince;
 import static dogido.fabric.protocol.EventObservationJson.buildHostileOutcomes;
 
+/** 周期内で共有した元観測と現在の戦闘台帳から各イベントの戦況を作る。開始・終了の更新はrootが所有する。 */
 public final class CombatObserver {
     private final ThreatObserver threatObserver;
     private final SoundObserver soundObserver;
@@ -36,6 +36,7 @@ public final class CombatObserver {
     public JsonObject buildCombat(
         ClientPlayerEntity player,
         ClientWorld world,
+        WorldObservationFrame frame,
         List<ThreatObservation> threats,
         List<AudioThreatObservation> audioThreats
     ) {
@@ -49,10 +50,10 @@ public final class CombatObserver {
         json.addProperty("hostile_scan_distance", round(scanDistance));
         json.addProperty("hostiles_within_scan_ground", countGroundThreatsWithin(threats, scanDistance));
         json.addProperty("combat_active_hint", this.threatObserver.combatActive() || !threats.isEmpty() || !audioThreats.isEmpty());
-        int nearbyExperienceOrbCount = countNearbyExperienceOrbs(world, player);
+        int nearbyExperienceOrbCount = frame.countEntities(player.getBoundingBox().expand(24.0, 12.0, 24.0), null, 0, "experience_orb");
         json.addProperty("nearby_experience_orb_count", nearbyExperienceOrbCount);
         json.add("hostile_outcomes", buildHostileOutcomes(this.threatObserver.outcomes()));
-        this.bossObserver.appendCombatInfo(json, player, world, threats);
+        this.bossObserver.appendCombatInfo(json, player, world, frame, threats);
         return json;
     }
 
@@ -73,19 +74,6 @@ public final class CombatObserver {
                 continue;
             }
             count += 1;
-        }
-        return count;
-    }
-
-    private int countNearbyExperienceOrbs(ClientWorld world, ClientPlayerEntity player) {
-        int count = 0;
-        for (Entity entity : world.getOtherEntities(
-            null,
-            player.getBoundingBox().expand(24.0, 12.0, 24.0)
-        )) {
-            if ("experience_orb".equals(entityTypeName(entity))) {
-                count += 1;
-            }
         }
         return count;
     }
