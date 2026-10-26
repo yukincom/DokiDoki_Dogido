@@ -540,7 +540,33 @@ impl Dialogue {
                 "warning_in_progress"
             } else { "fresh_safe_snapshot_required" }});
         }
-        let replay = queued_reply;
+        // 環境警告による再送も、同じ接続・原文の元入力へ戻す。
+        // 振り分け後に復元することで操作や警告の判断を変えず、下の共通再開処理で
+        // 元turn・受付時刻を保ち、新しいepochだけを割り当てて旧通知の取り違えを防ぐ。
+        let replay = queued_reply.or_else(|| {
+            let previous = expected_generation.as_ref()?.1.as_deref()?;
+            let s = &d.sessions[&session_id];
+            let row = d.rows.iter().find(|row| {
+                row["turn_id"] == previous
+                    && row["session_id"] == session_id
+                    && row["session_instance"] == s.instance_id
+                    && row["player_input_text"] == text
+                    && row["source"] == source
+            })?;
+            Some(super::reply_queue::Request {
+                turn: previous.to_owned(),
+                text: text.to_owned(),
+                source: source.to_owned(),
+                input_at: row["input_at_ms"].as_u64()?,
+                record_private: row["workshop_record_private"] == true,
+                classification: super::request_runtime::classification(s, text, source).cloned(),
+                binding: s
+                    .request_classification
+                    .binding(s.input_generation, text, source)
+                    .cloned()
+                    .or_else(|| super::request_runtime::Binding::capture(s)),
+            })
+        });
         let text = replay.as_ref().map_or(text, |p| p.text.as_str());
         let source = replay.as_ref().map_or(source, |p| p.source.as_str());
         let private = private || replay.as_ref().is_some_and(|p| p.record_private);

@@ -355,17 +355,22 @@ def main():
             sid = register(); send(sid)
             control["delay"] = .3
             old = say(sid, "続きの話をしよう")["turn_id"]
-            wait_for(lambda: row(base, old, {"generating"}))
+            original = wait_for(lambda: row(base, old, {"generating"}))
             send(sid, world={"thunder_sound_recent_ms": 0, "weather": "thunder"})
             send(sid)
             new = wait_for(lambda: next((r for r in rows(sid) if r.get("player_input_text") == "続きの話をしよう"
                 and r["playback_status"] == "completed"), None))
-            assert old != new["turn_id"] and row(base, old, {"cancelled"}), rows(sid)
+            assert old == new["turn_id"], rows(sid)
+            assert new["created_at"] == original["created_at"], (original, new)
+            assert new["input_at_ms"] == original["input_at_ms"], (original, new)
+            assert new["request_classification"] == original["request_classification"], (original, new)
+            assert new["epoch"] > original["epoch"] and new["resumed_at"], (original, new)
+            assert new["resolution"] == "reply_resumed", new
+            assert len([r for r in rows(sid) if r.get("category") == "speech" and r.get("player_input_text") == new["player_input_text"]]) == 1, rows(sid)
             session = next(s for s in snapshot(base)["sessions"] if s["session_id"] == sid)
             # 再生済みの雷反応も共有履歴へ入る。再開した会話だけをturn IDで検査する。
             history = session["history"]
             resumed_id = new["turn_id"]
-            assert not any(r["turn_id"] in {old, old + ":reply"} for r in history), session
             users = [r for r in history if r["role"] == "user"]
             assert len(users) == 1 and users[0]["turn_id"] == resumed_id, session
             assert users[0]["text"] == "続きの話をしよう", session
@@ -385,14 +390,20 @@ def main():
             sid = register(); send(sid)
             control["delay"] = .3
             old = say(sid, "火のそばでも話を続けよう")["turn_id"]
-            wait_for(lambda: row(base, old, {"generating"}))
+            original = wait_for(lambda: row(base, old, {"generating"}))
             send(sid, world=heat, player_state={"health": 20}, combat={"recent_damage_ms": 60000})
             warning = wait_for(lambda: match(sid, "damaging_light", "completed"))
             assert warning["text"] == control["leaf"] and warning["environment_reaction_outcome"] == "speak", warning
             assert warning["combat_actions"][0]["leaf"]["kind"] == "environment_reaction", warning
             new = wait_for(lambda: next((r for r in rows(sid) if r.get("player_input_text") == "火のそばでも話を続けよう"
                 and r["playback_status"] == "completed"), None))
-            assert old != new["turn_id"] and row(base, old, {"cancelled"}), rows(sid)
+            assert old == new["turn_id"], rows(sid)
+            assert new["created_at"] == original["created_at"], (original, new)
+            assert new["input_at_ms"] == original["input_at_ms"], (original, new)
+            assert new["request_classification"] == original["request_classification"], (original, new)
+            assert new["epoch"] > original["epoch"] and new["resumed_at"], (original, new)
+            assert new["resolution"] == "reply_resumed", new
+            assert len([r for r in rows(sid) if r.get("category") == "speech" and r.get("player_input_text") == new["player_input_text"]]) == 1, rows(sid)
             send(sid, world=heat)
             assert len([r for r in rows(sid) if any(a["kind"] == "damaging_light" for a in r.get("combat_actions", []))]) == 1
             close(sid); control["delay"] = 0
