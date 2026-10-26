@@ -10,7 +10,6 @@ use anyhow::{Result, ensure};
 use tokio::sync::watch;
 
 const PROMPT: &str = include_str!("../../../dogido_server/llm/history_summary.txt");
-const MERGE_PROMPT: &str = include_str!("../../../dogido_server/llm/adventure_summary.txt");
 
 impl Session {
     /// モデル入力だけを制限する共通投影。保存・復元・終了後の圧縮は全履歴を使う。
@@ -18,7 +17,7 @@ impl Session {
         if self.haiku.foreground() {
             self.history.workshop_rows()
         } else {
-            self.history.rows()
+            self.history.model_rows()
         }
     }
     pub(super) fn model_history_lines(&self) -> String {
@@ -41,7 +40,7 @@ impl Session {
         }
     }
     pub(super) fn workshop_context_rows(&self) -> Vec<serde_json::Value> {
-        let all = self.history.rows();
+        let all = self.history.model_rows();
         // private・未発話の専用履歴も20往復の入力枠を使うが、保存用対話には昇格させない。
         let extra = self.haiku.workshop.as_ref().map_or(0, |w| {
             w.dialogue
@@ -57,7 +56,7 @@ impl Session {
 }
 
 impl Dialogue {
-    /// 一入力につき最大二回。通常は10ターンの圧縮だけ、6件揃ったときだけ統合を加える。
+    /// 一入力につき一回だけ未要約本文を圧縮する。保存済みあらすじを再生成しない。
     pub(super) async fn compact_history(
         &self,
         sid: &str,
@@ -68,116 +67,91 @@ impl Dialogue {
         if !self.config.llm_enabled {
             return;
         }
-        for attempt in 0..2 {
-            if *cancel.borrow() || cancel.has_changed().is_err() {
+        if *cancel.borrow() || cancel.has_changed().is_err() {
+            return;
+        }
+        let Some((instance, batch)) = ({
+            let mut d = self.data.lock().unwrap();
+            if d.stopped {
                 return;
             }
-            let Some((instance, batch)) = ({
-                let mut d = self.data.lock().unwrap();
-                if d.stopped {
-                    return;
-                }
-                d.sessions
-                    .get_mut(sid)
-                    .filter(|s| s.epoch == epoch && s.current_turn == turn)
-                    .and_then(|s| {
-                        if s.haiku.foreground() {
-                            s.history.defer_for_haiku();
-                            return None;
-                        }
-                        s.history
-                            .compaction()
-                            .map(|batch| (s.instance_id.clone(), batch))
-                    })
+            d.sessions
+                .get_mut(sid)
+                .filter(|s| s.epoch == epoch && s.current_turn == turn)
+                .and_then(|s| {
+                    if s.haiku.foreground() {
+                        s.history.defer_for_haiku();
+                        return None;
+                    }
+                    s.history
+                        .compaction()
+                        .map(|batch| (s.instance_id.clone(), batch))
+                })
+        }) else {
+            return;
+        };
+        let response = tokio::select! {
+            biased;
+            _ = bridge::cancelled(cancel) => return,
+            response = self.summarize_history(&batch) => response,
+        };
+        if *cancel.borrow() || cancel.has_changed().is_err() {
+            return;
+        }
+        let text = match response {
+            Ok(text) => text,
+            Err(error) => {
+                tracing::warn!(event="conversation_summary_failed", session_id=sid, %error);
+                return;
+            }
+        };
+        let saved = {
+            let mut d = self.data.lock().unwrap();
+            if d.stopped {
+                return;
+            }
+            let Some(s) = d.sessions.get_mut(sid).filter(|s| {
+                s.instance_id == instance
+                    && s.epoch == epoch
+                    && s.current_turn == turn
+                    && !s.haiku.foreground()
             }) else {
                 return;
             };
-            // 失敗後に原文が増えても、同じ入力でrawを何度も再要約しない。
-            if attempt > 0 && !batch.merge {
+            if !s.history.commit_compaction(&batch, &text) {
                 return;
             }
-            let response = tokio::select! {
-                biased;
-                _ = bridge::cancelled(cancel) => return,
-                response = self.summarize_history(&batch) => response,
+            let saved = if self.config.haiku.memory_enabled && !s.text_workshop {
+                s.journey.as_mut().map(|record| {
+                    record.synopses = s.history.synopses();
+                    record.clone()
+                })
+            } else {
+                None
             };
-            if *cancel.borrow() || cancel.has_changed().is_err() {
-                return;
-            }
-            let text = match response {
-                Ok(text) => text,
-                Err(error) => {
-                    tracing::warn!(event="conversation_summary_failed", session_id=sid, %error);
-                    return;
-                }
-            };
-            let saved = {
-                let mut d = self.data.lock().unwrap();
-                if d.stopped {
-                    return;
-                }
-                let Some(s) = d.sessions.get_mut(sid).filter(|s| {
-                    s.instance_id == instance
-                        && s.epoch == epoch
-                        && s.current_turn == turn
-                        && !s.haiku.foreground()
-                }) else {
-                    return;
-                };
-                if !s.history.commit_compaction(&batch, &text) {
-                    return;
-                }
-                let saved = if self.config.haiku.memory_enabled && !s.text_workshop {
-                    s.journey.as_mut().map(|record| {
-                        record.synopses = s.history.synopses();
-                        record.clone()
-                    })
-                } else {
-                    None
-                };
-                d.revision += 1;
-                saved
-            };
-            if let Some(record) = saved {
-                self.persist_journey(record).await;
-            }
+            d.revision += 1;
+            saved
+        };
+        if let Some(record) = saved {
+            self.persist_journey(record).await;
         }
     }
     /// 対話中と停止時で同じ一回生成を使う。要約用の道具や再試行は追加しない。
     pub(super) async fn summarize_history(&self, batch: &Compaction) -> Result<String> {
         ensure!(self.config.llm_enabled, "LLM disabled by configuration");
-        let prompt = if batch.merge {
-            MERGE_PROMPT.trim().to_owned()
+        let scope = if batch.turns == 0 {
+            "冒険中の対話と出来事".into()
         } else {
-            let scope = if batch.turns == 0 {
-                "冒険中の対話と出来事".into()
-            } else {
-                format!("過去{}ターンの対話と出来事", batch.turns)
-            };
-            PROMPT.trim().replace("{record_scope}", &scope).replace(
-                "{target_chars}",
-                &(40 * batch.turns.div_ceil(10).max(1)).to_string(),
-            )
+            format!("過去{}ターンの対話と出来事", batch.turns)
         };
-        let input = if batch.merge {
-            batch
-                .rows
-                .iter()
-                .enumerate()
-                .map(|(i, row)| format!("{}: {}", i + 1, row["text"].as_str().unwrap_or("")))
-                .collect::<Vec<_>>()
-                .join("\n")
-        } else {
-            History::lines_for(&batch.rows)
-        };
+        let prompt = PROMPT.trim().replace("{record_scope}", &scope).replace(
+            "{target_chars}",
+            &(40 * batch.turns.div_ceil(10).max(1)).to_string(),
+        );
+        let input = History::lines_for(&batch.rows);
         let request = GenerationRequest {
             schema_version: 1,
-            kind: if batch.merge {
-                "adventure_summary"
-            } else {
-                "conversation_summary"
-            }
-            .into(),
+            kind: "conversation_summary".into(),
             model: self.config.model.clone(),
             messages: vec![
                 ChatMessage {
@@ -191,7 +165,7 @@ impl Dialogue {
             ],
             temperature: 0.2,
             // 字数は指示上の目安。原文の入力予算や文字数による切断は設けない。
-            max_tokens: if batch.merge { 768 } else { 512 },
+            max_tokens: 512,
             enable_thinking: false,
         };
         let report = self.llm.generate(&request).await?;
@@ -203,7 +177,6 @@ impl Dialogue {
         tracing::info!(
             event = "conversation_summary_generated",
             turns = batch.turns,
-            merge = batch.merge,
             chars = report.generated.text.trim().chars().count(),
             elapsed_ms = report.elapsed_ms as u64
         );
@@ -379,7 +352,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn twenty_turn_boundary_uses_configured_model_and_six_synopses_merge_once() {
+    async fn twenty_turn_boundary_summarizes_once_and_keeps_all_six_original_synopses() {
         let f = Fixture::new().await;
         f.seed(0, 19);
         f.compact().await;
@@ -392,7 +365,7 @@ mod tests {
         }
         {
             let seen = f.seen.lock().unwrap();
-            assert_eq!(seen.len(), 7); // 6件の短いあらすじと、その6件をまとめる1回。
+            assert_eq!(seen.len(), 6); // 各10ターンを一度ずつ。要約の再要約はない。
             assert_eq!(seen[0]["model"], "fixture");
             assert!(seen[0]["tools"].is_null());
             assert!(
@@ -404,15 +377,23 @@ mod tests {
             let input = seen[0]["messages"][1]["content"].as_str().unwrap();
             assert!(input.contains("入力0の最後まで。"));
             assert!(!input.contains("入力10の最後まで。"));
-            assert!(
-                seen[6]["messages"][0]["content"]
-                    .as_str()
-                    .unwrap()
-                    .contains("200文字")
-            );
             let d = f.dialogue.data.lock().unwrap();
-            assert_eq!(d.sessions["s"].history.synopses().len(), 1);
-            assert_eq!(d.sessions["s"].history.synopses()[0].turns, 60);
+            assert_eq!(d.sessions["s"].history.synopses().len(), 6);
+            assert!(
+                d.sessions["s"]
+                    .history
+                    .synopses()
+                    .iter()
+                    .all(|p| p.turns == 10)
+            );
+            assert_eq!(
+                d.sessions["s"]
+                    .model_history()
+                    .iter()
+                    .filter(|r| r["reaction"] == "summary")
+                    .count(),
+                5
+            );
             assert_eq!(
                 d.sessions["s"].history.completed_pairs()[0]["turn_id"],
                 "t67"
@@ -420,9 +401,16 @@ mod tests {
         }
         let saved = crate::journey::load(&f.root).unwrap();
         assert_eq!(saved.len(), 1);
-        assert_eq!(saved[0].synopses[0].turns, 60);
+        assert_eq!(saved[0].synopses.len(), 6);
+        assert_eq!(saved[0].synopses.iter().map(|p| p.turns).sum::<usize>(), 60);
         assert!(saved[0].ended_at.is_none());
         f.dialogue.shutdown().await;
+        let saved = crate::journey::load(&f.root).unwrap();
+        assert_eq!(saved[0].synopses.len(), 6);
+        assert_eq!(saved[0].raw_tail.len(), 20);
+        assert_eq!(saved[0].raw_tail[0].turn_id, "t60");
+        assert!(saved[0].ended_at.is_some());
+        assert_eq!(f.seen.lock().unwrap().len(), 6, "shutdown preserves the last ten turns without another model call");
     }
     #[tokio::test]
     async fn network_empty_and_truncated_failures_keep_raw_history_without_retry() {
@@ -486,7 +474,7 @@ mod tests {
         }
     }
     #[tokio::test]
-    async fn shutdown_summarizes_closed_and_current_sessions_and_writes_each_only_once() {
+    async fn shutdown_keeps_short_closed_and_current_sessions_raw_and_writes_each_once() {
         let f = Fixture::new().await;
         f.seed(0, 3);
         f.dialogue
@@ -511,26 +499,64 @@ mod tests {
                 .iter()
                 .all(|r| r.ended_at.is_some() && !r.date.is_empty() && !r.unfinished)
         );
-        assert_eq!(
-            records.iter().map(|r| r.synopses[0].turns).sum::<usize>(),
-            5
-        );
+        assert_eq!(records.iter().map(|r| r.raw_tail.len()).sum::<usize>(), 10);
         assert_eq!(records.iter().map(|r| r.poems.len()).sum::<usize>(), 1);
-        assert_eq!(f.seen.lock().unwrap().len(), 2);
+        assert!(f.seen.lock().unwrap().is_empty());
         f.dialogue.shutdown().await;
-        assert_eq!(f.seen.lock().unwrap().len(), 2);
+        assert!(f.seen.lock().unwrap().is_empty());
         assert_eq!(crate::journey::load(&f.root).unwrap().len(), 2);
+    }
+    #[tokio::test]
+    async fn shutdown_summarizes_only_more_than_ten_complete_turns() {
+        for turns in [0, 1, 10, 11] {
+            let f = Fixture::new().await;
+            f.seed(0, turns);
+            if turns == 10 {
+                f.dialogue
+                    .data
+                    .lock()
+                    .unwrap()
+                    .sessions
+                    .get_mut("s")
+                    .unwrap()
+                    .history
+                    .push("unanswered", "user", "未回答の入力");
+            }
+            f.dialogue.shutdown().await;
+            let records = crate::journey::load(&f.root).unwrap();
+            assert_eq!(f.seen.lock().unwrap().len(), usize::from(turns > 10));
+            if turns == 0 {
+                assert!(records.is_empty());
+                continue;
+            }
+            assert_eq!(records.len(), 1);
+            let record = &records[0];
+            if turns > 10 {
+                assert_eq!(record.synopses[0].turns, turns);
+                assert!(record.raw_tail.is_empty());
+            } else {
+                assert!(record.synopses.is_empty());
+                assert_eq!(record.raw_tail.len(), turns * 2 + usize::from(turns == 10));
+                assert_eq!(record.raw_tail[0].role, "user");
+                assert_eq!(record.raw_tail[1].role, "assistant");
+                if turns == 10 {
+                    assert_eq!(record.raw_tail.last().unwrap().text, "未回答の入力");
+                }
+            }
+        }
     }
     #[tokio::test]
     async fn shutdown_failure_keeps_existing_synopsis_and_omits_remaining_raw_text() {
         let f = Fixture::new().await;
         f.seed(0, 20);
         f.compact().await;
+        f.seed(20, 21);
         *f.mode.lock().unwrap() = "error";
         f.dialogue.shutdown().await;
         let record = crate::journey::load(&f.root).unwrap().remove(0);
         assert_eq!(record.synopses.len(), 1);
-        assert_eq!(record.omitted_turns, 10);
+        assert_eq!(record.omitted_turns, 11);
+        assert!(record.raw_tail.is_empty());
         assert!(record.unfinished);
         let text = std::fs::read_to_string(
             f.root

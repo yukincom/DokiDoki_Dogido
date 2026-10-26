@@ -7,12 +7,12 @@ use std::collections::{HashSet, VecDeque};
 const MAX_TURNS: usize = 20;
 const COMPACT_TURNS: usize = 10;
 const AUXILIARY_ROWS: usize = 40;
+const ACTIVE_SUMMARIES: usize = 5;
 
 /// 配送確定済みの古い10ターン。生成中の追加・取消・訂正と照合する元行を保持する。
 pub(super) struct Compaction {
     pub rows: Vec<Value>,
     pub turns: usize,
-    pub merge: bool,
 }
 
 #[derive(Clone, Default)]
@@ -35,10 +35,10 @@ fn normalize(text: &str) -> String {
         .join(" ")
 }
 impl History {
-    /// 6件のあらすじを先にまとめ、通常は20ターン揃った次の入力境界で古い10ターンを渡す。
+    /// 通常は20ターン揃った次の入力境界で古い10ターンを渡す。あらすじ自体は再要約しない。
     /// 未回答入力は往復に数えず、確定した沈黙は発話なしの応答として扱う。
     pub(super) fn compaction(&self) -> Option<Compaction> {
-        let rows = self.rows();
+        let rows = self.rows_with_summaries(&[]);
         let turns = terminal_turns(&rows);
         // 川柳中に溜めた分は終了後に一括し、直近10往復だけを原文で残す。
         let count = if self.deferred_for_haiku {
@@ -49,7 +49,7 @@ impl History {
             0
         };
         if count == 0 {
-            return self.synopsis_compaction();
+            return None;
         }
         let all: HashSet<String> = turns
             .iter()
@@ -73,11 +73,7 @@ impl History {
                     || (r["role"] != "user" && r["reaction"] != "summary" && !all.contains(id))
             })
             .collect();
-        Some(Compaction {
-            rows,
-            turns: count,
-            merge: false,
-        })
+        Some(Compaction { rows, turns: count })
     }
     pub(super) fn defer_for_haiku(&mut self) {
         self.deferred_for_haiku = true;
@@ -96,39 +92,18 @@ impl History {
         rows[start..].to_vec()
     }
     pub(super) fn workshop_rows(&self) -> Vec<Value> {
-        Self::recent_turn_rows(&self.rows(), MAX_TURNS)
-    }
-    pub(super) fn synopsis_compaction(&self) -> Option<Compaction> {
-        (self.summaries.len() >= 6).then(|| Compaction {
-            rows: self.summaries[..6].to_vec(),
-            turns: self.summaries[..6]
-                .iter()
-                .map(|r| r["turn_count"].as_u64().unwrap_or(0) as usize)
-                .sum(),
-            merge: true,
-        })
+        Self::recent_turn_rows(&self.model_rows(), MAX_TURNS)
     }
     /// 停止時の未要約分。聞いた入力と実際に配送された返答・出来事だけを渡す。
     pub(super) fn final_compaction(&self) -> Option<Compaction> {
-        let rows: Vec<_> = self
-            .rows()
-            .into_iter()
-            .filter(|r| r["reaction"] != "summary")
-            .collect();
-        let turns = rows
-            .iter()
-            .filter(|r| r["role"] == "user" || r["dialogue_turn"] == true)
-            .count();
-        (!rows.is_empty()).then_some(Compaction {
-            rows,
-            turns,
-            merge: false,
-        })
+        let rows = self.rows_with_summaries(&[]);
+        let turns = terminal_turns(&rows).len();
+        (!rows.is_empty()).then_some(Compaction { rows, turns })
     }
     /// 非空のあらすじと元行の一致を確認してから置換する。失敗時は元行を一切削除しない。
     pub(super) fn commit_compaction(&mut self, batch: &Compaction, text: &str) -> bool {
         let text = normalize(text);
-        let current = self.rows();
+        let current = self.rows_with_summaries(&[]);
         if text.is_empty()
             || batch.rows.is_empty()
             || batch.rows.iter().any(|row| !current.contains(row))
@@ -144,18 +119,12 @@ impl History {
             .retain(|r| !ids.contains(r["turn_id"].as_str().unwrap_or("")));
         self.danger_retained
             .retain(|r| !ids.contains(r["turn_id"].as_str().unwrap_or("")));
-        self.summaries
-            .retain(|r| !ids.contains(r["turn_id"].as_str().unwrap_or("")));
         self.compacted_ids.extend(ids);
         self.summary_sequence += 1;
         let row = json!({"turn_id":format!("summary:{}", self.summary_sequence),
             "role":"event", "reaction":"summary", "text":text, "turn_count":batch.turns});
-        if batch.merge {
-            self.summaries.insert(0, row);
-        } else {
-            self.summaries.push(row);
-            self.deferred_for_haiku = false;
-        }
+        self.summaries.push(row);
+        self.deferred_for_haiku = false;
         true
     }
     pub(super) fn synopses(&self) -> Vec<crate::journey::Synopsis> {
@@ -274,8 +243,19 @@ impl History {
         }
         pairs
     }
+    /// 保存・復元用の全要約と未要約本文。会話へ渡すときはmodel_rowsを使う。
     pub fn rows(&self) -> Vec<Value> {
-        let mut rows = self.summaries.clone();
+        self.rows_with_summaries(&self.summaries)
+    }
+    /// 会話用は末尾5件だけを最初から複写する。古い要約は保存用に原文のまま残す。
+    pub(super) fn model_rows(&self) -> Vec<Value> {
+        self.rows_with_summaries(self.active_summaries())
+    }
+    fn active_summaries(&self) -> &[Value] {
+        &self.summaries[self.summaries.len().saturating_sub(ACTIVE_SUMMARIES)..]
+    }
+    fn rows_with_summaries(&self, summaries: &[Value]) -> Vec<Value> {
+        let mut rows = summaries.to_vec();
         rows.extend(self.danger_retained.clone());
         for row in &self.rows {
             if let Some(saved) = rows.iter_mut().find(|r| r["turn_id"] == row["turn_id"]) {
@@ -298,7 +278,7 @@ impl History {
         retained: usize,
     ) -> Vec<Value> {
         // 受付後に圧縮した元行を凍結済みsnapshotから復活させず、最新の要約を先頭へ置く。
-        let mut rows = self.summaries.clone();
+        let mut rows = self.active_summaries().to_vec();
         rows.extend(
             captured
                 .iter()
@@ -310,7 +290,7 @@ impl History {
                 })
                 .cloned(),
         );
-        for row in self.rows() {
+        for row in self.model_rows() {
             if row["turn_id"] == turn {
                 continue;
             }
@@ -861,21 +841,50 @@ mod tests {
     }
 
     #[test]
-    fn six_synopses_fold_again_after_five_more_without_reordering_recent_dialogue() {
+    fn old_synopses_remain_in_archive_but_only_last_five_enter_model_context() {
         let mut h = History::default();
+        let mut captured = Vec::new();
         for i in 0..120 {
             pair(&mut h, &format!("t{i}"));
             if let Some(batch) = h.compaction() {
                 assert!(h.commit_compaction(&batch, &format!("冒険の記録{i}")));
-                if let Some(batch) = h.synopsis_compaction() {
-                    assert!(h.commit_compaction(&batch, &format!("ここまでの冒険{i}")));
+                if i == 69 {
+                    captured = h.model_rows();
                 }
             }
         }
-        assert_eq!(h.synopses().len(), 1);
-        assert_eq!(h.synopses()[0].turns, 110);
+        assert_eq!(h.synopses().len(), 11);
+        assert!(h.synopses().iter().all(|p| p.turns == 10));
+        let projected = h.model_rows();
+        let summary_ids = |rows: &[Value]| {
+            rows.iter()
+                .filter(|r| r["reaction"] == "summary")
+                .map(|r| r["turn_id"].as_str().unwrap().to_owned())
+                .collect::<Vec<_>>()
+        };
+        let expected = (7..=11).map(|i| format!("summary:{i}")).collect::<Vec<_>>();
+        assert_eq!(summary_ids(&projected), expected);
+        assert_eq!(
+            summary_ids(&h.refresh_before_input("new", &captured, 0)),
+            expected
+        );
         assert!(contains(&h, "t110"));
         assert!(!contains(&h, "t109"));
         assert_eq!(h.final_compaction().unwrap().turns, 10);
+        assert!(
+            h.compaction().is_none(),
+            "stored summaries never create another model call"
+        );
+    }
+    #[test]
+    fn final_turn_count_excludes_unanswered_input_and_keeps_its_text() {
+        let mut h = History::default();
+        for i in 0..10 {
+            pair(&mut h, &format!("t{i}"));
+        }
+        h.push("unanswered", "user", "返答のない入力も補作せず残す");
+        let batch = h.final_compaction().unwrap();
+        assert_eq!(batch.turns, 10);
+        assert!(batch.rows.iter().any(|r| r["turn_id"] == "unanswered"));
     }
 }

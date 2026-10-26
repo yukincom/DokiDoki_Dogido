@@ -78,8 +78,9 @@ impl Dialogue {
         let Some(event) = s.latest.clone() else {
             return false;
         };
+        let turns = s.model_history();
         let history = crate::chat_materials::CompletedHistory {
-            conversation_history: s.model_history_lines(), conversation_turns: s.model_history(),
+            conversation_history: super::history::History::lines_for(&turns), conversation_turns: turns,
             event_digest: s.history.situation_lines().iter().map(|n| format!("- {n}"))
                 .chain(s.combat_digest.iter().map(|n| format!("- {n}")))
                 .chain(std::iter::once(format!("- 今回のプレイヤーの依頼に従い、ドギドは指定された向きへの変更を完了した。実行結果: {}", report.value)))

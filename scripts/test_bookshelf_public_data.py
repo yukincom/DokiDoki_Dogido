@@ -49,7 +49,7 @@ def source_plan(root, *, capture=True, text='あさのひ', journey='PRIVATE-JOU
                     'translations': [{'id': 7, 'piece': '空', 'text': '空', 'method': 'original', 'private': secret}]})
         requests = [{'request_index': 1, 'response_id': 'response', 'capture_status': 'complete',
                      'manifest': manifest, 'hidden': raw_ref, 'j_lens': readout, 'translations': [translation]}]
-    journey_ref=add('journeys/journey_private/snapshots/example.json', {'record':{'synopses':[journey],'id':'journey_private'},'note':'PRIVATE-JOURNEY-NOTE'})
+    journey_ref=add('journeys/journey_private/snapshots/example.json', {'record':{'synopses':[journey],'raw_tail':[{'role':'user','text':'PRIVATE-RAW-TAIL-SENTINEL'}],'id':'journey_private'},'note':'PRIVATE-JOURNEY-NOTE'})
     add('index.json', {'archive_id': ARCHIVE, 'journeys':[{'id':'journey_private','snapshot':journey_ref}], 'poems': [{'id': 'private-session:poem', 'snapshot': snapshot, 'requests': requests}]})
     return {'repository': REPOSITORY, 'checkout': str(root / 'state'), 'files': files, 'poems': 1, 'captures': int(capture)}
 
@@ -61,7 +61,7 @@ class ProjectionTests(unittest.TestCase):
             public = data.projection(plan, 42)
             self.assertEqual(plan, before)
             json_text = '\n'.join(f.get('content', '') for f in public['files'])
-            for forbidden in ('PRIVATE-CONTEXT-SENTINEL', 'PRIVATE-JOURNEY-SENTINEL', 'PRIVATE-JOURNEY-NOTE', 'journey_private', 'prompt_token_ids', 'rendered_text', '/Users/', 'generation_options', 'private-session:poem'):
+            for forbidden in ('PRIVATE-CONTEXT-SENTINEL', 'PRIVATE-JOURNEY-SENTINEL', 'PRIVATE-JOURNEY-NOTE', 'PRIVATE-RAW-TAIL-SENTINEL', 'journey_private', 'prompt_token_ids', 'rendered_text', '/Users/', 'generation_options', 'private-session:poem'):
                 self.assertNotIn(forbidden, json_text)
             self.assertTrue(all(f['path'].startswith(f'contributors/42/{ARCHIVE}/') for f in public['files']))
             row = public['index']['poems'][0]['requests'][0]

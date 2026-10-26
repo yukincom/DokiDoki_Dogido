@@ -1,5 +1,5 @@
 //! 冒険の接続寿命と保存を管理する。切断時の未要約分は終了処理へ引き継ぐ。
-//! 正常なサーバー停止ではworkerを止めた後に残りを要約し、日付・句リンク付きの記録を保存する。
+//! 正常停止でworkerを止めた後、未要約が10往復を超えるときだけ要約し、短い残りは原文で保存する。
 //! 要約失敗時は既存あらすじを残し、未要約分の原文は永続化せず未収録を明記する。
 use super::{Dialogue, Session, history::History};
 use crate::journey::Record;
@@ -53,29 +53,22 @@ impl Dialogue {
         }
         for mut draft in drafts {
             if let Some(batch) = draft.history.final_compaction() {
-                match self.summarize_history(&batch).await {
-                    Ok(text) => {
-                        draft.history.commit_compaction(&batch, &text);
-                    }
-                    Err(error) => {
-                        draft.record.omitted_turns = batch.turns;
-                        draft.record.unfinished = true;
-                        tracing::warn!(event="journey_final_summary_failed", journey_id=draft.record.id, %error);
-                    }
-                }
-            }
-            // 通常は最大6件。統合失敗が続いた場合も、元のあらすじを捨てず順番を保つ。
-            while let Some(batch) = draft.history.synopsis_compaction() {
-                match self.summarize_history(&batch).await {
-                    Ok(text) => {
-                        draft.history.commit_compaction(&batch, &text);
-                    }
-                    Err(error) => {
-                        tracing::warn!(event="journey_merge_failed", journey_id=draft.record.id, %error);
-                        break;
+                if batch.turns <= 10 {
+                    draft.record.raw_tail = crate::journey::TranscriptLine::from_rows(&batch.rows);
+                } else {
+                    match self.summarize_history(&batch).await {
+                        Ok(text) => {
+                            draft.history.commit_compaction(&batch, &text);
+                        }
+                        Err(error) => {
+                            draft.record.omitted_turns = batch.turns;
+                            draft.record.unfinished = true;
+                            tracing::warn!(event="journey_final_summary_failed", journey_id=draft.record.id, %error);
+                        }
                     }
                 }
             }
+            // 各あらすじは生成した順のまま保存し、再要約を追加しない。
             draft.record.synopses = draft.history.synopses();
             self.persist_journey(draft.record).await;
         }

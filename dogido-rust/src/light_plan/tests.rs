@@ -64,19 +64,19 @@ async fn every_result_finishes_after_exactly_one_generation() {
     for (reply, status, speech) in [
         (
             json!({"text":r#"{"action":"acknowledge_supply_gain","speech":"備えが増えたな。"}"#}),
-            "accepted",
+            "generated",
             "備えが増えたな。",
         ),
         (
             json!({"text":r#"{"action":"stay_silent","speech":""}"#}),
-            "accepted",
+            "generated",
             "",
         ),
         (json!({"text":"broken"}), "invalid_json", ""),
         (
             json!({"text":r#"{"action":"relief_after_darkness","speech":"ほっ。"}"#}),
-            "schema_contract_error",
-            "",
+            "generated",
+            "ほっ。",
         ),
         (
             json!({"text":r#"{"action":"stay_silent","speech":""}"#, "finish_reason":"length"}),

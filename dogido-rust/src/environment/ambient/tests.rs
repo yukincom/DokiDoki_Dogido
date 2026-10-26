@@ -774,3 +774,18 @@ fn rain_after_respects_nonhostile_foreground_and_conversation_mute() {
         );
     }
 }
+
+#[test]
+fn light_consumer_validates_model_shape_once_before_emitting_speech() {
+    for payload in [
+        json!({"action":"acknowledge_supply_gain","speech":"","__dogido_status":"generated"}),
+        json!({"action":"acknowledge_supply_gain","speech":"備えや。","extra":true,"__dogido_status":"generated"}),
+        json!({"action":"stay_silent","speech":"話すで。","__dogido_status":"generated"}),
+    ] {
+        let focus = AmbientFocus::default();
+        let mut ambient = Ambient::default();
+        let (event, request) = light_request(&mut ambient, &focus);
+        assert!(ambient.resolve_light_plan(request.request_id, &payload, &event, 2000,
+            &focus, &Settings::default()).is_none());
+    }
+}

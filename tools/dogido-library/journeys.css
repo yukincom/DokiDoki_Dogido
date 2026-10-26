@@ -42,3 +42,8 @@ body.library-journeys { --cover:#9b7330; --accent:#865a24; }
   .topbar .header-actions .books { flex-wrap:wrap; }
 }
 @media(max-width:400px) { .journey-heading h2 { font-size:1.75rem; } }
+
+/* 原文の話者と出来事を区別し、改行はそのまま読む。 */
+.journey-dialogue p{display:grid;grid-template-columns:5em minmax(0,1fr);gap:.75em;margin:.8em 0;line-height:1.8}
+.journey-dialogue strong{font-size:.85em;color:var(--muted,#6b6254)}
+.journey-dialogue span{white-space:pre-wrap;overflow-wrap:anywhere}

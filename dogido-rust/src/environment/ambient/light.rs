@@ -183,16 +183,8 @@ impl Ambient {
         {
             return None;
         }
-        let status = payload["__dogido_status"].as_str().unwrap_or("accepted");
-        if status != "accepted" {
-            return None;
-        }
-        let action = payload["action"].as_str()?;
-        if !request.details["allowed_actions"]
-            .as_array()?
-            .iter()
-            .any(|v| v.as_str() == Some(action))
-        {
+        let status = payload["__dogido_status"].as_str().unwrap_or("generated");
+        if status != "generated" {
             return None;
         }
         let recent = !elapsed(
@@ -205,9 +197,14 @@ impl Ambient {
         if recent || focus.light.severe_darkness {
             return None;
         }
-        if !crate::light_plan::contract_errors(payload, &request.details).is_empty()
-            || action == "stay_silent"
-        {
+        // 出力の外形と依頼時に許可したactionはここで一度だけ検査する。
+        // 上の現在観測の照合は、生成中に変わる世界や入力のための別の確認。
+        let errors = crate::light_plan::contract_errors(payload, &request.details);
+        if !errors.is_empty() {
+            tracing::info!(kind = crate::light_plan::KIND, result = "schema_contract_error", ?errors);
+            return None;
+        }
+        if payload["action"] == "stay_silent" {
             return None;
         }
         let mut speech = Speech::new("light_source_gain", payload["speech"].as_str()?.trim());

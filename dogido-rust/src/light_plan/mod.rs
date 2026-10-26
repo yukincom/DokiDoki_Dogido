@@ -1,5 +1,5 @@
 //! 照明への反応選択と本文を一回で生成する。観測・発話権限・クールダウンは既存ambientが所有する。
-//! 返答はactionとspeechだけ。外形不正・生成失敗は無言にし、モデルへ再試行しない。
+//! 返答はactionとspeechだけ。JSON取得失敗は無言にし、許可action・本文の検証はambientの受取時に一度行う。
 #[cfg(test)]
 mod tests;
 mod validation;
@@ -155,10 +155,7 @@ where
     let Some(payload) = extract_object(&generated.text) else {
         return Ok(frame(fallback.clone(), "invalid_json", reports));
     };
-    let errors = contract_errors(&payload, details);
-    if !errors.is_empty() {
-        tracing::info!(kind = KIND, result = "schema_contract_error", ?errors);
-        return Ok(frame(fallback.clone(), "schema_contract_error", reports));
-    }
-    Ok(frame(payload, "accepted", reports))
+    // 原文のJSONを一度だけ配送する。依頼に対応するallowed_actionsと外形の検査は
+    // ambient側へ集約し、同じ結果を生成側と受取側の両方で検査しない。
+    Ok(frame(payload, "generated", reports))
 }

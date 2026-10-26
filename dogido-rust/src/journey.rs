@@ -1,5 +1,5 @@
 //! 「旅の記録」の保存正本。あらすじ・冒険の日付・配送された句への参照をJSONで保存する。
-//! 生の対話や評価ログは保存しない。プレイヤーの記録メモは本棚の既存state.jsonが所有する。
+//! 停止時に10往復以下の未要約対話は原文で収録する。評価ログは読まず、記録メモは本棚state.jsonが所有する。
 use anyhow::{Result, ensure};
 use chrono::{DateTime, Local, Utc};
 use serde::{Deserialize, Serialize};
@@ -15,6 +15,30 @@ pub struct Poem {
     pub id: String,
     pub text: String,
 }
+/// 履歴から収録する一行。出来事・沈黙・未回答を発話へ書き換えず、原文と種別を保つ。
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TranscriptLine {
+    pub turn_id: String,
+    pub role: String,
+    pub text: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reaction: Option<String>,
+    #[serde(default)]
+    pub dialogue_turn: bool,
+}
+impl TranscriptLine {
+    pub(crate) fn from_rows(rows: &[serde_json::Value]) -> Vec<Self> {
+        rows.iter()
+            .map(|row| Self {
+                turn_id: row["turn_id"].as_str().unwrap_or("").into(),
+                role: row["role"].as_str().unwrap_or("event").into(),
+                text: row["text"].as_str().unwrap_or("").into(),
+                reaction: row["reaction"].as_str().map(str::to_owned),
+                dialogue_turn: row["dialogue_turn"] == true,
+            })
+            .collect()
+    }
+}
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Record {
     pub schema_version: u32,
@@ -25,6 +49,8 @@ pub struct Record {
     pub started_at: DateTime<Utc>,
     pub ended_at: Option<DateTime<Utc>>,
     pub synopses: Vec<Synopsis>,
+    #[serde(default)]
+    pub raw_tail: Vec<TranscriptLine>,
     pub poems: Vec<Poem>,
     pub omitted_turns: usize,
     pub unfinished: bool,
@@ -41,6 +67,7 @@ impl Record {
             started_at: now.to_utc(),
             ended_at: None,
             synopses: vec![],
+            raw_tail: vec![],
             poems: vec![],
             omitted_turns: 0,
             unfinished: false,
@@ -54,6 +81,7 @@ impl Record {
     }
     pub fn has_content(&self) -> bool {
         !self.synopses.is_empty()
+            || !self.raw_tail.is_empty()
             || !self.poems.is_empty()
             || self.omitted_turns > 0
             || self.unfinished
@@ -130,7 +158,7 @@ pub fn load(root: &Path) -> Result<Vec<Record>> {
 mod tests {
     use super::*;
     #[test]
-    fn records_round_trip_without_raw_dialogue_and_replace_only_the_same_journey() {
+    fn records_round_trip_with_short_raw_tail_and_replace_only_the_same_journey() {
         let temp =
             std::env::temp_dir().join(format!("dogido-journey-test-{}", uuid::Uuid::new_v4()));
         let mut record = Record::new("s", "プレイヤー");
@@ -138,6 +166,11 @@ mod tests {
             text: "村を訪ね、川沿いに拠点を作る相談をした。".into(),
             turns: 10,
         });
+        record.raw_tail = TranscriptLine::from_rows(&[
+            serde_json::json!({"turn_id":"t1","role":"user","text":"橋も見に行こう"}),
+            serde_json::json!({"turn_id":"t1:reply","role":"assistant","text":"一緒に見よか。"}),
+            serde_json::json!({"turn_id":"quiet","role":"event","reaction":"silent","text":"沈黙を選んだ"}),
+        ]);
         record.poem("session:s:haiku1".into(), "川の句".into());
         record.poem("session:s:haiku1".into(), "川の句".into());
         save(&temp, &record).unwrap();
@@ -146,6 +179,15 @@ mod tests {
         let loaded = load(&temp).unwrap();
         assert_eq!(loaded.len(), 1);
         assert_eq!(loaded[0].synopses, record.synopses);
+        assert_eq!(loaded[0].raw_tail, record.raw_tail);
+        let mut legacy = serde_json::to_value(&record).unwrap();
+        legacy.as_object_mut().unwrap().remove("raw_tail");
+        assert!(
+            serde_json::from_value::<Record>(legacy)
+                .unwrap()
+                .raw_tail
+                .is_empty()
+        );
         assert_eq!(loaded[0].poems.len(), 1);
         assert!(loaded[0].ended_at.is_some());
         assert!(load(&temp.join("absent")).unwrap().is_empty());

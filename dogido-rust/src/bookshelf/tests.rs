@@ -1759,6 +1759,8 @@ fn journey_export_is_private_and_uses_immutable_snapshots_including_memos() {
     s.select_research_storage(research_storage::Selection {root,expected_archive_id:None}).unwrap();
     let mut record = crate::journey::Record::new("private-session", "本人");
     record.synopses.push(crate::journey::Synopsis {text:"非公開の旅のあらすじ".into(),turns:10});
+    record.raw_tail = crate::journey::TranscriptLine::from_rows(&[
+        json!({"turn_id":"short","role":"user","text":"非公開の未要約本文"})]);
     record.poem("root:p".into(), "旅で詠んだ句".into());
     crate::journey::save(&s.memory, &record).unwrap();
     let revision = s.player().unwrap()["revision"].clone();
@@ -1772,6 +1774,7 @@ fn journey_export_is_private_and_uses_immutable_snapshots_including_memos() {
     let file = first["files"].as_array().unwrap().iter().find(|f| f["path"] == first_path).unwrap();
     let saved: Value = serde_json::from_str(file["content"].as_str().unwrap()).unwrap();
     assert_eq!(saved["record"]["synopses"][0]["text"], "非公開の旅のあらすじ");
+    assert_eq!(saved["record"]["raw_tail"][0]["text"], "非公開の未要約本文");
     assert_eq!(saved["record"]["poems"][0]["id"], "root:p"); assert_eq!(saved["note"], "非公開メモ");
     assert_eq!(first, s.data_repository_plan(None, &data_repository::Mode::Private).unwrap());
     let revision = s.player().unwrap()["revision"].clone();

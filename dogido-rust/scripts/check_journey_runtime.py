@@ -15,8 +15,8 @@ def synopsis_model(control):
             return None
         assert not incoming.get("tools"), incoming
         calls.append(incoming)
-        text = ("川沿いを歩いて村を訪ね、拠点づくりを相談した。途中の景色を句に残し、次の冒険の話をした。"
-                if "あらすじ6件" in system else "川沿いを歩き、村のそばに拠点を作る相談をした。")
+        assert "あらすじ6件" not in system
+        text = f"記録{len(calls)}：川沿いを歩き、村のそばに拠点を作る相談をした。"
         return {"id": "journey-mock", "object": "chat.completion", "created": 0,
                 "model": "mock-model", "choices": [{"index": 0, "message": {
                     "role": "assistant", "content": text}, "finish_reason": "stop"}],
@@ -46,11 +46,13 @@ def main():
                 reply_calls = [r["body"] for r in seen if r["path"] == "/v1/chat/completions"]
                 leaf = reply_calls[-1]["messages"][-1]["content"]
                 assert "村のそばに拠点を作る相談" in leaf and long not in leaf, leaf
-        assert len(calls) == 7, len(calls)
-        assert "あらすじ6件" in calls[-1]["messages"][0]["content"]
+        assert len(calls) == 6, len(calls)
+        reply_calls = [r["body"] for r in seen if r["path"] == "/v1/chat/completions"]
+        leaf = reply_calls[-1]["messages"][-1]["content"]
+        assert "記録1：" not in leaf and "記録2：" in leaf and "記録6：" in leaf, leaf
         synopses = [r for r in history if r.get("reaction") == "summary"]
-        assert len(synopses) == 1 and synopses[0]["turn_count"] == 60, synopses
-        passed.append("20_turn_boundary_full_text_6_synopses_merge_and_next_reply_context")
+        assert len(synopses) == 6 and all(p["turn_count"] == 10 for p in synopses), synopses
+        passed.append("20_turn_boundary_one_summary_last_five_context_and_all_six_archived")
         # Minecraft側が先に切断しても、その冒険の残りを正常終了へ引き継ぐ。
         request(base, "/api/v1/adapter-sessions/" + sid, method="DELETE")
         process.send_signal(signal.SIGTERM)
@@ -62,8 +64,29 @@ def main():
         assert record["ended_at"] and record["date"] and not record["unfinished"], record
         assert sum(p["turns"] for p in record["synopses"]) == 71, record
         assert long not in json.dumps(record, ensure_ascii=False)
-        assert len(calls) == 8
+        assert len(calls) == 7
+        assert len(record["synopses"]) == 7 and not record["raw_tail"]
         passed.append("disconnect_then_SIGTERM_saves_remaining_11_turns_without_raw_dialogue")
+
+    with fixture(enabled=False) as f:
+        base, process, log, control, _, _, _, _, send, _, _, _, folder = f
+        calls = synopsis_model(control)
+        sid = register(base, preview=False)
+        control["leaf"] = "短い冒険も覚えておこか。"
+        for i in range(10):
+            send(sid)
+            turn = submit(base, sid, f"未要約の目印{i}だよ")
+            wait_for(lambda: row(base, turn, {"completed"}))
+        process.send_signal(signal.SIGTERM)
+        process.wait(timeout=15)
+        assert process.returncode == 0, log.read_text()
+        records = [json.loads(p.read_text()) for p in (folder / "memory/long_term/journeys").glob("*.json")]
+        assert len(records) == 1 and not calls, records
+        record = records[0]
+        assert not record["synopses"] and len(record["raw_tail"]) == 20, record
+        assert record["raw_tail"][0]["text"] == "未要約の目印0だよ"
+        assert record["raw_tail"][1]["role"] == "assistant"
+        passed.append("SIGTERM_keeps_ten_turns_raw_without_summary_model_call")
 
     with fixture() as f:
         base, process, log, control, _, _, _, _, send, _, rows, stored, folder = f
