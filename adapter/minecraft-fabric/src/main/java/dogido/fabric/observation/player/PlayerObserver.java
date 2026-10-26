@@ -34,6 +34,7 @@ import static dogido.fabric.observation.MobIdentityObservation.mobIdentity;
 import static dogido.fabric.observation.ObservationNumbers.round;
 import static dogido.fabric.observation.player.ItemIdentity.itemId;
 
+/** プレイヤーの現在値と所持品を読み取り、イベント用JSONへ投影する。睡眠・復帰地点の履歴はこの観測器が更新する。 */
 public final class PlayerObserver {
     // 乗り物の微小な同期揺れを「移動中」と誤認しないための水平速度閾値。
     // 単位は block/tick の二乗。実際の歩行・航行速度より十分小さい。
@@ -68,7 +69,18 @@ public final class PlayerObserver {
         this.wasSleeping = sleepingNow;
     }
 
-    public JsonObject buildPlayer(ClientPlayerEntity player, ClientWorld world) {
+    public record Observation(JsonObject player, JsonObject inventory) {}
+
+    /** 同じclient処理内で全slotを一度読み、held item・hotbar・総数へ配る。ItemStackを処理外へ保持しない。 */
+    public Observation observe(ClientPlayerEntity player, ClientWorld world) {
+        var inventory = player.getInventory();
+        ItemStack[] stacks = new ItemStack[inventory.size()];
+        for (int slot = 0; slot < stacks.length; slot++) stacks[slot] = inventory.getStack(slot);
+        int selected = inventory.getSelectedSlot();
+        return new Observation(buildPlayer(player, world, stacks, selected), buildInventory(stacks));
+    }
+
+    private JsonObject buildPlayer(ClientPlayerEntity player, ClientWorld world, ItemStack[] stacks, int selected) {
         JsonObject json = new JsonObject();
         json.addProperty("name", resolvePlayerName(player));
         json.add("environment", MobEnvironmentObservation.capture(player).toJson());
@@ -94,7 +106,7 @@ public final class PlayerObserver {
         json.addProperty("hunger", player.getHungerManager().getFoodLevel());
         json.addProperty("dimension", world.getRegistryKey().getValue().toString());
 
-        ItemStack held = player.getMainHandStack();
+        ItemStack held = stacks[selected];
         json.addProperty(
             "held_item",
             held.isEmpty() ? "minecraft:air" : Registries.ITEM.getId(held.getItem()).toString()
@@ -104,7 +116,7 @@ public final class PlayerObserver {
             "block_breaking_active",
             blockBreakingActive(client)
         );
-        json.add("hotbar", buildHotbar(player));
+        json.add("hotbar", buildHotbar(player, stacks, selected));
         JsonObject vehicle = buildVehicleState(player);
         if (vehicle != null) {
             // 未乗車時はキーごと省略する。「乗っていない」をLLM材料にしない。
@@ -169,11 +181,9 @@ public final class PlayerObserver {
         return json;
     }
 
-    public JsonObject buildInventory(ClientPlayerEntity player) {
+    private JsonObject buildInventory(ItemStack[] stacks) {
         Map<String, Integer> counts = new LinkedHashMap<>();
-        int size = player.getInventory().size();
-        for (int slot = 0; slot < size; slot += 1) {
-            ItemStack stack = player.getInventory().getStack(slot);
+        for (ItemStack stack : stacks) {
             if (stack.isEmpty()) {
                 continue;
             }
@@ -188,12 +198,12 @@ public final class PlayerObserver {
         return json;
     }
 
-    private JsonObject buildHotbar(ClientPlayerEntity player) {
+    private JsonObject buildHotbar(ClientPlayerEntity player, ItemStack[] stacks, int selected) {
         JsonObject hotbar = new JsonObject();
-        hotbar.addProperty("selected_slot", player.getInventory().getSelectedSlot());
+        hotbar.addProperty("selected_slot", selected);
         JsonArray slots = new JsonArray();
         for (int slot = 0; slot < net.minecraft.entity.player.PlayerInventory.getHotbarSize(); slot += 1) {
-            ItemStack stack = player.getInventory().getStack(slot);
+            ItemStack stack = stacks[slot];
             JsonObject row = new JsonObject();
             row.addProperty("slot", slot);
             if (stack.isEmpty()) {

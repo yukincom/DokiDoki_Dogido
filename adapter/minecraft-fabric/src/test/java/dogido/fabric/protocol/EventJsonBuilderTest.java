@@ -89,23 +89,26 @@ class EventJsonBuilderTest {
                 int index = 0;
                 while (!EVENTS[index][0].equals(event)) index++;
                 String[] descriptor = EVENTS[index];
-                WorldObservationFrame frame = new WorldObservationFrame(() -> object("world"), () -> blocks(detail));
+                WorldObservationFrame frame = new WorldObservationFrame(() -> object("world"), () -> blocks(detail),
+                    () -> new WorldObservationFrame.Materials(object("player"), object("inventory"),
+                        detail ? mobComposition() : null, array("dropped"), array("breaks"), detail ? object("look") : null));
+                var materials = frame.materials();
                 JsonObject nearby = frame.blocks();
                 EventJsonBuilder builder = new EventJsonBuilder(descriptor[0], descriptor[1], descriptor[2], descriptor[3],
                     TIME, new SmellObserver.Result(SMELL, 3600));
                 builder.sequence(7);
-                builder.player(object("player"));
+                builder.player(materials.player());
                 builder.world(frame.copy());
                 boolean emptyCombat = index == 3 || index == 7;
                 builder.visualThreats(index == 2 || emptyCombat ? List.of() : THREATS);
                 builder.auditoryThreats(emptyCombat ? List.of() : AUDIO);
                 if (index == 0) builder.ambientSounds(SOUNDS);
                 builder.passiveMobs(MOBS);
-                builder.inventory(object("inventory"));
-                builder.nearbyMaterials(nearby, detail ? mobComposition() : null);
-                builder.droppedItems(array("dropped"));
-                builder.recentBlockBreaks(array("breaks"));
-                builder.lookTarget(detail ? object("look") : null);
+                builder.inventory(materials.inventory());
+                builder.nearbyMaterials(nearby, materials.nearbyMobs());
+                builder.droppedItems(materials.droppedItems());
+                builder.recentBlockBreaks(materials.recentBlockBreaks());
+                builder.lookTarget(materials.lookTarget());
                 JsonObject combat = object("combat");
                 combat.addProperty("visual_count", emptyCombat ? 0 : THREATS.size());
                 combat.addProperty("audio_count", emptyCombat ? 0 : AUDIO.size());

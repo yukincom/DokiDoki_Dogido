@@ -328,8 +328,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         List<AmbientMobObservation> ambientMobs = this.ambientMobObserver.scanAmbientMobs(player, world, captureNearbyKinds);
         this.threatObserver.updateCombatTracking(visibleThreats, audioThreats);
         boolean deadNow = this.playerObserver.isPlayerDead(player);
-        WorldObservationFrame worldFrame = new WorldObservationFrame(
-            () -> this.worldObserver.buildWorld(player, world, this.tickCounter), () -> this.worldObserver.buildNearbyBlocks(player, world, captureNearbyKinds));
+        WorldObservationFrame worldFrame = this.eventCapture.frame(player, world, captureNearbyKinds);
 
         if (captureNearbyKinds) {
             JsonObject snapshot = this.eventCapture.buildStatusSnapshot(player, world, worldFrame, visibleThreats, audioThreats, ambientSounds, ambientMobs);
