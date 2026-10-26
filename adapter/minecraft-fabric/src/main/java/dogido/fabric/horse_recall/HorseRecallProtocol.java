@@ -4,7 +4,6 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -82,10 +81,14 @@ public final class HorseRecallProtocol {
 
     /** game-event応答内のrecall_horseだけを読む。不正な型や任意コマンドは実行対象にしない。 */
     public static List<Command> parseCommands(String body) {
+        return parseCommands(dogido.fabric.protocol.DogidoCommandProtocol.parseObject(body));
+    }
+
+    /** 共通解析済み応答からこの種類の命令を読む。共有objectを変更せず、不正な一件だけを除外する。 */
+    public static List<Command> parseCommands(JsonObject root) {
         List<Command> commands = new ArrayList<>();
         try {
-            JsonObject root = JsonParser.parseString(body).getAsJsonObject();
-            if (!root.has("commands") || !root.get("commands").isJsonArray()) return commands;
+            if (root == null || !root.has("commands") || !root.get("commands").isJsonArray()) return commands;
             for (JsonElement item : root.getAsJsonArray("commands")) {
                 if (!item.isJsonObject()) continue;
                 JsonObject row = item.getAsJsonObject();

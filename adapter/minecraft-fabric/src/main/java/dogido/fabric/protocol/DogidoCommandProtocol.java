@@ -28,8 +28,12 @@ public final class DogidoCommandProtocol {
     }
 
     static List<SelectHotbarCommand> parseSelectHotbarCommands(String responseBody) {
+        return parseSelectHotbarCommands(parseObject(responseBody));
+    }
+
+    /** 受信済みobjectからhotbar命令を読む。共有objectは変更しない。 */
+    static List<SelectHotbarCommand> parseSelectHotbarCommands(JsonObject root) {
         List<SelectHotbarCommand> commands = new ArrayList<>();
-        JsonObject root = parseObject(responseBody);
         if (root == null || !root.has("commands") || !root.get("commands").isJsonArray()) {
             return commands;
         }
@@ -66,8 +70,12 @@ public final class DogidoCommandProtocol {
     }
 
     static Set<String> parseAcknowledgedCommandIds(String responseBody) {
+        return parseAcknowledgedCommandIds(parseObject(responseBody));
+    }
+
+    /** 同じ応答の各結果台帳で共有する受領IDを抽出する。 */
+    static Set<String> parseAcknowledgedCommandIds(JsonObject root) {
         Set<String> commandIds = new LinkedHashSet<>();
-        JsonObject root = parseObject(responseBody);
         if (
             root == null
                 || !root.has("acknowledged_command_ids")
@@ -121,7 +129,8 @@ public final class DogidoCommandProtocol {
         return result;
     }
 
-    private static JsonObject parseObject(String text) {
+    /** 応答本文を一度だけ解析する。不正JSON・object以外・空入力はnullを返す。 */
+    public static JsonObject parseObject(String text) {
         if (text == null || text.isBlank()) {
             return null;
         }

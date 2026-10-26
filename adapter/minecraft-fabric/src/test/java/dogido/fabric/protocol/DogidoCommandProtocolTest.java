@@ -85,4 +85,48 @@ final class DogidoCommandProtocolTest {
         assertFalse(DogidoCommandProtocol.isUnknownSessionResponse(409, "{\"detail\":\"other\"}"));
         assertFalse(DogidoCommandProtocol.isUnknownSessionResponse(409, "not-json"));
     }
+
+    @Test
+    void sharedResponseKeepsMixedCommandsAndAcknowledgementsIndependent() {
+        JsonObject root = DogidoCommandProtocol.parseObject("""
+            {"acknowledged_command_ids":["old","old",17,null],"commands":[
+              null, "invalid", {"type":"select_hotbar","slot":99},
+              {"type":"body_request","mode":"invalid"},
+              {"type":"select_hotbar","command_id":"hotbar","slot":2,
+               "expected_item_id":"minecraft:stone_sword",
+               "issued_at":"2026-10-27T00:00:00Z","expires_at":"2026-10-27T00:00:03Z"},
+              {"type":"body_request","command_id":"00000000-0000-0000-0000-000000000001",
+               "owner_id":"00000000-0000-0000-0000-000000000002","input_generation":7,
+               "dimension":"minecraft:overworld","mode":"recall",
+               "issued_at":"2026-10-27T00:00:00Z","expires_at":"2026-10-27T00:00:03Z"},
+              {"type":"recall_horse","command_id":"horse",
+               "world_id":"00000000-0000-0000-0000-000000000001",
+               "player_uuid":"00000000-0000-0000-0000-000000000002",
+               "entity_id":"00000000-0000-0000-0000-000000000003","dimension":"minecraft:overworld",
+               "issued_at":"2026-10-27T00:00:00Z","expires_at":"2026-10-27T00:00:03Z"}]}
+            """);
+        JsonObject original = root.deepCopy();
+        assertEquals(Set.of("old"), DogidoCommandProtocol.parseAcknowledgedCommandIds(root));
+        assertEquals("hotbar", DogidoCommandProtocol.parseSelectHotbarCommands(root).getFirst().commandId());
+        assertEquals(7, dogido.fabric.body.BodyRequestProtocol.parseCommands(root).getFirst().inputGeneration());
+        assertEquals("horse", dogido.fabric.horse_recall.HorseRecallProtocol.parseCommands(root).getFirst().commandId());
+        assertTrue(dogido.fabric.body.BodyInspectProtocol.parseCommands(root).isEmpty());
+        assertTrue(dogido.fabric.screenshot.ScreenshotProtocol.parseCommands(root).isEmpty());
+        assertTrue(dogido.fabric.screenshot.BodyViewProtocol.parseCommands(root).isEmpty());
+        assertEquals(original, root);
+    }
+
+    @Test
+    void invalidResponseIsEmptyForEverySharedConsumer() {
+        for (String body : new String[]{null, "", "not-json", "[]", "null", "17", "{\"commands\":17}"}) {
+            JsonObject root = DogidoCommandProtocol.parseObject(body);
+            assertTrue(DogidoCommandProtocol.parseAcknowledgedCommandIds(root).isEmpty());
+            assertTrue(DogidoCommandProtocol.parseSelectHotbarCommands(root).isEmpty());
+            assertTrue(dogido.fabric.body.BodyRequestProtocol.parseCommands(root).isEmpty());
+            assertTrue(dogido.fabric.body.BodyInspectProtocol.parseCommands(root).isEmpty());
+            assertTrue(dogido.fabric.screenshot.ScreenshotProtocol.parseCommands(root).isEmpty());
+            assertTrue(dogido.fabric.screenshot.BodyViewProtocol.parseCommands(root).isEmpty());
+            assertTrue(dogido.fabric.horse_recall.HorseRecallProtocol.parseCommands(root).isEmpty());
+        }
+    }
 }

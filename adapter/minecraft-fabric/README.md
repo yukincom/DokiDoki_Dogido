@@ -24,7 +24,7 @@
 - 戦闘収束時の `combat_ended` 送信
 - game-event応答の型付き `select_hotbar` command受信
 - command ID・期限・slot・期待itemをMinecraftメインスレッドで再検証し、選択slotだけを変更
-- 実行結果をserverがackするまで後続イベントへ再送
+- 実行結果をserverがackするまで後続イベントへ再送。受理したHTTP応答のJSONとACK集合は一度だけ解析し、各命令protocolで共有する。命令固有の検査と実行直前の接続・期限確認は各担当で行う（[処理共有](../../docs/2026-10-27-processing-dedup-plan.md)）
 - 新しい音源を短期保持へ追加したとき、Minecraftの `latest.log` に `Dogido sound observed` を出す（hostile / ambientの切り分け用）
 
 ## まだやっていないこと

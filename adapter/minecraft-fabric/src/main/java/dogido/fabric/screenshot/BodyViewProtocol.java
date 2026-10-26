@@ -33,9 +33,15 @@ public final class BodyViewProtocol {
         }
     }
     public static List<Command> parseCommands(String body) {
+        return parseCommands(dogido.fabric.protocol.DogidoCommandProtocol.parseObject(body));
+    }
+
+    /** 共通解析済み応答からこの種類の命令を読む。共有objectを変更せず、不正な一件だけを除外する。 */
+    public static List<Command> parseCommands(JsonObject root) {
         List<Command> out=new ArrayList<>();
+        if (root == null) return out;
         try {
-            JsonArray commands=JsonParser.parseString(body).getAsJsonObject().getAsJsonArray("commands");
+            JsonArray commands=root.getAsJsonArray("commands");
             if (commands==null) return out;
             for (JsonElement value:commands) try {
                 JsonObject c=value.getAsJsonObject();

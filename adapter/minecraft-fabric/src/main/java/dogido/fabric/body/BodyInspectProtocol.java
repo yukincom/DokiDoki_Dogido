@@ -2,7 +2,6 @@ package dogido.fabric.body;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -69,10 +68,14 @@ public final class BodyInspectProtocol {
         }
     }
     public static List<Command> parseCommands(String body) {
+        return parseCommands(dogido.fabric.protocol.DogidoCommandProtocol.parseObject(body));
+    }
+
+    /** 共通解析済み応答からこの種類の命令を読む。共有objectを変更せず、不正な一件だけを除外する。 */
+    public static List<Command> parseCommands(JsonObject root) {
         List<Command> commands = new ArrayList<>();
         try {
-            JsonObject root = JsonParser.parseString(body).getAsJsonObject();
-            if (!root.has("commands") || !root.get("commands").isJsonArray()) return commands;
+            if (root == null || !root.has("commands") || !root.get("commands").isJsonArray()) return commands;
             for (JsonElement item : root.getAsJsonArray("commands")) {
                 try {
                     JsonObject row = item.getAsJsonObject();
