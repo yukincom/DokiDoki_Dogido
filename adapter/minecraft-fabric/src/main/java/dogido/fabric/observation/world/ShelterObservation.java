@@ -3,6 +3,7 @@ package dogido.fabric.observation.world;
 import dogido.fabric.observation.ObservationOrigin;
 
 import java.util.List;
+import java.util.function.Function;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.enums.DoubleBlockHalf;
 import net.minecraft.client.network.ClientPlayerEntity;
@@ -22,6 +23,7 @@ import static dogido.fabric.observation.ObservationVisibility.isWindowMaterialBl
 import static dogido.fabric.observation.ObservationVisibility.isWindowSideOpen;
 import static dogido.fabric.observation.world.BlockMaterials.classifyNaturalTerrainMaterial;
 
+/** 遮蔽・建具・局所空間を観測する。集計は読取りだけで、警告や状態変更は呼出し元が所有する。 */
 public final class ShelterObservation {
     private ShelterObservation() {}
 
@@ -82,53 +84,34 @@ public final class ShelterObservation {
         return state.isAir() || !state.getFluidState().isEmpty();
     }
 
-    static int countNearbyDoors(ClientWorld world, BlockPos origin) {
-        int count = 0;
-        for (int dx = -2; dx <= 2; dx += 1) {
-            for (int dy = -1; dy <= 2; dy += 1) {
-                for (int dz = -2; dz <= 2; dz += 1) {
-                    BlockPos sample = origin.add(dx, dy, dz);
-                    BlockState state = world.getBlockState(sample);
-                    String blockId = Registries.BLOCK.getId(state.getBlock()).getPath();
-                    if (blockId.endsWith("_door")) {
-                        if (
-                            state.contains(Properties.DOUBLE_BLOCK_HALF)
-                            && state.get(Properties.DOUBLE_BLOCK_HALF) != DoubleBlockHalf.LOWER
-                        ) {
-                            continue;
-                        }
-                        count += 1;
-                    }
-                }
-            }
-        }
-        return count;
+    enum DoorKind { NONE, CLOSED, OPEN }
+    record Doors(int count, int openCount) {}
+
+    /** 上半分を除く同じドアを一回だけ読み、総数と開いている数を同時に返す。 */
+    static Doors observeNearbyDoors(ClientWorld world, BlockPos origin) {
+        return observeNearbyDoors(origin, sample -> {
+            BlockState state = world.getBlockState(sample);
+            String blockId = Registries.BLOCK.getId(state.getBlock()).getPath();
+            if (!blockId.endsWith("_door") || state.contains(Properties.DOUBLE_BLOCK_HALF)
+                    && state.get(Properties.DOUBLE_BLOCK_HALF) != DoubleBlockHalf.LOWER) return DoorKind.NONE;
+            return state.contains(Properties.OPEN) && Boolean.TRUE.equals(state.get(Properties.OPEN))
+                ? DoorKind.OPEN : DoorKind.CLOSED;
+        });
     }
 
-    static int countOpenDoors(ClientWorld world, BlockPos origin) {
-        int count = 0;
-        for (int dx = -2; dx <= 2; dx += 1) {
-            for (int dy = -1; dy <= 2; dy += 1) {
-                for (int dz = -2; dz <= 2; dz += 1) {
-                    BlockPos sample = origin.add(dx, dy, dz);
-                    BlockState state = world.getBlockState(sample);
-                    String blockId = Registries.BLOCK.getId(state.getBlock()).getPath();
-                    if (!blockId.endsWith("_door")) {
-                        continue;
-                    }
-                    if (
-                        state.contains(Properties.DOUBLE_BLOCK_HALF)
-                        && state.get(Properties.DOUBLE_BLOCK_HALF) != DoubleBlockHalf.LOWER
-                    ) {
-                        continue;
-                    }
-                    if (state.contains(Properties.OPEN) && Boolean.TRUE.equals(state.get(Properties.OPEN))) {
-                        count += 1;
-                    }
+    static Doors observeNearbyDoors(BlockPos origin, Function<BlockPos, DoorKind> door) {
+        int count = 0, openCount = 0;
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dy = -1; dy <= 2; dy++) {
+                for (int dz = -2; dz <= 2; dz++) {
+                    DoorKind kind = door.apply(origin.add(dx, dy, dz));
+                    if (kind == DoorKind.NONE) continue;
+                    count++;
+                    if (kind == DoorKind.OPEN) openCount++;
                 }
             }
         }
-        return count;
+        return new Doors(count, openCount);
     }
 
     static boolean hasNearbyWindow(ClientWorld world, BlockPos origin) {

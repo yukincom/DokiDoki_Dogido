@@ -69,12 +69,12 @@ public final class SmellObserver {
     public void observe(ObservationOrigin receiver, ClientPlayerEntity owner, ClientWorld world,
             long tickCounter, int snapshotIntervalTicks) {
         BlockPos origin = receiver.blockPosition();
-        String localWeather = localSmellWeather(world, origin);
+        RegistryEntry<Biome> biomeEntry = world.getBiome(origin);
+        Biome biome = biomeEntry.value();
+        String localWeather = localSmellWeather(world, origin, biome);
         updateRainAfterSmellWindow(localWeather, tickCounter);
         boolean rainAfterActive = this.rainAfterSmellUntilTick >= tickCounter;
 
-        RegistryEntry<Biome> biomeEntry = world.getBiome(origin);
-        Biome biome = biomeEntry.value();
         int temperatureModifier = SmellPolicy.temperatureModifier(
             biome.getTemperature(),
             biome.isCold(origin, world.getSeaLevel())
@@ -97,7 +97,7 @@ public final class SmellObserver {
         collectZombieSmellCandidates(receiver, world, candidates);
         collectHotbarSmellCandidates(owner, receiver, candidates);
         collectDroppedItemSmellCandidates(receiver, world, candidates);
-        String biomeId = world.getBiome(origin).getKey()
+        String biomeId = biomeEntry.getKey()
             .map(key -> key.getValue().toString())
             .orElse("unknown");
         SmellPolicy.Candidate biomeCandidate = SmellPolicy.biomeCandidate(biomeId);
@@ -126,9 +126,8 @@ public final class SmellObserver {
         this.previousLocalSmellWeather = localWeather;
     }
 
-    private String localSmellWeather(ClientWorld world, BlockPos pos) {
-        Biome.Precipitation precipitation = world.getBiome(pos).value()
-            .getPrecipitation(pos, world.getSeaLevel());
+    private String localSmellWeather(ClientWorld world, BlockPos pos, Biome biome) {
+        Biome.Precipitation precipitation = biome.getPrecipitation(pos, world.getSeaLevel());
         if (world.isThundering()) {
             return switch (precipitation) {
                 case RAIN -> "thunder_rain";
