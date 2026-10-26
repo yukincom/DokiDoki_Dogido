@@ -32,7 +32,7 @@ impl Dialogue {
             kind: "player_chat".into(),
             model: self.config.model.clone(),
             details: json!({"dialogue_choice":true,"user_text":text,
-                "conversation_history":s.history.lines()}),
+                "conversation_history":s.model_history_lines()}),
             temperature: 0.65,
             max_tokens: self.config.max_tokens.max(192),
             enable_thinking: false,

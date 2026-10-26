@@ -236,7 +236,7 @@ print(json.dumps(dict(h,schema='dogido.j_lens.v1',status='exploratory_transfer',
     let archive = f.root.join("archive"); fs::create_dir(&archive).unwrap();
     store.select_research_storage(research_storage::Selection {root:archive,expected_archive_id:None}).unwrap();
     crate::poem_trash::change(&store.memory,"root:p",false,now()).unwrap();
-    let plan = store.data_repository_plan(Some(&config)).unwrap();
+    let plan = store.data_repository_plan(Some(&config), &data_repository::Mode::Private).unwrap();
     assert_eq!(plan["captures"],1);
     assert!(plan["files"].as_array().unwrap().iter().any(|f| f["path"].as_str().unwrap().contains("/j-lens/")));
     crate::poem_trash::change(&store.memory,"root:p",true,now()).unwrap();

@@ -229,7 +229,7 @@ impl Source {
         if !self.current(s) { return None; }
         let (_, previous) = input.snapshot.as_deref()?;
         let mut history = previous.context.history.clone();
-        history.conversation_turns = s.history.refresh_before_input(&self.turn, &history.conversation_turns, input.retained_history_count);
+        history.conversation_turns = s.refresh_model_history(&self.turn, &history.conversation_turns, input.retained_history_count);
         history.conversation_history = super::history::History::lines_for(&history.conversation_turns);
         let image_current = captured.is_some_and(|context| match &self.after_look {
             Some(request) => context == &request.look.context,

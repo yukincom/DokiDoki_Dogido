@@ -14,6 +14,24 @@ use std::{
 use tokio::sync::watch;
 
 impl Dialogue {
+    /// 句の版が同じでも、直列枠の待機中に確定したあらすじを取り込む。
+    pub(super) fn refresh_workshop_input(&self, sid: &str, epoch: u64, input: &mut bridge::Input) {
+        if input["workshop"].is_object() && input["poem_input"].is_null() {
+            let mut d = self.data.lock().unwrap();
+            if let Some(s) = d.sessions.get_mut(sid)
+                && s.epoch == epoch
+                && s.haiku.workshop.as_ref().is_some_and(|w| {
+                    w.open
+                        && input["workshop"]["workshop_id"] == w.hud_id
+                })
+            {
+                let text = input["text"].as_str().unwrap_or("").to_owned();
+                if let Some(view) = Self::workshop_view(s, &text) {
+                    input["workshop"] = view;
+                }
+            }
+        }
+    }
     pub(super) async fn run_turn(
         self: Arc<Self>,
         sid: String,
@@ -65,6 +83,13 @@ impl Dialogue {
         let mut permit = Some(
             tokio::select! { _=bridge::cancelled(&mut cancel)=>{self.update(&sid,&turn,epoch,PlaybackStatus::Cancelled,None);return;}, p=self.serial.acquire()=>p.unwrap() },
         );
+        // 同じ直列枠で要約を一度だけ行い、その後で観測と履歴を取り直す。
+        // 新入力・緊急取消・切断が来た要約は反映せず、元の履歴を保持する。
+        self.compact_history(&sid, &turn, epoch, &mut cancel).await;
+        if *cancel.borrow() || cancel.has_changed().is_err() {
+            self.update(&sid, &turn, epoch, PlaybackStatus::Cancelled, None);
+            return;
+        }
         // Pick up rain/smell changes and reactions completed while waiting for
         // the preceding turn. The resulting snapshot is fixed for this decision.
         {
@@ -79,7 +104,7 @@ impl Dialogue {
                     input.request_classification.as_ref(),
                 );
                 let mut history = previous.context.history.clone();
-                history.conversation_turns = s.history.refresh_before_input(
+                history.conversation_turns = s.refresh_model_history(
                     &turn,
                     &history.conversation_turns,
                     input.retained_history_count,
@@ -101,24 +126,8 @@ impl Dialogue {
         }
         input.visual = super::visual_runtime::Source::new(&self, &sid, &turn, epoch)
             .map(|source| source.after_look(input.after_look.clone()));
-        // An earlier authorized save may have completed while this turn waited.
-        // Rebuild the read-only context before planning against that new version.
-        if input["workshop"].is_object() && input["poem_input"].is_null() {
-            let mut d = self.data.lock().unwrap();
-            if let Some(s) = d.sessions.get_mut(&sid)
-                && s.epoch == epoch
-                && s.haiku.workshop.as_ref().is_some_and(|w| {
-                    w.open
-                        && input["workshop"]["workshop_id"] == w.hud_id
-                        && input["workshop"]["version"] != w.version
-                })
-            {
-                let text = input["text"].as_str().unwrap_or("").to_owned();
-                if let Some(view) = Self::workshop_view(s, &text) {
-                    input["workshop"] = view;
-                }
-            }
-        }
+        // 受付後の保存と文脈圧縮を、同じ現在workshopへ反映する。
+        self.refresh_workshop_input(&sid, epoch, &mut input);
         // 観測失効は生成・再生前に検出する。開始後は台詞を完走し、危険・終了の取消は各所有者に任せる。
         let owner = self.clone();
         let monitor_sid = sid.clone();

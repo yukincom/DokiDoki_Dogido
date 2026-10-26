@@ -107,6 +107,8 @@ function renderNavigation(){
 function showCover(){
   document.body.classList.add('library-cover');
   document.body.classList.remove('library-photos');
+  document.body.classList.remove('library-journeys');
+  $('journey-library').hidden=true;
   document.body.classList.remove('book-intro');
   $('book-cover').hidden=true;
   $('photo-library').hidden=true;
@@ -114,6 +116,7 @@ function showCover(){
   history.replaceState(null,'','#cover');
 }
 function showBookCover(book){
+  if(book==='journeys'){switchBook(book);return;}
   const covers={
     poems:{title:'句集',art:'poems-cover-pixel-v1.png',alt:'夕焼けの桜と、一匹のハチのドット絵'},
     catalog:{title:'あんちょこ',art:'catalog-cover-pixel-v1.png',alt:'草原のクリーパーと、黄色いタンポポのドット絵'},
@@ -147,7 +150,14 @@ function switchBook(book,selected){
   document.body.classList.remove('book-intro');
   $('book-cover').hidden=true;
   document.body.classList.toggle('library-photos',book==='photos');
+  document.body.classList.toggle('library-journeys',book==='journeys');
+  $('journey-library').hidden=book!=='journeys';
   $('photo-library').hidden=book!=='photos';
+  if(book==='journeys'){
+    history.replaceState(null,'','#journeys');
+    document.querySelectorAll('[data-book]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.book==='journeys')));
+    document.dispatchEvent(new Event('dogido-journeys-opened'));return;
+  }
   if(book==='photos'){
     history.replaceState(null,'','#photos');
     document.querySelectorAll('[data-book]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.book==='photos')));
@@ -195,7 +205,7 @@ document.addEventListener('submit',event=>{
 for(const key of ['biome','period','timeOfDay'])$(key).addEventListener('change',()=>{state[key]=$(key).value;renderList();});
 function openLibraryRoute(){
   if(['#catalog-cover','#poems-cover','#photos-cover'].includes(location.hash))showBookCover(location.hash.slice(1,-6));
-  else if(['#catalog','#poems','#photos'].includes(location.hash))switchBook(location.hash.slice(1));
+  else if(['#catalog','#poems','#photos','#journeys'].includes(location.hash))switchBook(location.hash.slice(1));
   else showCover();
 }
 window.addEventListener('hashchange',openLibraryRoute);

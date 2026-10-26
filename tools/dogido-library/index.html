@@ -17,6 +17,7 @@
   <link rel="stylesheet" href="research-settings.css">
   <link rel="stylesheet" href="poem-record.css">
   <link rel="stylesheet" href="poem-editor.css">
+  <link rel="stylesheet" href="journeys.css">
   <script defer src="bootstrap.js"></script>
   <script defer src="model.js"></script>
   <script defer src="catalog-player-notes.js"></script>
@@ -30,6 +31,7 @@
   <script defer src="reading-model.js"></script>
   <script defer src="bookshelf-controls.js"></script>
   <script defer src="research-settings.js"></script>
+  <script defer src="journeys.js"></script>
   <script defer src="live-library.js"></script>
   <script defer src="photo-library.js"></script>
   <script defer src="poem-export.js"></script>
@@ -38,7 +40,7 @@
 <body class="library-cover">
   <header class="topbar">
     <a class="brand" href="#cover" aria-label="ドギドの本棚・表紙へ"><span class="brand-mark" aria-hidden="true"><img src="assets/bookshelf-open-scroll-v4.png" alt="" width="44" height="44"></span>ドギドの本棚</a>
-    <div class="header-actions"><nav class="books" aria-label="本を選ぶ"><button data-book="poems" aria-pressed="false">句集</button><button data-book="catalog" aria-pressed="true">あんちょこ</button><button data-book="photos" aria-pressed="false">フォトブック</button></nav></div>
+    <div class="header-actions"><nav class="books" aria-label="本を選ぶ"><button data-book="poems" aria-pressed="false">句集</button><button data-book="catalog" aria-pressed="true">あんちょこ</button><button data-book="photos" aria-pressed="false">フォトブック</button><button data-book="journeys" aria-pressed="false">旅の記録</button></nav></div>
   </header>
   <main>
     <section class="cover-page" id="library-cover" aria-label="本棚の表紙">
@@ -47,6 +49,7 @@
         <button class="cover-book cover-poems" data-book="poems">句集<span aria-hidden="true">→</span></button>
         <button class="cover-book cover-catalog" data-book="catalog">あんちょこ<span aria-hidden="true">→</span></button>
         <button class="cover-book cover-photos" data-book="photos">フォトブック<span aria-hidden="true">→</span></button>
+        <button class="cover-book cover-journeys" data-book="journeys">旅の記録<span aria-hidden="true">→</span></button>
       </nav>
     </section>
     <section id="book-cover" class="book-cover-page" aria-labelledby="book-cover-title" hidden>
@@ -54,6 +57,7 @@
       <img id="book-cover-art" class="book-cover-art" alt="" width="1254" height="1254">
     </section>
     <section id="photo-library" class="photo-library-page" aria-label="フォトブック" hidden></section>
+    <section id="journey-library" class="journey-library-page" aria-label="旅の記録" hidden></section>
     <dialog id="photo-picker" aria-labelledby="photo-picker-title"></dialog>
     <section class="desk" aria-label="本の閲覧画面">
       <aside class="binding"><div class="book-label"><small id="volume">世界を知る</small><h2 id="book-title">ドギドの<br>あんちょこ</h2><span class="seal" aria-hidden="true">図鑑</span></div><nav id="categories" aria-label="カテゴリ"></nav><div class="companion"><img src="assets/character.png" alt="ドギド"><p>なんでもない発見も、<br>ことばの種になるんやな。</p><small>案内文は試作用</small></div></aside>

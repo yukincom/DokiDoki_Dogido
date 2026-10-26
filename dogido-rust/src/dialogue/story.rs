@@ -13,7 +13,7 @@ pub(super) struct StoryEvent<'a> {
 
 /// 通常会話が既に持つ文脈を相談へ渡す。相談由来のeventはw.dialogueと重なるため戻さない。
 pub(super) fn workshop_context(s: &Session) -> String {
-    let history = s.history.rows();
+    let history = s.workshop_context_rows();
     let ordinary: Vec<_> = history
         .iter()
         .filter(|row| {
@@ -41,7 +41,10 @@ impl Dialogue {
         s: &mut Session,
         event: StoryEvent<'_>,
     ) {
-        if s.history.story(event.id, event.text) {
+        let changed = if event.kind == "workshop_dialogue" {
+            s.history.story_turn(event.id, event.text)
+        } else { s.history.story(event.id, event.text) };
+        if changed {
             self.append_story(sid, &s.instance_id, event);
         }
     }

@@ -1234,10 +1234,10 @@ fn test_app(f: &Fixture) -> Arc<App> {
 fn repository_plan_preserves_snapshot_bytes_and_rejects_unconfigured_archive() {
     use sha2::{Digest, Sha256};
     let f = Fixture::new(); f.poem("root", "p"); let s = f.store();
-    assert!(s.data_repository_plan(None).is_err());
+    assert!(s.data_repository_plan(None, &data_repository::Mode::Private).is_err());
     let root = f.root.join("archive"); fs::create_dir(&root).unwrap();
     s.select_research_storage(research_storage::Selection {root:root.clone(),expected_archive_id:None}).unwrap();
-    let plan = s.data_repository_plan(None).unwrap();
+    let plan = s.data_repository_plan(None, &data_repository::Mode::Private).unwrap();
     assert_eq!(plan["poems"], 1); assert_eq!(plan["captures"], 0);
     let head = s.read().unwrap()["researchSnapshots"]["root:p"].clone();
     let saved = plan["files"].as_array().unwrap().iter().find(|f| f["path"] == head["relative_path"]).unwrap();
@@ -1725,4 +1725,63 @@ async fn export_requires_same_origin_token_and_valid_period() {
         .0,
         StatusCode::BAD_REQUEST
     );
+}
+
+#[test]
+fn journey_notes_use_existing_revision_save_and_never_rewrite_adventure_text() {
+    let f = Fixture::new();
+    let store = f.store();
+    let mut record = crate::journey::Record::new("s", "プレイヤー");
+    record.synopses.push(crate::journey::Synopsis { text:"村から川沿いを歩いた。".into(), turns:10 });
+    crate::journey::save(&store.memory, &record).unwrap();
+    let view = store.library_view().unwrap();
+    assert_eq!(view["journeys"][0]["id"], record.id);
+    assert_eq!(view["player"]["journeys"], json!({}));
+    let request = json!({"revision":0,"section":"journeys","key":record.id,
+        "value":{"note":"夕方警告の間隔を変えた。\n川沿いの視界が広かった。"}});
+    let saved = store.edit(&request).unwrap();
+    assert_eq!(saved["journeys"][&record.id]["note"], request["value"]["note"]);
+    assert!(store.edit(&request).is_err());
+    let mut invalid = request.clone(); invalid["revision"] = saved["revision"].clone();
+    invalid["value"]["synopses"] = json!([]);
+    assert!(store.edit(&invalid).is_err());
+    record.ended_at = Some(chrono::Utc::now());
+    crate::journey::save(&store.memory, &record).unwrap();
+    let view = store.library_view().unwrap();
+    assert_eq!(view["journeys"][0]["synopses"][0]["text"], "村から川沿いを歩いた。");
+    assert_eq!(view["player"]["journeys"][&record.id]["note"], request["value"]["note"]);
+}
+
+#[test]
+fn journey_export_is_private_and_uses_immutable_snapshots_including_memos() {
+    let f = Fixture::new(); let s = f.store();
+    let root = f.root.join("archive"); fs::create_dir(&root).unwrap();
+    s.select_research_storage(research_storage::Selection {root,expected_archive_id:None}).unwrap();
+    let mut record = crate::journey::Record::new("private-session", "本人");
+    record.synopses.push(crate::journey::Synopsis {text:"非公開の旅のあらすじ".into(),turns:10});
+    record.poem("root:p".into(), "旅で詠んだ句".into());
+    crate::journey::save(&s.memory, &record).unwrap();
+    let revision = s.player().unwrap()["revision"].clone();
+    s.edit(&json!({"revision":revision,"section":"journeys","key":record.id,"value":{"note":"非公開メモ"}})).unwrap();
+    let index = |plan: &Value| -> Value {
+        serde_json::from_str(plan["files"].as_array().unwrap().iter().find(|f| f["path"] == "index.json").unwrap()["content"].as_str().unwrap()).unwrap()
+    };
+    let first = s.data_repository_plan(None, &data_repository::Mode::Private).unwrap();
+    assert_eq!(first["poems"], 0); assert_eq!(first["journeys"], 1);
+    let first_path = index(&first)["journeys"][0]["snapshot"]["path"].as_str().unwrap().to_owned();
+    let file = first["files"].as_array().unwrap().iter().find(|f| f["path"] == first_path).unwrap();
+    let saved: Value = serde_json::from_str(file["content"].as_str().unwrap()).unwrap();
+    assert_eq!(saved["record"]["synopses"][0]["text"], "非公開の旅のあらすじ");
+    assert_eq!(saved["record"]["poems"][0]["id"], "root:p"); assert_eq!(saved["note"], "非公開メモ");
+    assert_eq!(first, s.data_repository_plan(None, &data_repository::Mode::Private).unwrap());
+    let revision = s.player().unwrap()["revision"].clone();
+    s.edit(&json!({"revision":revision,"section":"journeys","key":record.id,"value":{"note":"メモだけを変更"}})).unwrap();
+    let updated = s.data_repository_plan(None, &data_repository::Mode::Private).unwrap();
+    assert_ne!(index(&updated)["journeys"][0]["snapshot"]["path"], first_path);
+    // 一句もない冒険も非公開保管でき、公開planへ旅は流れない。
+    let public = s.data_repository_plan(None, &data_repository::Mode::Public).unwrap();
+    assert!(index(&public).get("journeys").is_none());
+    assert!(!public["files"].to_string().contains("journeys/"));
+    assert!(!public["files"].to_string().contains("非公開"));
+    assert!(!public["files"].to_string().contains("private-session"));
 }

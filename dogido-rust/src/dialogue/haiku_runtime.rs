@@ -507,6 +507,12 @@ impl Dialogue {
         if part != "poem" {
             s.history.push(turn, "assistant", body);
         } else {
+            if let Some(w) = s.haiku.workshop.as_ref()
+                && row["haiku_job_id"] == s.haiku.workshop_generation
+                && let Some(record) = s.journey.as_mut()
+            {
+                record.poem(format!("session:{sid}:{}", w.emission.entry_id()), body.into());
+            }
             let verb = if text { "示した" } else { "詠んだ" };
             self.share_story(
                 sid,

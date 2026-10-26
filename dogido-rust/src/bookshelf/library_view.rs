@@ -8,13 +8,14 @@ use std::collections::{BTreeMap, BTreeSet};
 impl Store {
     pub(super) fn library_view(&self) -> Result<Value> {
         let data = self.read()?;
+        let journeys = crate::journey::load(&self.memory)?;
         let mut local: BTreeMap<String, Value> = store::poems(&self.memory, false)?.into_iter()
             .map(|p| (p["id"].as_str().unwrap().into(), p)).collect();
-        let mut player = json!({"revision":data["revision"],"catalog":data["catalog"],"poems":data["poems"]});
+        let mut player = json!({"revision":data["revision"],"catalog":data["catalog"],"poems":data["poems"],"journeys":data["journeys"]});
         let mut photos = self.photo_snapshot(&data)?;
         let Some(config) = archive::load_config(&self.memory)? else {
             photos["researchStorage"]["displaySource"] = "local".into();
-            return Ok(json!({"poems":sorted(local.into_values().collect()),"player":player,"photos":photos}));
+            return Ok(json!({"poems":sorted(local.into_values().collect()),"player":player,"photos":photos,"journeys":journeys}));
         };
         let mut failures = Vec::new();
         let mut result = Vec::new();
@@ -82,7 +83,7 @@ impl Store {
         status["readPoems"] = archived.into();
         status["pendingPoems"] = pending.into();
         status["readError"] = json!(failures.first());
-        Ok(json!({"poems":sorted(result),"player":player,"photos":photos}))
+        Ok(json!({"poems":sorted(result),"player":player,"photos":photos,"journeys":journeys}))
     }
 }
 

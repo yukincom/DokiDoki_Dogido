@@ -57,13 +57,20 @@ class PublishTests(unittest.TestCase):
                 return subprocess.run(['git', '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid',
                     '-c', 'commit.gpgsign=false', '-C', str(root), *args],
                     capture_output=True, check=kwargs.get('check', True))
-            def plan(versions):
+            def plan(versions, journey=None):
                 files=[]; rows=[]
                 for label, version in versions.items():
                     file=m.text_file(f'2026/10251200/snapshots/{label}-{version}.json', str(version))
                     files.append(file)
                     rows.append({'id':label,'snapshot':{k:file[k] for k in ('path','bytes','sha256')},'requests':[]})
-                files.append(m.text_file('index.json',json.dumps({'poems':rows})))
+                journeys=[]
+                if journey is not None:
+                    content=json.dumps(journey,ensure_ascii=False)
+                    sha=m.hashlib.sha256(content.encode()).hexdigest()
+                    file=m.text_file(f'journeys/journey_test/snapshots/{sha}.json',content)
+                    files.append(file)
+                    journeys.append({'id':'journey_test','snapshot':{k:file[k] for k in ('path','bytes','sha256')}})
+                files.append(m.text_file('index.json',json.dumps({'poems':rows,'journeys':journeys})))
                 return {'repository':m.REPOSITORY,'checkout':str(checkout),'files':files,'poems':len(rows),'captures':0}
             github=subprocess.CompletedProcess([],0,json.dumps({'private':True,'full_name':m.REPOSITORY}).encode(),b'')
             with patch.object(m,'git',side_effect=local_git), patch.object(m,'run',return_value=github):
@@ -93,6 +100,23 @@ class PublishTests(unittest.TestCase):
                 retried=m.publish(plan({'one':1,'two':2,'three':1}))
                 self.assertEqual(retried['status'],'uploaded')
                 self.assertTrue(any(c[0]=='clone' for c in calls))
+                journey={'record':{'synopses':['非公開の旅'],'ended_at':None},'note':'最初のメモ'}
+                with_journey=m.publish(plan({'one':1,'two':2,'three':1},journey))
+                self.assertEqual((with_journey['poems'],with_journey['journeys']),(0,1))
+                paths=set((checkout/'journeys/journey_test/snapshots').glob('*.json'))
+                calls.clear()
+                same=m.publish(plan({'one':1,'two':2,'three':1},journey))
+                self.assertEqual((same['status'],same['journeys']),('up_to_date',0))
+                self.assertFalse(any(c[0] in ('push','clone') for c in calls))
+                journey['note']='メモだけを変更'
+                note=m.publish(plan({'one':1,'two':2,'three':1},journey))
+                self.assertEqual((note['poems'],note['journeys']),(0,1))
+                journey['record']['ended_at']='2026-10-26T07:00:00Z'
+                journey['record']['synopses'].append('終了時の記録')
+                final=m.publish(plan({'one':1,'two':2,'three':1},journey))
+                self.assertEqual(final['journeys'],1)
+                current=set((checkout/'journeys/journey_test/snapshots').glob('*.json'))
+                self.assertEqual(len(current),3);self.assertTrue(paths<=current)
 
 
 if __name__ == '__main__': unittest.main()

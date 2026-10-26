@@ -180,7 +180,7 @@ impl Dialogue {
         }
         w.dialogue =
             serde_json::from_value(original["workshop_history"].clone()).unwrap_or_default();
-        while w.dialogue.len() > 4 {
+        while w.dialogue.len() > 20 {
             w.dialogue.pop_front();
         }
         w.followup =
@@ -194,23 +194,10 @@ impl Dialogue {
         }
         if let Some(history) = original["history"].as_array() {
             for row in history {
-                if let (Some(t), Some(r), Some(c)) = (
-                    row["turn_id"].as_str(),
-                    row["role"].as_str(),
-                    row["text"].as_str(),
-                ) {
-                    s.history.push(
-                        if r == "assistant" {
-                            t.strip_suffix(":reply").unwrap_or(t)
-                        } else {
-                            t
-                        },
-                        r,
-                        c,
-                    );
-                }
+                s.history.restore_row(row);
             }
         }
+
         let rows = snapshot["dialogue"]["utterances"]
             .as_array()
             .ok_or_else(|| anyhow::anyhow!("missing transcript"))?;
@@ -360,6 +347,54 @@ mod tests {
             "lines":e["lines"],"materials":view["materials"],"interpretation":null,"preface":null,
             "biome":null,"structure":null,"time_phase":null,"dimension":null,"event_sequence":null,"route":"haiku"
         })).unwrap().complete(chrono::Utc::now()).unwrap()
+    }
+
+    #[tokio::test]
+    async fn restored_workshop_turns_compact_and_refresh_same_verse_context() {
+        let dialogue = Dialogue::new(DialogueConfig {
+            audio_enabled: false, llm_enabled: false,
+            haiku: HaikuSettings { enabled: false, memory_enabled: false, ..Default::default() },
+            ..Default::default()
+        }).unwrap();
+        dialogue.register("text", "プレイヤー", true);
+        dialogue.open_text_workshop("text", emission(), "saved".into()).unwrap();
+        {
+            let mut d = dialogue.data.lock().unwrap();
+            let s = d.sessions.get_mut("text").unwrap();
+            for i in 0..18 {
+                s.history.story_turn(&format!("story:{i}"), &format!("相談の往復{i}を届けた。"));
+            }
+            s.history.push("normal", "user", "古い相談前の入力");
+            s.history.push("normal", "assistant", "相談前の返答やで。");
+            s.history.push("quiet", "user", "返答を待つ入力");
+            s.history.silent("quiet");
+        }
+        let recovery = json!({"dialogue":dialogue.snapshot(None),"workshop":dialogue.workshop_snapshot("text",0)});
+        let restored = Dialogue::new(dialogue.config.clone()).unwrap();
+        restored.register("text", "プレイヤー", true);
+        restored.open_text_workshop("text", emission(), "saved".into()).unwrap();
+        restored.restore_text_conversation("text", &recovery).unwrap();
+        assert_eq!(restored.snapshot(None)["sessions"][0]["history"], recovery["dialogue"]["sessions"][0]["history"]);
+        let mut input = {
+            let mut d = restored.data.lock().unwrap();
+            let s = d.sessions.get_mut("text").unwrap();
+            let old = Dialogue::workshop_view(s, "続けよう").unwrap();
+            let batch = s.history.compaction().expect("restored 20 turns");
+            assert_eq!(batch.turns, 10);
+            assert!(s.history.commit_compaction(&batch, "草の句の意味と表現を相談した。"));
+            bridge::Input::from(json!({"text":"続けよう","workshop":old}))
+        };
+        let version = input["workshop"]["version"].clone();
+        restored.refresh_workshop_input("text", 0, &mut input);
+        assert_eq!(input["workshop"]["version"], version);
+        assert!(input["workshop"]["shared_context"].as_str().unwrap().contains("草の句の意味と表現を相談した。"));
+        // 他の一句へ古い入力を付け替えない。
+        input["workshop"]["workshop_id"] = "other".into();
+        input["workshop"]["shared_context"] = "変更前".into();
+        restored.refresh_workshop_input("text", 0, &mut input);
+        assert_eq!(input["workshop"]["shared_context"], "変更前");
+        restored.shutdown().await;
+        dialogue.shutdown().await;
     }
 
     #[test]

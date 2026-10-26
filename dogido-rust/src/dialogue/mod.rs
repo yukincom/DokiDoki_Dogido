@@ -23,6 +23,8 @@ mod episode_runtime;
 mod foreground_runtime;
 mod haiku_runtime;
 mod history;
+mod history_runtime;
+mod journey_runtime;
 mod horse_recall_runtime;
 mod knowledge_display;
 mod memory_runtime;
@@ -175,6 +177,8 @@ struct Session {
     sequences: SequenceLedger,
     /// turnに結びついた短期履歴。assistant側は実再生完了、テキスト相談室では表示確認で確定する。
     history: history::History,
+    /// 現在の冒険の日付と句リンク。あらすじはhistoryの確定結果から保存する。
+    journey: Option<crate::journey::Record>,
     /// 観測された名前と最近の対象の記録。chat_contextが会話用snapshotへ投影する。
     chat_observation: crate::chat_observation::ChatObservationMemory,
     /// 発句開始に添える現在構造物・プレイヤー名・所持品順。chat_contextが観測入口で更新する。
@@ -244,6 +248,7 @@ struct Session {
 #[derive(Default)]
 struct Data {
     sessions: HashMap<String, Session>,
+    closed_journeys: Vec<journey_runtime::Draft>,
     rows: VecDeque<Value>,
     revision: u64,
     stopped: bool,
@@ -366,6 +371,10 @@ impl Dialogue {
     /// 接続IDへ空の履歴・観測・判断器を登録し、workshop記録の差分比較状態を初期化する。
     pub fn register(&self, session_id: &str, name: &str, preview: bool) {
         let mut d = self.data.lock().unwrap();
+        if let Some(mut previous) = d.sessions.remove(session_id)
+            && let Some(draft) = journey_runtime::take(&mut previous) {
+                d.closed_journeys.push(draft);
+            }
         d.sessions.insert(
             session_id.into(),
             Session {
@@ -392,6 +401,7 @@ impl Dialogue {
                 mode: crate::combat::model::Mode::Normal,
                 sequences: SequenceLedger::default(),
                 history: history::History::default(),
+                journey: (!preview).then(|| crate::journey::Record::new(session_id, name)),
                 chat_observation: chat_context::memory(&self.config.combat),
                 haiku_context: crate::haiku::preparation::RuntimeSnapshot::default(),
                 pending_vocalization: None,
@@ -440,7 +450,10 @@ impl Dialogue {
         Self::cancel_warning(&mut d, session_id, "session_closed");
         Self::cancel_assist(&mut d, session_id);
         Self::cancel_light(&mut d, session_id);
-        d.sessions.remove(session_id);
+        if let Some(mut session) = d.sessions.remove(session_id)
+            && let Some(draft) = journey_runtime::take(&mut session) {
+                d.closed_journeys.push(draft);
+            }
         d.revision += 1;
         drop(d);
         self.record_workshop(
@@ -609,6 +622,7 @@ impl Dialogue {
                 &json!({"reason":"server_shutdown"}),
             );
         }
+        self.finish_journeys().await;
         self.workshop_records.flush().await;
         self.workshop_records.forget_all();
         self.request_classifier.lock().await.close().await;

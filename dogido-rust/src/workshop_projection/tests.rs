@@ -97,3 +97,17 @@ fn pending_allows_explicit_close_only_during_the_decision_phase() {
         assert_eq!(input, before);
     }
 }
+
+#[test]
+fn workshop_model_reads_the_latest_twenty_pairs() {
+    let pairs: Vec<_> = (0..25).map(|i| json!({
+        "turn_id": format!("turn-{i}"), "player_text": format!("入力{i:02}"),
+        "dogido_text": format!("返答{i:02}"), "reply_delivery": "spoken"
+    })).collect();
+    let text = dialogue_from_view(&pairs).unwrap();
+    assert_eq!(text.lines().count(), 40);
+    assert!(!text.contains("入力04"));
+    assert!(!text.contains("返答04"));
+    assert!(text.starts_with("プレイヤー: 入力05\nドギド: 返答05"));
+    assert!(text.ends_with("ドギド: 返答24"));
+}

@@ -20,7 +20,7 @@ impl Store {
         self.memory.join("bookshelf/state.json")
     }
     pub(super) fn read(&self) -> Result<Value> {
-        let value = trash::read_json(
+        let mut value = trash::read_json(
             &self.path(),
             json!({"revision":0,"photoRevision":0,"catalog":{},"poems":{},"photoTitles":{},"placements":{},"photoTrash":{}}),
         )?;
@@ -36,6 +36,9 @@ impl Store {
                 ),
             "invalid_poem_metadata"
         );
+        if value["journeys"].is_null() { value["journeys"] = json!({}); }
+        ensure!(value["journeys"].as_object().is_some_and(|notes| notes.values().all(|row|
+            row.as_object().is_some_and(|v| v.len() == 1 && v["note"].as_str().is_some_and(|s| s.chars().count() <= 4000)))), "invalid_journey_metadata");
         Ok(value)
     }
     pub(super) fn write_lock(&self) -> Result<fs::File> {
@@ -65,7 +68,7 @@ impl Store {
     }
     pub fn player(&self) -> Result<Value> {
         let d = self.read()?;
-        Ok(json!({"revision":d["revision"],"catalog":d["catalog"],"poems":d["poems"]}))
+        Ok(json!({"revision":d["revision"],"catalog":d["catalog"],"poems":d["poems"],"journeys":d["journeys"]}))
     }
     pub fn edit(&self, value: &Value) -> Result<Value> {
         let _lock = self.write_lock()?;
@@ -94,6 +97,11 @@ impl Store {
                 "use_reading_editor"
             );
             d[section][key] = json!({"keys":keys,"readings":[]});
+        } else if section == "journeys" {
+            ensure!(crate::journey::load(&self.memory)?.iter().any(|record| record.id == key), "unknown_journey");
+            ensure!(v.as_object().is_some_and(|v| v.len() == 1 && v.contains_key("note"))
+                && v["note"].as_str().is_some_and(|s| s.chars().count() <= 4000), "invalid_note");
+            d[section][key] = json!({"note":v["note"]});
         } else {
             ensure!(
                 section == "poems" && poems(&self.memory, false)?.iter().any(|p| p["id"] == key),
@@ -112,7 +120,7 @@ impl Store {
             d[section][key] = json!({"favorite":v["favorite"],"note":v["note"]});
         }
         self.save(&mut d)?;
-        Ok(json!({"revision":d["revision"],"catalog":d["catalog"],"poems":d["poems"]}))
+        Ok(json!({"revision":d["revision"],"catalog":d["catalog"],"poems":d["poems"],"journeys":d["journeys"]}))
     }
     fn photo_rows(&self, d: &Value) -> Result<Vec<Value>> {
         self.check_photo_directory()?;

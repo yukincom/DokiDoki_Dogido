@@ -149,7 +149,7 @@ impl Snapshot {
 }
 fn dialogue_from_view(pairs: &[Value]) -> Result<String> {
     let mut utterances: VecDeque<(&str, String, String)> = VecDeque::new();
-    for pair in &pairs[pairs.len().saturating_sub(4)..] {
+    for pair in &pairs[pairs.len().saturating_sub(20)..] {
         let id = cut(
             &clean(
                 pair["turn_id"]
@@ -179,7 +179,7 @@ fn dialogue_from_view(pairs: &[Value]) -> Result<String> {
             if !id.is_empty() && utterances.iter().any(|(r, i, _)| *r == role && i == &id) {
                 continue;
             }
-            if utterances.len() == 8 {
+            if utterances.len() == 40 {
                 utterances.pop_front();
             }
             utterances.push_back((role, id.clone(), value));

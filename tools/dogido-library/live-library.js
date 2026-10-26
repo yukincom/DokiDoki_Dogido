@@ -24,6 +24,7 @@
       const old=boot.player.poems[key]||{favorite:false,note:''};
       if(JSON.stringify(value)!==JSON.stringify(old))found.push({section:'poems',key,value});
     }
+    found.push(...(window.DogidoJourneys?.changes()||[]));
     return found;
   }
   function unadded(){return catalogNotes.hasDrafts()||['catalog-reading-word','catalog-reading-new'].some(id=>$(id)?.value.trim());}
@@ -122,6 +123,7 @@
       window.DogidoResearchSettings?.refresh(next.photos.researchStorage);
       M.poems.splice(0,M.poems.length,...next.poems.map(p=>({...p,biome:M.biomes[p.biomeId]})));
       boot.poems=M.poems;boot.player=next.player;revision=next.player.revision;
+      window.DogidoJourneys?.refresh(next.journeys||[], next.player.journeys||{});
       state.favorites.clear();
       for(const p of M.poems){
         const note=next.player.poems[p.id]||{};
@@ -134,7 +136,7 @@
       $('period').innerHTML='<option value="all">すべて</option>'+months.map(m=>`<option value="${esc(m)}">${esc(m)}</option>`).join('');
       $('period').value=state.period;
       signature=nextSignature;
-      renderNavigation();renderList();placeBookCover();dirtyStatus();
+      renderNavigation();renderList();placeBookCover();window.DogidoJourneys?.markActive();dirtyStatus();
     }catch(error){/* 一時的な読取失敗では現在表示と入力を保持し、次回に再試行する。 */}
     finally{refreshing=false;}
   }

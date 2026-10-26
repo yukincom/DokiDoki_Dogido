@@ -1,0 +1,44 @@
+/* 句集・あんちょこと共通の装丁、紙色、見出しと文字サイズ。 */
+body.library-journeys { --cover:#9b7330; --accent:#865a24; }
+.library-journeys .desk,.library-journeys main>footer { display:none; }
+.journey-library-page { background:var(--paper); border:4px solid #4c4434; box-shadow:0 3px 0 #c4b08d,0 7px 0 #76684d,0 20px 32px #3a342d22; }
+.journey-columns { display:grid; grid-template-columns:340px minmax(0,1fr); min-height:735px; }
+.journey-index { min-width:0; padding:24px 12px 20px 20px; border-right:7px double #6d501e; }
+.journey-index h1 { color:#fff4da; font:1.75rem/1.75 var(--serif); letter-spacing:.1em; margin:0 8px 22px; }
+.journey-index-paper { color:var(--ink); background:var(--paper); border:1px solid var(--line); padding:14px 10px 8px; }
+.journey-search-label { display:block; font-size:var(--text-small); }
+#journey-search { width:100%; margin-top:8px; padding:10px; background:#eee6d0; border:1px solid #bdb293; border-bottom:2px solid #a79b7c; border-radius:0; font:inherit; }
+.journey-count { margin:12px 0 8px; font-size:var(--text-small); color:var(--muted); }
+.journey-list { max-height:560px; overflow:auto; scrollbar-width:thin; scrollbar-color:#c0b38e transparent; }
+.journey-list button { width:100%; text-align:left; padding:12px 8px; border:0; border-bottom:1px solid var(--line); border-left:3px solid transparent; background:transparent; color:var(--ink); }
+.journey-list button[aria-pressed="true"] { border-left-color:var(--accent); background:#ede0ce; }
+.journey-list time { display:block; font-weight:600; font-size:var(--text-small); white-space:nowrap; }
+.journey-list span { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; margin-top:3px; font-size:var(--text-ui); line-height:1.6; }
+.journey-detail { min-width:0; padding:29px 34px 30px; background-image:repeating-linear-gradient(0deg,#8e6f3903 0 1px,transparent 1px 4px); }
+.journey-heading { border-bottom:1px solid var(--line); padding-bottom:18px; }
+.journey-heading h2 { font:var(--text-heading)/1.4 var(--serif); margin:0; letter-spacing:.02em; }
+.journey-heading p { margin-top:8px; }
+.journey-synopsis { font:var(--text-body)/1.85 var(--serif); margin:24px 0; max-width:48em; overflow-wrap:anywhere; white-space:pre-line; }
+.journey-synopsis p+p { margin-top:1em; }
+.journey-status { color:var(--muted); font-size:var(--text-small); line-height:1.7; }
+.journey-poems { border-block:1px solid var(--line); padding:0 0 22px; margin:24px 0; }
+.journey-poems ul { list-style:none; padding:0; margin:0; }
+.journey-poems li { margin:12px 0; }
+.journey-poems small { display:block; color:var(--muted); }
+.journey-poem-link { padding:6px 0; border:0; background:transparent; color:var(--accent); font:var(--text-body)/1.85 var(--serif); text-align:left; text-decoration:underline; text-underline-offset:4px; }
+#journey-note { width:100%; resize:vertical; padding:12px 15px; border:1px solid #dbccb0; background:#eee5cf; font:inherit; line-height:1.9; color:var(--ink); }
+#journey-note:focus-visible { outline:3px solid #a66725; outline-offset:3px; }
+.journey-empty { padding:80px 0; line-height:2; }
+.cover-choices { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); width:min(680px,100%); }
+.cover-journeys { background:#9b7330; border-color:#6d501e; border-left-color:#dbc4a2; }
+@media(min-width:1450px) { .journey-detail { padding-left:45px; padding-right:45px; } }
+@media(max-width:1100px) { .journey-detail { padding:24px; } }
+@media(max-width:850px) {
+  .journey-columns { grid-template-columns:1fr; min-height:0; }
+  .journey-index { display:block; padding:16px; border-right:0; border-bottom:5px double #6d501e; }
+  .journey-index h1 { margin-bottom:12px; }
+  .journey-list { max-height:300px; }
+  .journey-detail { padding:24px 20px 30px; }
+  .topbar .header-actions .books { flex-wrap:wrap; }
+}
+@media(max-width:400px) { .journey-heading h2 { font-size:1.75rem; } }

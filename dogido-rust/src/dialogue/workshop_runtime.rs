@@ -990,6 +990,8 @@ impl Dialogue {
     /// 現在の一句の読み取りsnapshotだけ。保存・句の正本はhelperへ委譲しない。
     pub(super) fn workshop_view(s: &mut Session, text: &str) -> Option<Value> {
         let shared_context = super::story::workshop_context(s);
+        let visible = s.workshop_context_rows();
+        let all = s.history.rows();
         let w = s
             .haiku
             .workshop
@@ -1010,6 +1012,11 @@ impl Dialogue {
             w.conversation_candidate = None;
         }
         let candidate = w.conversation_candidate.as_ref().map(|c| c.view());
+        // 共有文脈と同じ20ターンの窓を使い、専用履歴から古い相談を戻さない。
+        let dialogue: Vec<_> = w.dialogue.iter().filter(|row| {
+            let id = format!("workshop:{}", row["turn_id"].as_str().unwrap_or(""));
+            !all.iter().any(|r| r["turn_id"] == id) || visible.iter().any(|r| r["turn_id"] == id)
+        }).cloned().collect();
         let lines = w
             .pending
             .as_ref()
@@ -1022,7 +1029,7 @@ impl Dialogue {
             "current_lines":w.current_lines,"pending":w.pending,"version":w.version,
             "conversation_candidate":candidate,
             "discussion_target":w.discussion_target,
-            "dialogue":w.dialogue,"shared_context":shared_context,"agent_steps":w.agent_steps,"followup":w.followup,"text":text}),
+            "dialogue":dialogue,"shared_context":shared_context,"agent_steps":w.agent_steps,"followup":w.followup,"text":text}),
         )
     }
 

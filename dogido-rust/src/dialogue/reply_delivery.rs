@@ -100,7 +100,7 @@ impl Dialogue {
                 w.record_activity(Instant::now());
                 if !w.dialogue.iter().any(|p| p["turn_id"] == turn) {
                     w.dialogue.push_back(json!({"turn_id":turn,"player_text":player_text,"dogido_text":result["text"]}));
-                    while w.dialogue.len() > 4 {
+                    while w.dialogue.len() > 20 {
                         w.dialogue.pop_front();
                     }
                 }
@@ -116,7 +116,7 @@ impl Dialogue {
             && let Some(text) = result["text"].as_str().filter(|text| !text.is_empty())
         {
             // 想起・保存結果も実発話として共有する。通常雑談の対や新しい句の材料にはしない。
-            s.history.story(
+            s.history.story_turn(
                 &format!("memory:{turn}"),
                 &format!("プレイヤー「{player_text}」\nドギド「{text}」"),
             );

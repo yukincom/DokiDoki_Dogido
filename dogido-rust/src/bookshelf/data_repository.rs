@@ -41,13 +41,15 @@ fn inline(files: &mut Vec<Value>, path: &str, bytes: Vec<u8>) -> Result<Value> {
 fn encoded(value: &Value) -> Result<Vec<u8>> { Ok(serde_json::to_vec(value)?) }
 
 impl Store {
-    pub(super) fn data_repository_plan(&self, lens: Option<&j_lens::Config>) -> Result<Value> {
+    pub(super) fn data_repository_plan(&self, lens: Option<&j_lens::Config>, mode: &Mode) -> Result<Value> {
         ensure!(self.sync_research_storage()?["state"] == "ready", "data_repository_archive_unready");
         let _lock = self.research_lock()?;
         let config = archive::load_config(&self.memory)?.context("archive_not_configured")?;
         let archive = archive::open(config.clone())?;
         let state = self.read()?;
-        let heads = state["researchSnapshots"].as_object().context("data_repository_empty")?;
+        ensure!(state["researchSnapshots"].is_null() || state["researchSnapshots"].is_object(), "data_repository_invalid_snapshots");
+        let empty_heads = serde_json::Map::new();
+        let heads = state["researchSnapshots"].as_object().unwrap_or(&empty_heads);
         let mut files = Vec::new();
         let mut poems = Vec::new();
         inline(&mut files, ".dogido-research-archive.json", encoded(&json!({"schema_version":config.schema_version,"archive_id":config.archive_id,"volume_uuid":config.volume_uuid}))?)?;
@@ -99,10 +101,22 @@ impl Store {
             }
             poems.push(json!({"id":id,"snapshot":snapshot,"deleted_from_bookshelf":record["deletedFromBookshelf"],"requests":requests}));
         }
-        let index = json!({"schema":"dogido.research_repository.v1","archive_id":config.archive_id,"repository":URL,
+        let mut index = json!({"schema":"dogido.research_repository.v1","archive_id":config.archive_id,"repository":URL,
             "photos_included":false,"poems":poems});
+        // 旅の対話由来のあらすじ・記録メモは非公開保管にだけ含める。
+        // 正本は更新されるため、送信先では既存研究記録と同じ内容hash付きsnapshotを使う。
+        let mut journeys = Vec::new();
+        if matches!(mode, Mode::Private) {
+            for record in crate::journey::load(&self.memory)? {
+                let note = state["journeys"][&record.id]["note"].as_str().unwrap_or("");
+                let bytes = encoded(&json!({"schema":"dogido.private_journey.v1","record":record,"note":note}))?;
+                let path = format!("journeys/{}/snapshots/{}.json", record.id, hash(&bytes));
+                journeys.push(json!({"id":record.id,"snapshot":inline(&mut files, &path, bytes)?}));
+            }
+            index["journeys"] = json!(journeys);
+        }
         inline(&mut files, "index.json", encoded(&index)?)?;
-        Ok(json!({"repository":REPOSITORY,"files":files,"poems":poems.len(),
+        Ok(json!({"repository":REPOSITORY,"files":files,"poems":poems.len(),"journeys":journeys.len(),
             "captures":poems.iter().flat_map(|p| p["requests"].as_array().unwrap()).filter(|r| r["hidden"].is_object()).count()}))
     }
 
@@ -129,7 +143,7 @@ impl Store {
 
 /// workerは固定configで起動し、認証を画面へ渡さない。HTTP待機中にstate/保全lockを保持しない。
 pub(super) fn publish(store: &Store, lens: Option<&j_lens::Config>, config: &Config) -> Result<Value> {
-    let mut plan = store.data_repository_plan(lens)?;
+    let mut plan = store.data_repository_plan(lens, &config.mode)?;
     plan["checkout"] = json!(config.checkout);
     plan["mode"] = json!(config.mode);
     let dir = store.memory.join("bookshelf");

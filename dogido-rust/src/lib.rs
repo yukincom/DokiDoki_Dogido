@@ -38,6 +38,7 @@ pub mod mob_identity;
 pub mod playback;
 pub mod player_text;
 pub mod poem_book;
+pub mod journey;
 pub mod poem_input;
 pub mod python_worker;
 pub mod reading_correction;

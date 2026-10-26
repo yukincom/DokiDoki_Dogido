@@ -281,7 +281,7 @@ pub(super) fn refresh_dialogue_context(s: &Session, actions: &mut [Speech]) -> b
                 changes.retain(|change| change["kind"] != "smell");
             }
         }
-        leaf.details[key]["recent"] = json!({"conversation":s.history.rows()});
+        leaf.details[key]["recent"] = json!({"conversation":s.model_history()});
     }
     true
 }
@@ -391,7 +391,7 @@ impl Dialogue {
         // Player replies and environmental opportunities share the same history
         // (including chosen silence) and the same code-owned world projection.
         let s = &d.sessions[sid];
-        let recent = json!({"conversation":s.history.rows()});
+        let recent = json!({"conversation":s.model_history()});
         if let Some(event) = s.environment_latest.as_ref() {
             let event = super::body_runtime::event(s, event);
             for action in &mut actions {
@@ -631,7 +631,7 @@ impl Dialogue {
         sid: &str,
         mut request: LightPlanRequest,
     ) {
-        request.details["context"]["recent"] = json!(d.sessions[sid].history.rows());
+        request.details["context"]["recent"] = json!(d.sessions[sid].model_history());
         Self::cancel_light(d, sid);
         if jobs.len() >= 16 {
             return;

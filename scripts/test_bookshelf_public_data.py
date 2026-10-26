@@ -15,7 +15,7 @@ from publish_bookshelf_data import text_file, write_file, check_files, REPOSITOR
 ARCHIVE = '00000000-0000-4000-8000-000000000001'
 
 
-def source_plan(root, *, capture=True, text='あさのひ'):
+def source_plan(root, *, capture=True, text='あさのひ', journey='PRIVATE-JOURNEY-SENTINEL'):
     secret = 'PRIVATE-CONTEXT-SENTINEL'
     files = []
     def add(path, value):
@@ -49,7 +49,8 @@ def source_plan(root, *, capture=True, text='あさのひ'):
                     'translations': [{'id': 7, 'piece': '空', 'text': '空', 'method': 'original', 'private': secret}]})
         requests = [{'request_index': 1, 'response_id': 'response', 'capture_status': 'complete',
                      'manifest': manifest, 'hidden': raw_ref, 'j_lens': readout, 'translations': [translation]}]
-    add('index.json', {'archive_id': ARCHIVE, 'poems': [{'id': 'private-session:poem', 'snapshot': snapshot, 'requests': requests}]})
+    journey_ref=add('journeys/journey_private/snapshots/example.json', {'record':{'synopses':[journey],'id':'journey_private'},'note':'PRIVATE-JOURNEY-NOTE'})
+    add('index.json', {'archive_id': ARCHIVE, 'journeys':[{'id':'journey_private','snapshot':journey_ref}], 'poems': [{'id': 'private-session:poem', 'snapshot': snapshot, 'requests': requests}]})
     return {'repository': REPOSITORY, 'checkout': str(root / 'state'), 'files': files, 'poems': 1, 'captures': int(capture)}
 
 
@@ -60,7 +61,7 @@ class ProjectionTests(unittest.TestCase):
             public = data.projection(plan, 42)
             self.assertEqual(plan, before)
             json_text = '\n'.join(f.get('content', '') for f in public['files'])
-            for forbidden in ('PRIVATE-CONTEXT-SENTINEL', 'prompt_token_ids', 'rendered_text', '/Users/', 'generation_options', 'private-session:poem'):
+            for forbidden in ('PRIVATE-CONTEXT-SENTINEL', 'PRIVATE-JOURNEY-SENTINEL', 'PRIVATE-JOURNEY-NOTE', 'journey_private', 'prompt_token_ids', 'rendered_text', '/Users/', 'generation_options', 'private-session:poem'):
                 self.assertNotIn(forbidden, json_text)
             self.assertTrue(all(f['path'].startswith(f'contributors/42/{ARCHIVE}/') for f in public['files']))
             row = public['index']['poems'][0]['requests'][0]
@@ -75,6 +76,7 @@ class ProjectionTests(unittest.TestCase):
             check_files(output, public['files'])
             self.assertEqual((output / row['hidden']['path']).read_bytes(), (root / 'hidden.f32').read_bytes())
             self.assertEqual(public, data.projection(plan, 42))
+            self.assertEqual(public, data.projection(source_plan(root, journey='変更した非公開の旅'), 42))
 
     def test_corruption_and_cross_request_links_are_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -141,7 +143,7 @@ class ContributionTests(unittest.TestCase):
                 first = publish.publish_public(source_plan(root, capture=False))
                 self.assertEqual(first['status'], 'submitted'); self.assertEqual(len(prs), 1)
                 calls.clear()
-                same = publish.publish_public(source_plan(root, capture=False))
+                same = publish.publish_public(source_plan(root, capture=False, journey='旅とメモだけを変更'))
                 self.assertEqual(same['status'], 'up_to_date'); self.assertEqual(same['commit'], first['commit'])
                 self.assertFalse(any(c[0] in ('push', 'clone') for c in calls))
                 fail_push = True

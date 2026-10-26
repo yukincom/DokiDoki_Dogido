@@ -633,8 +633,9 @@ impl Dialogue {
             .chain((!resume_context.is_empty()).then_some(resume_context))
             .collect::<Vec<_>>()
             .join("\n");
-        let history = s.history.rows();
-        let conversation_history = s.history.lines();
+        if s.haiku.foreground() { s.history.defer_for_haiku(); }
+        let history = s.model_history();
+        let conversation_history = super::history::History::lines_for(&history);
         let chat_native = match chat_context::capture(
             s,
             &event,

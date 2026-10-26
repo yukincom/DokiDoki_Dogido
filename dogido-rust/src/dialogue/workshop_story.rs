@@ -132,7 +132,7 @@ impl Dialogue {
                 *saved = entry;
             } else {
                 workshop.dialogue.push_back(entry);
-                while workshop.dialogue.len() > 4 {
+                while workshop.dialogue.len() > 20 {
                     workshop.dialogue.pop_front();
                 }
             }

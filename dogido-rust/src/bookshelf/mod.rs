@@ -190,7 +190,7 @@ fn bootstrap(app: &App) -> Result<Value> {
         );
     }
     Ok(
-        json!({"catalog":catalog,"poems":view["poems"],"player":view["player"],"photos":view["photos"],"corrections":crate::haiku_record::MemoryStore::new(&app.store.memory).reading_corrections()?,"status":{"active":false,"memoryEnabled":app.memory_enabled,"message":"Minecraftを閉じた状態でも閲覧・編集できます。"},"csrf":app.csrf,"biomes":biomes,"biomeEnglish":english,"dataRepository":app.data_repository.as_ref().map(|c|json!({"url":data_repository::URL,"mode":c.mode}))}),
+        json!({"catalog":catalog,"poems":view["poems"],"journeys":view["journeys"],"player":view["player"],"photos":view["photos"],"corrections":crate::haiku_record::MemoryStore::new(&app.store.memory).reading_corrections()?,"status":{"active":false,"memoryEnabled":app.memory_enabled,"message":"Minecraftを閉じた状態でも閲覧・編集できます。"},"csrf":app.csrf,"biomes":biomes,"biomeEnglish":english,"dataRepository":app.data_repository.as_ref().map(|c|json!({"url":data_repository::URL,"mode":c.mode}))}),
     )
 }
 async fn boot(State(app): State<Arc<App>>) -> Result<Response, ApiError> {
@@ -362,6 +362,8 @@ async fn prepare_capture_readout(
     }).await?))
 }
 const PUBLIC: &[&str] = &[
+    "journeys.js",
+    "journeys.css",
     "research-settings.js",
     "research-settings.css",
     "poem-editor.js",

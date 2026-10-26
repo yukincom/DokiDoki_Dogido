@@ -21,6 +21,7 @@ README = '''# ドギドの研究データ
 - `index.json`: 句ID、保存時点のsnapshot、要求順、採取記録、原配列、J-lens結果の対応とSHA-256。
 - `年/月日時分/snapshots/`: 元句・現在句・改訂・対話・材料・メモ。元の保存形式とhashを維持します。
 - `年/月日時分/internal-representations/`: 検証済みの `manifest.json`、`hidden.f32`、`commit.json`。原配列はGit LFS。
+- `journeys/<ID>/snapshots/`: 旅のあらすじ、日時、発句リンク、記録メモ。非公開保管にだけ含めます。
 - `年/月日時分/j-lens/`: 前・中・後、全30層、各16候補。手動翻訳がある場合は `translations/` に別保存。
 
 写真は参照情報のみです。モデル本体・J-lens重み・認証情報は含みません。採取開始前の句には内部表現がありません。
@@ -143,7 +144,9 @@ def changed_records(plan, previous):
     current = json.loads(index['content'])
     old = {row['id']: row for row in previous.get('poems', [])}
     changed = [row for row in current['poems'] if row != old.get(row['id'])]
-    return len(changed), sum('hidden' in request for row in changed for request in row['requests'])
+    old_journeys = {row['id']: row for row in previous.get('journeys', [])}
+    journeys = sum(row != old_journeys.get(row['id']) for row in current.get('journeys', []))
+    return len(changed), sum('hidden' in request for row in changed for request in row['requests']), journeys
 
 
 def publish(plan):
@@ -199,7 +202,7 @@ def publish(plan):
         if heads:
             git(root, 'fetch', '--quiet', 'origin', 'main', env={'GIT_LFS_SKIP_SMUDGE': '1'})
         previous = json.loads(git(root, 'show', 'FETCH_HEAD:index.json').stdout) if heads else {}
-        changed_poems, changed_captures = changed_records(plan, previous)
+        changed_poems, changed_captures, changed_journeys = changed_records(plan, previous)
         if head and head != remote_head:
             behind = heads and git(root, 'merge-base', '--is-ancestor', head, 'FETCH_HEAD', check=False).returncode == 0
             head_tree = git(root, 'rev-parse', 'HEAD^{tree}').stdout.decode().strip()
@@ -249,9 +252,9 @@ def publish(plan):
         changed = git(root, 'diff', '--cached', '--quiet', check=False).returncode != 0
         if not changed and working['commit_parent'] == remote_head and not pending:
             working_path.unlink()
-            return {'status': 'up_to_date', 'url': URL, 'commit': working['commit_parent'], 'poems': 0, 'captures': 0}
+            return {'status': 'up_to_date', 'url': URL, 'commit': working['commit_parent'], 'poems': 0, 'captures': 0, 'journeys': 0}
         if changed:
-            git(root, 'commit', '-m', '句集とJ-lens候補および内部表現を保管')
+            git(root, 'commit', '-m', '句集と旅の記録および研究データを保管')
         commit = git(root, 'rev-parse', 'HEAD').stdout.decode().strip()
         journal(pending_path, {'commit': commit, 'remote_base': remote_head})
         git(root, 'lfs', 'fsck', timeout=300)
@@ -272,7 +275,7 @@ def publish(plan):
             check_files(checked, files)
         pending_path.unlink()
         working_path.unlink()
-        return {'status': 'uploaded', 'url': URL, 'commit': commit, 'poems': changed_poems, 'captures': changed_captures, 'verified_files': len(files), 'verified_bytes': sum(f['bytes'] for f in files)}
+        return {'status': 'uploaded', 'url': URL, 'commit': commit, 'poems': changed_poems, 'captures': changed_captures, 'journeys': changed_journeys, 'verified_files': len(files), 'verified_bytes': sum(f['bytes'] for f in files)}
 
 
 def main():
