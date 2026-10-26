@@ -140,19 +140,16 @@ pub(super) fn context(s: &Session, event: &GameEvent, complete: bool) -> GameEve
     GameEvent::parse(data).expect("merged validated observations")
 }
 
-pub(super) fn focus(
+/// 同じ判断で受理した身体観測を使い、発話機会の制約を計算する。
+/// 呼出元がdata lock内で投影したeventを渡すため、危険判定と視点・時点が揃う。
+fn focus(
     s: &Session,
+    e: &GameEvent,
     now: u64,
     settings: &crate::combat::model::Settings,
 ) -> AmbientFocus {
     let (boss, ominous) = s.combat.environmental_presence(now, settings);
-    let e = s
-        .environment_latest
-        .as_ref()
-        .or(s.latest.as_ref())
-        .expect("environment observation");
-    let e = super::body_runtime::event(s, e);
-    let light = s.danger.light_context(&e, settings);
+    let light = s.danger.light_context(e, settings);
     let casual = s.foreground.route == crate::foreground::Route::Casual
         && !crate::combat::model::elapsed(
             now,
@@ -168,7 +165,7 @@ pub(super) fn focus(
         ominous_presence: ominous,
         notice_ready: s.conversation_observation.noticing_context().is_some(),
         submerged: e.world.is_submerged == Some(true),
-        safe_zone_with_door: danger::safe_zone_with_door(&e),
+        safe_zone_with_door: danger::safe_zone_with_door(e),
         light: LightContext {
             surroundings_reasonably_lit: light.reasonably_lit,
             severe_darkness: light.severe_darkness,
@@ -482,6 +479,7 @@ impl Dialogue {
                 .chain(s.pending_warning.as_deref())
                 .flatten()
                 .any(|a| matches!(a.delivery, Delivery::Combat | Delivery::UrgentEnvironment));
+        let mut projected = None;
         if !occupied
             && observation_fresh(s)
             && !s.foreground.game_paused
@@ -498,6 +496,7 @@ impl Dialogue {
                 self.queue_environment(d, jobs, sid, vec![action], true);
                 return;
             }
+            projected = Some(event);
         }
         let s = d.sessions.get_mut(sid).unwrap();
         if super::workshop_focus::active(s) {
@@ -505,13 +504,16 @@ impl Dialogue {
             Self::cancel_light(d, sid);
             return;
         }
-        let Some(event) = s.environment_latest.clone() else {
+        // この区間ではdata lockを保持し、危険状態の更新も身体の受理台帳を変更しない。
+        // 危険確認で既に投影していれば共有し、workshop等の早期終了では余分に構築しない。
+        let Some(event) = projected.or_else(|| {
+            s.environment_latest.as_ref().map(|raw| super::body_runtime::event(s, raw))
+        }) else {
             return;
         };
-        let event = super::body_runtime::event(s, &event);
         let (boss, ominous) = s.combat.environmental_presence(now, &self.config.combat);
         s.danger.set_presence(boss, ominous);
-        let focus = focus(s, now, &self.config.combat);
+        let focus = focus(s, &event, now, &self.config.combat);
         if combat_priority != CombatPriority::None {
             let stop = if combat_priority == CombatPriority::FrontAmbush {
                 s.danger.interrupt_for_threat(&event, &self.config.combat)
@@ -663,15 +665,16 @@ impl Dialogue {
         };
         s.light_cancel = None;
         let now = self.clock.elapsed().as_millis() as u64;
+        // モデル待機中に変わった観測をここで受理し、このlock内の照明判断とfocusで共有する。
         let Some(event) = s
             .environment_latest
-            .clone()
+            .as_ref()
             .filter(|_| observation_fresh(s))
         else {
             return;
         };
-        let event = super::body_runtime::event(s, &event);
-        let focus = focus(s, now, &self.config.combat);
+        let event = super::body_runtime::event(s, event);
+        let focus = focus(s, &event, now, &self.config.combat);
         if s.haiku.foreground()
             || s.cancel.is_some()
             || s.warning.is_some()
@@ -738,6 +741,33 @@ mod tests {
     use super::*;
     use crate::dialogue::{DialogueConfig, empty_event};
     use std::time::Instant;
+
+    #[test]
+    fn focus_uses_same_body_projection_without_losing_player_danger_or_next_update() {
+        let dialogue = Dialogue::new(DialogueConfig::default()).unwrap();
+        dialogue.register("shared-focus", "試験", false);
+        let mut data = dialogue.data.lock().unwrap();
+        let s = data.sessions.get_mut("shared-focus").unwrap();
+        s.player_uuid = Some("11111111-1111-4111-8111-111111111111".into());
+        for (tick, body_underwater) in [(1, false), (2, true)] {
+            let mut wire = empty_event("試験");
+            wire["world"] = json!({"is_submerged":true,"air_supply":20,"local_light":15});
+            wire["player"]["environment"] = json!({"submerged_in_water":true});
+            let mut wire = json!(crate::body::tests::with_senses(wire, tick));
+            wire["body_observation"]["sample"]["senses"]["world"]["is_submerged"] = json!(body_underwater);
+            let raw = GameEvent::parse(wire).unwrap();
+            super::super::body_runtime::observe(s, &raw);
+            s.environment_latest = Some(raw.clone());
+            let event = super::super::body_runtime::event(s, &raw);
+            assert!(event.body_origin().unwrap().available);
+            assert!(danger::player::current(&event).contains(&danger::player::Kind::LowAir));
+            assert_eq!(focus(s, &event, tick, &dialogue.config.combat).submerged, body_underwater);
+        }
+        s.body_observation = Default::default();
+        let event = super::super::body_runtime::event(s, s.environment_latest.as_ref().unwrap());
+        assert!(!event.body_origin().unwrap().available);
+        assert!(!focus(s, &event, 3, &dialogue.config.combat).submerged);
+    }
 
     #[tokio::test]
     async fn player_hazard_waits_for_reply_and_preserves_workshop_and_pending_revision() {
