@@ -171,6 +171,10 @@ impl Dialogue {
             }
         });
         let mut completed = false;
+        if input["workshop"].is_null() {
+            input.speech_stream =
+                super::speech_stream_runtime::Source::new(&self, &sid, &turn, epoch);
+        }
         let result = if input["poem_input"].is_object() {
             self.save_poem_input(&sid, epoch, &input, &mut cancel).await
         } else if input.after_look.is_none()
@@ -321,6 +325,9 @@ impl Dialogue {
                 {
                     last["outcome"] = outcome;
                 }
+                // 文ストリームは全文受理時に配送準備を登録済み。
+                // 再生後はQueuedを繰り返さず、完了更新で世代と配送結果を照合する。
+                let audio_streamed = result["audio_streamed"] == true;
                 if let Some(unsupported) = result.get("unsupported").cloned() {
                     result["error"] = unsupported;
                     self.update(
@@ -332,7 +339,9 @@ impl Dialogue {
                     );
                 } else if result["text"].as_str().is_none_or(|s| s.is_empty()) {
                     self.update(&sid, &turn, epoch, PlaybackStatus::Quiet, Some(&result));
-                } else if self.update(&sid, &turn, epoch, PlaybackStatus::Queued, Some(&result)) {
+                } else if audio_streamed
+                    || self.update(&sid, &turn, epoch, PlaybackStatus::Queued, Some(&result))
+                {
                     tracing::info!(
                         event = "dialogue_reply",
                         session_id = sid,
@@ -346,7 +355,10 @@ impl Dialogue {
                     } else {
                         false
                     };
-                    let playback = if output_config.audio_enabled {
+                    let playback = if audio_streamed {
+                        // 同じturnで全生成・全音声が完了済み。全文を再び読み上げない。
+                        Ok(())
+                    } else if output_config.audio_enabled {
                         self.audio
                             .speak(
                                 &output_config,

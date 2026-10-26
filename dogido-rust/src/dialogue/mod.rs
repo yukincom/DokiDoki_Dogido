@@ -46,6 +46,7 @@ pub use haiku_runtime::Settings as HaikuSettings;
 mod request_runtime;
 pub use request_runtime::Settings as RequestClassifierSettings;
 mod sentences;
+mod speech_stream_runtime;
 mod voice_input_runtime;
 mod warnings;
 mod workshop_combat_input;

@@ -1,5 +1,7 @@
 # TTS 読み補正 — UniDic / 形態素解析方針
 
+**文ごとの先行音声（2026-10-26）:** 音声ありの通常会話では、生成中に確定した一文から読み補正する。同じ返答の読み訂正とUniDic補助を共有し、後から全文を再度補正・再生しない。表示本文は元の漢字交じりのまま保つ。[通常会話の文ごとの音声](2026-10-26-chat-sentence-stream.md) を参照。
+
 **明示訂正の接続（2026-10-13）:** 本棚の「あんちょこ」で保存した読みを、通常会話とワークショップの音声用本文へUniDicより先に反映する。各発話で共通の `catalog_corrections.jsonl` を読み直し、表示文は変更しない。以下のカタログラベル限定という旧説明は、標準の読み表についての範囲。利用者の明示訂正は自由文にも適用する。[本棚の仕様と検証](2026-10-13-bookshelf-integration.md)を参照。
 
 **実装先更新（2026-10-03）:** 読み補正の仕様は継続し、実装はRustへ移した。旧 `dogido_server/tts_reading.py` を保持する計画は終了。現行の読み判定・整形は `dogido-rust/src/tts_reading.rs`、辞書tokenは `dogido-rust/scripts/tts_shared_tokens.py` の共有 `Unidic()` が担当する。詳細は [共有取得口](rust-tts-shared.md) と [最小UniDic補助](rust-tts-adapter.md)。過去のフェーズ・実測待ちの記録を、今回の実機検証済みへ読み替えない。
@@ -24,7 +26,7 @@
 | 第一候補 | **MeCab + UniDic**（語種・読みが TTS 向き）→ **fugashi + unidic-lite で実装** |
 | 第二候補 | Sudachi + SudachiDict（導入のしやすさ・現代語） |
 | 第三 | Open JTalk 標準辞書系（軽量・組み込み寄り。サーバー本線ではない） |
-| 載せる場所 | Rust本体で表示本文を確定した後、音声合成へ渡す読みの生成時 |
+| 載せる場所 | Rust本体が音声合成へ渡す直前。通常会話の音声ありでは生成中に確定した文ごと、それ以外は完成本文から |
 | ログ / `action.text` | **漢字交じりのまま**（表示・デバッグ用） |
 | 例外・残差の扱い | Rustの `tts_reading.rs` と `tts_reading/replacements.json` に保持。旧Python実装の残存指示は終了 |
 | 依存 | **optional** `pip install -e ".[tts-reading]"` |

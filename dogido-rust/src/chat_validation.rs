@@ -4,7 +4,7 @@
 use serde_json::Value;
 use std::sync::LazyLock;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Outcome {
     pub text: String,
     pub action: &'static str,
@@ -68,7 +68,7 @@ fn normal_choice(raw: &str) -> Result<crate::speech_choice::Choice, &'static str
 }
 
 /// EOFで欠けた閉じ記号だけを足す。文字列の続きを推測したり内側の別JSONを拾ったりしない。
-fn complete_json(raw: &str) -> Option<Value> {
+pub(crate) fn complete_json(raw: &str) -> Option<Value> {
     let mut result = raw.trim().to_owned();
     if !result.starts_with('{') {
         return None;

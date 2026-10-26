@@ -82,8 +82,18 @@ impl Dialogue {
         } else {
             status
         };
+        // 逐次再生中または再生後に全文を登録してもStartedをQueuedへ巻き戻さない。
+        // Queuedの履歴/表示準備だけは実行し、全生成・全再生成功後にCompletedへ進める。
+        let preserve_started = status == PlaybackStatus::Queued
+            && result.is_some_and(|r| r["audio_streamed"] == true)
+            && d.rows
+                .iter()
+                .find(|r| r["turn_id"] == turn)
+                .is_some_and(|r| r["playback_status"] == "started");
         if let Some(row) = d.rows.iter_mut().find(|r| r["turn_id"] == turn) {
-            row["playback_status"] = status.into();
+            if !preserve_started {
+                row["playback_status"] = status.into();
+            }
             row[format!("{status}_at")] = chrono::Utc::now().to_rfc3339().into();
             if let Some(result) = result {
                 if status == PlaybackStatus::Queued
@@ -170,7 +180,9 @@ impl Dialogue {
             let now = self.clock.elapsed().as_millis() as u64;
             let player_at = row.and_then(|r| r["input_at_ms"].as_u64()).unwrap_or(now);
             let s = d.sessions.get_mut(sid).unwrap();
-            s.status = status;
+            if !preserve_started {
+                s.status = status;
+            }
             s.haiku.last_activity = Instant::now();
             if status.is_terminal() {
                 s.cancel = None;

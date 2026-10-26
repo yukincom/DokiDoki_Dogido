@@ -106,6 +106,79 @@ impl RigLlm {
             .0)
     }
 
+    /// 通常会話の可視本文だけを上限付きチャネルへ渡す。同じ要求を一回だけ送り、
+    /// reasoning/toolは発声へ混ぜず、終端通知の欠落は途中切断として返す。
+    pub(crate) async fn generate_stream(
+        &self,
+        input: &GenerationRequest,
+        image: Option<&crate::chat_image::Attachment>,
+        deltas: tokio::sync::mpsc::Sender<String>,
+    ) -> Result<GenerationReport> {
+        use rig_core::streaming::RawStreamingChoice;
+        ensure!(self.enabled, "LLM disabled by configuration");
+        input.validate()?;
+        let request = request_with_image(input, image)?;
+        let model = self.client.completion_model(&input.model);
+        let start = Instant::now();
+        let run = async {
+            let mut stream = model.raw_stream(request).await?;
+            let mut text = String::new();
+            let mut terminal = None;
+            while let Some(event) = std::future::poll_fn(|cx| stream.as_mut().poll_next(cx)).await {
+                match event? {
+                    RawStreamingChoice::Message(delta) => {
+                        ensure!(
+                            text.len().saturating_add(delta.len())
+                                <= stream_text_limit(input.max_tokens),
+                            "LLM speech stream exceeds response limit"
+                        );
+                        text.push_str(&delta);
+                        if !delta.is_empty() {
+                            deltas.send(delta).await.context("speech stream closed")?;
+                        }
+                    }
+                    RawStreamingChoice::FinalResponse(response) => terminal = Some(response),
+                    RawStreamingChoice::ToolCall(_) | RawStreamingChoice::ToolCallDelta { .. } => {
+                        bail!("unexpected tool call in ordinary speech")
+                    }
+                    _ => {}
+                }
+            }
+            let terminal = terminal.context("LLM stream ended before completion")?;
+            ensure!(
+                !text.trim().is_empty(),
+                "chat_completions response content is empty"
+            );
+            let terminal = serde_json::to_value(terminal)?;
+            Ok(GenerationReport {
+                schema_version: 1,
+                provider: "rig-core/openai-chat-completions".into(),
+                kind: input.kind.clone(),
+                requested_model: input.model.clone(),
+                response_model: terminal["model"].as_str().unwrap_or(&input.model).into(),
+                response_id: terminal["response_id"].as_str().unwrap_or("").into(),
+                elapsed_ms: start.elapsed().as_millis(),
+                generated: GeneratedText {
+                    text,
+                    finish_reason: terminal["finish_reason"].as_str().map(str::to_owned),
+                    completion_tokens: terminal["usage"]["completion_tokens"].as_u64(),
+                    prompt_tokens: terminal["usage"]["prompt_tokens"].as_u64(),
+                },
+            })
+        };
+        // 画像要求だけはproviderのTRACEから画像本文を除く。streamの読取り中も同じ購読を使う。
+        let result = if image.is_some() {
+            tokio::time::timeout(
+                self.timeout,
+                run.with_subscriber(tracing::subscriber::NoSubscriber::default()),
+            )
+            .await
+        } else {
+            tokio::time::timeout(self.timeout, run).await
+        };
+        result.context("LLM stream timed out; no retry was sent")?
+    }
+
     async fn complete(
         &self,
         input: &GenerationRequest,
@@ -240,6 +313,15 @@ fn to_rig_request(input: &GenerationRequest) -> CompletionRequest {
     }
 }
 
+/// 音声待ちでLLM受信を止めないための、一返答全体のUTF-8 byte上限。
+/// 設定のtoken数に十分な余裕を持たせ、絶対上限も置く。上限超過は切捨てず失敗にする。
+pub(crate) fn stream_text_limit(max_tokens: u64) -> usize {
+    usize::try_from(max_tokens)
+        .unwrap_or(usize::MAX)
+        .saturating_mul(64)
+        .clamp(4096, 1_000_000)
+}
+
 /// 応答本文を選択し、終了理由・使用量を保持する。JSON本文のドメイン検査は呼出側が行う。
 pub fn decode_response(body: &Value) -> Result<GeneratedText> {
     let choice = body
@@ -338,7 +420,10 @@ mod tests {
                 Some(json!(true))
             );
             assert_eq!(
-                captured.as_object_mut().unwrap().remove("dogido_capture_full"),
+                captured
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("dogido_capture_full"),
                 (index == 0).then(|| json!(true))
             );
             assert_eq!(pair[0], captured);

@@ -28,5 +28,10 @@ src/dialogue/sentences.rs ports the SentenceSplitter boundaries from
 https://github.com/yukincom/voicevox-sentence-stream
 commit c1d0642dd3a0639938add4897c1a613a356b25e8 (src/voicevox_sentence_stream/core.py).
 The Rust audio layer adds a single-sentence prefetch queue and owns playback
-and cancellation. It receives validated complete replies, not raw LLM deltas.
+and cancellation. For ordinary audio-enabled chat, the existing Rig client
+receives visible LLM deltas and the Rust dialogue layer extracts completed
+sentences from the JSON speech field. Reading correction, synthesis and
+playback can begin before the full response is received; final validation
+still controls full-text display and history eligibility. Other reply paths
+continue to deliver validated complete replies to the sentence splitter.
 The upstream optional STT implementation is not included in this adaptation.

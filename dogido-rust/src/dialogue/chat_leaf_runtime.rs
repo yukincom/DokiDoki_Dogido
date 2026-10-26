@@ -11,9 +11,11 @@ use serde_json::{Value, json};
 use std::future::Future;
 use tokio::sync::watch;
 
+#[derive(Clone)]
 pub(super) struct Run {
     pub output: chat_validation::Outcome,
     pub reports: Vec<Value>,
+    pub streamed: bool,
 }
 pub(super) async fn render(
     request: GenerationRequest,
@@ -76,6 +78,7 @@ async fn render_with<F: Future<Output = Result<GenerationReport>>>(
     Ok(Run {
         output,
         reports: vec![report],
+        streamed: false,
     })
 }
 

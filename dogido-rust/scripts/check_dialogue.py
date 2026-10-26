@@ -127,6 +127,34 @@ def dependencies():
                     actual = controls["completion_override"](incoming)
                     if actual is not None:
                         raw = json.dumps(actual, ensure_ascii=False).encode()
+                if incoming.get("stream"):
+                    # 同じ模擬応答をSSEへ配送。gateは最初の確定文の後だけを止められる。
+                    response = json.loads(raw)
+                    complete = response["choices"][0]
+                    content = complete["message"].get("content", "")
+                    chunks = controls.get("stream_chunks", [content])
+                    gate = controls.get("stream_gate")
+                    try:
+                        self.send_response(200); self.send_header("Content-Type", "text/event-stream")
+                        self.send_header("Connection", "close"); self.end_headers()
+                        def event(delta, *, finish=None, usage=None):
+                            frame = {"id":response.get("id", "mock"), "object":"chat.completion.chunk", "created":0,
+                                "model":response.get("model", "mock-model"),
+                                "choices":[{"index":0,"delta":delta,"finish_reason":finish}]}
+                            if usage is not None: frame["usage"] = usage
+                            self.wfile.write(("data: " + json.dumps(frame, ensure_ascii=False) + "\n\n").encode())
+                            self.wfile.flush()
+                        event({"reasoning_content":"この内容は発声しない。"})
+                        for index, chunk in enumerate(chunks):
+                            if index == 1 and gate is not None: gate.wait(timeout=12)
+                            event({"content":chunk})
+                        if not controls.get("stream_truncate"):
+                            event({}, finish=complete.get("finish_reason", "stop"), usage=response.get("usage"))
+                            self.wfile.write(b"data: [DONE]\n\n"); self.wfile.flush()
+                        controls["stream_finished"] = True
+                    except (BrokenPipeError, ConnectionResetError): pass
+                    self.close_connection = True
+                    return
             elif self.path.startswith("/audio_query?"):
                 text = parse_qs(urlsplit(self.path).query)["text"][0]
                 raw = json.dumps({"test_text": text}).encode()
@@ -157,6 +185,7 @@ def dependencies():
     try: yield f"http://127.0.0.1:{server.server_port}", controls, seen
     finally:
         for gate in controls["tts_gates"].values(): gate.set()
+        if controls.get("stream_gate") is not None: controls["stream_gate"].set()
         server.shutdown(); server.server_close(); t.join(timeout=3); assert not t.is_alive()
 
 

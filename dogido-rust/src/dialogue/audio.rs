@@ -1,4 +1,4 @@
-//! 検査済みの返答を文ごとに音声合成し、一文先を準備しながら順番に再生する。
+//! 発話本文を文ごとに音声合成し、一文先を準備しながら順番に再生する。
 //! 合成・再生プロセスと取消を扱い、履歴や句の状態は呼出側が配送結果から確定する。
 use super::{DialogueConfig, bridge::cancelled, sentences::sentences};
 use anyhow::{Result, ensure};
@@ -113,7 +113,34 @@ impl Audio {
         result
     }
 
-    async fn prepare(
+    /// 生成中の確定文を一文分だけ受け取り、既存playerで順番に再生する。
+    /// チャネル終了だけで成功にせず、呼出側がLLMの終端と合わせて配送完了を確定する。
+    pub(super) async fn play_stream(
+        &self,
+        config: &DialogueConfig,
+        mut rx: mpsc::Receiver<(usize, Arc<Vec<u8>>)>,
+        cancel: &mut watch::Receiver<bool>,
+        started: impl FnOnce(),
+    ) -> Result<()> {
+        let mut started = Some(started);
+        loop {
+            let next = tokio::select! { biased;
+                _ = cancelled(cancel) => anyhow::bail!("cancelled"),
+                next = rx.recv() => next,
+            };
+            let Some((index, bytes)) = next else {
+                return Ok(());
+            };
+            self.play(config, &bytes, cancel, index, || {
+                if let Some(started) = started.take() {
+                    started();
+                }
+            })
+            .await?;
+        }
+    }
+
+    pub(super) async fn prepare(
         &self,
         config: &DialogueConfig,
         spoken: &str,
@@ -242,7 +269,8 @@ impl Audio {
         index: usize,
         started: impl FnOnce(),
     ) -> Result<()> {
-        self.play_file_at_rate(config, path, cancel, index, 1.0, started).await
+        self.play_file_at_rate(config, path, cancel, index, 1.0, started)
+            .await
     }
 
     /// 録音済みの数コールだけを指定倍率で再生する。afplay互換playerへrateを渡し、取消と回収は共通。
@@ -255,14 +283,19 @@ impl Audio {
         rate: f64,
         started: impl FnOnce(),
     ) -> Result<()> {
-        ensure!(rate.is_finite() && rate > 0.0 && rate <= 2.0, "invalid playback rate");
+        ensure!(
+            rate.is_finite() && rate > 0.0 && rate <= 2.0,
+            "invalid playback rate"
+        );
         ensure!(config.audio_enabled, "audio_disabled");
         if *cancel.borrow() {
             anyhow::bail!("cancelled");
         }
         let mut command = Command::new(&config.player);
         command.arg(path);
-        if rate != 1.0 { command.args(["-r", &rate.to_string(), "-q", "1"]); }
+        if rate != 1.0 {
+            command.args(["-r", &rate.to_string(), "-q", "1"]);
+        }
         let mut child = command.kill_on_drop(true).spawn()?;
         let pid = child.id();
         tracing::info!(event = "audio_started", ?pid, sentence = index + 1);

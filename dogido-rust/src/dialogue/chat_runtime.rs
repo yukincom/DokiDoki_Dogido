@@ -20,7 +20,8 @@ fn live(cancel: &watch::Receiver<bool>) -> Result<()> {
     Ok(())
 }
 
-/// 返答処理全体をbudget内で実行し、表示用textと必要時spoken_textを返す。
+/// 本文生成と読み準備をbudget内で実行し、表示用textと必要時spoken_textを返す。
+/// 文ストリームでは全文受理後に生成期限を外し、音声配送は同じturnの取消で停止する。
 /// select_routeはSession側で所有権と保留を照合する入口。
 /// 読み補正に子プロセスが必要な場合は、その終了処理まで待ってから返る。
 pub(super) async fn render(
@@ -34,16 +35,25 @@ pub(super) async fn render(
     live(cancel)?;
     let deadline = Instant::now() + budget;
     let mut native_cancel = cancel.clone();
-    // 本文生成と資料読取りはfutureの破棄で止められるため、全体期限と取消を同じ待機で扱う。
-    let mut result = tokio::select! { biased;
-        _ = bridge::cancelled(cancel) => bail!("cancelled"),
-        result = tokio::time::timeout_at(deadline, body(config,llm,input,&mut native_cancel,&mut select_route)) => result.context("chat generation timed out")??,
+    let mut result = if let Some(stream) = input.speech_stream.as_ref() {
+        // 音声/辞書の所有者へ取消を伝え、回収終了を待つ。futureだけを捨てない。
+        let (stop, mut local) = watch::channel(false);
+        let work = body(config, llm, input, &mut local, &mut select_route);
+        wait_stream_body(work, cancel, stop, deadline, || stream.generated()).await?
+    } else {
+        tokio::select! { biased;
+            _ = bridge::cancelled(cancel) => bail!("cancelled"),
+            result = tokio::time::timeout_at(deadline, body(config,llm,input,&mut native_cancel,&mut select_route)) => result.context("chat generation timed out")??,
+        }
     };
     live(cancel)?;
-    ensure!(Instant::now() < deadline, "chat timed out");
+    ensure!(
+        result["audio_streamed"] == true || Instant::now() < deadline,
+        "chat timed out"
+    );
     if let Some(text) = result
         .get("text")
-        .filter(|_| result["dialogue_action"] != "silent")
+        .filter(|_| result["dialogue_action"] != "silent" && result["audio_streamed"] != true)
     {
         let text = text.as_str().context("native chat result text")?;
         // 読み補正は自身で取消・期限を監視し、所有する子プロセスを終了してから戻る。
@@ -56,6 +66,38 @@ pub(super) async fn render(
     live(cancel)?;
     tracing::info!(event = "chat_worker_finished", implementation = "rust");
     Ok(result)
+}
+
+/// 生成期限は全文を受理するまで。期限・取消では所有者へ停止を通知し、
+/// 辞書子プロセスとplayerの回収が終わるまでfutureを保持する。
+async fn wait_stream_body<T>(
+    work: impl std::future::Future<Output = Result<T>>,
+    cancel: &mut watch::Receiver<bool>,
+    stop: watch::Sender<bool>,
+    deadline: Instant,
+    generated: impl Fn() -> bool,
+) -> Result<T> {
+    tokio::pin!(work);
+    let mut generation_pending = true;
+    loop {
+        tokio::select! { biased;
+            _ = bridge::cancelled(cancel) => {
+                let _ = stop.send(true);
+                let _ = work.await;
+                bail!("cancelled");
+            },
+            _ = tokio::time::sleep_until(deadline), if generation_pending => {
+                if generated() {
+                    generation_pending = false;
+                } else {
+                    let _ = stop.send(true);
+                    let _ = work.await;
+                    bail!("chat generation timed out");
+                }
+            },
+            result = &mut work => return result,
+        }
+    }
 }
 
 /// 固定routingを先に処理し、通常雑談だけを一回生成へ進める。
@@ -235,22 +277,43 @@ async fn body(
                     json!({"op":"result","text":"そっち向いたで。","look_image_status":"unavailable","llm_reports":[]}),
                 );
             }
+            let mut streamed = false;
             let output = if config.llm_enabled {
                 let request = reply.request(&config.model, config.max_tokens)?;
-                let run = super::chat_leaf_runtime::render_image(
-                    request,
-                    llm,
-                    cancel,
-                    image.as_ref().map(|capture| &capture.image),
-                )
-                .await?;
+                let run = if let Some(stream) = input.speech_stream.as_ref()
+                    && input["workshop_fallback"] != true
+                    && input["workshop"].is_null()
+                {
+                    stream
+                        .render(
+                            request,
+                            llm,
+                            image.as_ref().map(|capture| &capture.image),
+                            input["reading_corrections"]
+                                .as_array()
+                                .cloned()
+                                .unwrap_or_default(),
+                            reply.details["world_context"]["revision"].clone(),
+                            cancel,
+                        )
+                        .await?
+                } else {
+                    super::chat_leaf_runtime::render_image(
+                        request,
+                        llm,
+                        cancel,
+                        image.as_ref().map(|capture| &capture.image),
+                    )
+                    .await?
+                };
+                streamed = run.streamed;
                 reports.extend(run.reports);
                 run.output
             } else {
                 live(cancel)?;
                 crate::chat_validation::finish(None)
             };
-            let mut result = json!({"op":"result","text":output.text,
+            let mut result = json!({"op":"result","text":output.text,"audio_streamed":streamed,
                 "dialogue_action":output.action,"dialogue_outcome":output.status,
                 "dialogue_reason":output.reason,
                 "observation_revision":reply.details["world_context"]["revision"]});
@@ -272,6 +335,56 @@ fn fixed_result(fixed: chat_materials::Fixed) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn stream_generation_deadline_does_not_cancel_validated_audio() {
+        let (_owner, mut cancel) = watch::channel(false);
+        let (stop, local) = watch::channel(false);
+        let work = async {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+            assert!(!*local.borrow());
+            Ok(42)
+        };
+        let result = wait_stream_body(work, &mut cancel, stop, Instant::now(), || true).await;
+        assert_eq!(result.unwrap(), 42);
+    }
+
+    #[tokio::test]
+    async fn stream_generation_deadline_stops_and_waits_for_cleanup() {
+        let (_owner, mut cancel) = watch::channel(false);
+        let (stop, mut local) = watch::channel(false);
+        let mut cleaned = false;
+        let work = async {
+            bridge::cancelled(&mut local).await;
+            cleaned = true;
+            Ok(())
+        };
+        let result = wait_stream_body(work, &mut cancel, stop, Instant::now(), || false).await;
+        assert_eq!(result.unwrap_err().to_string(), "chat generation timed out");
+        assert!(cleaned);
+    }
+
+    #[tokio::test]
+    async fn stream_cancel_after_generation_still_waits_for_cleanup() {
+        let (owner, mut cancel) = watch::channel(false);
+        let (stop, mut local) = watch::channel(false);
+        let mut cleaned = false;
+        let work = async {
+            bridge::cancelled(&mut local).await;
+            cleaned = true;
+            Ok(())
+        };
+        let cancelling = async {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+            owner.send(true).unwrap();
+        };
+        let (result, ()) = tokio::join!(
+            wait_stream_body(work, &mut cancel, stop, Instant::now(), || true),
+            cancelling,
+        );
+        assert_eq!(result.unwrap_err().to_string(), "cancelled");
+        assert!(cleaned);
+    }
     fn config() -> DialogueConfig {
         let mut c = DialogueConfig {
             python: "/missing/native-chat-python".into(),

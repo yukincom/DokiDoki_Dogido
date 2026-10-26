@@ -10,7 +10,7 @@ import tempfile
 import threading
 import time
 
-from check_dialogue import ROOT, dependencies, register, request, row, running, snapshot, submit, wait_for
+from check_dialogue import ROOT, acknowledge, dependencies, display_row, register, request, row, running, snapshot, submit, wait_for
 
 # 読み辞書の有無に依存しない、発声用のひらがなfixture。
 SENTENCES = ["こんにちは。", "はなしかけてくれてうれしいわ。", "きょうはゆっくりはなそう。"]
@@ -54,11 +54,139 @@ def assert_no_assistant(base):
     assert all(h["role"] != "assistant" for h in snapshot(base)["sessions"][0]["history"])
 
 
+@contextmanager
+def streamed(binary, chunks, *, truncate=False, voice=True, timeout_ms=None, hold_player=False):
+    with tempfile.TemporaryDirectory(prefix="dogido-llm-stream-") as temp, dependencies() as (dep, control, seen):
+        directory = Path(temp)
+        gate = threading.Event()
+        control.update(stream_chunks=chunks, stream_gate=gate, stream_truncate=truncate)
+        # 現行の--timeout-msはLLM通信の期限。実モデル・音声は使用しない。
+        args = () if timeout_ms is None else ("--timeout-ms", str(timeout_ms))
+        player = None
+        if hold_player:
+            hold = directory / "hold"
+            hold.touch()
+            control["playback_hold"] = hold
+            player = directory / "player"
+            player.write_text(f"#!{sys.executable}\nimport time\nfrom pathlib import Path\nwhile Path(__file__).with_name('hold').exists(): time.sleep(.01)\n")
+            player.chmod(0o700)
+        with running(binary, directory, dep, player=player, haiku_settings={"enabled":False,"memory_enabled":False}, extra_args=args) as (base, process, log):
+            sid = register(base, voice_enabled=voice)
+            turn = submit(base, sid, source="text")
+            try: yield base, sid, turn, gate, control, seen, log
+            finally:
+                gate.set()
+                if hold_player: control["playback_hold"].unlink(missing_ok=True)
+
+
+def check_llm_streaming(binary, passed):
+    first = '{"action":"speak","speech":"' + SENTENCES[0]
+    rest = ''.join(SENTENCES[1:]) + '"}'
+    with streamed(binary, [first, rest]) as (base, sid, turn, gate, control, seen, log):
+        wait_for(lambda: row(base, turn, {"started"}))
+        assert not gate.is_set() and not control.get("stream_finished")
+        assert syntheses(seen) == SENTENCES[:1], seen
+        assert display_row(base, turn) is None
+        assert_no_assistant(base)
+        wait_for(lambda: 'event="audio_stopped"' in log.read_text())
+        assert row(base, turn, {"started"}), "first sentence alone is not completed"
+        gate.set()
+        result = wait_for(lambda: row(base, turn, {"completed"}))
+        assert syntheses(seen) == SENTENCES and started_count(log) == 3
+        assert len([r for r in seen if r["path"] == "/v1/chat/completions"]) == 1
+        report = result["llm_reports"][0]
+        assert report["response_id"] == "mock" and report["response_model"] == "mock-model", report
+        assert report["generated"]["finish_reason"] == "stop", report
+        assert report["generated"]["completion_tokens"] == 20 and report["generated"]["prompt_tokens"] == 100, report
+        acknowledge(base, sid, wait_for(lambda: display_row(base, turn)))
+        assert len([h for h in snapshot(base)["sessions"][0]["history"] if h["role"] == "assistant"]) == 1
+        assert len(re.findall(r'playback_status="started"', log.read_text())) == 1
+        assert len(re.findall(r'playback_status="queued"', log.read_text())) == 1
+        passed.append("llm_first_sentence_plays_before_generation_finishes_one_delivery_and_metadata")
+
+    with streamed(binary, ['{"speech":"こんにちは。', 'おはよう！末尾","action":"speak"}']) as (base, sid, turn, gate, control, seen, log):
+        wait_for(lambda: any(r["path"] == "/v1/chat/completions" for r in seen))
+        time.sleep(.15)
+        assert not syntheses(seen) and started_count(log) == 0
+        gate.set()
+        wait_for(lambda: row(base, turn, {"completed"}))
+        assert syntheses(seen) == ["こんにちは。", "おはよう！", "末尾"] or len(syntheses(seen)) == 3
+        passed.append("action_last_waits_until_speak_then_delivers_sentences_and_tail")
+
+    for label, chunks, truncated in [
+        ("truncated_transport", [first, '"}'], True),
+        ("invalid_json", [first, '",}'], False),
+        ("repetition", ['{"action":"speak","speech":"同じや。', '同じや。同じや。"}'], False),
+    ]:
+        with streamed(binary, chunks, truncate=truncated) as (base, sid, turn, gate, control, seen, log):
+            wait_for(lambda: row(base, turn, {"started"}))
+            gate.set()
+            wait_for(lambda: row(base, turn, {"failed"}))
+            assert_no_assistant(base)
+            assert not any(h.get("reaction") == "silent" or "沈黙を選んだ" in h.get("text", "")
+                           for h in snapshot(base)["sessions"][0]["history"])
+            assert display_row(base, turn) is None
+            passed.append("late_" + label + "_never_commits_whole_reply_or_silence")
+
+    with streamed(binary, [first, rest]) as (base, sid, turn, gate, control, seen, log):
+        wait_for(lambda: row(base, turn, {"started"}))
+        request(base, "/api/v1/rust-dialogue/interrupt", {"session_id":sid})
+        wait_for(lambda: row(base, turn, {"cancelled"}), timeout=3)
+        gate.set(); time.sleep(.1)
+        assert syntheses(seen) == SENTENCES[:1] and started_count(log) == 1
+        assert_no_assistant(base)
+        passed.append("cancel_during_llm_generation_discards_late_text_and_reaps_player")
+
+    with streamed(binary, [first, rest], timeout_ms=600, hold_player=True) as (base, sid, turn, gate, control, seen, log):
+        wait_for(lambda: row(base, turn, {"started"}))
+        wait_for(lambda: row(base, turn, {"failed"}), timeout=3)
+        assert not gate.is_set()
+        assert_no_assistant(base)
+        passed.append("llm_timeout_after_first_sentence_reaps_pipeline_without_completing")
+
+    with streamed(binary, [first, '末尾"}'], hold_player=True) as (base, sid, turn, gate, control, seen, log):
+        wait_for(lambda: row(base, turn, {"started"}))
+        gate.set()
+        reply = wait_for(lambda: display_row(base, turn), timeout=2)
+        assert control["playback_hold"].exists() and row(base, turn, {"started"})
+        assert_no_assistant(base)
+        acknowledge(base, sid, reply)
+        assert len([h for h in snapshot(base)["sessions"][0]["history"] if h["role"] == "assistant"]) == 1
+        control["playback_hold"].unlink()
+        wait_for(lambda: row(base, turn, {"completed"}))
+        assert len([h for h in snapshot(base)["sessions"][0]["history"] if h["role"] == "assistant"]) == 1
+        passed.append("validated_full_text_displays_while_first_audio_is_held_ack_commits_once")
+
+    with streamed(binary, ['{"speech":"こんにちは。","action":"speak', '_other"}']) as (base, sid, turn, gate, control, seen, log):
+        wait_for(lambda: any(r["path"] == "/v1/chat/completions" for r in seen))
+        time.sleep(.15)
+        assert not syntheses(seen) and started_count(log) == 0
+        gate.set()
+        wait_for(lambda: row(base, turn, {"quiet"}))
+        assert not syntheses(seen) and started_count(log) == 0
+        passed.append("unclosed_action_is_not_promoted_to_speak")
+
+    with streamed(binary, ['{"action":"silent","speech":""}']) as (base, sid, turn, gate, control, seen, log):
+        wait_for(lambda: row(base, turn, {"quiet"}))
+        assert not syntheses(seen) and started_count(log) == 0
+        passed.append("explicit_silent_never_synthesizes")
+
+    with streamed(binary, [first, rest], voice=False) as (base, sid, turn, gate, control, seen, log):
+        reply = wait_for(lambda: display_row(base, turn))
+        acknowledge(base, sid, reply)
+        wait_for(lambda: row(base, turn, {"audio_disabled"}))
+        calls = [r for r in seen if r["path"] == "/v1/chat/completions"]
+        assert len(calls) == 1 and not calls[0]["body"]["stream"]
+        assert not syntheses(seen) and started_count(log) == 0
+        passed.append("voice_off_keeps_text_delivery_without_tts")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", type=Path, default=ROOT / "target/debug/dogido-rust")
     binary = parser.parse_args().binary.resolve()
     passed = []
+    check_llm_streaming(binary, passed)
     with scenario(binary) as (base, sid, turn, hold, second, control, seen, log):
         # 二文目のHTTPを止めても一文目は再生を開始する。
         assert not second.is_set()
