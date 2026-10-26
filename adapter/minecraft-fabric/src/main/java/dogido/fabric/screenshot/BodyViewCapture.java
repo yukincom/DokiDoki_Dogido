@@ -15,7 +15,6 @@ import javax.imageio.ImageIO;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.block.ShapeContext;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
@@ -86,13 +85,12 @@ public final class BodyViewCapture {
             .then(literal("prepare").executes(ctx->prepare()))
             .then(literal("capture").executes(ctx->request()))
             .then(literal("status").executes(ctx->{message("状態: "+(DEADLINE.busy()?"撮影処理中":live()!=null?"身体を取得済み":"身体待ち")+" / 前回: "+lastResult);return 1;}))));
-        ClientTickEvents.END_CLIENT_TICK.register(client->tick());
         publishStatus("installed",null);
     }
     private static int prepare() {
         armedUntil=System.nanoTime()+Duration.ofMinutes(10).toNanos(); nextStatus=0;
         message("撮影待機を有効にしました。記録側の準備確認後に /dogido-view capture で1枚撮影します。");
-        tick(); return 1;
+        tick(live()); return 1;
     }
     private static int request() {
         if (System.nanoTime()>=armedUntil) { message("先に /dogido-view prepare で撮影待機を有効にしてください。");return 0; }
@@ -191,23 +189,27 @@ public final class BodyViewCapture {
         var client=MinecraftClient.getInstance();
         if (connection==null || client.world==null || client.player==null || client.getNetworkHandler()==null) return null;
         var frame=connection.captureFrame(client.player.getUuid(),client.world.getRegistryKey().getValue().toString());
+        return live(client,frame,frame.resolveBody(client.world));
+    }
+    private static Live live(MinecraftClient client,BodyConnection.Frame frame,Entity entity) {
+        if (frame==null || client.world==null || client.player==null || client.getNetworkHandler()==null) return null;
         JsonObject observation=frame.observation();
         if (!observation.has("status") || !"observed".equals(observation.get("status").getAsString())
                 || observation.get("age_ms").getAsLong()>=1000) return null;
         JsonObject sample=observation.getAsJsonObject("sample");
-        UUID bodyId=UUID.fromString(sample.getAsJsonObject("context").get("body_id").getAsString());
-        for (Entity entity:client.world.getEntities()) {
-            if (entity.getUuid().equals(bodyId) && entity instanceof LivingEntity body && body.isAlive() && !body.hasVehicle() && !body.isSleeping())
-                return new Live(client.world,client.getNetworkHandler(),client.player,body,sample.deepCopy(),frame.autonomy().deepCopy(),observation.get("age_ms").getAsLong());
-        }
+        if (entity instanceof LivingEntity body && body.isAlive() && !body.hasVehicle() && !body.isSleeping())
+            return new Live(client.world,client.getNetworkHandler(),client.player,body,sample.deepCopy(),frame.autonomy().deepCopy(),observation.get("age_ms").getAsLong());
         return null;
     }
     private static BodyViewMotion.Pose pose(Live live) {
         return new BodyViewMotion.Pose(live.body.getX(),live.body.getY(),live.body.getZ(),live.body.bodyYaw,live.body.getPitch());
     }
-    private static void tick() {
+    /** rootの同じtickから受け取る。世界未取得時も期限・保存処理を進め、前世界の移動観測を消す。 */
+    public static void tick(MinecraftClient client,BodyConnection.Frame frame,Entity body) {
+        tick(live(client,frame,body));
+    }
+    private static void tick(Live observed) {
         long now=System.nanoTime();
-        Live observed=live();
         if(observed==null) {MOTION.clear();BodyViewTargets.clear();}
         else MOTION.observe(java.util.List.of(observed.world,observed.network,observed.sample.get("context")),pose(observed));
         if(poemRequest!=null) {
@@ -255,7 +257,7 @@ public final class BodyViewCapture {
         }
         if (now<armedUntil && now>=nextStatus) {
             nextStatus=now+Duration.ofSeconds(1).toNanos();
-            Live live=live();publishStatus(live==null?"waiting_for_body":"ready",live);
+            publishStatus(observed==null?"waiting_for_body":"ready",observed);
         }
     }
     private static void publishStatus(String status,Live live) {

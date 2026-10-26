@@ -44,12 +44,14 @@ class BodyInspectControllerTest {
         List<BodyConnection.MoveRequest> requests=new ArrayList<>(); List<JsonObject> results=new ArrayList<>();
         List<BodyConnection.LookRequest> looks=new ArrayList<>();
         BodyInspectController controller=new BodyInspectController(this,ref -> current && SESSION.equals(ref),results::add,clock);
-        public BodyInspectController.Live capture() { onCapture.run(); return new BodyInspectController.Live(observation,new Point(0,64,0),owner,1.62); }
+        int captures;
+        public BodyInspectController.Live capture() { captures++; onCapture.run(); return live(); }
+        BodyInspectController.Live live() { return new BodyInspectController.Live(observation,new Point(0,64,0),owner,1.62); }
+        void tick(Instant now) { controller.tick(now,live(),id -> lookResult); }
         public BodyInspectController.ResolvedTarget resolve(Target target,BodyInspectController.Live live) {
             onResolve.run();
             return actual == null ? null : new BodyInspectController.ResolvedTarget(actual,targetBounds,shape,false);
         }
-        public JsonObject lookResult(UUID actionId) { return lookResult; }
         public Target imageTarget(Command command,SessionRef session,BodyInspectController.Live live) {return grounded;}
         public boolean collisionFree(BodyApproachGeometry.Bounds destination) { onCollision.run(); return clear; }
         public String moveTo(SessionRef session,Command command,BodyConnection.MoveRequest request) { requests.add(request); return submission; }
@@ -69,6 +71,19 @@ class BodyInspectControllerTest {
         }
         String detail() { return results.getFirst().get("detail_code").getAsString(); }
     }
+    @Test void pendingTicksUseTheSuppliedObservationWithoutRecapturing() {
+        Fake fake=new Fake(); Command command=command();
+        fake.controller.handle(command,SESSION,NOW); assertEquals(1,fake.captures);
+        fake.outcome(command,"accepted"); fake.tick(NOW.plusMillis(10));
+        fake.observation=fake.observation.deepCopy(); // 次tickの独立frameへ結果が届く。
+        fake.outcome(command,"succeeded"); fake.tick(NOW.plusMillis(20));
+        assertEquals(1,fake.captures); assertEquals("arrived",fake.detail());
+    }
+    @Test void pendingTickUnavailableDoesNotReuseTheAcceptanceFrame() {
+        Fake fake=new Fake(); Command command=command(); fake.controller.handle(command,SESSION,NOW);
+        fake.controller.tick(NOW.plusMillis(10),null,id -> null);
+        assertEquals(1,fake.captures); assertEquals("body_unavailable",fake.detail());
+    }
     @Test void stationaryOwnerLookUsesCurrentEyeWithoutMovementAndWaitsForTheSameResult() {
         Fake fake=new Fake(); fake.owner=new Point(3,66,2);
         fake.observation.getAsJsonObject("reassurance").addProperty("owner_working",true);
@@ -76,8 +91,8 @@ class BodyInspectControllerTest {
         fake.controller.handle(command,SESSION,NOW);fake.controller.handle(command,SESSION,NOW);
         assertTrue(fake.requests.isEmpty());assertEquals(1,fake.looks.size());
         assertEquals(new Point(3,67.62,2),fake.looks.getFirst().target());
-        fake.outcome(command,"accepted");fake.controller.tick(NOW.plusMillis(10));assertTrue(fake.results.isEmpty());
-        fake.outcome(command,"succeeded");fake.controller.tick(NOW.plusMillis(20));fake.controller.tick(NOW.plusMillis(30));
+        fake.outcome(command,"accepted");fake.tick(NOW.plusMillis(10));assertTrue(fake.results.isEmpty());
+        fake.outcome(command,"succeeded");fake.tick(NOW.plusMillis(20));fake.tick(NOW.plusMillis(30));
         assertEquals(1,fake.results.size());assertEquals("facing_target",fake.detail());
     }
     @Test void ownerLookRunsDuringMovementAndWithLocomotionDisabled() {
@@ -87,7 +102,7 @@ class BodyInspectControllerTest {
             fake.owner=new Point(20,64,0);
             var command=new Command(UUID.randomUUID(),NOW,NOW.plusSeconds(4),CONTEXT,null,Purpose.LOOK_OWNER);
             fake.controller.handle(command,SESSION,NOW);assertEquals(1,fake.looks.size(),activity);
-            fake.outcome(command,"succeeded");fake.controller.tick(NOW.plusMillis(10));
+            fake.outcome(command,"succeeded");fake.tick(NOW.plusMillis(10));
             assertEquals("facing_target",fake.detail());assertTrue(fake.requests.isEmpty());
         }
     }
@@ -106,26 +121,26 @@ class BodyInspectControllerTest {
         assertEquals(1,fake.requests.size()); assertTrue(fake.results.isEmpty());
         assertEquals(command.commandId(),fake.requests.getFirst().actionId());
         assertFalse(fake.shape.at(fake.requests.getFirst().destination()).intersects(fake.targetBounds.expand(.2)));
-        fake.outcome(command,"accepted"); fake.controller.tick(NOW.plusMillis(100));
+        fake.outcome(command,"accepted"); fake.tick(NOW.plusMillis(100));
         assertTrue(fake.results.isEmpty()); assertTrue(fake.controller.pending());
-        fake.outcome(command,"succeeded"); fake.controller.tick(NOW.plusMillis(150));
+        fake.outcome(command,"succeeded"); fake.tick(NOW.plusMillis(150));
         assertFalse(fake.controller.pending()); assertEquals("succeeded",fake.results.getFirst().get("status").getAsString());
-        fake.controller.tick(NOW.plusMillis(200)); assertEquals(1,fake.results.size());
+        fake.tick(NOW.plusMillis(200)); assertEquals(1,fake.results.size());
         fake.controller.handle(command,SESSION,NOW.plusMillis(200)); assertEquals(1,fake.requests.size());
     }
     @Test void wrongActionOrSequenceDoesNotConfirmArrivalAndWaitIsBounded() {
         Fake fake=new Fake(); Command command=command(); fake.controller.handle(command,SESSION,NOW);
         fake.outcome(command,"succeeded"); fake.observation.getAsJsonObject("action_result").addProperty("sequence",0);
-        fake.controller.tick(NOW.plusSeconds(1)); assertTrue(fake.results.isEmpty());
+        fake.tick(NOW.plusSeconds(1)); assertTrue(fake.results.isEmpty());
         fake.outcome(command,"succeeded"); fake.observation.getAsJsonObject("action_result").addProperty("action_id",UUID.randomUUID().toString());
-        fake.controller.tick(NOW.plusSeconds(2)); assertTrue(fake.results.isEmpty());
-        fake.controller.tick(NOW.plusSeconds(35)); assertEquals("result_timeout",fake.detail()); assertFalse(fake.controller.pending());
+        fake.tick(NOW.plusSeconds(2)); assertTrue(fake.results.isEmpty());
+        fake.tick(NOW.plusSeconds(35)); assertEquals("result_timeout",fake.detail()); assertFalse(fake.controller.pending());
     }
     @Test void delayedDeliveryDoesNotExtendTheIssuedDeadline() {
         Fake fake=new Fake(); Command command=command(); fake.clockNow=NOW.plusSeconds(3); fake.controller.handle(command,SESSION,fake.clockNow);
         assertEquals(1,fake.requests.size());
-        fake.controller.tick(NOW.plusSeconds(34)); assertTrue(fake.results.isEmpty());
-        fake.outcome(command,"succeeded"); fake.controller.tick(NOW.plusSeconds(35));
+        fake.tick(NOW.plusSeconds(34)); assertTrue(fake.results.isEmpty());
+        fake.outcome(command,"succeeded"); fake.tick(NOW.plusSeconds(35));
         assertEquals("result_timeout",fake.detail()); assertEquals("expired",fake.results.getFirst().get("status").getAsString());
     }
     @Test void staleSnapshotDisabledAndDirectNeverSubmit() {
@@ -160,7 +175,7 @@ class BodyInspectControllerTest {
     }
     @Test void sessionOrWorldEpochChangeDiscardsPendingAndStaleCallback() {
         Fake fake=new Fake(); Command command=command(); fake.controller.handle(command,SESSION,NOW);
-        fake.current=false; fake.controller.tick(NOW.plusMillis(100));
+        fake.current=false; fake.tick(NOW.plusMillis(100));
         assertFalse(fake.controller.pending()); assertTrue(fake.results.isEmpty());
         fake.controller.handle(command(),new SessionRef("session",2),NOW); assertEquals(1,fake.requests.size());
     }
@@ -196,7 +211,7 @@ class BodyInspectControllerTest {
     @Test void bodyContextChangeFinishesOldActionWithoutAcceptingNewBodyResult() {
         Fake fake=new Fake(); Command command=command(); fake.controller.handle(command,SESSION,NOW);
         fake.outcome(command,"succeeded"); fake.observation.getAsJsonObject("context").addProperty("body_id",UUID.randomUUID().toString());
-        fake.controller.tick(NOW.plusMillis(100)); assertEquals("stale_context",fake.detail());
+        fake.tick(NOW.plusMillis(100)); assertEquals("stale_context",fake.detail());
     }
     @Test void refusedSubmissionFinishesWithoutArrivalAndCompetingCommandIsRejected() {
         Fake refused=new Fake(); refused.submission="stale_context"; refused.controller.handle(command(),SESSION,NOW);
@@ -217,7 +232,7 @@ class BodyInspectControllerTest {
     @Test void allTerminalOutcomesAreReportedOnce() {
         for (String outcome : List.of("succeeded","rejected","interrupted","expired")) {
             Fake fake=new Fake(); Command command=command(); fake.controller.handle(command,SESSION,NOW); fake.outcome(command,outcome);
-            fake.controller.tick(NOW.plusMillis(100)); fake.controller.tick(NOW.plusMillis(200));
+            fake.tick(NOW.plusMillis(100)); fake.tick(NOW.plusMillis(200));
             assertEquals(1,fake.results.size()); assertEquals(outcome.equals("interrupted") ? "failed" : outcome,fake.results.getFirst().get("status").getAsString());
         }
     }
@@ -237,8 +252,8 @@ class BodyInspectControllerTest {
             fake.controller.handle(command,SESSION,NOW);
             assertEquals(1,fake.requests.size()); assertEquals(purpose,fake.requests.getFirst().purpose());
             assertNull(fake.requests.getFirst().destination()); assertTrue(fake.results.isEmpty());
-            fake.outcome(command,"accepted"); fake.controller.tick(NOW.plusMillis(100)); assertTrue(fake.results.isEmpty());
-            fake.outcome(command,"succeeded"); fake.controller.tick(NOW.plusMillis(200)); assertEquals("arrived",fake.detail());
+            fake.outcome(command,"accepted"); fake.tick(NOW.plusMillis(100)); assertTrue(fake.results.isEmpty());
+            fake.outcome(command,"succeeded"); fake.tick(NOW.plusMillis(200)); assertEquals("arrived",fake.detail());
         }
     }
     @Test void ownerFaceRechecksWorkingAndEmergencyRangeWhileNearCanStayBesideWork() {

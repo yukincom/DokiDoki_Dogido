@@ -38,18 +38,14 @@ public final class BodyInspectRuntime {
                 MinecraftClient client=MinecraftClient.getInstance();
                 if (client.player == null || client.world == null) return null;
                 currentFrame=connection.captureFrame(client.player.getUuid(),client.world.getRegistryKey().getValue().toString());
-                JsonObject observation=senses.capture(currentFrame,client);
-                if (!"observed".equals(string(observation,"status"))) return null;
-                JsonObject sample=observation.getAsJsonObject("sample");
-                return new BodyInspectController.Live(senses.autonomy(currentFrame,observation),
-                    point(sample.getAsJsonObject("self_pose").getAsJsonObject("position")),
-                    new Point(client.player.getX(),client.player.getY(),client.player.getZ()),client.player.getEyeY()-client.player.getY());
+                currentBody=currentFrame.resolveBody(client.world);
+                JsonObject observation=senses.capture(currentFrame,client,currentBody);
+                return live(client,currentFrame,senses.autonomy(currentFrame,observation));
             }
             public BodyInspectController.ResolvedTarget resolve(Target target,BodyInspectController.Live live) { return resolveCurrent(target,live,false); }
             public Target imageTarget(Command command,SessionRef session,BodyInspectController.Live live) {
                 return dogido.fabric.screenshot.BodyViewTargets.resolve(command.imageTarget(),command.context(),session.sessionId());
             }
-            public JsonObject lookResult(java.util.UUID actionId) { return currentFrame==null?null:currentFrame.lookResult(actionId); }
             public BodyInspectController.ResolvedTarget resolveImage(Target target,BodyInspectController.Live live) { return resolveCurrent(target,live,true); }
             public boolean collisionFree(BodyApproachGeometry.Bounds destination) { return clearSpace(destination); }
             public BodyLookController.Result lookOwner(SessionRef session,Command command) {
@@ -67,7 +63,16 @@ public final class BodyInspectRuntime {
     public void handle(Command command,SessionRef session) {
         MinecraftClient.getInstance().execute(() -> controller.handle(command,session,Instant.now()));
     }
-    public void tick() { controller.tick(Instant.now()); }
+    /** 完了監視はrootの観測を使う。命令受付のcaptureとは時点を分け、次tickの結果を必ず見る。 */
+    public void tick(BodyConnection.Frame frame,JsonObject autonomy) {
+        controller.tick(Instant.now(),live(MinecraftClient.getInstance(),frame,autonomy),frame::lookResult);
+    }
+    private static BodyInspectController.Live live(MinecraftClient client,BodyConnection.Frame frame,JsonObject autonomy) {
+        if (client.player==null || !"observed".equals(string(frame.observation(),"status"))) return null;
+        JsonObject sample=frame.observation().getAsJsonObject("sample");
+        return new BodyInspectController.Live(autonomy,point(sample.getAsJsonObject("self_pose").getAsJsonObject("position")),
+            new Point(client.player.getX(),client.player.getY(),client.player.getZ()),client.player.getEyeY()-client.player.getY());
+    }
     public void clear() { controller.clear(); senses.clearFocus(); classifier.reset(); currentFrame=null; currentBody=null; }
     private BodyInspectController.ResolvedTarget resolveCurrent(Target target,BodyInspectController.Live live,boolean fromImage) {
         MinecraftClient client=MinecraftClient.getInstance();
@@ -80,9 +85,6 @@ public final class BodyInspectRuntime {
             vision=new BodyOriginVision(sample.get("server_tick").getAsLong(),new Vec3d(eye.x(),eye.y(),eye.z()),
                 pose.get("view_yaw").getAsDouble(),pose.get("view_pitch").getAsDouble());
         }
-        currentBody=null;
-        var bodyId=context(live.autonomy().getAsJsonObject("context")).bodyId();
-        for (Entity entity : client.world.getEntities()) if (entity.getUuid().equals(bodyId) && entity.isAlive()) { currentBody=entity; break; }
         if (currentBody == null) return null;
         // 補間中の身体座標は使わず、現物の寸法だけをserver姿勢に合わせる。
         Box bodyBox=currentBody.getBoundingBox().offset(currentBody.getEntityPos().negate());

@@ -61,7 +61,7 @@ public final class BodySensesCollector {
     }
 
     /** 同じ身体frameは一度だけ全走査する。間のeventでも種類表は元frameと一緒に保持し、ageだけ進める。 */
-    public JsonObject capture(BodyConnection.Frame frame, MinecraftClient client) {
+    public JsonObject capture(BodyConnection.Frame frame, MinecraftClient client, Entity body) {
         JsonObject observation = frame.observation().deepCopy();
         if (!"observed".equals(string(observation,"status")) || client.player == null || client.world == null) {
             reset(); return observation;
@@ -85,7 +85,7 @@ public final class BodySensesCollector {
             }
             BodyOriginVision vision = inspectionVision(sample,frame.autonomy());
             BodyOriginVision safetyVision = vision.withoutAttention();
-            ObservationOrigin origin = origin(sample,client.world,vision);
+            ObservationOrigin origin = origin(sample,body,vision);
             if (origin == null || !BodyOriginVision.loaded(client.world,origin.bounds().expand(31,24,31))) {
                 clearCollectors();
                 return unavailable(observation,serverTick,"area_unloaded",key);
@@ -101,7 +101,7 @@ public final class BodySensesCollector {
             // 毎fresh snapshotで種類表を実視認し直す。player側のcaptureNearbyKindsや前の種類表で補完しない。
             var passive = mobs.scanAmbientMobs(origin,client.world,true);
             // 注意を絞っても敵の取得範囲は狭めない。同じ身体姿勢・既存FOVで危険だけを別に照合する。
-            var hostile = threats.scanThreats(origin(sample,client.world,safetyVision),client.world);
+            var hostile = threats.scanThreats(origin(sample,body,safetyVision),client.world);
             JsonObject blocks = worldObserver.buildNearbyBlocks(origin,client.world,true);
             JsonArray dropped = worldObserver.buildDroppedItems(origin,client.world);
             JsonObject localWorld = worldObserver.buildWorld(origin,client.world,ticks.getAsLong());
@@ -215,7 +215,7 @@ public final class BodySensesCollector {
         try {
             establishContext(sample,client.world);
             if (unavailableReason(sample) != null) return;
-            ObservationOrigin origin = origin(sample,client.world,vision(sample,null));
+            ObservationOrigin origin = origin(sample,frame.resolveBody(client.world),vision(sample,null));
             if (origin == null) return;
             Vec3d source = new Vec3d(sound.getX(),sound.getY(),sound.getZ());
             var event = Registries.SOUND_EVENT.get(sound.getId());
@@ -285,12 +285,10 @@ public final class BodySensesCollector {
     }
     void inspectionResult(JsonObject result) { if (attention.result(result)) frameKey=null; }
     void clearFocus() { attention.clear(); frameKey=null; }
-    private static ObservationOrigin origin(JsonObject sample, ClientWorld world, BodyOriginVision vision) {
+    private static ObservationOrigin origin(JsonObject sample, Entity body, BodyOriginVision vision) {
         JsonObject context = sample.getAsJsonObject("context"), pose = sample.getAsJsonObject("self_pose");
         UUID id = UUID.fromString(context.get("body_id").getAsString());
         Vec3d position = point(pose.getAsJsonObject("position"));
-        Entity body = null;
-        for (Entity entity : world.getEntities()) if (entity.getUuid().equals(id)) { body = entity; break; }
         if (body == null || !body.isAlive()) return null;
         // client補間後の位置をserver実測へ混ぜず、身体の実寸だけを同じsnapshot位置へ移す。
         Box bounds = body.getBoundingBox().offset(position.subtract(body.getEntityPos()));

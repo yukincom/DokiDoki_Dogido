@@ -227,6 +227,11 @@ public final class DogidoClientAdapter implements ClientModInitializer {
      * 本体から返る古い表示結果が新しい危険観測を上書きしないようにする。
      */
     private void onClientTick(MinecraftClient client) {
+        // 撮影の移動追跡は無効化中も進める。通常consumerと同じ取得値を明示的に配る。
+        var bodyFrame=client.player==null || client.world==null ? null
+            : this.bodyConnection.captureFrame(client.player.getUuid(),client.world.getRegistryKey().getValue().toString());
+        var bodyEntity=bodyFrame==null ? null : bodyFrame.resolveBody(client.world);
+        dogido.fabric.screenshot.BodyViewCapture.tick(client,bodyFrame,bodyEntity);
         if (!this.config.enabled) {
             this.horseRecall.clear();
             this.bodyInspect.clear();
@@ -287,12 +292,11 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.lastPlayerZ = player.getZ();
 
         this.tickCounter += 1;
-        var bodyFrame = this.bodyConnection.captureFrame(player.getUuid(),currentDimensionId);
         if (this.tickCounter % 5 == 0) this.bodyConnection.observeOwnerWork(PlayerObserver.blockBreakingActive(client));
-        this.bodyObservation = this.bodySenses.capture(bodyFrame,client);
+        this.bodyObservation = this.bodySenses.capture(bodyFrame,client,bodyEntity);
         this.bodyAutonomy = this.bodySenses.autonomy(bodyFrame,this.bodyObservation);
-        this.bodyInspect.tick();
-        this.bodyRequests.tick();
+        this.bodyInspect.tick(bodyFrame,this.bodyAutonomy);
+        this.bodyRequests.tick(bodyFrame);
         this.eventClient.ensureSession(this.playerObserver.resolvePlayerName(player),player.getUuid(),this.bodyConnection.supported());
         this.soundObserver.expireSoundObservations();
         this.worldObserver.expireBlockBreakObservations(this.tickCounter);

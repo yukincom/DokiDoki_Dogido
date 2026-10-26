@@ -20,8 +20,6 @@ final class BodyInspectController {
         default long nextSequence(Context context,long prior,long tick,long last) { return Math.max(Math.max(last,prior),tick)+1; }
         /** 現在の生存・種類・非敵対・視認を再検査し、実座標を返す。未確認はnull。 */
         ResolvedTarget resolve(Target target,Live live);
-        /** 移動結果と独立した注視台帳から、同じaction IDの受付・完了を返す。 */
-        default JsonObject lookResult(UUID actionId) { return null; }
         /** 同じsessionの撮影時対応表へ見た目の属性を問い合わせる。通常候補表とは独立に現物を確定する。 */
         default Target imageTarget(Command command,SessionRef session,Live live) { return null; }
         default ResolvedTarget resolveImage(Target target,Live live) { return resolve(target,live); }
@@ -130,15 +128,15 @@ final class BodyInspectController {
             pending=new Pending(command,session,sequence,command.issuedAt().plusSeconds(35));
         } catch (RuntimeException | LinkageError error) { finish(command,"failed","bridge_error",now); }
     }
-    void tick(Instant now) {
+    /** そのtickの観測と注視台帳を受け、受付時の古い値や追加captureを使わず完了を照合する。 */
+    void tick(Instant now,Live live,java.util.function.Function<UUID,JsonObject> lookResults) {
         Pending work=pending; if (work == null) return;
         if (!current.test(work.session())) { pending=null; return; }
         if (!now.isBefore(work.deadline())) { pending=null; finish(work.command(),"expired","result_timeout",now); return; }
         try {
-            Live live=access.capture();
             String invalid=invalid(live,work.command().context(),work.command().purpose());
             if (invalid != null) { pending=null; finish(work.command(),"rejected",invalid,now); return; }
-            JsonObject result=work.command().purpose()==Purpose.LOOK_OWNER?access.lookResult(work.command().commandId()):live.autonomy().getAsJsonObject("action_result");
+            JsonObject result=work.command().purpose()==Purpose.LOOK_OWNER?lookResults.apply(work.command().commandId()):live.autonomy().getAsJsonObject("action_result");
             if (result != null && work.command().commandId().toString().equals(string(result,"action_id"))
                     && result.get("sequence").getAsLong() == work.sequence()) {
                 String outcome=string(result,"outcome");

@@ -15,6 +15,13 @@ public final class BodyConnection {
         public static Hearing unavailable() { return new Hearing(false,-1,List.of(),false); }
     }
     public record Frame(JsonObject observation, Hearing hearing, JsonObject autonomy, JsonObject lookResults) {
+        /** この観測周期の身体現物を一度解決し、感覚・撮影へ渡す。次周期へentityを保持しない。 */
+        public net.minecraft.entity.Entity resolveBody(net.minecraft.client.world.ClientWorld world) {
+            if (world == null || !"observed".equals(BodyInspectProtocol.string(observation,"status"))) return null;
+            UUID id=UUID.fromString(observation.getAsJsonObject("sample").getAsJsonObject("context").get("body_id").getAsString());
+            for (var entity : world.getEntities()) if (entity.getUuid().equals(id) && entity.isAlive()) return entity;
+            return null;
+        }
         public JsonObject lookResult(UUID actionId) { return lookResults==null?null:lookResults.getAsJsonObject(actionId.toString()); }
         static Frame unavailable(String reason) { return new Frame(BodyConnection.unavailable(reason),Hearing.unavailable(),BodyInspectProtocol.unavailable(reason),null); }
     }

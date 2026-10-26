@@ -103,7 +103,8 @@ public final class BodyRequestRuntime {
         var direction=client.player.getRotationVec(1.0f);
         return BodyLookController.sceneTarget(eye,new Point(direction.x,direction.y,direction.z),hitPoint);
     }
-    public void tick() {
+    /** 完了確認はrootが取得した現在frameを使う。RECALLの専用結果照会は従来の台帳へ行う。 */
+    public void tick(BodyConnection.Frame frame) {
         Pending work=pending; if (work==null) return;
         if (!current.test(work.session(),work.command().inputGeneration())) { discardPending(); return; }
         if (!ownerMatches(MinecraftClient.getInstance(),work.command())) { discardPending(); return; }
@@ -121,7 +122,6 @@ public final class BodyRequestRuntime {
                     outcome="failed"; reason="invalid_recall_result";
                 }
             } else {
-                var frame=connection.captureFrame(work.command().ownerId(),work.command().dimension());
                 var observation=frame.observation();
                 if (!"observed".equals(string(observation,"status"))) { discardPending(); finish(work.command(),work.session(),"rejected","body_unavailable",resolved); return; }
                 var actual=context(observation.getAsJsonObject("sample").getAsJsonObject("context"));
