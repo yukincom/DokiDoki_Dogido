@@ -794,6 +794,52 @@ fn library_view_keeps_pending_edits_and_deletions_until_ssd_sync() {
 }
 
 #[test]
+fn library_view_keeps_restored_poem_pending_until_ssd_sync() {
+    let f = Fixture::new(); f.poem("root", "p"); let s = f.store();
+    let root = f.root.join("archive"); fs::create_dir(&root).unwrap();
+    s.select_research_storage(research_storage::Selection {root, expected_archive_id: None}).unwrap();
+    crate::poem_trash::change(&s.memory, "root:p", false, now()).unwrap();
+    s.sync_research_storage().unwrap();
+    crate::poem_trash::change(&s.memory, "root:p", true, now()).unwrap();
+    let view = s.library_view().unwrap();
+    assert_eq!(view["poems"].as_array().unwrap().len(), 1);
+    assert_eq!(view["poems"][0]["storageSource"], "local_pending");
+    s.sync_research_storage().unwrap();
+    assert_eq!(s.library_view().unwrap()["poems"][0]["storageSource"], "archive");
+}
+
+#[test]
+fn library_view_does_not_apply_orphan_deletion_to_archive_only_poem() {
+    let f = Fixture::new(); let dir = f.poem("root", "p"); let s = f.store();
+    let root = f.root.join("archive"); fs::create_dir(&root).unwrap();
+    s.select_research_storage(research_storage::Selection {root, expected_archive_id: None}).unwrap();
+    crate::poem_trash::change(&s.memory, "root:p", false, now()).unwrap();
+    assert!(s.library_view().unwrap()["poems"].as_array().unwrap().is_empty());
+    // fixtureの原記録だけを除く。台帳しかないIDを新たな削除根拠にしない。
+    fs::remove_file(dir.join("long_term/haiku_entries.jsonl")).unwrap();
+    let before = fs::read(s.memory.join("bookshelf/state.json")).unwrap();
+    let view = s.library_view().unwrap();
+    assert_eq!(view["poems"][0]["id"], "root:p");
+    assert_eq!(view["poems"][0]["readOnly"], true);
+    assert_eq!(fs::read(s.memory.join("bookshelf/state.json")).unwrap(), before);
+}
+
+#[test]
+fn poem_read_keeps_deletion_scoped_to_its_source() {
+    let f = Fixture::new(); f.poem("root", "same"); f.poem("other", "same"); let s = f.store();
+    crate::poem_trash::change(&s.memory, "root:same", false, now()).unwrap();
+    let records = store::read_poems(&s.memory, false).unwrap();
+    assert_eq!(records.items.len(), 1);
+    assert_eq!(records.items[0]["id"], "session:other:same");
+    assert_eq!(records.deleted_ids.into_iter().collect::<Vec<_>>(), vec!["root:same"]);
+    let deleted = store::poems(&s.memory, true).unwrap();
+    assert_eq!(deleted.len(), 1);
+    assert_eq!(deleted[0]["id"], "root:same");
+    assert!(deleted[0]["deletedAt"].is_string());
+    assert_eq!(s.library_view().unwrap()["poems"][0]["id"], "session:other:same");
+}
+
+#[test]
 fn library_view_reports_corrupt_snapshot_and_never_masks_corrupt_ssd_image() {
     let f = Fixture::new(); let (command, receipt) = capture(&f); let s = f.store();
     s.register_capture(&command, &receipt).unwrap();

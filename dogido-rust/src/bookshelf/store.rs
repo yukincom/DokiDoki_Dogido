@@ -5,6 +5,7 @@ use anyhow::{Context, Result, ensure};
 use chrono::{DateTime, Duration, Utc};
 use serde_json::{Value, json};
 use std::{
+    collections::BTreeSet,
     fs,
     path::{Path, PathBuf},
 };
@@ -471,7 +472,20 @@ fn hash(path: &Path) -> Result<String> {
     Ok(format!("{:x}", h.finalize()))
 }
 pub fn poems(root: &Path, deleted: bool) -> Result<Vec<Value>> {
+    Ok(read_poems(root, deleted)?.items)
+}
+
+/// 一度の読込で得た表示句と削除ID。IDには保存元を含み、同名の別記録を隠さない。
+pub(super) struct PoemRead {
+    pub items: Vec<Value>,
+    pub deleted_ids: BTreeSet<String>,
+}
+
+/// 保存元ごとに削除台帳・revision・対話・句を一度読み、選択した側だけ本文を投影する。
+/// 削除IDは実在する句との対応から集める。台帳だけ残ったIDでSSD単独の記録を隠さない。
+pub(super) fn read_poems(root: &Path, deleted: bool) -> Result<PoemRead> {
     let mut out = vec![];
+    let mut deleted_ids = BTreeSet::new();
     for dir in crate::poem_book::directories(root)? {
         let journal = trash::journal(&dir)?;
         let revisions = trash::raw_rows(&dir, "haiku_revisions.jsonl")?;
@@ -479,12 +493,16 @@ pub fn poems(root: &Path, deleted: bool) -> Result<Vec<Value>> {
         for row in trash::raw_rows(&dir, "haiku_entries.jsonl")? {
             let id = row["id"].as_str().context("poem_id_missing")?;
             let deletion = journal.get(id);
+            let qualified_id = format!("{}:{id}", trash::source(root, &dir));
+            if deletion.is_some() {
+                deleted_ids.insert(qualified_id.clone());
+            }
             if deletion.is_some() != deleted {
                 continue;
             }
             let history: Vec<_> = revisions.iter().filter(|r| r["haiku_id"] == id).collect();
             let latest = history.last().copied().unwrap_or(&row);
-            let mut item = project_poem(&format!("{}:{id}", trash::source(root, &dir)), &row, latest,
+            let mut item = project_poem(&qualified_id, &row, latest,
                 &json!(history), &row["materials_snapshot"],
                 &json!(dialogue.get(id).cloned().unwrap_or_default()),
                 &json!({"materials":if row["materials_snapshot"].is_object(){"recorded"}else{"missing"},
@@ -497,7 +515,7 @@ pub fn poems(root: &Path, deleted: bool) -> Result<Vec<Value>> {
         }
     }
     out.sort_by(|a, b| b["createdAt"].as_str().cmp(&a["createdAt"].as_str()));
-    Ok(out)
+    Ok(PoemRead { items: out, deleted_ids })
 }
 
 /// ローカル正本と検証済みSSD snapshotで共通の表示投影。

@@ -3,13 +3,14 @@
 use super::{research_archive as archive, store::{self, Store}};
 use anyhow::{Context, Result, ensure};
 use serde_json::{Value, json};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 impl Store {
     pub(super) fn library_view(&self) -> Result<Value> {
         let data = self.read()?;
         let journeys = crate::journey::load(&self.memory)?;
-        let mut local: BTreeMap<String, Value> = store::poems(&self.memory, false)?.into_iter()
+        let records = store::read_poems(&self.memory, false)?;
+        let mut local: BTreeMap<String, Value> = records.items.into_iter()
             .map(|p| (p["id"].as_str().unwrap().into(), p)).collect();
         let mut player = json!({"revision":data["revision"],"catalog":data["catalog"],"poems":data["poems"],"journeys":data["journeys"]});
         let mut photos = self.photo_snapshot(&data)?;
@@ -21,8 +22,7 @@ impl Store {
         let mut result = Vec::new();
         let mut archived = 0;
         let mut pending = 0;
-        let deleted: BTreeSet<String> = store::poems(&self.memory, true)?.iter()
-            .filter_map(|p| p["id"].as_str().map(Into::into)).collect();
+        let deleted = records.deleted_ids;
         match archive::open(config.clone()) {
             Ok(archive) => {
                 for (id, raw) in data["researchSnapshots"].as_object().into_iter().flatten() {
