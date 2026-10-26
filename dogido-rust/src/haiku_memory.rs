@@ -1,5 +1,5 @@
-//! Soft feedback and explicit recall. This module never edits a verse or turns
-//! player advice into hard constraints; only the configured memory root is read.
+//! softな講評と明示想起。設定済み記憶から候補を読み、条件・日時順で検索する。
+//! 想起は句を編集せず、本人の助言をhard制約へ変えない。保存判断は各操作の入口が所有する。
 use crate::haiku_record::{MemoryStore, SAVE_LOCK, append_line, locked_file};
 use anyhow::Result;
 use chrono::{DateTime, Duration, NaiveDateTime, Utc};
@@ -321,25 +321,24 @@ impl MemoryStore {
     }
 
     pub fn search_poems(&self, query: &RecallQuery) -> Result<Vec<Value>> {
+        Ok(select_recalled_poems(&self.recall_candidates()?, query))
+    }
+
+    /// 一つの想起要求の候補を読む。削除済み句の除外は既存poem_rowsが担当する。
+    /// 条件を外すときも全候補を再利用できるよう、件数制限と本文の重複除去は検索側で行う。
+    fn recall_candidates(&self) -> Result<Vec<Value>> {
         let mut candidates = self.poem_rows("haiku_revisions.jsonl")?.into_iter().map(|r|
             json!({"kind":"revision","id":r["id"],"created_at":r["created_at"],"original_text":r["original_text"],
                 "revised_text":r["revised_text"],"comment":r["comment"],"world":r["world"]})).collect::<Vec<_>>();
         candidates.extend(self.poem_rows("haiku_entries.jsonl")?.into_iter().map(|r|
             json!({"kind":"entry","id":r["id"],"created_at":r["created_at"],"original_text":r["text"],
                 "revised_text":null,"comment":r["interpretation"],"world":r["world"]})));
-        candidates.retain(|r| query.matches(r));
-        candidates.sort_by_key(|r| std::cmp::Reverse(date(&r["created_at"])));
-        let mut seen = HashSet::new();
-        candidates.retain(|r| {
-            let text = r["original_text"].as_str().unwrap_or("").trim();
-            text.is_empty() || seen.insert(text.to_owned())
-        });
-        candidates.truncate(3);
         Ok(candidates)
     }
 
     pub fn recall_reply(&self, q: &RecallQuery) -> Result<String> {
-        let mut hits = self.search_poems(q)?;
+        let candidates = self.recall_candidates()?;
+        let mut hits = select_recalled_poems(&candidates, q);
         let place = q.place_label.as_deref().or(q.biome_id.as_deref());
         let time = q.time_label.as_deref();
         let mut prefix = match (time, place) {
@@ -349,7 +348,7 @@ impl MemoryStore {
             _ => "覚えとる句やと…".into(),
         };
         if hits.is_empty() && q.filtered() {
-            hits = self.search_poems(&RecallQuery::default())?;
+            hits = select_recalled_poems(&candidates, &RecallQuery::default());
             prefix = if !hits.is_empty() && (place.is_some() || time.is_some()) {
                 "ぴったりは無いけど、覚えとる句やと…"
             } else {
@@ -392,6 +391,19 @@ impl MemoryStore {
         }
         Ok(prefix)
     }
+}
+
+/// 同じ読込候補を条件ごとに検索し、最新の同本文を優先して最大3件返す。
+/// 元候補は変更せず、実際に返す行だけを複製する。別の要求では保存済み記録を再読込する。
+fn select_recalled_poems(candidates: &[Value], query: &RecallQuery) -> Vec<Value> {
+    let mut hits: Vec<_> = candidates.iter().filter(|row| query.matches(row)).collect();
+    hits.sort_by_key(|row| std::cmp::Reverse(date(&row["created_at"])));
+    let mut seen = HashSet::new();
+    hits.retain(|row| {
+        let text = row["original_text"].as_str().unwrap_or("").trim();
+        text.is_empty() || seen.insert(text.to_owned())
+    });
+    hits.into_iter().take(3).cloned().collect()
 }
 
 fn select_lessons(lessons: &[Value], entries: &[Value], now: DateTime<Utc>) -> Vec<Value> {

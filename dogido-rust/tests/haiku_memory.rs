@@ -299,3 +299,29 @@ fn praise_retries_deduplicate_by_received_turn_not_words() {
     assert_eq!(read(&f.0.join("long_term/haiku_critiques.jsonl")).len(), 3);
     assert!(!f.0.join("long_term/haiku_lessons.jsonl").exists());
 }
+
+#[test]
+fn recall_filters_before_limiting_and_loads_new_records_on_next_request() {
+    let f = Fixture::new();
+    let store = f.store();
+    let entries: Vec<_> = (1..=5).map(|n| json!({
+        "id":format!("p{n}"),"text":format!("句その{n}"),
+        "created_at":format!("2026-10-0{n}T00:00:00Z"),
+        "world":{"biome":if n == 1 {"desert"} else {"plains"}}
+    })).collect();
+    f.write("long_term/haiku_entries.jsonl", &entries);
+    let desert = RecallQuery { biome_id:Some("desert".into()), ..Default::default() };
+    assert_eq!(store.search_poems(&desert).unwrap()[0]["original_text"], "句その1");
+    let absent = RecallQuery { biome_id:Some("snowy_plains".into()), place_label:Some("雪原".into()), ..Default::default() };
+    let reply = store.recall_reply(&absent).unwrap();
+    assert!(reply.starts_with("ぴったりは無いけど"));
+    assert!(reply.contains("句その5") && reply.contains("句その4"));
+    assert!(!reply.contains("句その3"));
+    f.write("long_term/haiku_entries.jsonl", &[json!({
+        "id":"new","text":"追加した句","created_at":"2026-10-27T00:00:00Z","world":{"biome":"plains"}
+    })]);
+    let next = store.recall_reply(&absent).unwrap();
+    assert!(next.contains("追加した句") && !next.contains("句その5"));
+    f.write("long_term/haiku_entries.jsonl", &[]);
+    assert_eq!(store.recall_reply(&absent).unwrap(), "それに合う句、まだ覚えとらへんで。");
+}
