@@ -13,9 +13,23 @@ class BodyLookControllerTest {
         var target=sceneTarget(eye,new Point(0,-.6,.8),null);
         assertEquals(new Point(10,60.2,26.4),target);
         Fake fake=new Fake();var controller=new BodyLookController(fake);
-        assertEquals("queued",controller.point(context,UUID.randomUUID(),target).status());
+        assertEquals("queued",controller.scene(context,UUID.randomUUID(),null,target).status());
         assertEquals(target,fake.request.target());
         Point hit=new Point(12,65,25);assertEquals(hit,sceneTarget(eye,new Point(0,-.6,.8),hit));
+    }
+    @Test void sceneTargetAndAcceptanceUseOneCaptureAndTheNextRequestReadsAgain() {
+        Fake fake=new Fake(); var controller=new BodyLookController(fake);
+        Point direction=new Point(0,-.6,.8);
+        assertEquals("queued",controller.scene(context,UUID.randomUUID(),direction,null).status());
+        assertEquals(1,fake.captures); assertEquals(sceneTarget(eye,direction,null),fake.request.target());
+        Point nextEye=new Point(12,70,22);
+        fake.live=new Live(context,101,0,201,nextEye,90,fake.live.playerEye());
+        assertEquals("queued",controller.scene(context,UUID.randomUUID(),direction,null).status());
+        assertEquals(2,fake.captures); assertEquals(101,fake.request.observedServerTick());
+        assertEquals(sceneTarget(nextEye,direction,null),fake.request.target());
+        fake.live=null;
+        assertEquals("target_unavailable",controller.scene(context,UUID.randomUUID(),direction,null).status());
+        assertEquals(2,fake.calls);
     }
     @Test void eightDirectionsUseBodyYawAndConstantDistance() {
         double[][] offsets = {{0,1},{-1,1},{-1,0},{-1,-1},{0,-1},{1,-1},{1,0},{1,1}};
@@ -36,8 +50,8 @@ class BodyLookControllerTest {
     }
     private final class Fake implements Access {
         Live live = new Live(context,100,20,200,eye,90,new Point(12,66.62,24));
-        BodyConnection.LookRequest request; int calls;
-        public Live capture() { return live; }
+        BodyConnection.LookRequest request; int calls,captures;
+        public Live capture() { captures++; return live; }
         public String submit(BodyConnection.LookRequest value) { calls++; request=value; return "queued"; }
     }
     @Test void playerSendsActualEyeAndDirectionSendsDerivedCoordinate() {
@@ -59,17 +73,17 @@ class BodyLookControllerTest {
     @Test void observedTargetKeepsTheOriginalPointWhenRetried() {
         Fake fake = new Fake(); var controller = new BodyLookController(fake); UUID id = UUID.randomUUID();
         Point target = new Point(14,68,22);
-        assertEquals("queued",controller.point(context,id,target).status());
+        assertEquals("queued",controller.scene(context,id,null,target).status());
         var original = fake.request;
         assertEquals(target,original.target());
         fake.live = new Live(context,110,0,201,eye,180,new Point(0,66,0));
-        assertEquals("queued",controller.point(context,id,new Point(12,66,24)).status());
+        assertEquals("queued",controller.scene(context,id,null,new Point(12,66,24)).status());
         assertEquals(original,fake.request);
         assertEquals("action_id_conflict",controller.player(context,id).status());
     }
     @Test void pointBeyondTheExistingLookRangeNeverSends() {
         Fake fake = new Fake(); var controller = new BodyLookController(fake);
-        assertEquals("invalid_target",controller.point(context,UUID.randomUUID(),new Point(100,65,20)).status());
+        assertEquals("invalid_target",controller.scene(context,UUID.randomUUID(),null,new Point(100,65,20)).status());
         assertEquals(0,fake.calls);
     }
     @Test void staleMissingAndForeignContextNeverSend() {

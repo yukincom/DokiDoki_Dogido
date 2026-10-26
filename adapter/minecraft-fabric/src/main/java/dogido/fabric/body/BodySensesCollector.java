@@ -206,11 +206,16 @@ public final class BodySensesCollector {
         return result;
     }
 
+    /** 身体を使わない除外を先に済ませ、通った音だけ発音時点のframeを一回取得する。 */
+    static BodyConnection.Frame captureForSound(SoundInstance sound,java.util.function.Supplier<BodyConnection.Frame> capture) {
+        if (sound==null || sound.getId()==null || !SoundObserver.positionedBodySoundCategory(sound.getCategory(),sound.isRelative())) return null;
+        return capture.get();
+    }
     /** SoundManagerの実発音候補を発生時に検証する。相対音にplayer座標を代入せず、身体までの到達範囲を見る。 */
-    public void onPlayedSound(SoundInstance sound, BodyConnection.Frame frame, MinecraftClient client) {
-        if (client.world == null || client.player == null || sound == null || sound.getId() == null
-                || !SoundObserver.positionedBodySoundCategory(sound.getCategory(),sound.isRelative())
-                || !"observed".equals(string(frame.observation(),"status"))) return;
+    public void onPlayedSound(SoundInstance sound,java.util.function.Supplier<BodyConnection.Frame> capture,MinecraftClient client) {
+        if (client.world==null || client.player==null) return;
+        BodyConnection.Frame frame=captureForSound(sound,capture);
+        if (frame==null || !"observed".equals(string(frame.observation(),"status"))) return;
         JsonObject sample = frame.observation().getAsJsonObject("sample");
         try {
             establishContext(sample,client.world);

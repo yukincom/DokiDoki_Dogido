@@ -50,7 +50,8 @@ public final class BodyInspectRuntime {
             public boolean collisionFree(BodyApproachGeometry.Bounds destination) { return clearSpace(destination); }
             public BodyLookController.Result lookOwner(SessionRef session,Command command) {
                 // 同一commandの再送は上位台帳で除外済み。BERTと同じ実測・鮮度・共有sequenceを使う。
-                return BodyLookRuntime.create(connection,request -> lookSubmission.lookAt(session,command,request))
+                return BodyLookRuntime.create(connection,() -> BodyLookRuntime.live(MinecraftClient.getInstance(),currentFrame),
+                    request -> lookSubmission.lookAt(session,command,request))
                     .player(command.context(),command.commandId());
             }
             public String moveTo(SessionRef session,Command command,BodyConnection.MoveRequest request) {

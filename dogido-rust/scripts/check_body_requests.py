@@ -30,7 +30,7 @@ LABELS = {
     STALE_TARGET: "look_target",
     NEW_RIGHT: "look_relative_right",
 }
-SUCCESS_TEXT = {"recall": "来たで。", "look": "そっち向いたで。"}
+SUCCESS_TEXT = {"recall": "はーい、今そっち行くで。", "look": "そっち向いたで。"}
 
 
 def now():
@@ -40,8 +40,9 @@ def now():
 def main():
     passed = []
     with tempfile.TemporaryDirectory(prefix="dogido-body-request-") as tmp, \
-            dependencies() as (dep, _, seen), \
+            dependencies() as (dep, controls, seen), \
             mock_request_classifier(LABELS) as (classifier_args, classifier_dir):
+        controls["leaf"] = SUCCESS_TEXT["recall"]
         folder = Path(tmp)
         with running(ROOT / "target/debug/dogido-rust", folder, dep,
                      haiku_settings={"enabled": False, "memory_enabled": False},
@@ -101,7 +102,10 @@ def main():
                 if not found:
                     return None
                 assert len(found) == 1 and found[0]["text"] == expected, found
-                assert not found[0].get("llm_reports"), found[0]
+                if text == RECALL:
+                    assert [report["kind"] for report in found[0].get("llm_reports", [])] == ["body_recall"], found[0]
+                else:
+                    assert not found[0].get("llm_reports"), found[0]
                 return found[0]
 
             def body_commands(response):
@@ -134,7 +138,11 @@ def main():
                 assert (command["context"] is not None) == bound, command
                 if bound:
                     assert command["context"] == context, command
-                assert not feedback(text), feedback(text)
+                if mode == "recall":
+                    # 受付時の呼びかけ返答は許可済み。到着はACK前に確定せず、返事だけを一度生成する。
+                    wait_for(lambda: completed_feedback(text, SUCCESS_TEXT["recall"]))
+                else:
+                    assert not feedback(text), feedback(text)
                 assert item["body_request_status"] == "queued" and "body_request_result" not in item, item
                 # 同じ依頼の再配送は同じID。Rustはlookの座標や移動を作らない。
                 assert body_commands(send(bound=bound)) == [command]
@@ -187,7 +195,7 @@ def main():
             routed, command = issue(RECALL, "recall", bound=False)
             assert command["context"] is None
             accept_success(routed, command, RECALL, duplicate=True)
-            passed.append("unbound_recall_waits_for_arrival_and_duplicate_ack_speaks_once")
+            passed.append("unbound_recall_replies_before_arrival_and_duplicate_ack_does_not_repeat")
 
             routed, command = issue(RIGHT, "look_relative_right")
             accept_success(routed, command, RIGHT)
@@ -246,8 +254,11 @@ def main():
             classified_texts = [frame["text"].split("現在のユーザー発話:\n", 1)[1]
                                 for frame in classified_requests]
             assert classified_texts == requests_sent, (classified_texts, requests_sent)
-            assert not [r for r in seen if r["path"] == "/v1/chat/completions"], seen
-            passed.append("each_raw_input_classified_once_without_model_generation")
+            generated = [r for r in seen if r["path"] == "/v1/chat/completions"]
+            assert len(generated) == 1, generated
+            recall_context = json.loads(generated[0]["body"]["messages"][1]["content"])
+            assert recall_context["event"] == "body_recall" and recall_context["player_input"] == RECALL, recall_context
+            passed.append("each_raw_input_classified_once_and_only_recall_reply_is_generated")
             request(base, "/api/v1/adapter-sessions/" + sid, method="DELETE")
     print(json.dumps({"phase": "body_requests_http", "passed": passed, "count": len(passed),
                       "all_owned_processes_stopped": True}, ensure_ascii=False, indent=2))

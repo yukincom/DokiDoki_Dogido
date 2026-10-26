@@ -42,18 +42,19 @@ public final class BodyLookController {
     }
     /** 明示された8方向だけを渡す。基準は受付時の身体snapshotのview_yaw。 */
     public Result direction(Context expected,UUID actionId,Direction direction) {
-        return direction == null ? new Result(actionId,-1,"invalid_direction") : send(expected,actionId,direction,null,direction.name());
+        return direction == null ? new Result(actionId,-1,"invalid_direction") : send(expected,actionId,live -> directionTarget(live.eye(),live.yaw(),direction),direction.name());
     }
     /** 現在の本人の目を送り、その座標へ一度向く。 */
-    public Result player(Context expected,UUID actionId) { return send(expected,actionId,null,null,"player"); }
-    /** 実crosshairまたは実player視線からコードで求めた点。再送では元の点を保持する。 */
-    public Result point(Context expected,UUID actionId,Point target) {
-        return target == null ? new Result(actionId,-1,"invalid_target") : send(expected,actionId,null,target,"point");
+    public Result player(Context expected,UUID actionId) { return send(expected,actionId,Live::playerEye,"player"); }
+    /** 実crosshairまたは本人の視線と、受付照合に使う同じ身体の眼から注視点を作る。 */
+    public Result scene(Context expected,UUID actionId,Point playerDirection,Point hit) {
+        if (hit==null && playerDirection==null) return new Result(actionId,-1,"invalid_target");
+        return send(expected,actionId,live -> sceneTarget(live.eye(),playerDirection,hit),"scene");
     }
-    private Result send(Context expected,UUID id,Direction direction,Point explicitTarget,String mode) {
+    private Result send(Context expected,UUID id,java.util.function.Function<Live,Point> targetFor,String mode) {
         if (expected == null || id == null) return new Result(id,-1,"invalid_request");
         Live live = access.capture();
-        if (live == null || !Objects.equals(expected,live.context())) return new Result(id,-1,"stale_context");
+        if (live == null || !Objects.equals(expected,live.context())) return new Result(id,-1,"scene".equals(mode)?"target_unavailable":"stale_context");
         if (live.tick() < 0 || live.ageMillis() < 0 || live.ageMillis() > 750) return new Result(id,-1,"stale_snapshot");
         Sent previous = sent.get(id);
         if (previous != null) {
@@ -62,8 +63,9 @@ public final class BodyLookController {
             var request = previous.request();
             return new Result(id,request.sequence(),access.submit(request));
         }
+        if (live.eye()==null) return new Result(id,-1,"invalid_target");
         Point target;
-        try { target = explicitTarget != null ? explicitTarget : direction == null ? live.playerEye() : directionTarget(live.eye(),live.yaw(),direction); }
+        try { target = targetFor.apply(live); }
         catch (IllegalArgumentException error) { return new Result(id,-1,"invalid_pose"); }
         if (target == null || live.eye() == null || live.eye().distance(target) > 64) return new Result(id,-1,"invalid_target");
         long sequence = access.nextSequence(expected,live.priorSequence(),live.tick(),lastSequence);

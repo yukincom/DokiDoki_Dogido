@@ -66,9 +66,8 @@ public final class BodyRequestRuntime {
                 BodyLookController.Result result;
                 if (command.mode()==Mode.LOOK_PLAYER) result=look.player(command.context(),command.commandId());
                 else if (command.mode()==Mode.LOOK_TARGET || command.mode()==Mode.LOOK_DIRECTION) {
-                    Point target=target(client,command);
-                    if (target==null) { finish(command,session,"rejected","target_unavailable",command.context()); return; }
-                    result=look.point(command.context(),command.commandId(),target);
+                    var direction=client.player.getRotationVec(1.0f);
+                    result=look.scene(command.context(),command.commandId(),new Point(direction.x,direction.y,direction.z),hitPoint(client,command));
                 } else result=look.direction(command.context(),command.commandId(),
                     BodyLookController.Direction.valueOf(command.mode().name().substring("LOOK_RELATIVE_".length())));
                 sequence=result.sequence(); submission=result.status();
@@ -85,7 +84,7 @@ public final class BodyRequestRuntime {
             finish(command,session,"failed","bridge_error",command.context());
         } finally { dispatchCommand=null; dispatchSession=null; dispatchLook=null; }
     }
-    private Point target(MinecraftClient client,Command command) {
+    private static Point hitPoint(MinecraftClient client,Command command) {
         Point hitPoint=null;
         if (command.mode()==Mode.LOOK_TARGET) {
             HitResult hit=client.crosshairTarget;
@@ -94,14 +93,7 @@ public final class BodyRequestRuntime {
             }
             // 景色・空・遠景は物体への命中を必要としない。本人が向いている方向を使う。
         }
-        var frame=connection.captureFrame(command.ownerId(),command.dimension());
-        var observation=frame.observation();
-        if (!"observed".equals(string(observation,"status"))) return null;
-        var sample=observation.getAsJsonObject("sample");
-        if (!command.context().equals(context(sample.getAsJsonObject("context")))) return null;
-        Point eye=point(sample.getAsJsonObject("self_pose").getAsJsonObject("eye_position"));
-        var direction=client.player.getRotationVec(1.0f);
-        return BodyLookController.sceneTarget(eye,new Point(direction.x,direction.y,direction.z),hitPoint);
+        return hitPoint;
     }
     /** 完了確認はrootが取得した現在frameを使う。RECALLの専用結果照会は従来の台帳へ行う。 */
     public void tick(BodyConnection.Frame frame) {

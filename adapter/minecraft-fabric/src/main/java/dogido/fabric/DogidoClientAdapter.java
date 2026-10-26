@@ -215,8 +215,8 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         instance.soundObserver.onPlayedSound(sound);
         MinecraftClient client = MinecraftClient.getInstance();
         if (instance.bodySenses != null && client.player != null && client.world != null) {
-            var frame = instance.bodyConnection.captureFrame(client.player.getUuid(),client.world.getRegistryKey().getValue().toString());
-            instance.bodySenses.onPlayedSound(sound,frame,client);
+            instance.bodySenses.onPlayedSound(sound,
+                () -> instance.bodyConnection.captureFrame(client.player.getUuid(),client.world.getRegistryKey().getValue().toString()),client);
         }
     }
 
