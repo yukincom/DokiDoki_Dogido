@@ -8,6 +8,7 @@ import time
 
 from check_dialogue import dependencies, register, request, row, running, snapshot, submit, wait_for
 from check_environment_reactions import reaction_context
+from body_senses_fixture import attach_body
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -64,20 +65,20 @@ def main():
             passed.append("invalid_output_records_failure_silence_without_tts")
             request(base, "/api/v1/adapter-sessions/" + sid, method="DELETE")
 
-            sid = register(base, preview=False)
+            sid = register(base, preview=False, body=True)
             sequence = 0
 
             def event(weather, smell):
                 nonlocal sequence
                 sequence += 1
-                return request(base, "/api/v1/game-events", {
+                return request(base, "/api/v1/game-events", attach_body({
                     "schema_version": "2026-05-24", "adapter": "fixture", "sequence": sequence,
                     "observed_at": datetime.now(timezone.utc).isoformat(),
                     "event": {"name": "status_snapshot", "source_kind": "system", "priority_hint": "background", "certainty": "high"},
                     "player": {"name": "試験", "dimension": "minecraft:overworld"},
                     "world": {"weather": weather, "biome": "plains", "sky_visible": True,
                               "ceiling_height": 20, "local_light": 15, "time_phase": "day"},
-                    "smell_observation": smell}, sid=sid)
+                    "smell_observation": smell}), sid=sid)
 
             bread = {"status":"present","components":[{"smell_id":"bread","category":"food","valence":"pleasant","source_kind":"hotbar","effective_strength":3}],"basis":"smell_policy_v2"}
             event("clear", {"status":"none","components":[],"basis":"smell_policy_v2"})

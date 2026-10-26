@@ -203,7 +203,7 @@ async fn existing_environment_model_gets_one_image_request_and_can_select_silenc
     assert_eq!(context["recent"]["conversation"][0]["text"], "カメさん、砂浜でゆっくりしとるなぁ。");
     let shared = crate::reaction_leaf::context("surroundings_notice", &json!({})).unwrap();
     assert_eq!(context["situation"], shared["situation"]);
-    assert!(context["situation"].as_str().unwrap().contains("新しく言うことがなければ黙っててええ"));
+    assert!(context["situation"].as_str().unwrap().contains("同じ意味合いの話をしたばかりで、新しく伝えることがなければ黙ってな"));
     assert_eq!(result["observation_revision"], context["world_context"]["revision"]);
     assert!(!context.to_string().contains(PNG));
     // 添付の有無で、共通の状況文・全観測・変化・履歴が削られない。
@@ -338,3 +338,7 @@ async fn old_image_cannot_claim_the_current_scene_is_unchanged() {
     let mut action=crate::environment::notice::action();
     let data=d.data.lock().unwrap();attach_latest(&data.sessions["s"],&mut action);assert!(action.image.is_none());
 }
+
+
+#[path = "look_tests.rs"]
+mod look_tests;

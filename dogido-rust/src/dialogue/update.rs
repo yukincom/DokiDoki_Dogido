@@ -30,6 +30,12 @@ impl Dialogue {
         if row.is_some_and(|r| r["epoch"].as_u64().is_some_and(|owner| owner != epoch)) {
             return false;
         }
+        if current
+            && row.is_some_and(|r| !super::visual_runtime::look_reply_current(&d.sessions[sid], r))
+        {
+            Self::cancel_chat(&mut d, sid, "look_context_changed");
+            return false;
+        }
         let workshop_id = row
             .and_then(|r| r["workshop_id"].as_str())
             .map(str::to_owned);
@@ -82,10 +88,7 @@ impl Dialogue {
             if let Some(result) = result {
                 if status == PlaybackStatus::Queued
                     && workshop_id.is_some()
-                    && matches!(
-                        result["workshop_action"].as_str(),
-                        Some("close_workshop")
-                    )
+                    && matches!(result["workshop_action"].as_str(), Some("close_workshop"))
                 {
                     // This validated queued transition closes the pin below.
                     // Preserve ownership for its later text-display acknowledgement.
@@ -133,6 +136,8 @@ impl Dialogue {
                     "observation_revision",
                     "body_observation_input",
                     "body_position_changes_input",
+                    "look_image_status",
+                    "look_capture_id",
                     "horse_recall_status",
                     "horse_recall_reason",
                     "horse_command",

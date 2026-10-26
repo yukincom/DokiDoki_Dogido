@@ -79,57 +79,63 @@ async fn body(
         .into();
     // 一句の相談中は過去句を検索しない。戦闘pauseと通常会話への寄り道も、
     // 受付時にコードが確定したworkshopのopen状態を引き継ぐ。
-    if context.asks_haiku_recall
-        && input["poem_reference"]["open"] != true
-        && input["workshop_fallback"] != true
-        && !(context.asks_save_last_haiku
+    if input.after_look.is_none() {
+        if context.asks_haiku_recall
+            && input["poem_reference"]["open"] != true
+            && input["workshop_fallback"] != true
+            && !(context.asks_save_last_haiku
+                || context.revised_haiku_text.is_some()
+                || context.player_haiku_text.is_some())
+        {
+            let query = crate::recall_query::parse(
+                raw,
+                input["reading_corrections"]
+                    .as_array()
+                    .context("recall reading snapshot")?,
+                chrono::Utc::now(),
+            )
+            .context("recall request missing from current input")?;
+            return Ok(
+                json!({"op":"result","memory_query_requested":true,"memory_query":query,"llm_reports":[]}),
+            );
+        }
+        // 剣・モブのフラグは共通分類で置換済み。専用経路から通常会話へ誤流入した場合を扱う。
+        // 完成句の保存・三行編集は23分類とは別の既存経路なので、この分岐を残す。
+        if context.requests_sword
+            || context.asks_save_last_haiku
             || context.revised_haiku_text.is_some()
-            || context.player_haiku_text.is_some())
-    {
-        let query = crate::recall_query::parse(
-            raw,
-            input["reading_corrections"]
-                .as_array()
-                .context("recall reading snapshot")?,
-            chrono::Utc::now(),
-        )
-        .context("recall request missing from current input")?;
-        return Ok(
-            json!({"op":"result","memory_query_requested":true,"memory_query":query,"llm_reports":[]}),
-        );
-    }
-    // 剣・モブのフラグは共通分類で置換済み。専用経路から通常会話へ誤流入した場合を扱う。
-    // 完成句の保存・三行編集は23分類とは別の既存経路なので、この分岐を残す。
-    if context.requests_sword
-        || context.asks_save_last_haiku
-        || context.revised_haiku_text.is_some()
-        || context.player_haiku_text.is_some()
-        || context.asks_mob_information
-    {
-        return Ok(json!({"op":"result","unsupported":"unexpected_route","llm_reports":[]}));
-    }
-    if context.wants_quiet {
-        return Ok(json!({"op":"result","text":"","llm_reports":[]}));
-    }
-    if let Some(query) = context.knowledge_query.clone() {
-        if input["workshop_fallback"] == true {
+            || context.player_haiku_text.is_some()
+            || context.asks_mob_information
+        {
             return Ok(json!({"op":"result","unsupported":"unexpected_route","llm_reports":[]}));
         }
-        ensure!(
-            input["workshop"].is_null(),
-            "knowledge must be outside workshop"
-        );
-        let lookup = crate::knowledge::provider::lookup_async(
-            crate::knowledge::provider::Paths::from_helper(&config.helper)?,
-            query,
-        )
-        .await?;
-        live(cancel)?;
-        let reply = crate::knowledge::render(&lookup);
-        select_route(Route::Knowledge)?;
-        return Ok(
-            json!({"op":"result","text":reply.text,"knowledge_status":reply.lookup_status,"references":reply.references,"llm_reports":[]}),
-        );
+        if context.wants_quiet {
+            return Ok(json!({"op":"result","text":"","llm_reports":[]}));
+        }
+        if let Some(query) = context.knowledge_query.clone() {
+            if input["workshop_fallback"] == true {
+                return Ok(
+                    json!({"op":"result","unsupported":"unexpected_route","llm_reports":[]}),
+                );
+            }
+            ensure!(
+                input["workshop"].is_null(),
+                "knowledge must be outside workshop"
+            );
+            let lookup = crate::knowledge::provider::lookup_async(
+                crate::knowledge::provider::Paths::from_helper(&config.helper)?,
+                query,
+            )
+            .await?;
+            live(cancel)?;
+            let reply = crate::knowledge::render(&lookup);
+            select_route(Route::Knowledge)?;
+            return Ok(
+                json!({"op":"result","text":reply.text,"knowledge_status":reply.lookup_status,"references":reply.references,"llm_reports":[]}),
+            );
+        }
+    } else {
+        context.knowledge_query = None;
     }
     // 国語学習の専用対話は本体の対象外。詩の基本知識は上の正本DB経路で扱う。
     let mut reports: Vec<Value> = vec![];
@@ -215,6 +221,20 @@ async fn body(
                     image = None;
                 }
             }
+            if input.after_look.is_some() && image.is_none() {
+                // 実行成功だけは既に照合済み。画像なしで景色を補作せず、従来の成功返答だけを配送する。
+                ensure!(
+                    input
+                        .visual
+                        .as_ref()
+                        .and_then(|s| s.refresh(input, None))
+                        .is_some(),
+                    "look_reply_stale"
+                );
+                return Ok(
+                    json!({"op":"result","text":"そっち向いたで。","look_image_status":"unavailable","llm_reports":[]}),
+                );
+            }
             let output = if config.llm_enabled {
                 let request = reply.request(&config.model, config.max_tokens)?;
                 let run = super::chat_leaf_runtime::render_image(
@@ -234,6 +254,10 @@ async fn body(
                 "dialogue_action":output.action,"dialogue_outcome":output.status,
                 "dialogue_reason":output.reason,
                 "observation_revision":reply.details["world_context"]["revision"]});
+            if let Some(request) = &input.after_look {
+                result["look_image_status"] = json!("captured");
+                result["look_capture_id"] = json!(request.capture_id);
+            }
             super::body_runtime::attach_input(&mut result, &reply.details);
             result
         }

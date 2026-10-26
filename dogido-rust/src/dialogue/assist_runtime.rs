@@ -26,6 +26,9 @@ impl Dialogue {
             s.visual.enabled = capabilities
                 .iter()
                 .any(|c| c == super::visual_runtime::CAPABILITY);
+            s.visual.after_look_enabled = capabilities
+                .iter()
+                .any(|c| c == super::visual_runtime::AFTER_LOOK_CAPABILITY);
             s.body_interest_enabled = capabilities.iter().any(|c| c == "body.inspect_target.v3");
             s.body_requests.set_enabled(
                 capabilities

@@ -16,6 +16,7 @@ pub(super) struct Input {
     pub horse_recall: Option<super::horse_recall_runtime::Request>,
     pub request_classification: Option<crate::request_classifier::Classification>,
     pub visual: Option<super::visual_runtime::Source>,
+    pub after_look: Option<super::visual_runtime::LookCapture>,
 }
 
 impl Input {
@@ -32,6 +33,7 @@ impl Input {
             horse_recall: None,
             request_classification: None,
             visual: None,
+            after_look: None,
         }
     }
 }
@@ -45,6 +47,7 @@ impl From<Value> for Input {
             horse_recall: None,
             request_classification: None,
             visual: None,
+            after_look: None,
             frame,
         }
     }

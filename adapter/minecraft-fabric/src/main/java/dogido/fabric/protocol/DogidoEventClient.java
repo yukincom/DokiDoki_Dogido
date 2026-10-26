@@ -335,7 +335,10 @@ public final class DogidoEventClient {
         if (this.horseRecallAvailable.getAsBoolean()) executionCapabilities.add(HorseRecallProtocol.CAPABILITY);
         if (this.bodySupported && this.bodyCommandHandler != null) executionCapabilities.add(dogido.fabric.body.BodyInspectProtocol.CAPABILITY);
         if (this.bodySupported && this.bodyRequestHandler != null) executionCapabilities.add(dogido.fabric.body.BodyRequestProtocol.CAPABILITY);
-        if (this.bodySupported && this.bodyViewHandler!=null) executionCapabilities.add(dogido.fabric.screenshot.BodyViewProtocol.CAPABILITY);
+        if (this.bodySupported && this.bodyViewHandler!=null) {
+            executionCapabilities.add(dogido.fabric.screenshot.BodyViewProtocol.CAPABILITY);
+            if(this.bodyRequestHandler!=null)executionCapabilities.add(dogido.fabric.screenshot.BodyViewProtocol.AFTER_LOOK_CAPABILITY);
+        }
         payload.add("execution_capabilities", executionCapabilities);
 
         try {
@@ -472,7 +475,9 @@ public final class DogidoEventClient {
             for(var command:dogido.fabric.screenshot.BodyViewProtocol.parseCommands(body)) {
                 synchronized(this) {
                     if(!isCurrent(ref))return;
-                    if(!command.sessionId().equals(ref.sessionId()) || !this.bodyViewState.claim(command.id()))continue;
+                    if(!command.sessionId().equals(ref.sessionId())
+                        || command.afterLook()!=null && !isCurrentBodyRequest(ref,command.afterLook().inputGeneration())
+                        || !this.bodyViewState.claim(command.id()))continue;
                 }
                 try {this.bodyViewHandler.accept(command,ref);}
                 catch(RuntimeException error) {

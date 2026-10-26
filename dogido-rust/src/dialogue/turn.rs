@@ -39,9 +39,15 @@ impl Dialogue {
                 epoch: Some(epoch),
             },
         );
+        let after_look = input.after_look.clone();
         self.clone()
             .run_turn_body(sid.clone(), turn.clone(), epoch, input, cancel)
             .await;
+        if let Some(request) = after_look
+            && let Some(s) = self.data.lock().unwrap().sessions.get_mut(&sid)
+        {
+            s.visual.finish_look(&request);
+        }
         self.record_workshop_turn(&sid, &turn, &attempt);
     }
     /// 通常turnを直列枠内で実行する。待ち時間中の観測・保存済み句を取り込み直し、
@@ -93,7 +99,8 @@ impl Dialogue {
                 }
             }
         }
-        input.visual = super::visual_runtime::Source::new(&self, &sid, &turn, epoch);
+        input.visual = super::visual_runtime::Source::new(&self, &sid, &turn, epoch)
+            .map(|source| source.after_look(input.after_look.clone()));
         // An earlier authorized save may have completed while this turn waited.
         // Rebuild the read-only context before planning against that new version.
         if input["workshop"].is_object() && input["poem_input"].is_null() {
@@ -132,6 +139,10 @@ impl Dialogue {
                     _=tokio::time::sleep(Duration::from_millis(200))=>{
                         let mut d=owner.data.lock().unwrap();
                         owner.tick_workshop(&mut d, &monitor_sid);
+                        let stale_look = d.sessions.get(&monitor_sid).is_some_and(|s| s.epoch==epoch
+                            && d.rows.iter().find(|r| r["turn_id"]==s.current_turn)
+                                .is_some_and(|r| !super::visual_runtime::look_reply_current(s,r)));
+                        if stale_look { Self::cancel_chat(&mut d,&monitor_sid,"look_context_changed");break; }
                         let stale = d.sessions.get(&monitor_sid).is_some_and(|s| {
                             let workshop_allowed = workshop_id.is_some()
                                 && workshop_focus::quiet_observation(s);
@@ -151,7 +162,9 @@ impl Dialogue {
         let mut completed = false;
         let result = if input["poem_input"].is_object() {
             self.save_poem_input(&sid, epoch, &input, &mut cancel).await
-        } else if crate::haiku_memory::clear_requested(input["text"].as_str().unwrap_or("")) {
+        } else if input.after_look.is_none()
+            && crate::haiku_memory::clear_requested(input["text"].as_str().unwrap_or(""))
+        {
             self.clear_lessons(&sid, epoch, &input).await
         } else if input["workshop"].is_object() {
             match self.render_workshop(&input, &mut cancel, &mut permit).await {

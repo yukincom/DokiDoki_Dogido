@@ -167,7 +167,7 @@ Body API v9対応時、観測capabilityは`body_autonomy.v2`、実行capability�
 
 ### 身体視点の画像取得（2026-10-21）
 
-通常会話用の `capture_body_view` は既存の応答・結果・ACKを使う。capabilityは `client.body_view.capture.v1`。身体contextと期限を検証し、成功時だけ192px PNGを一件添える。[画像契約](2026-10-21-chat-image.md#既存通信への接続)。
+通常会話用の `capture_body_view` は既存の応答・結果・ACKを使う。capabilityは `client.body_view.on_stop.v1`。身体contextと期限を検証し、成功時だけ192px PNGを一件添える。[画像契約](2026-10-21-chat-image.md#既存通信への接続)。 明示の向き変更後は追加capability `client.body_view.after_look.v1` と `after_look` を使い、成功した同じ操作へ撮影を結び付ける。[向き変更後の契約](2026-10-26-look-capture-and-darkness.md)。
 
 句集用は実行capability `client.screenshot.body_view.v1` の接続で、新しい自動川柳の材料を固定して生成を開始するときに、既存の応答 `commands` へ `capture_screenshot` を配送する。本棚への登録は同じ生成の保存成功後だけ。LLMによる選択・保存判断は行わない。
 

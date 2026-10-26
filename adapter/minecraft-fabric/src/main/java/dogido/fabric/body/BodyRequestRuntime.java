@@ -20,20 +20,27 @@ public final class BodyRequestRuntime {
     @FunctionalInterface public interface Sender {
         String submit(SessionRef session,Command command,Supplier<String> action);
     }
-    private record Pending(Command command,SessionRef session,UUID connectionId,long sequence,Instant deadline) {}
+    private record Pending(Command command,SessionRef session,UUID connectionId,long sequence,Instant deadline,
+                           BodyConnection.LookRequest look) {}
     private final BodyConnection connection;
     private final BiPredicate<SessionRef,Long> current;
     private final Sender sender;
     private final BiConsumer<SessionRef,JsonObject> resultSink;
     private final BodyLookController look;
     private final LinkedHashSet<UUID> seen=new LinkedHashSet<>();
+    private final dogido.fabric.screenshot.BodyViewAfterLook lookCaptures=new dogido.fabric.screenshot.BodyViewAfterLook();
     private Pending pending;
+    private BodyConnection.LookRequest dispatchLook;
     private Command dispatchCommand;
     private SessionRef dispatchSession;
     public BodyRequestRuntime(BodyConnection connection,BiPredicate<SessionRef,Long> current,Sender sender,
             BiConsumer<SessionRef,JsonObject> resultSink) {
         this.connection=connection; this.current=current; this.sender=sender; this.resultSink=resultSink;
-        this.look=BodyLookRuntime.create(connection,request -> sender.submit(dispatchSession,dispatchCommand,() -> connection.lookAt(request)));
+        this.look=BodyLookRuntime.create(connection,request -> {
+            String status=sender.submit(dispatchSession,dispatchCommand,() -> connection.lookAt(request));
+            if("queued".equals(status))dispatchLook=request;
+            return status;
+        });
     }
     public void handle(Command command,SessionRef session) {
         MinecraftClient client=MinecraftClient.getInstance();
@@ -41,6 +48,7 @@ public final class BodyRequestRuntime {
     }
     private void handleOnClient(MinecraftClient client,Command command,SessionRef session) {
         if (!current.test(session,command.inputGeneration()) || !seen.add(command.commandId())) return;
+        lookCaptures.clear(); // 新しい操作が失敗しても、その前に向いた画像を新操作の結果にしない。
         while (seen.size()>2048) seen.remove(seen.iterator().next());
         Instant now=Instant.now(); String problem=command.timeError(now);
         if (problem != null) { finish(command,session,"expired",problem,command.context()); return; }
@@ -71,11 +79,11 @@ public final class BodyRequestRuntime {
                 return;
             }
             // queuedは成功ではない。同じ実行IDの終端結果を待つ。
-            pending=new Pending(command,session,connectionId,sequence,command.issuedAt().plusSeconds(35));
+            pending=new Pending(command,session,connectionId,sequence,command.issuedAt().plusSeconds(35),dispatchLook);
         } catch (RuntimeException | LinkageError error) {
             connection.release(command.commandId());
             finish(command,session,"failed","bridge_error",command.context());
-        } finally { dispatchCommand=null; dispatchSession=null; }
+        } finally { dispatchCommand=null; dispatchSession=null; dispatchLook=null; }
     }
     private Point target(MinecraftClient client,Command command) {
         if (command.mode()==Mode.LOOK_TARGET) {
@@ -99,6 +107,7 @@ public final class BodyRequestRuntime {
         if (!Instant.now().isBefore(work.deadline())) { discardPending(); finish(work.command(),work.session(),"expired","result_timeout",work.command().context()); return; }
         try {
             String outcome=null, reason=null; Context resolved=work.command().context();
+            BodyConnection.Frame completedFrame=null;
             if (work.command().mode()==Mode.RECALL) {
                 var result=connection.recallResult(work.command().commandId());
                 if (result==null || !work.command().commandId().equals(result.actionId()) || !work.connectionId().equals(result.connectionId())
@@ -117,7 +126,7 @@ public final class BodyRequestRuntime {
                 var result=frame.autonomy().getAsJsonObject("action_result");
                 if (result==null || !work.command().commandId().toString().equals(string(result,"action_id"))
                         || work.sequence()!=result.get("sequence").getAsLong()) return;
-                outcome=string(result,"outcome"); reason=string(result,"reason");
+                outcome=string(result,"outcome"); reason=string(result,"reason");completedFrame=frame;
                 if ("succeeded".equals(outcome) && !"facing_target".equals(reason)) { outcome="failed"; reason="invalid_look_result"; }
             }
             String status=switch (outcome==null?"":outcome) {
@@ -125,8 +134,12 @@ public final class BodyRequestRuntime {
                 case "interrupted" -> "failed"; case "expired" -> "expired"; default -> null;
             };
             if (status!=null) {
+                Instant executedAt=Instant.now();
+                if("succeeded".equals(status) && "facing_target".equals(reason) && completedFrame!=null)
+                    lookCaptures.completed(work.session(),work.command(),work.look(),
+                        completedFrame.observation().getAsJsonObject("sample"),completedFrame.autonomy(),executedAt);
                 discardPending();
-                finish(work.command(),work.session(),status,reason,resolved);
+                finish(work.command(),work.session(),status,reason,resolved,executedAt);
             }
         } catch (RuntimeException | LinkageError error) { discardPending(); finish(work.command(),work.session(),"failed","bridge_error",work.command().context()); }
     }
@@ -134,13 +147,23 @@ public final class BodyRequestRuntime {
         return client.isOnThread() && client.player!=null && client.world!=null && client.player.isAlive()
             && command.ownerId().equals(client.player.getUuid()) && command.dimension().equals(client.world.getRegistryKey().getValue().toString());
     }
+    /** 撮影受付・描画前・保存後で同じ入力世代と成功根拠を確かめる。旧入力はsuccess台帳に残っていても渡さない。 */
+    public dogido.fabric.screenshot.BodyViewAfterLook.Proof lookCapture(
+            dogido.fabric.screenshot.BodyViewProtocol.Command command,SessionRef session) {
+        if(command.afterLook()==null || !current.test(session,command.afterLook().inputGeneration()))return null;
+        return lookCaptures.capture(command,session,Instant.now());
+    }
     private void finish(Command command,SessionRef session,String status,String reason,Context context) {
+        finish(command,session,status,reason,context,Instant.now());
+    }
+    private void finish(Command command,SessionRef session,String status,String reason,Context context,Instant executedAt) {
         if (current.test(session,command.inputGeneration()))
-            resultSink.accept(session,BodyRequestProtocol.result(command,status,reason==null?"unknown":reason,Instant.now(),context));
+            resultSink.accept(session,BodyRequestProtocol.result(command,status,reason==null?"unknown":reason,executedAt,context));
     }
     private void discardPending() {
         Pending previous=pending; pending=null;
         if (previous != null) connection.release(previous.command().commandId());
     }
-    public void clear() { discardPending(); dispatchCommand=null; dispatchSession=null; look.clear(); seen.clear(); }
+    public void clear() { discardPending(); dispatchCommand=null; dispatchSession=null; dispatchLook=null;
+        lookCaptures.clear();look.clear(); seen.clear(); }
 }

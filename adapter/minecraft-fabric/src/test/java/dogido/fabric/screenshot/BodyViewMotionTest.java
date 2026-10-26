@@ -38,6 +38,15 @@ class BodyViewMotionTest {
         motion.observe("world",pose(0,0));motion.observe("world",pose(0,0));motion.observe("world",pose(0,0));
         assertEquals(2,motion.sequence());assertTrue(motion.translation()>before);
     }
+    @Test void explicitCaptureConsumesTheCurrentTurnWithoutAnImmediateSecondOrdinaryCapture() {
+        var motion=new BodyViewMotion();for(int i=0;i<3;i++)motion.observe("world",pose(0,0));
+        motion.observe("world",pose(0,90));
+        assertEquals(2,motion.afterLookSequence(1));
+        for(int i=0;i<10;i++)motion.observe("world",pose(0,90));
+        assertEquals(2,motion.sequence());
+        motion.observe("world",pose(1,90));motion.observe("world",pose(1,90));motion.observe("world",pose(1,90));
+        assertEquals(3,motion.sequence());
+    }
     @Test void newWorldResetsStabilityButKeepsSequenceMonotonic() {
         var motion=new BodyViewMotion();for(int i=0;i<3;i++)motion.observe("old",pose(0,0));
         motion.clear();motion.observe("new",pose(0,0));assertFalse(motion.still(pose(0,0)));

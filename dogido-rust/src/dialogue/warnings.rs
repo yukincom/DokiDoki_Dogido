@@ -414,6 +414,7 @@ impl Dialogue {
         let Some(s) = d.sessions.get_mut(sid) else {
             return;
         };
+        s.visual.cancel_look();
         if let Some(c) = s.cancel.take() {
             s.epoch += 1;
             s.status = PlaybackStatus::Cancelled;

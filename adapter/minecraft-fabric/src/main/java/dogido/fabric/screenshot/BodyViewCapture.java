@@ -10,6 +10,7 @@ import java.time.Duration;
 import java.util.UUID;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import javax.imageio.ImageIO;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -48,15 +49,17 @@ public final class BodyViewCapture {
     private static Request pending,stopRequest,poemRequest;
     private static final BodyViewMotion MOTION=new BodyViewMotion();
     private static final BodyViewChange CHANGES=new BodyViewChange();
+    private static final BodyViewRequestOrder REQUEST_ORDER=new BodyViewRequestOrder();
     private static Frame active;
     private static Request currentRequest;
     private static long nextUseUpdate;
     private static final ConcurrentHashMap<String,Instant> ACK_USES=new ConcurrentHashMap<>();
     private static final CaptureDeadline DEADLINE=new CaptureDeadline();
     private static volatile String lastResult="none";
-    private record Live(ClientWorld world,Object network,Entity owner,LivingEntity body,JsonObject sample,long age) {}
+    private record Live(ClientWorld world,Object network,Entity owner,LivingEntity body,JsonObject sample,JsonObject autonomy,long age) {}
     private record Request(String id,Live live,long deadline,BodyViewProtocol.Command command,ScreenshotProtocol.Command screenshot,
-                           BooleanSupplier sessionCurrent,Consumer<JsonObject> result,AtomicBoolean completed,long motionSequence,long translation) {}
+                           BooleanSupplier sessionCurrent,Consumer<JsonObject> result,AtomicBoolean completed,long motionSequence,long translation,
+                           BodyViewAfterLook.Proof afterLook,BooleanSupplier lookCurrent) {}
     private record Owner(Vec3d position,Box box,float delta,boolean invisible,int clearRays,String pose) {}
 
     /** 一frame内の可変組立だけを保持し、GPU callbackへ渡す時点でJSONへ固定する。 */
@@ -96,22 +99,36 @@ public final class BodyViewCapture {
         if (DEADLINE.busy() || pending!=null) { message("前の撮影が完了するまで待ってください。");return 0; }
         Live live=live();
         if (live==null) { message("身体の取得待ちです。ゲーム画面に戻り少し待ってから実行してください。");return 0; }
-        pending=new Request("view_"+UUID.randomUUID(),live,System.nanoTime()+Duration.ofSeconds(10).toNanos(),null,null,()->true,null,new AtomicBoolean(),0,0);
+        pending=new Request("view_"+UUID.randomUUID(),live,System.nanoTime()+Duration.ofSeconds(10).toNanos(),null,null,()->true,null,new AtomicBoolean(),0,0,null,()->true);
         DEADLINE.start(pending.id,pending.deadline); currentRequest=pending;lastResult="requested";
         message("撮影を予約しました。次の描画frameで1枚保存します。"); return 1;
     }
     /** 既存event応答の型付き命令をclient threadへ渡す。手動prepareを要求せず、同じ一枚撮影枠で予約する。 */
-    public static void request(BodyViewProtocol.Command command,BooleanSupplier sessionCurrent,Consumer<JsonObject> result) {
+    public static void request(BodyViewProtocol.Command command,BooleanSupplier sessionCurrent,
+            Supplier<BodyViewAfterLook.Proof> lookProof,Consumer<JsonObject> result) {
         MinecraftClient.getInstance().execute(()->{
             String error=command.timeError(Instant.now());Live current=live();
             if (!sessionCurrent.getAsBoolean()) return;
             if(error==null && (current==null || !command.matches(current.sample.getAsJsonObject("context"))))error="body_unavailable";
+            BodyViewAfterLook.Proof proof=command.afterLook()==null?null:lookProof.get();
+            if(error==null && command.afterLook()!=null && (proof==null || !proof.matches(current.sample,current.autonomy)))
+                error="look_completion_unavailable";
+            if(error==null && !REQUEST_ORDER.accept(command,explicitPending(stopRequest) || explicitPending(currentRequest)))
+                error="superseded";
             if(error!=null) {result.accept(BodyViewProtocol.result(command,"failed",error,Instant.now()));return;}
             if(stopRequest!=null)complete(stopRequest,null,"superseded");
+            // まだ描画していない通常予約は明示依頼へ譲る。GPU/IO処理中のframeは同じ撮影枠で完了を待つ。
+            if(proof!=null && pending!=null && pending.command!=null) {
+                Request old=pending;pending=null;DEADLINE.finish(old.id);complete(old,null,"superseded");
+            }
             long remaining=Duration.between(Instant.now(),command.expiresAt()).toNanos();
-            stopRequest=new Request("view_"+UUID.randomUUID(),current,System.nanoTime()+Math.max(0,remaining),command,null,
-                sessionCurrent,result,new AtomicBoolean(),0,0);
+            stopRequest=new Request(proof==null?"view_"+UUID.randomUUID():command.id(),current,
+                System.nanoTime()+Math.max(0,remaining),command,null,sessionCurrent,result,new AtomicBoolean(),0,0,
+                proof,proof==null?()->true:()->lookProof.get()==proof);
         });
+    }
+    private static boolean explicitPending(Request request) {
+        return request!=null && request.afterLook!=null && !request.completed.get() && request.lookCurrent.getAsBoolean();
     }
     /** 句集用も同じframe予約に合流する。撮影前はworld世代まで照合し、保存後の結果は元sessionの台帳へ返す。 */
     public static void request(ScreenshotProtocol.Command command,BooleanSupplier sessionCurrent,Consumer<JsonObject> result) {
@@ -125,7 +142,7 @@ public final class BodyViewCapture {
             }
             long remaining=Duration.between(Instant.now(),command.expiresAt()).toNanos();
             poemRequest=new Request("view_"+UUID.randomUUID(),current,System.nanoTime()+Math.max(0,remaining),null,command,
-                sessionCurrent,result,new AtomicBoolean(),0,0);
+                sessionCurrent,result,new AtomicBoolean(),0,0,null,()->true);
         });
     }
     /** ACKが画像利用を確定した時刻を共有retentionへ反映する。別readerの排他中なら次tick以降に再試行する。 */
@@ -137,6 +154,8 @@ public final class BodyViewCapture {
             && current.network==request.live.network && current.owner==request.live.owner && current.body==request.live.body
             && current.sample.get("context").equals(request.live.sample.get("context"))
             && (request.command==null || request.command.matches(current.sample.getAsJsonObject("context")))
+            && request.lookCurrent.getAsBoolean()
+            && (request.afterLook==null || request.afterLook.matches(current.sample,current.autonomy))
             && (request.screenshot==null || (request.screenshot.timeError(Instant.now())==null
                 && request.screenshot.matches(current.sample.getAsJsonObject("context"))));
     }
@@ -163,14 +182,15 @@ public final class BodyViewCapture {
     private static Live live() {
         var client=MinecraftClient.getInstance();
         if (connection==null || client.world==null || client.player==null || client.getNetworkHandler()==null) return null;
-        JsonObject observation=connection.capture(client.player.getUuid(),client.world.getRegistryKey().getValue().toString());
+        var frame=connection.captureFrame(client.player.getUuid(),client.world.getRegistryKey().getValue().toString());
+        JsonObject observation=frame.observation();
         if (!observation.has("status") || !"observed".equals(observation.get("status").getAsString())
                 || observation.get("age_ms").getAsLong()>=1000) return null;
         JsonObject sample=observation.getAsJsonObject("sample");
         UUID bodyId=UUID.fromString(sample.getAsJsonObject("context").get("body_id").getAsString());
         for (Entity entity:client.world.getEntities()) {
             if (entity.getUuid().equals(bodyId) && entity instanceof LivingEntity body && body.isAlive() && !body.hasVehicle() && !body.isSleeping())
-                return new Live(client.world,client.getNetworkHandler(),client.player,body,sample.deepCopy(),observation.get("age_ms").getAsLong());
+                return new Live(client.world,client.getNetworkHandler(),client.player,body,sample.deepCopy(),frame.autonomy().deepCopy(),observation.get("age_ms").getAsLong());
         }
         return null;
     }
@@ -195,12 +215,12 @@ public final class BodyViewCapture {
             Request request=stopRequest;
             if(now>=request.deadline || !valid(request,observed)) {
                 stopRequest=null;complete(request,null,now>=request.deadline?"expired":"stale_body");
-            } else if(!DEADLINE.busy() && pending==null && MOTION.still(pose(observed))
-                    && MOTION.sequence()>request.command.afterMotionSequence()) {
+            } else if(!DEADLINE.busy() && pending==null && (request.afterLook!=null
+                    || MOTION.still(pose(observed)) && MOTION.sequence()>request.command.afterMotionSequence())) {
                 stopRequest=null;
                 pending=new Request(request.id,observed,request.deadline,request.command,null,request.sessionCurrent,
-                    request.result,request.completed,MOTION.sequence(),MOTION.translation());
-                DEADLINE.start(pending.id,pending.deadline);currentRequest=pending;lastResult="stopped";
+                    request.result,request.completed,MOTION.sequence(),MOTION.translation(),request.afterLook,request.lookCurrent);
+                DEADLINE.start(pending.id,pending.deadline);currentRequest=pending;lastResult=request.afterLook==null?"stopped":"after_look";
             }
         }
         String expired=DEADLINE.expire(now);
@@ -246,19 +266,28 @@ public final class BodyViewCapture {
         if (pending==null || !renderingWorld || client.currentScreen!=null || client.skipGameRender) return null;
         Request request=pending;
         Live current=live();
-        // tick後に再び動き始めていたら、停止を取り直すまで描画へ入らない。
-        if(request.command!=null && current!=null && !MOTION.still(pose(current)))return null;
-        pending=null;
         if (System.nanoTime()>=request.deadline || !valid(request,current)
                 || client.player.nauseaIntensity>0 || client.player.lastNauseaIntensity>0) {
-            DEADLINE.finish(request.id);lastResult="stale_or_unavailable";complete(request,null,"stale_or_unavailable");
+            pending=null;DEADLINE.finish(request.id);lastResult="stale_or_unavailable";complete(request,null,"stale_or_unavailable");
             if(request.command==null && request.screenshot==null)message("撮影条件が変わったため中止しました。");return null;
         }
-        Request fresh=new Request(request.id,current,request.deadline,request.command,request.screenshot,request.sessionCurrent,request.result,request.completed,
-            request.command==null?request.motionSequence:MOTION.sequence(),request.command==null?request.translation:MOTION.translation());
-        currentRequest=fresh;
+        // 通常画像は元の停止条件を守る。明示注視は実成功と現在の保持姿勢を別に検証済みで、上下浮遊だけを待ち続けない。
+        if(request.command!=null && request.afterLook==null && !MOTION.still(pose(current)))return null;
         float delta=counter.getTickProgress(!current.world.getTickManager().shouldSkipTick(current.body));
-        active=new Frame(fresh,new BodyViewCamera(current.body,delta));
+        BodyViewCamera camera=new BodyViewCamera(current.body,delta);
+        if(request.afterLook!=null && !request.afterLook.facing(camera.pose()))return null;
+        long sequence=request.command==null?request.motionSequence:MOTION.sequence();
+        if(request.afterLook!=null) {
+            try {sequence=MOTION.afterLookSequence(request.command.afterMotionSequence());}
+            catch(IllegalStateException exhausted) {
+                pending=null;DEADLINE.finish(request.id);complete(request,null,"motion_sequence_exhausted");return null;
+            }
+        }
+        pending=null;
+        Request fresh=new Request(request.id,current,request.deadline,request.command,request.screenshot,request.sessionCurrent,request.result,request.completed,
+            sequence,request.command==null?request.translation:MOTION.translation(),request.afterLook,request.lookCurrent);
+        currentRequest=fresh;
+        active=new Frame(fresh,camera);
         return active;
     }
     public static boolean active() { return active!=null; }

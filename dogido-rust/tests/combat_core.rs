@@ -496,3 +496,47 @@ fn rain_does_not_consume_regular_warning_and_water_skeleton_gasps() {
     assert_eq!(d.actions[0].cue_id, Some("spot_hostile_gasp"));
     assert_eq!(d.actions[1].kind, "daylight_water");
 }
+
+#[test]
+fn darkness_keeps_chat_allowed_on_complete_and_passive_partial_observations() {
+    let mut engine = Engine::default();
+    let settings = Settings::default();
+    let warnings = threats::Settings::default();
+    let dark = changed(&event(json!([]), json!([])), |v| {
+        v["world"]["local_light"] = json!(3);
+        v["world"]["danger_darkness_score"] = json!(0.97);
+        v["combat"] = json!({"combat_active_hint":false,"recent_damage_ms":356650});
+    });
+    for (at, complete) in [(0, true), (1000, false), (2000, false), (3000, true)] {
+        let observed = if complete {
+            dark.clone()
+        } else {
+            changed(&dark, |v| {
+                v["event"]["name"] = json!("ambient_mob_detected");
+                v["event"]["source_kind"] = json!("visual");
+                v["passive_mobs"] = json!([{"type":"dogido","distance":2.0}]);
+            })
+        };
+        let decision = engine.observe(&observed, at, complete, true, &settings, &warnings);
+        assert_eq!(decision.mode, Mode::Alert);
+        assert!(decision.chat_allowed, "complete={complete}, at={at}");
+        assert!(!decision.stop_audio);
+        assert!(decision.actions.is_empty());
+    }
+    for danger in ["visual", "auditory", "damage", "hint"] {
+        let mut engine = Engine::default();
+        engine.observe(&dark, 0, true, true, &settings, &warnings);
+        let threat = changed(&dark, |v| match danger {
+            "visual" => v["visual_threats"] = json!([visual("zombie", "enemy", 12.0)]),
+            "auditory" => v["auditory_threats"] = json!([sound("enemy")]),
+            "damage" => v["combat"]["recent_damage_ms"] = json!(0),
+            _ => v["combat"]["combat_active_hint"] = json!(true),
+        });
+        assert!(
+            !engine
+                .observe(&threat, 1000, false, true, &settings, &warnings)
+                .chat_allowed,
+            "{danger}"
+        );
+    }
+}

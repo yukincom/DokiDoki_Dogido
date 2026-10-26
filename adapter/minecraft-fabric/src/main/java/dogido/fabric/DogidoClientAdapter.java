@@ -150,7 +150,10 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             hotbarCommands::handleSelectHotbarCommand, this.horseRecall::handle, this.horseRecall::available, this.bodyInspect::handle,
             (command,ref) -> screenshots.execute(command,ref,this.eventClient),
             (command,ref) -> dogido.fabric.screenshot.BodyViewCapture.request(command,
-                () -> this.eventClient.isCurrent(ref),result -> this.eventClient.rememberBodyViewResult(ref,result)),
+                () -> this.eventClient.isCurrent(ref) && (command.afterLook()==null
+                    || this.eventClient.isCurrentBodyRequest(ref,command.afterLook().inputGeneration())),
+                () -> this.bodyRequests.lookCapture(command,ref),
+                result -> this.eventClient.rememberBodyViewResult(ref,result)),
             dogido.fabric.screenshot.BodyViewCapture::acknowledged,this.bodyRequests::handle);
         this.eventClient.rememberVoicePreference(this.config.voiceEnabled());
         this.dialogueChat = DogidoDialogueChat.register(this.eventClient, this.config::saveVoiceEnabled, snapshot -> {

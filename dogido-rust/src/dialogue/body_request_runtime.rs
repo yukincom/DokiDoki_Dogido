@@ -39,6 +39,101 @@ fn active(s: &Session) -> bool {
 }
 
 impl Dialogue {
+    /// 向き変更の成功ACKから、同じ入力の通常返答へ一度だけ進める。
+    /// BERTと操作受付には戻さず、元の行・原文・入力世代を引き継ぐ。画像待機と生成はrun_turnの取消枠で行う。
+    pub(super) fn continue_look_reply(
+        self: &Arc<Self>,
+        d: &mut Data,
+        jobs: &mut Vec<JoinHandle<()>>,
+        sid: &str,
+        report: &Report,
+    ) -> bool {
+        let Some(look) = &report.completed_look else {
+            return false;
+        };
+        let Some(s) = d.sessions.get(sid) else {
+            return true;
+        };
+        if s.input_generation != look.input_generation || !active(s) {
+            return true;
+        }
+        if !self.config.llm_enabled
+            || !self.config.chat_image.enabled
+            || !s.visual.after_look_enabled
+            || !s.visual.enabled
+        {
+            return false;
+        }
+        let Some(row) = d.rows.iter().find(|r| {
+            r["session_id"] == sid
+                && r["session_instance"] == s.instance_id
+                && r["body_request_command_id"] == report.command_id
+        }) else {
+            return true;
+        };
+        let turn = row["turn_id"].as_str().unwrap().to_owned();
+        let source = row["source"].as_str().unwrap_or("typed").to_owned();
+        Self::cancel_chat(d, sid, "completed_body_look");
+        let s = d.sessions.get_mut(sid).unwrap();
+        let Some(event) = s.latest.clone() else {
+            return false;
+        };
+        let history = crate::chat_materials::CompletedHistory {
+            conversation_history: s.history.lines(), conversation_turns: s.history.rows(),
+            event_digest: s.history.situation_lines().iter().map(|n| format!("- {n}"))
+                .chain(s.combat_digest.iter().map(|n| format!("- {n}")))
+                .chain(std::iter::once(format!("- 今回のプレイヤーの依頼に従い、ドギドは指定された向きへの変更を完了した。実行結果: {}", report.value)))
+                .collect::<Vec<_>>().join("\n"),
+        };
+        let Ok(native) =
+            super::chat_context::capture(s, &event, &self.config.combat, history.clone(), None)
+        else {
+            return false;
+        };
+        let Some(capture) = s
+            .visual
+            .arm_after_look(sid, look.clone(), chrono::Utc::now())
+        else {
+            return false;
+        };
+        s.epoch += 1;
+        let epoch = s.epoch;
+        s.current_turn = turn.clone();
+        s.status = crate::playback::Status::Generating;
+        let mut input = super::bridge::Input::native(
+            json!({"text":report.original,"source":source,
+            "session_instance":s.instance_id,"operation_id":turn,"event":event,
+            "history":history.conversation_turns,"conversation_history":history.conversation_history,
+            "event_digest":history.event_digest}),
+            event,
+            native,
+        );
+        input.retained_history_count = s.history.retained_count();
+        input.after_look = Some(capture.clone());
+        input.request_classification =
+            super::request_runtime::classification(s, &report.original, &source).cloned();
+        s.history.push(&turn, "user", &report.original);
+        let (cancel, rx) = tokio::sync::watch::channel(false);
+        s.cancel = Some(cancel);
+        let binding = super::request_runtime::Binding::capture(s);
+        let row = d.rows.iter_mut().find(|r| r["turn_id"] == turn).unwrap();
+        row["classifier_binding"] = json!(binding);
+        row["look_context"] = json!(look.context);
+        row["category"] = json!("speech");
+        row["epoch"] = json!(epoch);
+        row["playback_status"] = json!("generating");
+        row["output_mode"] = json!("both");
+        row["look_capture_id"] = json!(capture.capture_id);
+        // 操作済みの入力は警告後に再受付しない。取消後の操作再実行を防ぐ。
+        row["combat_resumable"] = json!(false);
+        let owner = self.clone();
+        let sid = sid.to_owned();
+        jobs.push(tokio::spawn(async move {
+            owner.run_turn(sid, turn, epoch, input, rx).await;
+        }));
+        true
+    }
+
     pub(super) fn body_request_input(
         self: &Arc<Self>,
         d: &mut Data,

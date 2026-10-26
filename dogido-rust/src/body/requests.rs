@@ -44,12 +44,22 @@ struct Pending {
     original: String,
 }
 
+/// 同じ命令・入力世代・身体の実行成功を照合した、撮影予約用の事実。
+#[derive(Clone)]
+pub struct CompletedLook {
+    pub command_id: String,
+    pub context: Context,
+    pub input_generation: u64,
+    pub executed_at: DateTime<Utc>,
+}
+
 /// 操作の結果。受付・送信待ちを成功へ昇格させない。
 pub struct Report {
     pub command_id: String,
     pub original: String,
     pub value: Value,
     pub feedback: Option<&'static str>,
+    pub completed_look: Option<CompletedLook>,
 }
 
 #[derive(Default)]
@@ -123,6 +133,7 @@ impl State {
                 value: json!({"command_id":p.command["command_id"],"mode":p.mode,
                     "input_generation":p.generation,"status":status,"detail_code":detail}),
                 feedback,
+                completed_look: None,
             });
             while self.reports.len() > 16 {
                 self.reports.pop_front();
@@ -245,6 +256,12 @@ impl State {
                     continue;
                 }
             }
+            let completed_look = (success && p.mode != Mode::Recall).then(|| CompletedLook {
+                command_id: r.command_id.clone(),
+                context: p.context.clone().unwrap(),
+                input_generation: p.generation,
+                executed_at: executed.with_timezone(&Utc),
+            });
             let feedback = if success {
                 if p.mode == Mode::Recall {
                     // 呼びかけへの返事は受付時に生成を開始する。到着結果は記録だけにし、二度返事しない。
@@ -267,6 +284,9 @@ impl State {
                 &r.detail_code,
                 feedback,
             );
+            if let Some(report) = self.reports.back_mut() {
+                report.completed_look = completed_look;
+            }
         }
         self.reports.drain(..).collect()
     }

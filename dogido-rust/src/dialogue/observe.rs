@@ -293,6 +293,10 @@ impl Dialogue {
             }
             d.revision += 1;
         }
+        let s = &d.sessions[session_id];
+        let stale_look = d.rows.iter().find(|r| r["turn_id"] == s.current_turn)
+            .is_some_and(|r| !super::visual_runtime::look_reply_current(s,r));
+        if stale_look { Self::cancel_chat(&mut d,session_id,"look_context_changed"); }
         let body_reports =
             super::body_request_runtime::observe(d.sessions.get_mut(session_id).unwrap(), &event);
         for report in body_reports {
@@ -304,7 +308,8 @@ impl Dialogue {
                 row["body_request_result"] = report.value.clone();
             }
             tracing::info!(event="body_request_result",session_id,result=%report.value);
-            if let Some(feedback) = report.feedback {
+            let continued = self.continue_look_reply(&mut d, &mut jobs, session_id, &report);
+            if !continued && let Some(feedback) = report.feedback {
                 self.queue_fixed_reply(
                     &mut d,
                     &mut jobs,
@@ -353,6 +358,7 @@ impl Dialogue {
                     commands.extend(s.screenshots.commands(utc));
                     let capture_context = (self.config.chat_image.enabled && !s.preview && !s.foreground.game_paused)
                         .then(|| s.body_observation.accepted(Instant::now()).map(|v| v.context.clone())).flatten();
+                    s.visual.validate_generation(s.input_generation);
                     s.visual.arm(session_id,capture_context,utc);
                     commands.extend(s.visual.commands(utc));
                     commands

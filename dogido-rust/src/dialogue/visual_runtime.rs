@@ -8,13 +8,23 @@ use std::{collections::VecDeque, sync::{Arc, Weak}, time::{Duration, Instant}};
 use tokio::sync::watch;
 
 pub(super) const CAPABILITY: &str = "client.body_view.on_stop.v1";
+pub(super) const AFTER_LOOK_CAPABILITY: &str = "client.body_view.after_look.v1";
 const IMAGE_FRESH_SECONDS: i64 = 30;
 struct Pending { command: Value, context: Context, issued: DateTime<Utc>, expires: DateTime<Utc> }
 #[derive(Clone)]
 pub(super) struct Captured { pub image: Attachment, pub context: Context, pub capture_id: String, pub sequence: u64, change: Value }
+/// 一件の実行成功に結び付く撮影。通常の最新画像とは別に、返答終了まで保持する。
+#[derive(Clone)]
+pub(super) struct LookCapture {
+    pub capture_id: String,
+    pub look: crate::body::requests::CompletedLook,
+}
+struct LookPending { request: LookCapture, expires: DateTime<Utc>, image: Option<Captured>, finished: bool }
 #[derive(Default)]
 pub(super) struct State {
     pub enabled: bool,
+    pub after_look_enabled: bool,
+    look: Option<LookPending>,
     context: Option<Context>,
     pending: Option<Pending>,
     latest: Option<Captured>,
@@ -33,18 +43,43 @@ impl State {
     pub fn arm(&mut self, sid: &str, context: Option<Context>, now: DateTime<Utc>) {
         if self.context != context || !self.enabled {
             if let Some(p) = self.pending.take() { self.finish(p.command["command_id"].as_str().unwrap_or("")); }
+            self.look = None;
             self.latest = None; self.ready = false; self.sequence = 0; self.context = context.clone();
         }
         let Some(context) = context.filter(|_| self.enabled) else { return; };
         if self.pending.as_ref().is_some_and(|p| now >= p.expires) {
             let id = self.pending.as_ref().unwrap().command["command_id"].as_str().unwrap().to_owned(); self.finish(&id);
         }
-        if self.pending.is_some() { return; }
+        if self.look.as_ref().is_some_and(|v| now >= v.expires) { self.cancel_look(); }
+        if self.look.is_some() || self.pending.is_some() { return; }
         let expires = now + chrono::Duration::seconds(10);
         let command = json!({"type":"capture_body_view","command_id":format!("view_{}",uuid::Uuid::new_v4()),"session_id":sid,
             "issued_at":now,"expires_at":expires,"body_entity_uuid":context.body_id,"body_epoch":context.epoch,
             "owner_uuid":context.owner_id,"dimension":context.dimension,"after_motion_sequence":self.sequence});
         self.pending = Some(Pending {command,context,issued:now,expires});
+    }
+    /// 成功済みの向き変更だけを予約し、先行する通常撮影を取り消す。
+    /// 撮影結果は同じcapture ID・身体・時刻で照合し、通常の変化発話を重ねない。
+    pub fn arm_after_look(&mut self, sid: &str, look: crate::body::requests::CompletedLook, now: DateTime<Utc>) -> Option<LookCapture> {
+        if !self.enabled || !self.after_look_enabled || now < look.executed_at { return None; }
+        self.cancel_look();
+        if let Some(p) = self.pending.take() { self.finish(p.command["command_id"].as_str().unwrap()); }
+        self.arm(sid, Some(look.context.clone()), now);
+        let pending = self.pending.as_mut()?;
+        pending.command["after_look"] = json!({"command_id":look.command_id,"input_generation":look.input_generation,"executed_at":look.executed_at});
+        let request = LookCapture {capture_id:pending.command["command_id"].as_str()?.into(),look};
+        self.ready = false;
+        self.look = Some(LookPending {request:request.clone(),expires:pending.expires,image:None,finished:false});
+        Some(request)
+    }
+    pub fn cancel_look(&mut self) {
+        if let Some(look) = self.look.take() { self.finish(&look.request.capture_id); }
+    }
+    pub fn finish_look(&mut self, request: &LookCapture) {
+        if self.look.as_ref().is_some_and(|v| v.request.capture_id == request.capture_id) { self.cancel_look(); }
+    }
+    pub fn validate_generation(&mut self, generation: u64) {
+        if self.look.as_ref().is_some_and(|v| v.request.look.input_generation != generation) { self.cancel_look(); }
     }
     pub fn snapshot(&self) -> Value {
         json!({"supported":self.enabled,"capture_trigger":"body_stopped_or_stationary_refresh","pending":self.pending.as_ref().map(|p| json!({
@@ -62,15 +97,18 @@ impl State {
     /// 同じ地点で4枚前と同等なら画像は更新するが、変化と新たなモデル判断は作らない。
     pub fn receive(&mut self, result: &AdapterCommandResult, now: DateTime<Utc>) -> bool {
         let Some(p) = self.pending.as_ref().filter(|p| p.command["command_id"] == result.command_id) else { return true; };
+        let explicit = self.look.as_ref().is_some_and(|v| v.request.capture_id == result.command_id);
         let captured = (now < p.expires && result.status == Status::Succeeded).then(|| parse_image(result,p,now)).flatten();
         if let Some(mut captured) = captured.filter(|v| v.sequence > self.sequence) {
             let changed = captured.change["visual_change"] == true;
             captured.change["previous_sha256"] = json!(self.latest.as_ref().map(|v| &v.image.sha256));
-            self.sequence = captured.sequence; self.ready = changed;
+            self.sequence = captured.sequence; self.ready = changed && !explicit;
+            if explicit && let Some(look) = self.look.as_mut() { look.image = Some(captured.clone()); }
             tracing::info!(event="body_stop_image_received",command_id=result.command_id,capture_id=captured.capture_id,
                 motion_sequence=captured.sequence,visual_change=changed,compared_to_four_before=%captured.change["compared_to_four_before"]);
             self.latest = Some(captured);
         } else { tracing::info!(event="body_stop_image_rejected", command_id=result.command_id, detail=result.detail_code); }
+        if explicit && let Some(look) = self.look.as_mut() { look.finished = true; }
         self.finish(&result.command_id); true
     }
 }
@@ -81,6 +119,7 @@ fn parse_image(result: &AdapterCommandResult, pending: &Pending, now: DateTime<U
         || v["dimension"] != pending.context.dimension { return None; }
     let captured = DateTime::parse_from_rfc3339(v["captured_at"].as_str()?).ok()?.with_timezone(&Utc);
     if captured < pending.issued || captured > now || captured >= pending.expires { return None; }
+    if pending.command["after_look"].is_object() && v["capture_id"] != pending.command["command_id"] { return None; }
     let capture_id = v["capture_id"].as_str()?.strip_prefix("view_")?;
     if uuid::Uuid::parse_str(capture_id).ok()?.to_string() != capture_id { return None; }
     let sequence = v["motion_sequence"].as_u64()?;
@@ -137,15 +176,28 @@ pub(super) fn attach_latest(s: &Session, action: &mut crate::combat::model::Spee
     action.image = Some(Arc::new(captured.image.clone()));
 }
 
+/// 撮影後から配送完了まで、同じ身体と入力世代に属する返答だけを許可する。
+/// 行に保存した事実は生成結果ではなく、成功ACKから引き継いだ値。
+pub(super) fn look_reply_current(s: &Session, row: &Value) -> bool {
+    row["look_capture_id"].is_null() || (!s.foreground.game_paused
+        && row["input_generation"].as_u64() == Some(s.input_generation)
+        && s.body_observation.accepted(Instant::now()).is_some_and(|sample| json!(sample.context) == row["look_context"]))
+}
+
 /// 通常会話も最後に受信した一枚を参照する。会話ごとの新規撮影要求は発行しない。
 #[derive(Clone)]
-pub(super) struct Source { owner: Weak<Dialogue>, sid: String, instance: String, turn: String, epoch: u64 }
+pub(super) struct Source { owner: Weak<Dialogue>, sid: String, instance: String, turn: String, epoch: u64, after_look: Option<LookCapture> }
 impl Source {
     pub fn new(owner: &Arc<Dialogue>, sid: &str, turn: &str, epoch: u64) -> Option<Self> {
         let data=owner.data.lock().unwrap();let s=data.sessions.get(sid)?;
-        Some(Self {owner:Arc::downgrade(owner),sid:sid.into(),instance:s.instance_id.clone(),turn:turn.into(),epoch})
+        Some(Self {owner:Arc::downgrade(owner),sid:sid.into(),instance:s.instance_id.clone(),turn:turn.into(),epoch,after_look:None})
     }
-    fn current(&self, s: &Session) -> bool { s.instance_id==self.instance && s.epoch==self.epoch && s.current_turn==self.turn }
+    pub fn after_look(mut self, request: Option<LookCapture>) -> Self { self.after_look = request; self }
+    fn current(&self, s: &Session) -> bool {
+        s.instance_id==self.instance && s.epoch==self.epoch && s.current_turn==self.turn
+            && self.after_look.as_ref().is_none_or(|v| s.input_generation==v.look.input_generation
+                && s.body_observation.accepted(Instant::now()).is_some_and(|sample| sample.context==v.look.context))
+    }
     pub async fn capture(&self, cancel: &mut watch::Receiver<bool>) -> Option<Captured> {
         let owner=self.owner.upgrade()?;
         if !owner.config.chat_image.enabled { return None; }
@@ -156,7 +208,10 @@ impl Source {
                 let data=owner.data.lock().unwrap();let s=data.sessions.get(&self.sid)?;
                 if !self.current(s) || s.preview || !s.visual.enabled || s.foreground.game_paused { return None; }
                 s.body_observation.accepted(Instant::now())?;
-                if let Some(captured)=latest(s) { return Some(captured.clone()); }
+                if let Some(request) = &self.after_look {
+                    let pending = s.visual.look.as_ref().filter(|v| v.request.capture_id == request.capture_id)?;
+                    if pending.finished { return pending.image.clone(); }
+                } else if let Some(captured)=latest(s) { return Some(captured.clone()); }
             }
             if tokio::time::Instant::now()>=deadline { return None; }
             tokio::select! {biased;_=bridge::cancelled(cancel)=>return None,_=tokio::time::sleep(Duration::from_millis(25))=>{}}

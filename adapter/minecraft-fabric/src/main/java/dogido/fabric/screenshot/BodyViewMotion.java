@@ -30,6 +30,12 @@ final class BodyViewMotion {
         }
     }
     boolean still(Pose pose) { return previous!=null && quiet==2 && pose.distance(previous)<=.0001 && pose.angle(previous)<=.05; }
+    /** 明示注視の成功で一枚を撮る時だけ進める。同方向の再依頼でも一意になり、通常停止番号を巻き戻さない。 */
+    long afterLookSequence(long after) {
+        long previous=Math.max(sequence,after);
+        if(previous==Long.MAX_VALUE)throw new IllegalStateException("motion_sequence_exhausted");
+        sequence=previous+1;dirty=false;anchor=this.previous;sinceCapture=0;return sequence;
+    }
     long sequence() { return sequence; }
     long translation() { return translation; }
 }

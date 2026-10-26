@@ -34,6 +34,31 @@ class BodyViewProtocolTest {
         JsonObject c=command();c.remove("after_motion_sequence");assertTrue(parse(c).isEmpty());
         for(double value:new double[]{-1,.5}) {c=command();c.addProperty("after_motion_sequence",value);assertTrue(parse(c).isEmpty());}
     }
+    private JsonObject afterLook() {
+        JsonObject value=new JsonObject();value.addProperty("command_id","12345678-1234-1234-1234-123456789abc");
+        value.addProperty("input_generation",7);value.addProperty("executed_at",NOW.toString());return value;
+    }
+    @Test void afterLookIsOptionalAndKeepsExactReceiptBinding() {
+        assertNull(parse(command()).getFirst().afterLook());
+        JsonObject c=command();c.add("after_look",afterLook());
+        var look=parse(c).getFirst().afterLook();assertEquals(7,look.inputGeneration());assertEquals(NOW,look.executedAt());
+        assertEquals("12345678-1234-1234-1234-123456789abc",look.commandId().toString());
+    }
+    @Test void rejectsPartialOrForgedAfterLookAndFutureCompletion() {
+        for(String key:List.of("command_id","input_generation","executed_at")) {
+            JsonObject c=command(),look=afterLook();look.remove(key);c.add("after_look",look);assertTrue(parse(c).isEmpty(),key);
+        }
+        for(JsonElement invalid:List.of(JsonNull.INSTANCE,new JsonPrimitive("receipt"),new JsonArray())) {
+            JsonObject c=command();c.add("after_look",invalid);assertTrue(parse(c).isEmpty());
+        }
+        for(String value:List.of("-1","0.5","9223372036854775808","18446744073709551616","\"7\"")) {
+            JsonObject c=command(),look=afterLook();look.add("input_generation",JsonParser.parseString(value));
+            c.add("after_look",look);assertTrue(parse(c).isEmpty(),value);
+        }
+        JsonObject c=command(),look=afterLook();look.addProperty("extra","untrusted");c.add("after_look",look);assertTrue(parse(c).isEmpty());
+        c=command();look=afterLook();look.addProperty("executed_at",NOW.plusNanos(1).toString());c.add("after_look",look);assertTrue(parse(c).isEmpty());
+        c=command();look=afterLook();look.addProperty("command_id","short");c.add("after_look",look);assertTrue(parse(c).isEmpty());
+    }
     private JsonObject success(String id) {
         JsonObject r=BodyViewProtocol.result(parse(command()).getFirst(),"succeeded","captured",NOW);r.addProperty("command_id",id);
         JsonObject image=new JsonObject();image.addProperty("capture_id",ID);image.addProperty("png_base64","image");r.add("body_view",image);return r;

@@ -7,13 +7,21 @@ import java.util.*;
 /** 通常会話に添える一枚を既存commands/results/ACKで往復する契約。世界操作や保存先の指定は受け付けない。 */
 public final class BodyViewProtocol {
     public static final String CAPABILITY="client.body_view.on_stop.v1";
+    public static final String AFTER_LOOK_CAPABILITY="client.body_view.after_look.v1";
     public static final int MAX_PNG_BYTES=128*1024;
     public static final int MAX_EVENT_BYTES=256*1024;
     private static final Set<String> KEYS=Set.of("type","command_id","session_id","issued_at","expires_at",
         "body_entity_uuid","body_epoch","owner_uuid","dimension","after_motion_sequence");
+    private static final Set<String> AFTER_LOOK_KEYS=Set.of("command_id","input_generation","executed_at");
     private BodyViewProtocol() {}
+    /** 既存の明示注視成功へ結び付ける識別子。回転完了を推測した時刻ではなく結果のexecuted_atを使う。 */
+    public record AfterLook(UUID commandId,long inputGeneration,Instant executedAt) {}
     public record Command(String id,String sessionId,Instant issuedAt,Instant expiresAt,
-                          UUID bodyId,UUID epoch,UUID ownerId,String dimension,long afterMotionSequence) {
+                          UUID bodyId,UUID epoch,UUID ownerId,String dimension,long afterMotionSequence,AfterLook afterLook) {
+        public Command(String id,String sessionId,Instant issuedAt,Instant expiresAt,
+                UUID bodyId,UUID epoch,UUID ownerId,String dimension,long afterMotionSequence) {
+            this(id,sessionId,issuedAt,expiresAt,bodyId,epoch,ownerId,dimension,afterMotionSequence,null);
+        }
         public String timeError(Instant now) {
             return now.isBefore(issuedAt)?"not_yet_valid":!now.isBefore(expiresAt)?"expired":null;
         }
@@ -31,7 +39,8 @@ public final class BodyViewProtocol {
             if (commands==null) return out;
             for (JsonElement value:commands) try {
                 JsonObject c=value.getAsJsonObject();
-                if (!"capture_body_view".equals(string(c,"type")) || !c.keySet().equals(KEYS)) continue;
+                if (!"capture_body_view".equals(string(c,"type")) || !c.keySet().containsAll(KEYS)
+                        || c.keySet().stream().anyMatch(key->!KEYS.contains(key) && !key.equals("after_look"))) continue;
                 String id=string(c,"command_id"),session=string(c,"session_id"),dimension=string(c,"dimension");
                 if (!captureId(id) || session.isBlank() || session.length()>200 || dimension.length()>200
                         || !dimension.matches("[a-z0-9_.-]+:[a-z0-9_./-]+")) continue;
@@ -40,7 +49,18 @@ public final class BodyViewProtocol {
                 var sequence=c.get("after_motion_sequence");
                 if(sequence==null || !sequence.isJsonPrimitive() || !sequence.getAsJsonPrimitive().isNumber())continue;
                 long after=sequence.getAsBigDecimal().longValueExact();if(after<0)continue;
-                out.add(new Command(id,session,issued,expires,uuid(c,"body_entity_uuid"),uuid(c,"body_epoch"),uuid(c,"owner_uuid"),dimension,after));
+                AfterLook look=null;
+                if(c.has("after_look")) {
+                    JsonObject valueLook=c.getAsJsonObject("after_look");
+                    if(valueLook==null || !valueLook.keySet().equals(AFTER_LOOK_KEYS))continue;
+                    var generation=valueLook.get("input_generation");
+                    if(generation==null || !generation.isJsonPrimitive() || !generation.getAsJsonPrimitive().isNumber())continue;
+                    long inputGeneration=generation.getAsBigDecimal().longValueExact();if(inputGeneration<0)continue;
+                    Instant executed=Instant.parse(string(valueLook,"executed_at"));
+                    if(executed.isAfter(issued))continue;
+                    look=new AfterLook(uuid(valueLook,"command_id"),inputGeneration,executed);
+                }
+                out.add(new Command(id,session,issued,expires,uuid(c,"body_entity_uuid"),uuid(c,"body_epoch"),uuid(c,"owner_uuid"),dimension,after,look));
             } catch (RuntimeException invalid) { /* 不正な一件を他の命令へ波及させない。 */ }
         } catch (RuntimeException invalid) { }
         return out;

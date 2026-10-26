@@ -192,8 +192,9 @@ impl Engine {
                 || event
                     .combat
                     .recent_damage_ms
-                    .is_some_and(|n| n <= s.ms("recent_damage_window_ms") as i64)
-                || dark_alert(event, s);
+                    .is_some_and(|n| n <= s.ms("recent_damage_window_ms") as i64);
+            // 暗さは下のAlertと環境材料で扱う。非敵対の部分通知に暗さが同居しても、
+            // 完全観測と同じく進行中の会話・発句を継続できるよう、戦闘の保留条件へ混ぜない。
         }
         // 撃破・爆散など今回の明示結果を先に処理し、通常の危険度警告より先に配送候補にする。
         let immediate = self.outcomes.observe(event, now);

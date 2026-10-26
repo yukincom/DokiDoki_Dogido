@@ -911,4 +911,84 @@ mod completion_tests {
         assert!(!d.haiku_row("s", "job", "preface", "旧結果", PlaybackStatus::Completed));
         d.shutdown().await;
     }
+
+    #[tokio::test]
+    async fn dark_passive_events_preserve_generating_and_playing_haiku_and_replies() {
+        for poem in [false, true] {
+            for phase in ["generating", "started"] {
+                let mut config = DialogueConfig {
+                    llm_enabled: false,
+                    audio_enabled: false,
+                    ..Default::default()
+                };
+                config.haiku.enabled = false;
+                config.haiku.memory_enabled = false;
+                let d = Dialogue::new(config).unwrap();
+                d.register("s", "試験", false);
+                let mut frame = super::super::empty_event("試験");
+                frame["sequence"] = json!(1);
+                frame["observed_at"] = json!(chrono::Utc::now());
+                frame["world"]["time_phase"] = json!("day");
+                frame["world"]["local_light"] = json!(3);
+                frame["world"]["danger_darkness_score"] = json!(0.97);
+                frame["combat"] = json!({"recent_damage_ms":356650,"combat_active_hint":false});
+                d.observe(
+                    "s",
+                    crate::events::GameEvent::parse(frame.clone()).unwrap(),
+                    None,
+                );
+                let (tx, rx) = watch::channel(false);
+                {
+                    let mut data = d.data.lock().unwrap();
+                    let s = data.sessions.get_mut("s").unwrap();
+                    let mut row =
+                        json!({"session_id":"s","turn_id":"working","playback_status":phase});
+                    if poem {
+                        s.haiku.active = Some(Active {
+                            id: "job".into(),
+                            cancel: tx,
+                        });
+                        row["haiku_job_id"] = json!("job");
+                    } else {
+                        s.cancel = Some(tx);
+                        s.current_turn = "working".into();
+                        // 記憶照会など再送対象でない返答も、暗さだけでは取消しない。
+                        row["combat_resumable"] = json!(false);
+                    }
+                    data.rows.push_back(row);
+                }
+                for (sequence, partial) in [(2, false), (3, true), (4, true)] {
+                    frame["sequence"] = json!(sequence);
+                    frame["observed_at"] = json!(chrono::Utc::now());
+                    frame["event"]["name"] = json!(if partial {
+                        "ambient_mob_detected"
+                    } else {
+                        "status_snapshot"
+                    });
+                    frame["event"]["source_kind"] =
+                        json!(if partial { "visual" } else { "system" });
+                    d.observe(
+                        "s",
+                        crate::events::GameEvent::parse(frame.clone()).unwrap(),
+                        None,
+                    );
+                    assert!(
+                        !*rx.borrow(),
+                        "poem={poem}, phase={phase}, partial={partial}"
+                    );
+                    assert_eq!(
+                        d.data
+                            .lock()
+                            .unwrap()
+                            .rows
+                            .iter()
+                            .find(|r| r["turn_id"] == "working")
+                            .unwrap()["playback_status"],
+                        phase
+                    );
+                }
+                d.shutdown().await;
+            }
+        }
+    }
 }
