@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import sys
 import tempfile
+import threading
 import time
 
 from check_dialogue import dependencies, running, register, request, snapshot, wait_for, row, submit
@@ -67,7 +68,8 @@ time.sleep(.04 if '/panic/' in sys.argv[1] else delay)
                 request(base, "/api/v1/adapter-sessions/" + sid, method="DELETE")
 
             def reject_chat(sid):
-                got = request(base, "/api/v1/player-input", {"session_id": sid, "source": "voice", "text": "こんにちは"})
+                # 録音世代を発行できない未取得状態でも、文字入力で観測期限の拒否を確認する。
+                got = request(base, "/api/v1/player-input", {"session_id": sid, "source": "text", "text": "こんにちは"})
                 if got.get("reason") == "reply_input_routing":
                     routing_turn = got["turn_id"]
                     def forwarded():
@@ -112,19 +114,30 @@ time.sleep(.04 if '/panic/' in sys.argv[1] else delay)
             passed.append("complete_empty_snapshot_allows_started_warning_to_finish")
             close(sid)
 
-            # 新しい部分通知だけが来続けても、視認情報の10秒期限は延長しない。
-            (folder / "delay").write_text("30")
+            # 新しい部分通知だけが来続けても、未開始の視認警告の10秒期限は延長しない。
+            # 開始後は最後まで配送する契約なので、未キャッシュの右方向本文を合成中で止める。
+            gate, requested = threading.Event(), threading.Event()
+            def block_warning(text):
+                requested.set()
+                return gate
+            control["tts_gate_selector"] = block_warning
             sid = register(base, preview=False)
-            send(sid)
-            wt = wait_for(lambda: warnings(sid))[-1]["turn_id"]
-            wait_for(lambda: row(base, wt, {"started"}))
-            deadline = time.monotonic() + 12
-            while time.monotonic() < deadline and not row(base, wt, {"cancelled"}):
-                send(sid, name="hostile_audio_detected")
-                time.sleep(.15)
-            assert row(base, wt, {"cancelled"})["cancel_reason"] == "stale_observation"
-            passed.append("partial_notifications_do_not_renew_visual_lifetime")
-            close(sid)
+            try:
+                send(sid, direction="right")
+                wt = wait_for(lambda: warnings(sid))[-1]["turn_id"]
+                wait_for(requested.is_set)
+                assert not row(base, wt, {"started", "completed"})
+                deadline = time.monotonic() + 12
+                while time.monotonic() < deadline and not row(base, wt, {"cancelled"}):
+                    send(sid, name="hostile_audio_detected")
+                    time.sleep(.15)
+                cancelled = row(base, wt, {"cancelled"})
+                assert cancelled and cancelled["cancel_reason"] == "stale_observation", cancelled
+                passed.append("partial_notifications_do_not_renew_unstarted_visual_lifetime")
+            finally:
+                gate.set()
+                control.pop("tts_gate_selector", None)
+                close(sid)
 
             sid = register(base, preview=False)
             send(sid, name="ambient_mob_detected")

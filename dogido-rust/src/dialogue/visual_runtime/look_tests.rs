@@ -342,3 +342,32 @@ async fn look_reply_survives_body_changes_after_capture_and_only_new_input_cance
         assert_eq!(row["text"].is_null(),changed=="input");
     }
 }
+
+#[tokio::test]
+async fn image_missing_ack_checks_input_identity_without_requiring_a_current_body() {
+    for changed in ["none", "body", "generation", "epoch", "turn", "session", "event", "removed"] {
+        let (d, source) = server(100);
+        let source = {
+            let mut data = d.data.lock().unwrap();
+            let s = data.sessions.get_mut("s").unwrap();
+            let context = s.visual.context.clone().unwrap();
+            let source = source.after_look(Some(LookCapture {
+                capture_id: "reserved".into(),
+                look: completed_look(context, s.input_generation),
+            }));
+            match changed {
+                "body" => s.body_observation = Default::default(),
+                "generation" => s.input_generation += 1,
+                "epoch" => s.epoch += 1,
+                "turn" => s.current_turn = "next".into(),
+                "session" => s.instance_id = "replacement".into(),
+                "event" => s.latest = None,
+                _ => (),
+            }
+            if changed == "removed" { data.sessions.remove("s"); }
+            source
+        };
+        assert_eq!(source.input_current(), matches!(changed, "none" | "body"), "{changed}");
+        d.shutdown().await;
+    }
+}

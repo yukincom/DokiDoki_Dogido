@@ -236,31 +236,34 @@ async fn body(
                     );
                 }
                 live(cancel)?;
-                if let Some((current, image_current)) =
-                    source.refresh(input, image.as_ref().map(|capture| &capture.context))
-                {
-                    if !image_current {
+                // 明示注視の画像が無ければ固定の成功案内だけを返すので、使わない材料を再構成しない。
+                if input.after_look.is_none() || image.is_some() {
+                    if let Some((current, image_current)) =
+                        source.refresh(input, image.as_ref().map(|capture| &capture.context))
+                    {
+                        if !image_current {
+                            image = None;
+                        }
+                        native = current;
+                        // 待機中の現在値で材料を再構成する。これは純粋な投影で、モデル呼出しを増やさない。
+                        match chat_materials::prepare(
+                            native
+                                .sensory_event
+                                .as_ref()
+                                .context("accepted body sensory view")?,
+                            &native.settings,
+                            &chat_materials::PlayerInput::from(&context),
+                            &native.context,
+                            &native.snapshot,
+                            &CatalogLabels,
+                        )? {
+                            Prepared::Reply(current) => reply = current,
+                            Prepared::Fixed(fixed) => return Ok(fixed_result(fixed)),
+                            Prepared::Knowledge => bail!("knowledge routing already consumed"),
+                        }
+                    } else {
                         image = None;
                     }
-                    native = current;
-                    // 待機中の現在値で材料を再構成する。これは純粋な投影で、モデル呼出しを増やさない。
-                    match chat_materials::prepare(
-                        native
-                            .sensory_event
-                            .as_ref()
-                            .context("accepted body sensory view")?,
-                        &native.settings,
-                        &chat_materials::PlayerInput::from(&context),
-                        &native.context,
-                        &native.snapshot,
-                        &CatalogLabels,
-                    )? {
-                        Prepared::Reply(current) => reply = current,
-                        Prepared::Fixed(fixed) => return Ok(fixed_result(fixed)),
-                        Prepared::Knowledge => bail!("knowledge routing already consumed"),
-                    }
-                } else {
-                    image = None;
                 }
             }
             if input.after_look.is_some() && image.is_none() {
@@ -269,8 +272,7 @@ async fn body(
                     input
                         .visual
                         .as_ref()
-                        .and_then(|s| s.refresh(input, None))
-                        .is_some(),
+                        .is_some_and(|s| s.input_current()),
                     "look_reply_stale"
                 );
                 return Ok(

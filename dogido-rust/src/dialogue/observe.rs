@@ -138,11 +138,13 @@ impl Dialogue {
                 s.audio_latest = Some(event.clone());
                 s.audio_received = recent.then(Instant::now);
             }
+            // 同じ受信・同じロック内の判断では、受理済み身体の時点を一度固定する。
+            // environment_latestは部分通知を補った別入力なので、下で独立に投影する。
+            let senses = super::body_runtime::event(s, &event);
             if recent {
                 s.environment_latest = Some(environment_runtime::context(s, &event, complete));
                 let (boss, ominous) = s.combat.environmental_presence(now, &self.config.combat);
                 s.danger.set_presence(boss, ominous);
-                let senses = super::body_runtime::event(s, &event);
                 s.danger.update(&senses, now, complete, &self.config.combat);
                 s.ambient
                     .update(&senses, now, complete, &self.config.combat);
@@ -208,7 +210,6 @@ impl Dialogue {
                     &self.config.warnings,
                 );
                 let names = s.combat.take_name_updates();
-                let senses = super::body_runtime::event(s, &event);
                 s.chat_observation.observe_body(
                     &senses,
                     &names,
@@ -278,7 +279,6 @@ impl Dialogue {
                 s.danger.finish_frame(s.mode);
             } else {
                 let s = d.sessions.get_mut(session_id).unwrap();
-                let senses = super::body_runtime::event(s, &event);
                 s.chat_observation.observe_body(
                     &senses,
                     &Default::default(),

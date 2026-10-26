@@ -203,6 +203,12 @@ impl Source {
         s.instance_id==self.instance && s.epoch==self.epoch && s.current_turn==self.turn
             && self.after_look.as_ref().is_none_or(|v| s.input_generation==v.look.input_generation)
     }
+    /// 画像なしの成功案内にも現在の入力世代を照合する。本文材料を使わないため観測は再構成しない。
+    pub fn input_current(&self) -> bool {
+        let Some(owner) = self.owner.upgrade() else { return false; };
+        let data = owner.data.lock().unwrap();
+        data.sessions.get(&self.sid).is_some_and(|s| self.current(s) && s.latest.is_some())
+    }
     pub async fn capture(&self, cancel: &mut watch::Receiver<bool>) -> Option<Captured> {
         let owner=self.owner.upgrade()?;
         if !owner.config.chat_image.enabled { return None; }
