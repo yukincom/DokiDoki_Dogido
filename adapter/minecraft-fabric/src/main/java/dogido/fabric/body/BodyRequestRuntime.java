@@ -86,10 +86,13 @@ public final class BodyRequestRuntime {
         } finally { dispatchCommand=null; dispatchSession=null; dispatchLook=null; }
     }
     private Point target(MinecraftClient client,Command command) {
+        Point hitPoint=null;
         if (command.mode()==Mode.LOOK_TARGET) {
             HitResult hit=client.crosshairTarget;
-            if (hit==null || hit.getType()==HitResult.Type.MISS) return null;
-            var p=hit.getPos(); return new Point(p.x,p.y,p.z);
+            if(hit!=null && hit.getType()!=HitResult.Type.MISS) {
+                var p=hit.getPos();hitPoint=new Point(p.x,p.y,p.z);
+            }
+            // 景色・空・遠景は物体への命中を必要としない。本人が向いている方向を使う。
         }
         var frame=connection.captureFrame(command.ownerId(),command.dimension());
         var observation=frame.observation();
@@ -98,7 +101,7 @@ public final class BodyRequestRuntime {
         if (!command.context().equals(context(sample.getAsJsonObject("context")))) return null;
         Point eye=point(sample.getAsJsonObject("self_pose").getAsJsonObject("eye_position"));
         var direction=client.player.getRotationVec(1.0f);
-        return new Point(eye.x()+8*direction.x,eye.y()+8*direction.y,eye.z()+8*direction.z);
+        return BodyLookController.sceneTarget(eye,new Point(direction.x,direction.y,direction.z),hitPoint);
     }
     public void tick() {
         Pending work=pending; if (work==null) return;
@@ -123,7 +126,7 @@ public final class BodyRequestRuntime {
                 if (!"observed".equals(string(observation,"status"))) { discardPending(); finish(work.command(),work.session(),"rejected","body_unavailable",resolved); return; }
                 var actual=context(observation.getAsJsonObject("sample").getAsJsonObject("context"));
                 if (!resolved.equals(actual)) { discardPending(); finish(work.command(),work.session(),"rejected","stale_context",resolved); return; }
-                var result=frame.autonomy().getAsJsonObject("action_result");
+                var result=frame.lookResult(work.command().commandId());
                 if (result==null || !work.command().commandId().toString().equals(string(result,"action_id"))
                         || work.sequence()!=result.get("sequence").getAsLong()) return;
                 outcome=string(result,"outcome"); reason=string(result,"reason");completedFrame=frame;
@@ -136,8 +139,7 @@ public final class BodyRequestRuntime {
             if (status!=null) {
                 Instant executedAt=Instant.now();
                 if("succeeded".equals(status) && "facing_target".equals(reason) && completedFrame!=null)
-                    lookCaptures.completed(work.session(),work.command(),work.look(),
-                        completedFrame.observation().getAsJsonObject("sample"),completedFrame.autonomy(),executedAt);
+                    lookCaptures.completed(work.session(),work.command(),work.look(),executedAt);
                 discardPending();
                 finish(work.command(),work.session(),status,reason,resolved,executedAt);
             }
@@ -147,7 +149,7 @@ public final class BodyRequestRuntime {
         return client.isOnThread() && client.player!=null && client.world!=null && client.player.isAlive()
             && command.ownerId().equals(client.player.getUuid()) && command.dimension().equals(client.world.getRegistryKey().getValue().toString());
     }
-    /** 撮影受付・描画前・保存後で同じ入力世代と成功根拠を確かめる。旧入力はsuccess台帳に残っていても渡さない。 */
+    /** 撮影受付時に同じ入力世代と成功IDへ束縛する。撮影後の位置・角度は再検査しない。 */
     public dogido.fabric.screenshot.BodyViewAfterLook.Proof lookCapture(
             dogido.fabric.screenshot.BodyViewProtocol.Command command,SessionRef session) {
         if(command.afterLook()==null || !current.test(session,command.afterLook().inputGeneration()))return null;

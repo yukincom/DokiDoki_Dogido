@@ -18,11 +18,16 @@ class BodySnapshotPayloadTest {
     private static Snapshot snapshot(String reason, List<FoodTarget> food, List<HeardSound> sounds) {
         return new Snapshot(BodyProtocol.VERSION,Presence.PRESENT,
             new Context(UUID.randomUUID(),UUID.randomUUID(),UUID.randomUUID(),"minecraft:overworld"),"minecraft:overworld",
-            30,42,POSITION,180,Activity.HOLDING,reason,41,null,null,Sensors.BODY_VISION_AND_HEARING,
+            30,42,POSITION,180,Activity.FOLLOWING,reason,41,null,new ActionResult(UUID.randomUUID(),20,Outcome.SUCCEEDED,"arrived"),Sensors.BODY_VISION_AND_HEARING,
             new Vitals(Life.ACTIVE,20,20,true,"survival",0,0,0,0,null),
             new FoodObservation(ObservationStatus.OBSERVED,30,food,false),
             new PoseObservation(POSITION,POSITION,180,0,0,0),BodyVisionGeometry.unavailable(30,"area_unloaded"),
-            new HearingObservation(ObservationStatus.OBSERVED,30,sounds,false),new ControlObservation(true,Mode.FOLLOW,16,24,new Reassurance(87.5,2.1,true,true,false)));
+            new HearingObservation(ObservationStatus.OBSERVED,30,sounds,false),new ControlObservation(true,Mode.FOLLOW,16,24,new Reassurance(87.5,2.1,true,true,false)),lookResults());
+    }
+    private static List<ActionResult> lookResults() {
+        var rows=new ArrayList<ActionResult>();
+        for(int i=0;i<32;i++)rows.add(new ActionResult(UUID.randomUUID(),i,Outcome.SUCCEEDED,"facing_target"));
+        return rows;
     }
     private static List<HeardSound> sounds() {
         var result = new ArrayList<HeardSound>();
@@ -31,11 +36,11 @@ class BodySnapshotPayloadTest {
         return result;
     }
 
-    @Test void ordinarySnapshotRoundTripsV11AndPreservesUnknownPitch() {
+    @Test void ordinarySnapshotRoundTripsV12AndPreservesUnknownPitch() {
         Snapshot original = snapshot("holding",List.of(),sounds());
         String encoded = BodySnapshotPayload.encode(original);
         Snapshot decoded = JSON.fromJson(encoded,Snapshot.class);
-        assertEquals(11,decoded.version());
+        assertEquals(12,decoded.version());
         assertEquals(new ControlObservation(true,Mode.FOLLOW,16,24,new Reassurance(87.5,2.1,true,true,false)),decoded.control());
         assertEquals(original,decoded);
         assertNull(decoded.hearing().sounds().getFirst().pitch());
@@ -58,6 +63,8 @@ class BodySnapshotPayloadTest {
         assertEquals(original.food(),decoded.food());
         assertEquals(original.control(),decoded.control());
         assertEquals(original.pose(),decoded.pose());
+        assertEquals(original.lookResults(),decoded.lookResults());
+        assertEquals(original.actionResult(),decoded.actionResult());
         assertEquals(original.vision(),decoded.vision());
         assertEquals(original.snapshotRevision(),decoded.snapshotRevision());
         assertTrue(decoded.hearing().truncated());
@@ -66,7 +73,7 @@ class BodySnapshotPayloadTest {
         assertEquals(original.hearing().sounds().getLast(),decoded.hearing().sounds().getLast());
     }
 
-    @Test void maximumFoodAndSoundSamplesStillFitWithReassuranceAfterTrimming() {
+    @Test void maximumFoodSoundAndLookResultHistoryFitTheResponseBudget() {
         var food = new ArrayList<FoodTarget>();
         for (int i=0;i<BodyFood.MAX_TARGETS;i++) food.add(new FoodTarget("drop:"+UUID.randomUUID(),FoodKind.DROPPED_ITEM,
             POSITION,"minecraft:"+"a".repeat(110),6));
@@ -76,8 +83,7 @@ class BodySnapshotPayloadTest {
         Snapshot decoded = JSON.fromJson(encoded,Snapshot.class);
         assertEquals(original.food(),decoded.food());
         assertEquals(original.control(),decoded.control());
-        assertTrue(decoded.hearing().truncated());
-        assertFalse(decoded.hearing().sounds().isEmpty());
+        assertEquals(original.lookResults(),decoded.lookResults());
     }
 
     @Test void recallReceiptSharesTheSnapshotByteBudgetAndIsNeverTrimmed() {
@@ -94,7 +100,9 @@ class BodySnapshotPayloadTest {
         var envelope = com.google.gson.JsonParser.parseString(encoded).getAsJsonObject();
         assertEquals(recall,JSON.fromJson(envelope.get("recall_result"),RecallReceipt.class));
         Snapshot decoded = JSON.fromJson(envelope,Snapshot.class);
-        assertEquals(original.pose(),decoded.pose()); assertTrue(decoded.hearing().truncated());
+        assertEquals(original.pose(),decoded.pose());
+        assertEquals(original.lookResults(),decoded.lookResults());
+        assertEquals(original.actionResult(),decoded.actionResult()); assertTrue(decoded.hearing().truncated());
         assertTrue(decoded.hearing().sounds().size() < original.hearing().sounds().size());
     }
     @Test void utf8LimitIsCheckedAndOversizedNonHearingValuesFailBeforeSend() {

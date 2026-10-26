@@ -9,6 +9,14 @@ import static dogido.fabric.body.BodyLookController.*;
 class BodyLookControllerTest {
     private final Context context = new Context(UUID.randomUUID(),UUID.randomUUID(),UUID.randomUUID(),"minecraft:overworld");
     private final Point eye = new Point(10,65,20);
+    @Test void openSceneryWithoutAHitUsesThePlayerDirectionIncludingPitch() {
+        var target=sceneTarget(eye,new Point(0,-.6,.8),null);
+        assertEquals(new Point(10,60.2,26.4),target);
+        Fake fake=new Fake();var controller=new BodyLookController(fake);
+        assertEquals("queued",controller.point(context,UUID.randomUUID(),target).status());
+        assertEquals(target,fake.request.target());
+        Point hit=new Point(12,65,25);assertEquals(hit,sceneTarget(eye,new Point(0,-.6,.8),hit));
+    }
     @Test void eightDirectionsUseBodyYawAndConstantDistance() {
         double[][] offsets = {{0,1},{-1,1},{-1,0},{-1,-1},{0,-1},{1,-1},{1,0},{1,1}};
         for (int i=0;i<8;i++) {

@@ -11,7 +11,7 @@ import java.nio.charset.StandardCharsets;
  * 音を省いた場合はtruncatedを保持する。既存部分だけで上限を超える不正値は送信前に拒否する。
  */
 final class BodySnapshotPayload {
-    static final int MAX_BYTES = 8192;
+    static final int MAX_BYTES = 16384;
     private static final Gson JSON = new Gson();
     private BodySnapshotPayload() {}
 
@@ -36,6 +36,6 @@ final class BodySnapshotPayload {
     private static Snapshot withHearing(Snapshot s, HearingObservation hearing) {
         return new Snapshot(s.version(),s.presence(),s.context(),s.ownerDimension(),s.serverTick(),s.snapshotRevision(),
             s.position(),s.yaw(),s.activity(),s.reason(),s.appliedStateRevision(),s.stateResult(),s.actionResult(),
-            s.sensors(),s.vitals(),s.food(),s.pose(),s.vision(),hearing,s.control());
+            s.sensors(),s.vitals(),s.food(),s.pose(),s.vision(),hearing,s.control(),s.lookResults());
     }
 }

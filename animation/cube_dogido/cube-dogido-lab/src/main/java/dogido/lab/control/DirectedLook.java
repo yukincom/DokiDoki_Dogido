@@ -1,54 +1,31 @@
 package dogido.lab.control;
 
 import dogido.lab.api.BodyProtocol.*;
-import dogido.lab.api.perception.BodyVisionGeometry;
 import java.util.UUID;
-import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 
 /**
- * 明示された一点へ最大100tickで向き、完了から100tick保持する。座標はblock、角度は度。
- * 実体が回転した後だけ一度成功を返す。移動・所有者・世代・受付鮮度は既存実行器が検査する。
+ * Minecraftの向き指定を移動とは独立して保持する。身体が指定を適用したtickで一度だけ成功を返す。
+ * 実ロボットの整定・姿勢誤差の検査は行わず、描画後の一枚はその時点の観測として扱う。
  */
 public final class DirectedLook {
-    public static final int TURN_TIMEOUT_TICKS = 100;
     public static final int HOLD_TICKS = 100;
-    public record End(UUID actionId,Outcome outcome,String reason) {}
     private UUID id;
     private Vec3d target;
     private long expires;
     private boolean completed;
     public boolean active() { return id != null; }
     public Vec3d target() { return target; }
-    public void clear() { id = null; target = null; completed = false; expires = 0; }
-    /** 受付済み要求を開始する。再送はControlLeaseが除外するため期限を更新しない。 */
-    public void begin(UUID actionId, Position point, long now) {
-        clear(); id = actionId; target = new Vec3d(point.x(),point.y(),point.z()); expires = now+TURN_TIMEOUT_TICKS;
+    public void clear() { id=null;target=null;completed=false;expires=0; }
+    /** 移動のmode・速度・追従先を変更せず、新しい注視点だけを置き換える。 */
+    public void begin(UUID actionId,Position point,long now) {
+        clear();id=actionId;target=new Vec3d(point.x(),point.y(),point.z());expires=now+HOLD_TICKS;
     }
-    /** 新しい移動を選ばず、待機・通常探索だけをその場で止める。追従や危険回避には譲る。 */
-    public static String priority(boolean enabled, boolean retreat, boolean calling, boolean busy,
-            Activity activity, boolean following, boolean danger) {
-        if (!enabled) return "control_inactive";
-        if (retreat || danger) return "danger_has_priority";
-        if (calling) return "call_has_priority";
-        if (busy) return "body_action_busy";
-        if (following) return "distance_follow_has_priority";
-        return activity == Activity.HOLDING || activity == Activity.EXPLORING ? null : "body_activity_busy";
-    }
-    /** 成功前の取消・期限切れだけ結果にする。成功後の保持終了で成功結果を書き換えない。 */
-    public End stop(long now, String interruption) {
-        if (!active() || interruption == null && now < expires) return null;
-        End result = completed ? null : new End(id,
-            interruption == null ? Outcome.EXPIRED : Outcome.INTERRUPTED,
-            interruption == null ? "look_timeout" : interruption);
-        clear(); return result;
-    }
-    /** 適用後の実yaw/pitchを照合する。別actionの完了へ流用しないようIDを返す。 */
-    public UUID reached(Vec3d eye, float yaw, float pitch, long now) {
-        if (!active() || completed) return null;
-        var angles = BodyVisionGeometry.facing(target.subtract(eye),yaw,pitch);
-        if (Math.abs(MathHelper.wrapDegrees(angles.yaw()-yaw)) > 1 || Math.abs(angles.pitch()-pitch) > 1) return null;
-        // 回転にかかった時間で保持時間を削らず、実角度が一致した時から数える。
-        completed = true; expires = now+HOLD_TICKS; return id;
+    /** 同じ指定を保持する時間だけを管理する。追従・退避・他の身体操作では取り消さない。 */
+    public void tick(long now) { if(completed && now>=expires)clear(); }
+    /** 身体のyaw/pitchへ適用した直後に呼ぶ。角度差や停止状態を成功の追加条件にしない。 */
+    public UUID applied(long now) {
+        if(!active() || completed)return null;
+        completed=true;expires=now+HOLD_TICKS;return id;
     }
 }

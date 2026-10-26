@@ -16,6 +16,8 @@ use std::{
 
 const FRESH_MS: u64 = 3000;
 const ATTEMPT_INTERVAL: Duration = Duration::from_secs(3);
+// 明示注視の既存5秒保持に合わせ、次の自律注視だけを後ろへ送る。移動の周期は変更しない。
+const EXPLICIT_LOOK_INTERVAL: Duration = Duration::from_secs(5);
 const COMMAND_TTL: Duration = Duration::from_secs(5);
 const RESULT_DEADLINE: Duration = Duration::from_secs(35);
 const CHOICE_LIMIT: usize = 8;
@@ -98,6 +100,7 @@ pub struct State {
     choices: VecDeque<Value>,
     visits: VecDeque<Visit>,
     last_attempt: Option<Instant>,
+    next_owner_look: Option<Instant>,
     prepared: Option<uuid::Uuid>,
     pending: Option<Pending>,
     diagnostics: Vec<Value>,
@@ -166,6 +169,7 @@ impl State {
             self.choices.clear();
             self.visits.clear();
             self.last_attempt = None;
+            self.next_owner_look = None;
         }
         self.accepted = Some(accepted.clone());
         let Some(observation) = observation else {
@@ -283,11 +287,20 @@ impl State {
             && self.current.as_ref().is_some_and(|r| Self::owner_arrival_holding(&r.data))
     }
     pub fn cancel_owner_arrival(&mut self) { self.owner_arrival_pending = false; }
+    /// 明示注視が実行された時刻から自律注視の間隔だけを数え直す。
+    /// 配送待ちの自律注視は取り下げるが、進行中の移動・他の選択・全体の判断周期は維持する。
+    pub fn explicit_look_completed(&mut self, now: Instant) {
+        self.next_owner_look=Some(now+EXPLICIT_LOOK_INTERVAL);
+        if self.pending.as_ref().is_some_and(|p| p.command["purpose"]=="look_owner") { self.pending=None; }
+    }
+    fn owner_look_ready(&self, now: Instant) -> bool {
+        self.next_owner_look.is_none_or(|next| now>=next)
+    }
     /// 到着後のそばに留まる・その場の注視・顔への接近は帰還直後の間にも進める。通常の見物・次の接近は従来の待機を守る。
     fn ready_activity(data: &Observed, after_owner_arrival: bool) -> bool {
         if after_owner_arrival { return Self::owner_arrival_holding(data); }
         data.activity == Activity::Holding
-            && !matches!(data.reason.as_str(), "inspection_dwell" | "owner_near_dwell" | "owner_face_dwell" | "follow_settling" | "requested_look")
+            && !matches!(data.reason.as_str(), "inspection_dwell" | "owner_near_dwell" | "owner_face_dwell" | "follow_settling")
     }
     /// 見物候補の半径・同一対象の再訪間隔は、判断機会と実際の候補準備で同じ条件を使う。
     fn inspect_candidates(&self, data: &Observed, now: Instant) -> Vec<Candidate> {
@@ -336,7 +349,8 @@ impl State {
         }
         self.visits.retain(|v| now.saturating_duration_since(v.arrived) < REVISIT_INTERVAL);
         let candidates = if after_owner_arrival { Vec::new() } else { self.inspect_candidates(data, now) };
-        let mut available_actions = vec!["stay".to_owned(), "look_owner".to_owned()];
+        let mut available_actions = vec!["stay".to_owned()];
+        if self.owner_look_ready(now) { available_actions.push("look_owner".to_owned()); }
         if !after_owner_arrival { available_actions.push("owner_near".to_owned()); }
         if !data.reassurance.owner_working { available_actions.push("owner_face".to_owned()); }
         if !candidates.is_empty() { available_actions.push("inspect".to_owned()); }
@@ -403,6 +417,8 @@ impl State {
         let action_name = serde_json::to_value(choice.action)?.as_str().expect("action enum").to_owned();
         ensure!(prepared.available_actions.contains(&action_name), "body_autonomy_action_not_available");
         ensure!(choice.action == Action::InspectImage || choice.image_target.is_none(), "body_autonomy_unexpected_image_target");
+        // 明示注視の前に生成を始めた自律注視も次の周期へ送る。返答本文と別の身体移動は継続する。
+        if choice.action==Action::LookOwner && !self.owner_look_ready(now) { return Ok(None); }
         let mut image_target = None;
         let target = match choice.action {
             Action::InspectImage => {

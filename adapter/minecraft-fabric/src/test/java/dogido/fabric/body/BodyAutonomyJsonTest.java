@@ -41,7 +41,7 @@ class BodyAutonomyJsonTest {
     }
     @Test void candidatesOnlySurviveExactlyTheSameFreshEnabledFollowFrame() throws Exception {
         var snapshot=snapshot(); JsonObject observation=BodyObservationJson.observed(snapshot,25,BodyObservationJsonTest.OWNER,BodyObservationJsonTest.WORLD);
-        var frame=new BodyConnection.Frame(observation,BodyConnection.Hearing.unavailable(),BodySnapshotReader.autonomy(snapshot,observation));
+        var frame=new BodyConnection.Frame(observation,BodyConnection.Hearing.unavailable(),BodySnapshotReader.autonomy(snapshot,observation),null);
         var collector=collector(); cache(collector,observation);
         assertEquals(1,collector.autonomy(frame,observation).getAsJsonArray("candidates").size());
         for (String changed : java.util.List.of("revision","context","mode","enabled","senses")) {
@@ -53,7 +53,7 @@ class BodyAutonomyJsonTest {
                 case "enabled" -> metadata.addProperty("enabled",false);
                 case "senses" -> { var field=BodySensesCollector.class.getDeclaredField("retainedSenses"); field.setAccessible(true); JsonObject unavailable=new JsonObject(); unavailable.addProperty("status","unavailable"); field.set(collector,unavailable); }
             }
-            assertTrue(collector.autonomy(new BodyConnection.Frame(altered,frame.hearing(),metadata),altered).getAsJsonArray("candidates").isEmpty(),changed);
+            assertTrue(collector.autonomy(new BodyConnection.Frame(altered,frame.hearing(),metadata,null),altered).getAsJsonArray("candidates").isEmpty(),changed);
         }
         cache(collector,observation); collector.reset(); assertTrue(collector.autonomy(frame,observation).getAsJsonArray("candidates").isEmpty());
         observation.addProperty("age_ms",3000); assertEquals("unavailable",collector.autonomy(frame,observation).get("status").getAsString());
@@ -61,7 +61,7 @@ class BodyAutonomyJsonTest {
     @Test void focusSwitchAndMatchingFailureInvalidateCandidatesEvenWithinTheSameFrame() throws Exception {
         var snapshot=snapshot();
         JsonObject observation=BodyObservationJson.observed(snapshot,25,BodyObservationJsonTest.OWNER,BodyObservationJsonTest.WORLD);
-        var frame=new BodyConnection.Frame(observation,BodyConnection.Hearing.unavailable(),BodySnapshotReader.autonomy(snapshot,observation));
+        var frame=new BodyConnection.Frame(observation,BodyConnection.Hearing.unavailable(),BodySnapshotReader.autonomy(snapshot,observation),null);
         var collector=collector(); cache(collector,observation);
         var command=BodyInspectControllerTest.command();
         collector.focus(command,snapshot.serverTick(),123,() -> true);

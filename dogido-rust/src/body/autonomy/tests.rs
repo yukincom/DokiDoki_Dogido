@@ -436,7 +436,7 @@ fn arrival_cools_only_the_visited_object_and_not_unselected_objects_of_the_same_
 fn arrival_dwell_and_follow_settling_delay_selection() {
     let at = Instant::now();
     let mut state = State::default();
-    for (i, reason) in ["inspection_dwell", "owner_near_dwell", "owner_face_dwell", "follow_settling", "requested_look"].into_iter().enumerate() {
+    for (i, reason) in ["inspection_dwell", "owner_near_dwell", "owner_face_dwell", "follow_settling"].into_iter().enumerate() {
         let s = sample(i as u64 + 1);
         let mut o = observation(&s);
         data(&mut o).reason = reason.into();
@@ -444,7 +444,7 @@ fn arrival_dwell_and_follow_settling_delay_selection() {
         assert!(state.available(at));
         assert!(state.prepare(at).is_none());
     }
-    for reason in ["inspection_dwell", "owner_near_dwell", "owner_face_dwell", "follow_settling", "requested_look"] {
+    for reason in ["inspection_dwell", "owner_near_dwell", "owner_face_dwell", "follow_settling"] {
         let (mut state, p) = prepared(at);
         let s = sample(2);
         let mut o = observation(&s);
@@ -1170,4 +1170,35 @@ fn stationary_owner_look_is_available_while_working_and_only_facing_target_finis
     assert!(state.observe_results(&[receipt],at+Duration::from_secs(1),utc()+UtcDuration::seconds(1)).is_empty());
     assert!(!state.owner_arrival_pending(at+Duration::from_secs(1)));
     assert!(state.commands(at+Duration::from_secs(1),utc()+UtcDuration::seconds(1)).is_empty());
+}
+
+#[test]
+fn explicit_look_reschedules_only_owner_gaze_and_repeated_requests_restart_its_interval() {
+    let at=Instant::now();let mut state=State::default();observe(&mut state,&sample(1),at);
+    state.explicit_look_completed(at);
+    let first=state.prepare(at).unwrap();
+    assert!(!first.available_actions.contains(&"look_owner".into()));
+    for action in ["owner_near","owner_face","inspect"] {assert!(first.available_actions.contains(&action.into()));}
+    state.cancel_preparation();
+    state.explicit_look_completed(at+Duration::from_secs(4));
+    let later=at+Duration::from_secs(5);observe(&mut state,&sample(2),later);
+    let delayed=state.prepare(later).unwrap();assert!(!delayed.available_actions.contains(&"look_owner".into()));
+    state.cancel_preparation();
+    let due=at+Duration::from_secs(9);observe(&mut state,&sample(3),due);
+    assert!(state.prepare(due).unwrap().available_actions.contains(&"look_owner".into()));
+}
+
+#[test]
+fn explicit_look_defers_an_old_gaze_choice_without_cancelling_other_model_actions_or_moves() {
+    let at=Instant::now();
+    let (mut state,p)=prepared(at);state.explicit_look_completed(at);
+    assert!(state.choose(&p,r#"{"action":"look_owner","target_id":null}"#,at,utc()).unwrap().is_none());
+    assert!(state.commands(at,utc()).is_empty());
+    let (mut state,p)=prepared(at);state.explicit_look_completed(at);
+    let movement=inspect(&mut state,&p,at);state.explicit_look_completed(at+Duration::from_secs(1));
+    assert_eq!(state.commands(at+Duration::from_secs(1),utc()+UtcDuration::seconds(1)),vec![movement]);
+    let (mut state,p)=prepared(at);
+    state.choose(&p,r#"{"action":"look_owner","target_id":null}"#,at,utc()).unwrap();
+    assert_eq!(state.commands(at,utc()).len(),1);
+    state.explicit_look_completed(at);assert!(state.commands(at,utc()).is_empty());
 }

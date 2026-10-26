@@ -19,7 +19,7 @@ class BodyOrientationTest {
         SharedConstants.createGameVersion(); Bootstrap.initialize();
         FabricDefaultAttributeRegistry.register(DogidoLab.DOGIDO,DogidoEntity.attributes());
     }
-    @Test void playerAboveBelowAndEveryRelativeDirectionFinishWithRealLookControlTicks() {
+    @Test void playerAboveBelowAndEveryRelativeDirectionApplyInOneTickWhileMoving() {
         for (int direction=0; direction<8; direction++) for (double height : new double[]{-2.35,0,2.35}) {
             DogidoEntity body=new DogidoEntity(DogidoLab.DOGIDO,null);
             body.setYaw(173); body.setPitch(0);
@@ -27,13 +27,10 @@ class BodyOrientationTest {
             Vec3d target=body.getEyePos().add(-10*Math.sin(angle),height,10*Math.cos(angle));
             var look=new DirectedLook(); UUID id=UUID.randomUUID();
             look.begin(id,new Position(target.x,target.y,target.z),0);
-            UUID completed=null;
-            for (int tick=0; tick<100 && completed==null; tick++) {
-                body.getLookControl().tick();
-                body.updateOrientation(target,Vec3d.ZERO);
-                completed=look.reached(body.getEyePos(),body.getYaw(),body.getPitch(),tick);
-            }
-            assertEquals(id,completed,"方向="+direction+", 高さ="+height);
+            // 移動中の実体に向きを適用しても、位置・速度はそのまま残る。
+            body.setVelocity(.15,.03,-.1);var velocity=body.getVelocity();var position=body.getEntityPos();
+            body.getLookControl().tick();body.applyDirectedLook(target);
+            assertEquals(id,look.applied(0));assertEquals(velocity,body.getVelocity());assertEquals(position,body.getEntityPos());
             var expected=BodyVisionGeometry.facing(target.subtract(body.getEyePos()),0,0);
             assertEquals(0,MathHelper.wrapDegrees(expected.yaw()-body.getYaw()),1.0);
             assertEquals(expected.pitch(),body.getPitch(),1.0);

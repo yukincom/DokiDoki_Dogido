@@ -30,7 +30,7 @@ class BodyInspectControllerTest {
         JsonArray candidates=new JsonArray(); candidates.add(TARGET.json()); row.add("candidates",candidates); return row;
     }
     static class Fake implements BodyInspectController.Access {
-        JsonObject observation=observation(); Point actual=TARGET.position(); Point owner=new Point(0,64,0);
+        JsonObject observation=observation(),lookResult; Point actual=TARGET.position(); Point owner=new Point(0,64,0);
         String submission="queued"; boolean current=true; boolean clear=true; Target grounded=TARGET;
         Instant clockNow=NOW;
         Runnable onCapture=() -> {}, onResolve=() -> {}, onCollision=() -> {};
@@ -49,6 +49,7 @@ class BodyInspectControllerTest {
             onResolve.run();
             return actual == null ? null : new BodyInspectController.ResolvedTarget(actual,targetBounds,shape,false);
         }
+        public JsonObject lookResult(UUID actionId) { return lookResult; }
         public Target imageTarget(Command command,SessionRef session,BodyInspectController.Live live) {return grounded;}
         public boolean collisionFree(BodyApproachGeometry.Bounds destination) { onCollision.run(); return clear; }
         public String moveTo(SessionRef session,Command command,BodyConnection.MoveRequest request) { requests.add(request); return submission; }
@@ -64,7 +65,7 @@ class BodyInspectControllerTest {
         void outcome(Command command,String outcome) {
             JsonObject result=new JsonObject(); result.addProperty("action_id",command.commandId().toString());
             result.addProperty("sequence",looks.isEmpty()?requests.getFirst().sequence():looks.getFirst().sequence()); result.addProperty("outcome",outcome);
-            result.addProperty("reason",looks.isEmpty()?"arrived":"facing_target"); observation.add("action_result",result);
+            result.addProperty("reason",looks.isEmpty()?"arrived":"facing_target"); if(command.purpose()==Purpose.LOOK_OWNER)lookResult=result;else observation.add("action_result",result);
         }
         String detail() { return results.getFirst().get("detail_code").getAsString(); }
     }
@@ -79,13 +80,21 @@ class BodyInspectControllerTest {
         fake.outcome(command,"succeeded");fake.controller.tick(NOW.plusMillis(20));fake.controller.tick(NOW.plusMillis(30));
         assertEquals(1,fake.results.size());assertEquals("facing_target",fake.detail());
     }
+    @Test void ownerLookRunsDuringMovementAndWithLocomotionDisabled() {
+        for(String activity:List.of("following","calling","retreating","resting","holding","exploring")) {
+            Fake fake=new Fake();fake.observation.addProperty("enabled",false);fake.observation.addProperty("mode","direct");
+            fake.observation.addProperty("activity",activity);fake.observation.addProperty("reason","requested_look");
+            fake.owner=new Point(20,64,0);
+            var command=new Command(UUID.randomUUID(),NOW,NOW.plusSeconds(4),CONTEXT,null,Purpose.LOOK_OWNER);
+            fake.controller.handle(command,SESSION,NOW);assertEquals(1,fake.looks.size(),activity);
+            fake.outcome(command,"succeeded");fake.controller.tick(NOW.plusMillis(10));
+            assertEquals("facing_target",fake.detail());assertTrue(fake.requests.isEmpty());
+        }
+    }
     @Test void ownerLookCannotBypassContextOrSubmissionGuards() {
-        for (String guard:List.of("stale_context","body_action_pending","requested_look_holding")) {
+        for (String guard:List.of("stale_context","body_action_pending")) {
             Fake fake=new Fake(); fake.submission=guard;
             if(guard.equals("stale_context"))fake.observation.getAsJsonObject("context").addProperty("epoch",UUID.randomUUID().toString());
-            if(guard.equals("requested_look_holding")) {
-                fake.submission="queued";fake.observation.addProperty("reason","requested_look");
-            }
             fake.controller.handle(new Command(UUID.randomUUID(),NOW,NOW.plusSeconds(4),CONTEXT,null,Purpose.LOOK_OWNER),SESSION,NOW);
             assertEquals(guard,fake.detail());assertTrue(fake.requests.isEmpty());assertFalse(fake.controller.pending());
             if(!guard.equals("body_action_pending"))assertTrue(fake.looks.isEmpty());

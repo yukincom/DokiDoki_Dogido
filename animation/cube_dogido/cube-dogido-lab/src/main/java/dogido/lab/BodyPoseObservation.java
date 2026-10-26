@@ -11,9 +11,9 @@ final class BodyPoseObservation {
     /** 座標はblock。身体の足元とyawは呼出元Snapshotが同じtickで採り、ここは眼とplayer足元を補う。 */
     static PoseObservation capture(DogidoEntity body, ServerPlayerEntity owner) {
         if (owner == null || body.getEntityWorld() != owner.getEntityWorld()) return null;
-        // 現モデルの顔は胴体と一体で上下へ回転しない。描画されないheadYaw/pitchを視線に使わない。
+        // 撮影カメラと同じ身体のyaw/pitchを運ぶ。描画モデルの形状で上下視線を0へ置き換えない。
         return new PoseObservation(position(body.getEyePos()),position(owner.getEntityPos()),
-            body.getBodyYaw(),0,owner.getYaw(),owner.getPitch());
+            body.getBodyYaw(),body.getPitch(),owner.getYaw(),owner.getPitch());
     }
     private static Position position(Vec3d p) { return new Position(p.x,p.y,p.z); }
 }

@@ -31,9 +31,9 @@ impl Dialogue {
             return false;
         }
         if current
-            && row.is_some_and(|r| !super::visual_runtime::look_reply_current(&d.sessions[sid], r))
+            && row.is_some_and(|r| !super::visual_runtime::look_input_current(&d.sessions[sid], r))
         {
-            Self::cancel_chat(&mut d, sid, "look_context_changed");
+            Self::cancel_chat(&mut d, sid, "look_input_changed");
             return false;
         }
         let workshop_id = row

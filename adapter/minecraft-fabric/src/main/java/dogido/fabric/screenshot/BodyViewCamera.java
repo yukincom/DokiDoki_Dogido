@@ -29,9 +29,5 @@ public final class BodyViewCamera extends Camera {
         setPos(eye); setRotation(viewYaw,viewPitch);
         getEnvironmentAttributeInterpolator().update(world,eye);
     }
-    /** 今回描画する補間済みの眼・角度を、注視完了と同じ幾何へ照合する。 */
-    public BodyViewAfterLook.Pose pose() {
-        return new BodyViewAfterLook.Pose(new dogido.fabric.body.BodyInspectProtocol.Point(eye.x,eye.y,eye.z),viewYaw,viewPitch);
-    }
     public float bodyDelta() { return bodyDelta; }
 }

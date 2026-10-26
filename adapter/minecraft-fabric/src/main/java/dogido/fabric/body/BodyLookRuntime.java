@@ -19,8 +19,11 @@ public final class BodyLookRuntime {
                 if (!"observed".equals(string(observation,"status"))) return null;
                 var sample = observation.getAsJsonObject("sample"); var pose = sample.getAsJsonObject("self_pose");
                 var result = frame.autonomy().getAsJsonObject("action_result");
+                long prior=result==null?0:result.get("sequence").getAsLong();
+                if(frame.lookResults()!=null)for(var row:frame.lookResults().entrySet())
+                    prior=Math.max(prior,row.getValue().getAsJsonObject().get("sequence").getAsLong());
                 return new BodyLookController.Live(context(sample.getAsJsonObject("context")),sample.get("server_tick").getAsLong(),
-                    observation.get("age_ms").getAsLong(),result == null ? 0 : result.get("sequence").getAsLong(),
+                    observation.get("age_ms").getAsLong(),prior,
                     point(pose.getAsJsonObject("eye_position")),pose.get("view_yaw").getAsDouble(),
                     new Point(client.player.getX(),client.player.getEyeY(),client.player.getZ()));
             }

@@ -36,6 +36,10 @@ public final class BodyLookController {
         double angle = Math.toRadians(yaw+direction.degrees);
         return new Point(eye.x()-8*Math.sin(angle),eye.y(),eye.z()+8*Math.cos(angle));
     }
+    /** 実ヒット点がなければ身体の眼から本人の視線方向へ向く。遠景・空にも同じLOOK_ATを使う。 */
+    public static Point sceneTarget(Point eye,Point direction,Point hit) {
+        return hit!=null?hit:new Point(eye.x()+8*direction.x(),eye.y()+8*direction.y(),eye.z()+8*direction.z());
+    }
     /** 明示された8方向だけを渡す。基準は受付時の身体snapshotのview_yaw。 */
     public Result direction(Context expected,UUID actionId,Direction direction) {
         return direction == null ? new Result(actionId,-1,"invalid_direction") : send(expected,actionId,direction,null,direction.name());

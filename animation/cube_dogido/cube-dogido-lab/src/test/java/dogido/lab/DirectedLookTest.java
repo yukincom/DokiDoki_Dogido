@@ -8,31 +8,81 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class DirectedLookTest {
-    @Test void completesOnlyAfterRotationAndHoldsUntilDeadline() {
-        var look = new DirectedLook(); UUID id = UUID.randomUUID();
-        look.begin(id,new Position(-8,0,0),10);
-        assertNull(look.reached(Vec3d.ZERO,0,0,10));
-        assertEquals(id,look.reached(Vec3d.ZERO,90,0,90));
-        assertNull(look.reached(Vec3d.ZERO,90,0,90));
-        assertNull(look.stop(189,null)); assertTrue(look.active());
-        assertNull(look.stop(190,null)); assertFalse(look.active());
+    @Test void applyingOrientationCompletesOnceWithoutAStabilityGate() {
+        var look=new DirectedLook();UUID id=UUID.randomUUID();
+        look.begin(id,new Position(0,8,8),10);
+        assertEquals(id,look.applied(10));assertNull(look.applied(11));
+        look.tick(109);assertTrue(look.active());look.tick(110);assertFalse(look.active());
     }
-    @Test void checksVerticalPitchAndTimeoutBeforeSuccess() {
-        var look = new DirectedLook(); look.begin(UUID.randomUUID(),new Position(0,8,8),0);
-        assertNull(look.reached(Vec3d.ZERO,0,0,10));
-        assertNotNull(look.reached(Vec3d.ZERO,0,-45,20));
-        look.begin(UUID.randomUUID(),new Position(0,0,-8),10);
-        var result = look.stop(110,null); assertEquals(Outcome.EXPIRED,result.outcome());
-        assertFalse(look.active()); assertNull(look.reached(Vec3d.ZERO,180,0,110));
+    @Test void everyLocomotionModeAndDisabledOrRetreatingControlAcceptsLook() {
+        var context=new Context(UUID.randomUUID(),UUID.randomUUID(),UUID.randomUUID(),"minecraft:overworld");
+        for(Mode mode:Mode.values())for(boolean retreat:new boolean[]{false,true})for(boolean enabled:new boolean[]{false,true}) {
+            var lease=new ControlLease();lease.reset(context);lease.local(mode,retreat);if(!enabled)lease.pause();
+            var request=new ActionRequest(context,1,UUID.randomUUID(),10,20,Action.LOOK_AT,new Position(8,0,0),null);
+            assertTrue(lease.submit(request,10,null).execute(),mode+" "+retreat+" "+enabled);
+            lease.completeAction(request.actionId(),Outcome.SUCCEEDED,"facing_target");
+            assertEquals(Outcome.SUCCEEDED,lease.lookResult().outcome());
+        }
     }
-    @Test void yieldsToPrioritiesAndCancelsWithoutSuccess() {
-        assertNull(DirectedLook.priority(true,false,false,false,Activity.HOLDING,false,false));
-        assertEquals("body_action_busy",DirectedLook.priority(true,false,false,true,Activity.HOLDING,false,false));
-        assertEquals("distance_follow_has_priority",DirectedLook.priority(true,false,false,false,Activity.HOLDING,true,false));
-        assertEquals("danger_has_priority",DirectedLook.priority(true,false,false,false,Activity.HOLDING,false,true));
-        assertEquals("call_has_priority",DirectedLook.priority(true,false,true,false,Activity.CALLING,false,false));
-        var look = new DirectedLook(); look.begin(UUID.randomUUID(),new Position(0,0,8),0);
-        assertEquals(Outcome.INTERRUPTED,look.stop(2,"danger_has_priority").outcome()); assertFalse(look.active());
+    @Test void movementAndLookCompleteIndependentlyInEitherOrder() {
+        for(Action movement:new Action[]{Action.MOVE_TO,Action.CALL,Action.WAIT,Action.REST})for(boolean lookFirst:new boolean[]{false,true}) {
+            var context=new Context(UUID.randomUUID(),UUID.randomUUID(),UUID.randomUUID(),"minecraft:overworld");
+            var lease=new ControlLease();lease.reset(context);lease.local(Mode.DIRECT,false);
+            var move=new ActionRequest(context,lookFirst?2:1,UUID.randomUUID(),10,20,movement,new Position(8,0,0),null);
+            var look=new ActionRequest(context,lookFirst?1:2,UUID.randomUUID(),10,20,Action.LOOK_AT,new Position(0,8,0),null);
+            assertTrue(lease.submit(lookFirst?look:move,10,null).execute());
+            assertTrue(lease.submit(lookFirst?move:look,10,null).execute());
+            assertTrue(lease.hasActiveAction());
+            lease.completeAction(lookFirst?look.actionId():move.actionId(),Outcome.SUCCEEDED,lookFirst?"facing_target":"arrived");
+            assertEquals(Outcome.ACCEPTED,lease.actionResult(lookFirst?move.actionId():look.actionId()).outcome());
+            lease.completeAction(lookFirst?move.actionId():look.actionId(),Outcome.SUCCEEDED,lookFirst?"arrived":"facing_target");
+            assertEquals(move.actionId(),lease.actionResult().actionId());assertEquals(Outcome.SUCCEEDED,lease.actionResult().outcome());
+            assertEquals(look.actionId(),lease.lookResult().actionId());assertEquals(Outcome.SUCCEEDED,lease.lookResult().outcome());
+        }
+    }
+    @Test void downedEndsBothPendingActions() {
+        var context=new Context(UUID.randomUUID(),UUID.randomUUID(),UUID.randomUUID(),"minecraft:overworld");
+        var lease=new ControlLease();lease.reset(context);lease.local(Mode.DIRECT,false);
+        var move=new ActionRequest(context,1,UUID.randomUUID(),10,20,Action.WAIT);
+        var look=new ActionRequest(context,2,UUID.randomUUID(),10,20,Action.LOOK_AT,new Position(0,8,0),null);
+        lease.submit(move,10,null);lease.submit(look,10,null);
+        lease.interruptAll("downed");
+        assertEquals(Outcome.INTERRUPTED,lease.actionResult().outcome());
+        assertEquals(Outcome.INTERRUPTED,lease.submit(look,11,null).result().outcome());
+        assertEquals("downed",lease.lookResult().reason());
+    }
+    @Test void controlExpiryEndsMovementWhileOrientationStillApplies() {
+        var context=new Context(UUID.randomUUID(),UUID.randomUUID(),UUID.randomUUID(),"minecraft:overworld");
+        var lease=new ControlLease();lease.reset(context);
+        lease.apply(new StateRequest(context,1,0,10,1,true,Mode.DIRECT,false),10);
+        var move=new ActionRequest(context,1,UUID.randomUUID(),10,20,Action.WAIT);
+        var look=new ActionRequest(context,2,UUID.randomUUID(),10,20,Action.LOOK_AT,new Position(0,8,0),null);
+        lease.submit(move,10,null);lease.submit(look,10,null);lease.expire(11);
+        assertEquals(Outcome.EXPIRED,lease.actionResult().outcome());assertEquals(Outcome.ACCEPTED,lease.lookResult().outcome());
+        lease.completeAction(look.actionId(),Outcome.SUCCEEDED,"facing_target");
+        assertEquals(Outcome.SUCCEEDED,lease.lookResult().outcome());assertFalse(lease.enabled());
+    }
+    @Test void consecutiveLookResultsStayReadableByIdWithoutBlockingNewLook() {
+        var context=new Context(UUID.randomUUID(),UUID.randomUUID(),UUID.randomUUID(),"minecraft:overworld");
+        var lease=new ControlLease();lease.reset(context);
+        UUID first=UUID.randomUUID(),second=UUID.randomUUID(),third=UUID.randomUUID();
+        lease.submit(new ActionRequest(context,1,first,10,20,Action.LOOK_AT,new Position(0,8,0),null),10,null);
+        assertTrue(lease.submit(new ActionRequest(context,2,second,10,20,Action.LOOK_AT,new Position(0,0,8),null),10,null).execute());
+        lease.completeAction(second,Outcome.SUCCEEDED,"facing_target");
+        lease.submit(new ActionRequest(context,3,third,10,20,Action.LOOK_AT,new Position(8,0,0),null),10,null);
+        assertEquals(3,lease.lookResults().size());
+        assertEquals(Outcome.INTERRUPTED,lease.actionResult(first).outcome());
+        assertEquals(Outcome.SUCCEEDED,lease.actionResult(second).outcome());
+        assertEquals(Outcome.ACCEPTED,lease.actionResult(third).outcome());
+        assertTrue(lease.lookResults().contains(lease.actionResult(second)));
+    }
+    @Test void staleLookStillPublishesItsRejectionWithoutReservingAnAction() {
+        var context=new Context(UUID.randomUUID(),UUID.randomUUID(),UUID.randomUUID(),"minecraft:overworld");
+        var lease=new ControlLease();lease.reset(context);
+        var request=new ActionRequest(context,1,UUID.randomUUID(),10,20,Action.LOOK_AT,new Position(0,8,0),null);
+        var rejected=lease.submit(request,31,null);
+        assertEquals("stale_request",rejected.result().reason());assertFalse(rejected.execute());
+        assertEquals(java.util.List.of(rejected.result()),lease.lookResults());assertNull(lease.actionResult(request.actionId()));
     }
     @Test void validatesCoordinateAndUsesExistingDedupAndEpochChecks() {
         var context = new Context(UUID.randomUUID(),UUID.randomUUID(),UUID.randomUUID(),"minecraft:overworld");

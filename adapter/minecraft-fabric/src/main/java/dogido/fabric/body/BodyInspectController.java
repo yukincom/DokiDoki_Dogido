@@ -20,6 +20,8 @@ final class BodyInspectController {
         default long nextSequence(Context context,long prior,long tick,long last) { return Math.max(Math.max(last,prior),tick)+1; }
         /** 現在の生存・種類・非敵対・視認を再検査し、実座標を返す。未確認はnull。 */
         ResolvedTarget resolve(Target target,Live live);
+        /** 移動結果と独立した注視台帳から、同じaction IDの受付・完了を返す。 */
+        default JsonObject lookResult(UUID actionId) { return null; }
         /** 同じsessionの撮影時対応表へ見た目の属性を問い合わせる。通常候補表とは独立に現物を確定する。 */
         default Target imageTarget(Command command,SessionRef session,Live live) { return null; }
         default ResolvedTarget resolveImage(Target target,Live live) { return resolve(target,live); }
@@ -52,12 +54,8 @@ final class BodyInspectController {
         if (timeError != null) { finish(command,"expired",timeError,now); return; }
         if (pending != null) { finish(command,"rejected","body_action_pending",now); return; }
         try {
-            Live live=access.capture(); String invalid=invalid(live,command.context());
+            Live live=access.capture(); String invalid=invalid(live,command.context(),command.purpose());
             if (invalid != null) { finish(command,"rejected",invalid,now); return; }
-            // モデルの生成後にBERT注視が完了しても、その保持時間を遅配の自発注視で上書きしない。
-            if (command.purpose() == Purpose.LOOK_OWNER && "requested_look".equals(string(live.autonomy(),"reason"))) {
-                finish(command,"rejected","requested_look_holding",now); return;
-            }
             boolean fromImage=command.imageTarget()!=null;
             if(fromImage) {
                 Target grounded=access.imageTarget(command,session,live);
@@ -90,7 +88,7 @@ final class BodyInspectController {
                 destination=BodyApproachGeometry.choose(live.body(),live.owner(),live.ownerEyeHeight(),followDistance,resolved.targetBounds(),resolved.bodyShape(),
                     resolved.ceiling(),access::collisionFree);
                 if (destination == null) { finish(command,"rejected","no_safe_approach",now); return; }
-            } else {
+            } else if(command.purpose()!=Purpose.LOOK_OWNER) {
                 // ownerのidentityは同じframeのcontextで確定済み。目的地・足場・作業中の正面は身体serverで再検査する。
                 var reassurance=live.autonomy().getAsJsonObject("reassurance");
                 if (reassurance == null) { finish(command,"rejected","invalid_reassurance",now); return; }
@@ -138,9 +136,9 @@ final class BodyInspectController {
         if (!now.isBefore(work.deadline())) { pending=null; finish(work.command(),"expired","result_timeout",now); return; }
         try {
             Live live=access.capture();
-            String invalid=invalid(live,work.command().context());
+            String invalid=invalid(live,work.command().context(),work.command().purpose());
             if (invalid != null) { pending=null; finish(work.command(),"rejected",invalid,now); return; }
-            JsonObject result=live.autonomy().getAsJsonObject("action_result");
+            JsonObject result=work.command().purpose()==Purpose.LOOK_OWNER?access.lookResult(work.command().commandId()):live.autonomy().getAsJsonObject("action_result");
             if (result != null && work.command().commandId().toString().equals(string(result,"action_id"))
                     && result.get("sequence").getAsLong() == work.sequence()) {
                 String outcome=string(result,"outcome");
@@ -157,14 +155,14 @@ final class BodyInspectController {
     }
     void clear() { pending=null; }
     boolean pending() { return pending != null; }
-    private static String invalid(Live live,Context expected) {
+    private static String invalid(Live live,Context expected,Purpose purpose) {
         if (live == null || live.autonomy() == null || !"observed".equals(string(live.autonomy(),"status"))) return "body_unavailable";
         JsonObject row=live.autonomy();
         if (row.get("version").getAsInt() != 2) return "version_mismatch";
         if (!expected.equals(context(row.getAsJsonObject("context")))) return "stale_context";
         long age=row.get("age_ms").getAsLong();
         if (age < 0 || age >= 3_000) return "stale_snapshot";
-        if (!row.get("enabled").getAsBoolean() || !"follow".equals(string(row,"mode"))) return "control_not_follow";
+        if(purpose!=Purpose.LOOK_OWNER && (!row.get("enabled").getAsBoolean() || !"follow".equals(string(row,"mode"))))return "control_not_follow";
         if (live.body() == null || live.owner() == null) return "invalid_pose";
         return null;
     }

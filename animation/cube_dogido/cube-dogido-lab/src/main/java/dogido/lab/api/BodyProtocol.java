@@ -5,8 +5,8 @@ import java.util.List;
 
 /** 身体の実測と操作を不変データで渡す。HP/食料は身体の情報で、player観測や嗅覚へ混入させない。 */
 public final class BodyProtocol {
-    public static final int VERSION = 11;
-    public static final String ENTRYPOINT = "dogido:body_bridge_v11";
+    public static final int VERSION = 12;
+    public static final String ENTRYPOINT = "dogido:body_bridge_v12";
     /** FOLLOWが高さを合わせ直す幅（block）。身体とadapterの停止位置計算で共有する。 */
     public static final double FOLLOW_HEIGHT_DISTANCE = 4;
     /** ownerの目の高さと身体の実寸から、通常追従する身体底面の高さを足元基準で返す。 */
@@ -98,5 +98,5 @@ public final class BodyProtocol {
     public record Snapshot(int version, Presence presence, Context context, String ownerDimension, long serverTick,
             long snapshotRevision, Position position, float yaw, Activity activity, String reason,
             long appliedStateRevision, StateResult stateResult, ActionResult actionResult, Sensors sensors,
-            Vitals vitals, FoodObservation food, PoseObservation pose, VisionObservation vision, HearingObservation hearing, ControlObservation control) {}
+            Vitals vitals, FoodObservation food, PoseObservation pose, VisionObservation vision, HearingObservation hearing, ControlObservation control, java.util.List<ActionResult> lookResults) {}
 }

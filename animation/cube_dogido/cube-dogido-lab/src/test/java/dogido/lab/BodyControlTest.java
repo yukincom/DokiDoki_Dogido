@@ -46,7 +46,8 @@ class BodyControlTest {
         lease.request(new ActionRequest(c,1,first,100,20,Action.CALL),100);
         lease.completeAction(Outcome.SUCCEEDED,"arrived");
         lease.request(new ActionRequest(c,2,second,101,20,Action.LOOK_AT,new Position(1,2,3),null),101);
-        assertEquals(second,lease.actionResult().actionId());
+        assertEquals(second,lease.lookResult().actionId());
+        assertEquals(first,lease.actionResult().actionId());
         assertEquals(new ActionResult(first,1,Outcome.SUCCEEDED,"arrived"),lease.actionResult(first));
         lease.reset(new Context(c.ownerId(),c.bodyId(),UUID.randomUUID(),c.dimension()));
         assertNull(lease.actionResult(first));

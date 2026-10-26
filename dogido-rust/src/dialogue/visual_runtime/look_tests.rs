@@ -13,6 +13,8 @@ fn completed_look(context: Context, generation: u64) -> crate::body::requests::C
 async fn look_capture_excludes_old_images_and_is_bound_to_capture_body_input_and_session() {
     for change in [
         "none",
+        "moving",
+        "unavailable",
         "capture_id",
         "body",
         "generation",
@@ -69,6 +71,17 @@ async fn look_capture_excludes_old_images_and_is_bound_to_capture_body_input_and
             }
             s.visual.receive(&image, Utc::now());
             s.visual.receive(&image, Utc::now());
+            if change=="moving" || change=="unavailable" {
+                let mut frame=serde_json::to_value(wire(5)).unwrap();
+                if change=="moving" {
+                    frame["body_observation"]["sample"]["self_pose"]["position"]["x"]=json!(50.0);
+                    frame["body_observation"]["sample"]["self_pose"]["view_yaw"]=json!(135.0);
+                    frame["body_observation"]["sample"]["self_pose"]["view_pitch"]=json!(45.0);
+                } else {frame["body_observation"]=json!({"version":3,"status":"unavailable","reason":"stale_or_missing"});}
+                crate::dialogue::body_runtime::observe(s,&crate::events::GameEvent::parse(frame).unwrap());
+                s.visual.arm("s",None,Utc::now());
+                assert!(s.visual.look.as_ref().unwrap().image.is_some());
+            }
             assert!(
                 !s.visual.ready,
                 "explicit look must not create an extra ambient comment"
@@ -76,7 +89,7 @@ async fn look_capture_excludes_old_images_and_is_bound_to_capture_body_input_and
         }
         assert_eq!(
             source.capture(&mut cancel).await.is_some(),
-            change == "none",
+            matches!(change,"none"|"moving"|"unavailable"),
             "{change}"
         );
     }
@@ -88,7 +101,9 @@ async fn look_success_continues_once_with_a_new_image_or_only_acknowledges_on_ti
         let sent = Arc::new(std::sync::Mutex::new(Vec::<Value>::new()));
         let recorded = sent.clone();
         let app = axum::Router::new().route("/v1/chat/completions",axum::routing::post(move |axum::Json(v):axum::Json<Value>| {
-            recorded.lock().unwrap().push(v); async { axum::Json(json!({"id":"fixture","object":"chat.completion","created":0,"model":"fixture",
+            recorded.lock().unwrap().push(v); async {
+                tokio::time::sleep(Duration::from_millis(700)).await;
+                axum::Json(json!({"id":"fixture","object":"chat.completion","created":0,"model":"fixture",
                 "choices":[{"index":0,"message":{"role":"assistant","content":"{\"action\":\"speak\",\"speech\":\"あの木、葉っぱがよう茂っとるな。\"}"},"finish_reason":"stop"}]})) }
         }));
         let socket = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -208,6 +223,17 @@ async fn look_success_continues_once_with_a_new_image_or_only_acknowledges_on_ti
             let mut event = serde_json::to_value(wire(3)).unwrap();
             event["command_results"] = json!([receipt, ack]);
             d.observe("s", crate::events::GameEvent::parse(event).unwrap(), None);
+            // 模擬LLMへ画像が届き、生成中になってから身体を動かす。その後の観測遅延でも返答を止めない。
+            tokio::time::timeout(Duration::from_secs(2),async {
+                while sent.lock().unwrap().is_empty() {tokio::time::sleep(Duration::from_millis(5)).await;}
+            }).await.unwrap();
+            let mut moved=serde_json::to_value(wire(4)).unwrap();
+            moved["body_observation"]["sample"]["self_pose"]["position"]["x"]=json!(35.0);
+            moved["body_observation"]["sample"]["self_pose"]["view_yaw"]=json!(120.0);
+            moved["body_observation"]["sample"]["self_pose"]["view_pitch"]=json!(40.0);
+            d.observe("s",crate::events::GameEvent::parse(moved).unwrap(),None);
+            let mut data=d.data.lock().unwrap();let s=data.sessions.get_mut("s").unwrap();
+            s.received=Some(Instant::now()-Duration::from_secs(11));
         }
         tokio::time::timeout(Duration::from_secs(3), async {
             loop {
@@ -270,7 +296,7 @@ async fn look_success_continues_once_with_a_new_image_or_only_acknowledges_on_ti
 }
 
 #[tokio::test]
-async fn look_reply_rechecks_body_and_input_after_model_generation_before_delivery() {
+async fn look_reply_survives_body_changes_after_capture_and_only_new_input_cancels() {
     for changed in ["body", "input", "pause"] {
         let (d, _) = server(100);
         let (tx, rx) = watch::channel(false);
@@ -301,20 +327,18 @@ async fn look_reply_rechecks_body_and_input_after_model_generation_before_delive
             }
             data.rows.push_back(row);
         }
-        assert!(
-            !d.update(
+        let accepted=d.update(
                 "s",
                 "turn",
                 7,
                 crate::playback::Status::Queued,
                 Some(&json!({"text":"旧画像の返答"}))
-            ),
-            "{changed}"
-        );
-        assert!(*rx.borrow());
+            );
+        assert_eq!(accepted,changed!="input","{changed}");
+        assert_eq!(*rx.borrow(),changed=="input");
         let data = d.data.lock().unwrap();
         let row = data.rows.iter().find(|r| r["turn_id"] == "turn").unwrap();
-        assert_eq!(row["playback_status"], "cancelled");
-        assert!(row["text"].is_null());
+        assert_eq!(row["playback_status"],if changed=="input" {"cancelled"} else {"queued"});
+        assert_eq!(row["text"].is_null(),changed=="input");
     }
 }

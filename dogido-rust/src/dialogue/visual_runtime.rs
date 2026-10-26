@@ -1,4 +1,4 @@
-//! 静止時の身体画像を既存game-eventsで受け取り、最新一枚と未考慮の変化を保持する。
+//! 停止時・明示注視後の身体画像を既存game-eventsで受け取る。明示撮影は移動と並行し、撮影後の一枚を返答まで保持する。
 //! 撮影・比較はFabric、発話機会・取消・身体世代の照合はRust。画像本文は履歴や保存JSONに入れない。
 use super::{Dialogue, Session, bridge, chat_context};
 use crate::{body::contracts::Context, chat_image::Attachment, events::{AdapterCommandResult, AdapterCommandResultStatus as Status}};
@@ -39,18 +39,21 @@ impl State {
         while self.done.len() > 256 { self.done.pop_front(); }
     }
     /// 次の静止観測を予約する。命令の10秒期限は切断対策で、静止中の撮影更新周期はFabricが所有する。
-    /// 身体・世界・接続が失効した画像を別の状態へ持ち越さず、停止番号で再撮影を抑える。
+    /// 通常画像は現在の身体・世界へ結び付け、停止番号で再撮影を抑える。明示画像の寿命は入力・会話側が所有する。
     pub fn arm(&mut self, sid: &str, context: Option<Context>, now: DateTime<Utc>) {
         if self.context != context || !self.enabled {
-            if let Some(p) = self.pending.take() { self.finish(p.command["command_id"].as_str().unwrap_or("")); }
-            self.look = None;
+            // 明示撮影は取得時のidentityに属する。移動中の観測欠落や別poseで予約・取得済み画像を捨てない。
+            if !self.enabled { self.cancel_look(); }
+            if self.look.is_none() && let Some(p) = self.pending.take() {
+                self.finish(p.command["command_id"].as_str().unwrap_or(""));
+            }
             self.latest = None; self.ready = false; self.sequence = 0; self.context = context.clone();
         }
         let Some(context) = context.filter(|_| self.enabled) else { return; };
         if self.pending.as_ref().is_some_and(|p| now >= p.expires) {
             let id = self.pending.as_ref().unwrap().command["command_id"].as_str().unwrap().to_owned(); self.finish(&id);
         }
-        if self.look.as_ref().is_some_and(|v| now >= v.expires) { self.cancel_look(); }
+        if self.look.as_ref().is_some_and(|v| !v.finished && now >= v.expires) { self.cancel_look(); }
         if self.look.is_some() || self.pending.is_some() { return; }
         let expires = now + chrono::Duration::seconds(10);
         let command = json!({"type":"capture_body_view","command_id":format!("view_{}",uuid::Uuid::new_v4()),"session_id":sid,
@@ -176,12 +179,15 @@ pub(super) fn attach_latest(s: &Session, action: &mut crate::combat::model::Spee
     action.image = Some(Arc::new(captured.image.clone()));
 }
 
-/// 撮影後から配送完了まで、同じ身体と入力世代に属する返答だけを許可する。
-/// 行に保存した事実は生成結果ではなく、成功ACKから引き継いだ値。
-pub(super) fn look_reply_current(s: &Session, row: &Value) -> bool {
-    row["look_capture_id"].is_null() || (!s.foreground.game_paused
-        && row["input_generation"].as_u64() == Some(s.input_generation)
-        && s.body_observation.accepted(Instant::now()).is_some_and(|sample| json!(sample.context) == row["look_context"]))
+/// 取得済みの明示画像は現在観測の更新間隔に依存しない。新入力・turn取消は会話の所有者が扱う。
+pub(super) fn captured_look(s: &Session, request: &LookCapture) -> bool {
+    s.input_generation==request.look.input_generation && s.visual.look.as_ref().is_some_and(|v|
+        v.request.capture_id==request.capture_id && v.image.is_some())
+}
+
+/// 新入力による取消だけを照合する。撮影後の身体位置・向き・観測鮮度で返答を取り消さない。
+pub(super) fn look_input_current(s: &Session, row: &Value) -> bool {
+    row["look_capture_id"].is_null() || row["input_generation"].as_u64() == Some(s.input_generation)
 }
 
 /// 通常会話も最後に受信した一枚を参照する。会話ごとの新規撮影要求は発行しない。
@@ -195,8 +201,7 @@ impl Source {
     pub fn after_look(mut self, request: Option<LookCapture>) -> Self { self.after_look = request; self }
     fn current(&self, s: &Session) -> bool {
         s.instance_id==self.instance && s.epoch==self.epoch && s.current_turn==self.turn
-            && self.after_look.as_ref().is_none_or(|v| s.input_generation==v.look.input_generation
-                && s.body_observation.accepted(Instant::now()).is_some_and(|sample| sample.context==v.look.context))
+            && self.after_look.as_ref().is_none_or(|v| s.input_generation==v.look.input_generation)
     }
     pub async fn capture(&self, cancel: &mut watch::Receiver<bool>) -> Option<Captured> {
         let owner=self.owner.upgrade()?;
@@ -207,7 +212,6 @@ impl Source {
             {
                 let data=owner.data.lock().unwrap();let s=data.sessions.get(&self.sid)?;
                 if !self.current(s) || s.preview || !s.visual.enabled || s.foreground.game_paused { return None; }
-                s.body_observation.accepted(Instant::now())?;
                 if let Some(request) = &self.after_look {
                     let pending = s.visual.look.as_ref().filter(|v| v.request.capture_id == request.capture_id)?;
                     if pending.finished { return pending.image.clone(); }
@@ -227,7 +231,10 @@ impl Source {
         let mut history = previous.context.history.clone();
         history.conversation_turns = s.history.refresh_before_input(&self.turn, &history.conversation_turns, input.retained_history_count);
         history.conversation_history = super::history::History::lines_for(&history.conversation_turns);
-        let image_current = captured.is_some_and(|context| s.body_observation.accepted(Instant::now()).is_some_and(|sample| &sample.context == context));
+        let image_current = captured.is_some_and(|context| match &self.after_look {
+            Some(request) => context == &request.look.context,
+            None => s.body_observation.accepted(Instant::now()).is_some_and(|sample| &sample.context == context),
+        });
         let native = chat_context::capture(s, s.latest.as_ref()?, &owner.config.combat, history, None).ok()?;
         Some((native, image_current))
     }

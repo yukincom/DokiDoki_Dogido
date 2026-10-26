@@ -1,6 +1,5 @@
 package dogido.fabric.screenshot;
 
-import com.google.gson.JsonObject;
 import dogido.fabric.body.BodyConnection;
 import dogido.fabric.body.BodyInspectProtocol.Context;
 import dogido.fabric.body.BodyInspectProtocol.Point;
@@ -13,7 +12,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
-/** 明示注視の成功根拠から一枚の予約へ進み、浮遊・補間・新しい操作と遅配を取り違えない回帰検査。 */
+/** 明示注視の成功IDから一枚の予約へ進み、新しい操作と遅配を取り違えない回帰検査。 */
 class BodyViewAfterLookTest {
     private static final Instant NOW=Instant.parse("2026-10-26T00:00:00Z");
     private static final SessionRef SESSION=new SessionRef("session",3);
@@ -26,16 +25,6 @@ class BodyViewAfterLookTest {
     private BodyConnection.LookRequest look(BodyRequestProtocol.Command request) {
         return new BodyConnection.LookRequest(CONTEXT,21,request.commandId(),20,20,TARGET);
     }
-    private JsonObject sample() {
-        JsonObject sample=new JsonObject(),pose=new JsonObject();sample.add("context",CONTEXT.json());sample.addProperty("server_tick",25);
-        pose.add("eye_position",EYE.json());pose.addProperty("view_yaw",0);pose.addProperty("view_pitch",0);sample.add("self_pose",pose);return sample;
-    }
-    private JsonObject autonomy(BodyRequestProtocol.Command request) {
-        JsonObject value=new JsonObject(),action=new JsonObject();value.addProperty("status","observed");value.addProperty("enabled",true);
-        value.addProperty("activity","holding");value.addProperty("reason","requested_look");
-        action.addProperty("action_id",request.commandId().toString());action.addProperty("sequence",21);
-        action.addProperty("outcome","succeeded");action.addProperty("reason","facing_target");value.add("action_result",action);return value;
-    }
     private BodyViewProtocol.Command capture(BodyRequestProtocol.Command request) {
         return new BodyViewProtocol.Command("view_"+UUID.randomUUID(),SESSION.sessionId(),NOW.plusSeconds(2),NOW.plusSeconds(10),
             CONTEXT.bodyId(),CONTEXT.epoch(),CONTEXT.ownerId(),CONTEXT.dimension(),0,
@@ -46,7 +35,7 @@ class BodyViewAfterLookTest {
             context.ownerId(),context.dimension(),c.afterMotionSequence(),new BodyViewProtocol.AfterLook(action,generation,executed));
     }
     private BodyViewAfterLook completed(BodyRequestProtocol.Command request) {
-        var state=new BodyViewAfterLook();state.completed(SESSION,request,look(request),sample(),autonomy(request),NOW.plusSeconds(1));return state;
+        var state=new BodyViewAfterLook();state.completed(SESSION,request,look(request),NOW.plusSeconds(1));return state;
     }
     @Test void oneVerifiedLookBindsOneCaptureAndRejectsForeignReceiptFields() {
         var request=request();var state=completed(request);var capture=capture(request);
@@ -58,60 +47,25 @@ class BodyViewAfterLookTest {
         assertNull(state.capture(capture,new SessionRef("other",3),NOW.plusSeconds(2)));
         assertNull(state.capture(capture,new SessionRef("session",4),NOW.plusSeconds(2)));
         var proof=state.capture(capture,SESSION,NOW.plusSeconds(2));assertNotNull(proof);
-        assertSame(proof,state.capture(capture,SESSION,NOW.plusSeconds(3))); // 同じ撮影の描画前・保存後の照合
+        assertSame(proof,state.capture(capture,SESSION,NOW.plusSeconds(3))); // 同じ命令の再送は同じ予約へ結び付ける
         assertNull(state.capture(capture(request),SESSION,NOW.plusSeconds(3))); // 同じ注視で別の一枚を作らない
         assertNull(state.capture(capture,SESSION,NOW.plusSeconds(10)));
     }
-    @Test void failedOrQueuedNativeResultsNeverAuthorizeAnImage() {
-        for(String outcome:new String[]{"accepted","rejected","interrupted","expired"}) {
-            var request=request();var state=new BodyViewAfterLook();JsonObject a=autonomy(request);
-            a.getAsJsonObject("action_result").addProperty("outcome",outcome);
-            state.completed(SESSION,request,look(request),sample(),a,NOW.plusSeconds(1));
-            assertNull(state.capture(capture(request),SESSION,NOW.plusSeconds(2)),outcome);
-        }
-        var request=request();var state=new BodyViewAfterLook();JsonObject a=autonomy(request);
-        a.getAsJsonObject("action_result").addProperty("reason","arrived");
-        state.completed(SESSION,request,look(request),sample(),a,NOW.plusSeconds(1));
+    @Test void aReceiptCannotBeReboundToAnotherActionOrBody() {
+        var request=request();var state=new BodyViewAfterLook();
+        var other=new BodyConnection.LookRequest(CONTEXT,21,UUID.randomUUID(),20,20,TARGET);
+        state.completed(SESSION,request,other,NOW.plusSeconds(1));
         assertNull(state.capture(capture(request),SESSION,NOW.plusSeconds(2)));
-    }
-    @Test void currentSnapshotMustStillHoldTheSameCompletedAction() {
-        var request=request();var state=completed(request);var proof=state.capture(capture(request),SESSION,NOW.plusSeconds(2));
-        assertTrue(proof.matches(sample(),autonomy(request)));
-        for(String field:new String[]{"activity","reason","enabled","action_id","sequence","outcome","context","server_tick"}) {
-            JsonObject s=sample(),a=autonomy(request),action=a.getAsJsonObject("action_result");
-            switch(field) {
-                case "activity" -> a.addProperty(field,"following");
-                case "reason" -> a.addProperty(field,"following_owner");
-                case "enabled" -> a.addProperty(field,false);
-                case "action_id" -> action.addProperty(field,UUID.randomUUID().toString());
-                case "sequence" -> action.addProperty(field,22);
-                case "outcome" -> action.addProperty(field,"accepted");
-                case "context" -> s.getAsJsonObject(field).addProperty("epoch",UUID.randomUUID().toString());
-                case "server_tick" -> s.addProperty(field,24);
-            }
-            assertFalse(proof.matches(s,a),field);
-        }
-    }
-    @Test void hoveringDoesNotBlockTheCompletedLookButInterpolatedWrongFacingAndTravelDo() {
-        var request=request();var state=completed(request);var proof=state.capture(capture(request),SESSION,NOW.plusSeconds(2));
-        var ordinary=new BodyViewMotion();
-        for(int tick=0;tick<90;tick++) {
-            double y=65+.18*Math.sin(tick*Math.PI*2/120);
-            double pitch=Math.toDegrees(Math.atan2(y-65,8));
-            var rendered=new BodyViewAfterLook.Pose(new Point(0,y,0),0,pitch);
-            ordinary.observe("world",new BodyViewMotion.Pose(0,y,0,0,pitch));
-            assertTrue(proof.facing(rendered));
-            assertFalse(ordinary.still(new BodyViewMotion.Pose(0,y,0,0,pitch)));
-        }
-        assertFalse(proof.facing(new BodyViewAfterLook.Pose(EYE,30,0))); // 補間中の旧方向
-        assertFalse(proof.facing(new BodyViewAfterLook.Pose(new Point(.03,65,0),0,0)));
-        assertFalse(proof.facing(new BodyViewAfterLook.Pose(new Point(0,65.5,0),0,0)));
+        var foreign=new Context(CONTEXT.ownerId(),CONTEXT.bodyId(),UUID.randomUUID(),CONTEXT.dimension());
+        other=new BodyConnection.LookRequest(foreign,21,request.commandId(),20,20,TARGET);
+        state.completed(SESSION,request,other,NOW.plusSeconds(1));
+        assertNull(state.capture(capture(request),SESSION,NOW.plusSeconds(2)));
     }
     @Test void repeatedSameDirectionIsAnotherCaptureOnlyAfterAnotherActualSuccess() {
         var first=request();var state=completed(first);var original=capture(first);var motion=new BodyViewMotion();
         assertNotNull(state.capture(original,SESSION,NOW.plusSeconds(2)));assertEquals(1,motion.afterLookSequence(0));
         state.clear();assertNull(state.capture(original,SESSION,NOW.plusSeconds(2)));
-        var second=request();state.completed(SESSION,second,look(second),sample(),autonomy(second),NOW.plusSeconds(1));
+        var second=request();state.completed(SESSION,second,look(second),NOW.plusSeconds(1));
         assertNull(state.capture(original,SESSION,NOW.plusSeconds(2)));
         assertNotNull(state.capture(capture(second),SESSION,NOW.plusSeconds(2)));assertEquals(2,motion.afterLookSequence(1));
         assertEquals(6,motion.afterLookSequence(5));assertEquals(7,motion.afterLookSequence(1));
@@ -127,7 +81,7 @@ class BodyViewAfterLookTest {
         Instant now=Instant.now();
         var request=new BodyRequestProtocol.Command(UUID.randomUUID(),now.minusSeconds(1),now.plusSeconds(4),7,
             CONTEXT.ownerId(),CONTEXT.dimension(),BodyRequestProtocol.Mode.LOOK_TARGET,CONTEXT);
-        state.completed(SESSION,request,look(request),sample(),autonomy(request),now);
+        state.completed(SESSION,request,look(request),now);
         var c=new BodyViewProtocol.Command("view_"+UUID.randomUUID(),SESSION.sessionId(),now,now.plusSeconds(10),
             CONTEXT.bodyId(),CONTEXT.epoch(),CONTEXT.ownerId(),CONTEXT.dimension(),0,new BodyViewProtocol.AfterLook(request.commandId(),7,now));
         assertNotNull(runtime.lookCapture(c,SESSION));generation.set(8);

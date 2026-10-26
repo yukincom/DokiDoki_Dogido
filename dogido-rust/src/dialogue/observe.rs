@@ -295,8 +295,8 @@ impl Dialogue {
         }
         let s = &d.sessions[session_id];
         let stale_look = d.rows.iter().find(|r| r["turn_id"] == s.current_turn)
-            .is_some_and(|r| !super::visual_runtime::look_reply_current(s,r));
-        if stale_look { Self::cancel_chat(&mut d,session_id,"look_context_changed"); }
+            .is_some_and(|r| !super::visual_runtime::look_input_current(s,r));
+        if stale_look { Self::cancel_chat(&mut d,session_id,"look_input_changed"); }
         let body_reports =
             super::body_request_runtime::observe(d.sessions.get_mut(session_id).unwrap(), &event);
         for report in body_reports {

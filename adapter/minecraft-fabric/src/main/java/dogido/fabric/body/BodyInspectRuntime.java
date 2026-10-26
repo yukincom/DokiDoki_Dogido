@@ -49,6 +49,7 @@ public final class BodyInspectRuntime {
             public Target imageTarget(Command command,SessionRef session,BodyInspectController.Live live) {
                 return dogido.fabric.screenshot.BodyViewTargets.resolve(command.imageTarget(),command.context(),session.sessionId());
             }
+            public JsonObject lookResult(java.util.UUID actionId) { return currentFrame==null?null:currentFrame.lookResult(actionId); }
             public BodyInspectController.ResolvedTarget resolveImage(Target target,BodyInspectController.Live live) { return resolveCurrent(target,live,true); }
             public boolean collisionFree(BodyApproachGeometry.Bounds destination) { return clearSpace(destination); }
             public BodyLookController.Result lookOwner(SessionRef session,Command command) {

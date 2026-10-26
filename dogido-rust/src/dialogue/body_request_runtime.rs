@@ -118,7 +118,6 @@ impl Dialogue {
         let binding = super::request_runtime::Binding::capture(s);
         let row = d.rows.iter_mut().find(|r| r["turn_id"] == turn).unwrap();
         row["classifier_binding"] = json!(binding);
-        row["look_context"] = json!(look.context);
         row["category"] = json!("speech");
         row["epoch"] = json!(epoch);
         row["playback_status"] = json!("generating");
@@ -227,7 +226,7 @@ pub(super) fn observe(s: &mut Session, event: &GameEvent) -> Vec<Report> {
         .accepted(now)
         .map(|sample| sample.context.clone());
     let active = active(s);
-    s.body_requests.observe(
+    let reports=s.body_requests.observe(
         &event.command_results,
         s.input_generation,
         s.player_uuid.as_deref(),
@@ -238,7 +237,12 @@ pub(super) fn observe(s: &mut Session, event: &GameEvent) -> Vec<Report> {
         active,
         now,
         chrono::Utc::now(),
-    )
+    );
+    // 重複ACKはbody_requestsがreportへ再昇格しないため、古い成功で周期を延長し続けない。
+    if reports.iter().any(|report| report.completed_look.is_some()) {
+        s.body_autonomy.explicit_look_completed(now);
+    }
+    reports
 }
 
 pub(super) fn commands(s: &mut Session) -> Vec<Value> {

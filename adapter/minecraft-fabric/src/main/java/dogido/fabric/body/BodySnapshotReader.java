@@ -4,7 +4,7 @@ import dogido.lab.api.BodyBridge;
 import dogido.lab.api.BodyProtocol;
 import net.fabricmc.loader.api.FabricLoader;
 
-/** API v11導入時だけロードする接続実体。snapshot・MOVE_TO・作業・発話注視を同じbridgeへ接続する。 */
+/** API v12導入時だけロードする接続実体。snapshot・MOVE_TO・作業・発話注視を同じbridgeへ接続する。 */
 final class BodySnapshotReader {
     private BodySnapshotReader() {}
     static BodyConnection.Source open() {
@@ -18,7 +18,7 @@ final class BodySnapshotReader {
                 if (snapshot.isEmpty()) return BodyConnection.Frame.unavailable("stale_or_missing");
                 var value = snapshot.get();
                 var observation = BodyObservationJson.observed(value,bridge.snapshotAgeMillis(),owner,dimension);
-                return new BodyConnection.Frame(observation,hearing(value),autonomy(value,observation));
+                return new BodyConnection.Frame(observation,hearing(value),autonomy(value,observation),lookResults(value));
             }
             public String recall(BodyConnection.RecallRequest request) {
                 var snapshot=bridge.snapshot().orElse(null);
@@ -97,13 +97,26 @@ final class BodySnapshotReader {
         row.add("reassurance",feeling);
         row.add("attention",new BodyAttention().observation(row));
         row.add("candidates",new com.google.gson.JsonArray());
-        var result = value.actionResult();
-        if (result != null && result.actionId() != null && result.outcome() != null && result.sequence() >= 0) {
-            var action = new com.google.gson.JsonObject(); action.addProperty("action_id",result.actionId().toString());
-            action.addProperty("sequence",result.sequence()); action.addProperty("outcome",result.outcome().name().toLowerCase(java.util.Locale.ROOT));
-            action.addProperty("reason",wireReason(result.reason())); row.add("action_result",action);
-        }
+        var action=actionResult(value.actionResult());
+        if(action!=null)row.add("action_result",action);
         return row;
+    }
+
+    /** 同じsnapshot内の移動・注視結果を別々に運び、並行完了時の上書きを避ける。 */
+    static com.google.gson.JsonObject actionResult(BodyProtocol.ActionResult result) {
+        if(result==null || result.actionId()==null || result.outcome()==null || result.sequence()<0)return null;
+        var action=new com.google.gson.JsonObject();action.addProperty("action_id",result.actionId().toString());
+        action.addProperty("sequence",result.sequence());action.addProperty("outcome",result.outcome().name().toLowerCase(java.util.Locale.ROOT));
+        action.addProperty("reason",wireReason(result.reason()));return action;
+    }
+
+    /** 既存action台帳の注視結果をID索引にする。移動と同時でも複数LOOKが続いても待機先を取り違えない。 */
+    static com.google.gson.JsonObject lookResults(BodyProtocol.Snapshot snapshot) {
+        var results=new com.google.gson.JsonObject();
+        if(snapshot.lookResults()!=null)for(var receipt:snapshot.lookResults()) {
+            var value=actionResult(receipt);if(value!=null)results.add(receipt.actionId().toString(),value);
+        }
+        return results;
     }
 
     private static String wireReason(String reason) {

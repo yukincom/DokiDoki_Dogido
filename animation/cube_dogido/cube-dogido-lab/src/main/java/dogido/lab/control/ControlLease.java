@@ -14,8 +14,8 @@ public final class ControlLease {
     private boolean enabled, retreat, expired;
     private Mode mode = Mode.DIRECT;
     private StateResult stateResult;
-    private ActionResult actionResult, activeAction;
-    private ActionRequest activeRequest;
+    private ActionResult actionResult, activeAction, lookResult, activeLook;
+    private ActionRequest activeRequest, activeLookRequest;
     private record Remembered(ActionRequest request, ActionResult result) {}
     public record ActionAdmission(ActionResult result, boolean execute) {}
     private final Map<java.util.UUID, Remembered> actions = new LinkedHashMap<>();
@@ -27,8 +27,8 @@ public final class ControlLease {
         enabled = retreat = expired = false;
         mode = Mode.DIRECT;
         stateResult = null;
-        actionResult = activeAction = null;
-        activeRequest = null;
+        actionResult = activeAction = lookResult = activeLook = null;
+        activeRequest = activeLookRequest = null;
         actions.clear();
     }
 
@@ -65,16 +65,19 @@ public final class ControlLease {
         if (error == null && (request.actionId() == null || request.action() == null || request.sequence() < 0)) error = "invalid_action";
         if (error == null && actions.containsKey(request.actionId())) {
             Remembered old = actions.get(request.actionId());
-            actionResult = old.request().equals(request) ? old.result()
+            ActionResult result = old.request().equals(request) ? old.result()
                 : new ActionResult(request.actionId(),request.sequence(),Outcome.REJECTED,"action_id_conflict");
-            return new ActionAdmission(actionResult,false);
+            publish(request,result);
+            return new ActionAdmission(result,false);
         }
         if (error == null && request.sequence() <= lastActionSequence) error = "old_sequence";
         if (error == null && (request.validForTicks() < 1 || request.validForTicks() > MAX_TRANSPORT_TICKS
                 || !fresh(request.observedServerTick(), tick, request.validForTicks()))) error = "stale_request";
         boolean remember = error == null;
-        if (error == null && !enabled) error = "control_inactive";
-        if (error == null && retreat) error = "retreat_has_priority";
+        boolean look = request != null && request.action() == Action.LOOK_AT;
+        // 向きは移動制御の有効/退避状態と独立して適用する。
+        if (error == null && !look && !enabled) error = "control_inactive";
+        if (error == null && !look && retreat) error = "retreat_has_priority";
         if (error == null && admissionError != null) error = admissionError;
         ActionResult result = new ActionResult(request == null ? null : request.actionId(), request == null ? -1 : request.sequence(),
             error == null ? Outcome.ACCEPTED : Outcome.REJECTED, error == null ? "started" : error);
@@ -84,18 +87,45 @@ public final class ControlLease {
             remember(result,request);
         }
         if (result.outcome() == Outcome.ACCEPTED) {
-            completeAction(Outcome.INTERRUPTED,"superseded_by_new_action");
-            activeAction = result;
-            activeRequest = request;
+            if (look) {
+                if (activeLook != null) completeAction(activeLook.actionId(),Outcome.INTERRUPTED,"superseded_by_new_look");
+                activeLook=result;activeLookRequest=request;
+            } else {
+                completeAction(Outcome.INTERRUPTED,"superseded_by_new_action");
+                activeAction=result;activeRequest=request;
+            }
         }
-        actionResult = result;
+        publish(request,result);
         return new ActionAdmission(result,result.outcome() == Outcome.ACCEPTED);
     }
 
+    private void publish(ActionRequest request,ActionResult result) {
+        if(request != null && request.action()==Action.LOOK_AT)lookResult=result;
+        else actionResult=result;
+    }
     public boolean hasActiveAction() { return activeAction != null; }
-    /** 先の行動の終了通知で、後から受け付けた行動を完了させない。 */
+    public long lastActionSequence() { return lastActionSequence; }
+    /** 移動と注視の完了を別に保存する。同時に完了しても片方の結果を上書きしない。 */
     public void completeAction(java.util.UUID id, Outcome outcome, String reason) {
-        if (activeAction != null && activeAction.actionId().equals(id)) completeAction(outcome,reason);
+        if (activeLook != null && activeLook.actionId().equals(id)) {
+            lookResult=new ActionResult(id,activeLook.sequence(),outcome,reason);
+            remember(lookResult,activeLookRequest);activeLook=null;activeLookRequest=null;
+        } else if (activeAction != null && activeAction.actionId().equals(id)) completeAction(outcome,reason);
+    }
+    /** 身体の消失・ダウン時だけ、未完了の移動と注視を共に終端化する。 */
+    public void interruptAll(String reason) {
+        completeAction(Outcome.INTERRUPTED,reason);
+        if(activeLook!=null)completeAction(activeLook.actionId(),Outcome.INTERRUPTED,reason);
+    }
+    public ActionResult lookResult() { return lookResult; }
+    /** 既存32件台帳から注視結果を返す。同じsnapshot間隔中の次のLOOKで先の完了結果を失わない。 */
+    public java.util.List<ActionResult> lookResults() {
+        var results=new LinkedHashMap<java.util.UUID,ActionResult>();
+        for(var remembered:actions.values())if(remembered.request().action()==Action.LOOK_AT)
+            results.put(remembered.result().actionId(),remembered.result());
+        // 期限・sequence等で台帳へ登録しない拒否も、待機元へ終端結果として返す。
+        if(lookResult!=null && lookResult.actionId()!=null)results.put(lookResult.actionId(),lookResult);
+        return java.util.List.copyOf(results.values());
     }
     public void completeAction(Outcome outcome, String reason) {
         if (activeAction != null) {

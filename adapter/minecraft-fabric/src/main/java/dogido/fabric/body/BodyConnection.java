@@ -14,8 +14,9 @@ public final class BodyConnection {
         public Hearing { sounds = List.copyOf(sounds); }
         public static Hearing unavailable() { return new Hearing(false,-1,List.of(),false); }
     }
-    public record Frame(JsonObject observation, Hearing hearing, JsonObject autonomy) {
-        static Frame unavailable(String reason) { return new Frame(BodyConnection.unavailable(reason),Hearing.unavailable(),BodyInspectProtocol.unavailable(reason)); }
+    public record Frame(JsonObject observation, Hearing hearing, JsonObject autonomy, JsonObject lookResults) {
+        public JsonObject lookResult(UUID actionId) { return lookResults==null?null:lookResults.getAsJsonObject(actionId.toString()); }
+        static Frame unavailable(String reason) { return new Frame(BodyConnection.unavailable(reason),Hearing.unavailable(),BodyInspectProtocol.unavailable(reason),null); }
     }
     public record MoveRequest(BodyInspectProtocol.Context context, long sequence, UUID actionId,
             long observedServerTick, int validForTicks, BodyInspectProtocol.Point destination, BodyInspectProtocol.Purpose purpose) {}
@@ -39,23 +40,27 @@ public final class BodyConnection {
     private BodyInspectProtocol.Context sequenceContext;
     private long lastActionSequence;
     private enum ActionKind { MOVE, LOOK, RECALL }
-    private UUID activeAction;
+    private UUID activeAction, activeLook;
     private ActionKind activeKind;
     private long activeUntil;
-    /** MOVE_TO・LOOK_AT・CALLの送信を一件に限定し、共有sequenceを現在context内で進める。 */
+    /** 移動と注視で共有sequenceを現在context内で進める。送信中の移動は注視を妨げない。 */
     public synchronized long nextActionSequence(BodyInspectProtocol.Context context,long prior,long tick) {
         if (!java.util.Objects.equals(sequenceContext,context)) { sequenceContext=context; lastActionSequence=0; }
         lastActionSequence=Math.max(Math.max(lastActionSequence,prior),tick)+1;
         return lastActionSequence;
     }
     private synchronized boolean claim(UUID id,ActionKind kind) {
+        if(kind==ActionKind.LOOK) { activeLook=id;return true; }
         if (activeAction != null && !activeAction.equals(id) && System.nanoTime() < activeUntil
                 && (kind != ActionKind.RECALL || activeKind == ActionKind.RECALL)) return false;
         // 明示CALLは既存身体の優先操作。自律MOVE_TOや注視のadapter枠で妨げない。
         activeAction=id; activeKind=kind; activeUntil=System.nanoTime()+35_000_000_000L; return true;
     }
-    public synchronized void release(UUID id) { if (java.util.Objects.equals(activeAction,id)) activeAction=null; }
-    public synchronized void clearActions() { activeAction=null; sequenceContext=null; lastActionSequence=0; }
+    public synchronized void release(UUID id) {
+        if(java.util.Objects.equals(activeAction,id))activeAction=null;
+        if(java.util.Objects.equals(activeLook,id))activeLook=null;
+    }
+    public synchronized void clearActions() { activeAction=activeLook=null; sequenceContext=null; lastActionSequence=0; }
     private String reason = "not_installed";
 
     /** client threadでentrypointを一度解決。古いAPIのクラスをロードする前に版の入口を検査する。 */
@@ -65,7 +70,7 @@ public final class BodyConnection {
         FabricLoader loader = FabricLoader.getInstance();
         if (!loader.isModLoaded("dogido_experiment")) return;
         reason = "version_mismatch";
-        if (loader.getEntrypointContainers("dogido:body_bridge_v11",Object.class).isEmpty()) return;
+        if (loader.getEntrypointContainers("dogido:body_bridge_v12",Object.class).isEmpty()) return;
         try { source = BodySnapshotReader.open(); }
         catch (RuntimeException | LinkageError error) { source = null; }
     }
@@ -116,14 +121,16 @@ public final class BodyConnection {
             UUID active; synchronized (this) { active=activeAction; }
             RecallResult recall=active == null ? null : source.recallResult(active);
             if (recall != null && !"accepted".equals(recall.outcome())) release(active);
-            var result=frame.autonomy().getAsJsonObject("action_result");
-            if (result != null && !"accepted".equals(BodyInspectProtocol.string(result,"outcome"))) {
-                String id=BodyInspectProtocol.string(result,"action_id");
-                if (id != null) release(UUID.fromString(id));
-            }
+            releaseCompleted(frame.autonomy().getAsJsonObject("action_result"));
+            if(frame.lookResults()!=null)for(var result:frame.lookResults().entrySet())releaseCompleted(result.getValue().getAsJsonObject());
             return frame;
         }
         catch (RuntimeException | LinkageError error) { return Frame.unavailable("bridge_error"); }
+    }
+    private void releaseCompleted(JsonObject result) {
+        if(result==null || "accepted".equals(BodyInspectProtocol.string(result,"outcome")))return;
+        String id=BodyInspectProtocol.string(result,"action_id");
+        if(id!=null)release(UUID.fromString(id));
     }
     /** client tickで取得した既存作業観測を任意身体へ送る。未導入・版違いは通常観測を止めない。 */
     public void observeOwnerWork(boolean working) {

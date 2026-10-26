@@ -2,17 +2,17 @@
 
 Minecraft Java 1.21.11 / Fabricで動く3Dドギドの身体です。浮遊する既存モデルに、移動・HP・休息・食事・復活を持たせます。
 
-0.7.12ではBERTの明示呼び寄せ・注視をAPI v11へ接続します。相対8方向は身体を基準にし、呼び寄せは所有個体と安全な配置を既存処理で確認します。近くへの帰還後に「そばに留まる／その場でプレイヤーを見る／顔が見える位置へ近づく」を一度だけ選び直します。周囲と会話を見て、発話と次の行動を一回で選びます。離れると安心度が下がり、そばや顔の見える位置で回復します。安全な待機時は安心度に応じて周辺への注意が広がります。[仕様・確認状況](../../../docs/2026-10-20-reassurance.md)を参照してください。
+0.7.13ではBERTの明示呼び寄せ・注視をAPI v12へ接続します。相対8方向は身体を基準にし、呼び寄せは所有個体と安全な配置を既存処理で確認します。近くへの帰還後に「そばに留まる／その場でプレイヤーを見る／顔が見える位置へ近づく」を一度だけ選び直します。周囲と会話を見て、発話と次の行動を一回で選びます。離れると安心度が下がり、そばや顔の見える位置で回復します。安全な待機時は安心度に応じて周辺への注意が広がります。[仕様・確認状況](../../../docs/2026-10-20-reassurance.md)を参照してください。
 
 発話中は、話題にした現在のモブや実音の地点へ向きます。明示注視を優先し、待機中は向きを保ちます。コードによる定期的な見回しは行いません。[発話と視線の仕様](../../../docs/2026-10-18-body-speech-gaze.md)。
 
 ## 導入
 
-0.7.12は向きの競合を修正し、注視完了後から5秒保持します。検証・配備の状態は[今回の記録](../../../docs/2026-10-25-body-orientation-scene.md)を参照してください。
+0.7.13は移動と注視を並行させ、向きの適用後から5秒保持します。停止・位置差・角度差を理由に撮影を拒否しません。[方針・検証状態](../../../docs/2026-10-26-look-capture-and-darkness.md)を参照してください。
 
 1. Minecraftを終了する。
-2. 使用する起動構成の`mods`で旧`cube-dogido-lab`を退避し、`build/libs/cube-dogido-lab-0.7.12.jar`へ置き換える。同じModの新旧を同時に入れない。
-3. 会話へ接続する場合は、対応するadapter（build `0.1.0+20261025orientation`）とRustのHTTP観測v3・自律制御v2も揃える。
+2. 使用する起動構成の`mods`で旧`cube-dogido-lab`を退避し、`build/libs/cube-dogido-lab-0.7.13.jar`へ置き換える。同じModの新旧を同時に入れない。
+3. 会話へ接続する場合は、対応するadapter（build `0.1.0+20261026parallel-look`）とRustのHTTP観測v3・自律制御v2も揃える。
 4. Minecraft **1.21.11**、Fabric Loader **0.18.4以上**、Fabric APIで起動する。
 
 2D表示用Modと併用できます。2D表示は既存Modの`/dogidohud hide`・`/dogidohud show`で切り替えます。身体単体の試験にHTTPサーバーやLAN公開は不要です。
@@ -97,11 +97,11 @@ Java 21以上でビルドします。
 
 既存キャッシュがない環境では、通常の`./gradlew test build`で依存関係を取得します。
 
-- `build/libs/cube-dogido-lab-0.7.12.jar`：Minecraftへ入れるMod
-- `build/libs/cube-dogido-lab-0.7.12-body-api.jar`：adapterのコンパイル用。`mods`へ入れない
-- `build/libs/cube-dogido-lab-0.7.12-sources.jar`：ソース
+- `build/libs/cube-dogido-lab-0.7.13.jar`：Minecraftへ入れるMod
+- `build/libs/cube-dogido-lab-0.7.13-body-api.jar`：adapterのコンパイル用。`mods`へ入れない
+- `build/libs/cube-dogido-lab-0.7.13-sources.jar`：ソース
 
-[API v11と最小例](docs/body-api.md) · [本線へ合体するときの対応表・検証手順](docs/mainline-integration.md)
+[API v12と最小例](docs/body-api.md) · [本線へ合体するときの対応表・検証手順](docs/mainline-integration.md)
 
 ## 確認状態
 

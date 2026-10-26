@@ -1,17 +1,18 @@
-# Body API v11
+# Body API v12
 
-## v11のBERT明示呼び寄せ・注視
+## v12の移動と注視の並行
 
-BERTへ変更済み。旧判定へ戻さない。身体Mod **0.7.11 / protocol 11** とadapterを組で更新します。entrypointは`dogido:body_bridge_v11`、payloadは`body_request_v11`／`body_snapshot_v11`。旧版の受信口とfallbackはありません。HTTP観測v3・自律制御v2は維持します。
+BERTへ変更済み。旧判定へ戻さない。身体Mod **0.7.13 / protocol 12** とadapterを組で更新します。entrypointは`dogido:body_bridge_v12`、payloadは`body_request_v12`／`body_snapshot_v12`。旧版の受信口とfallbackはありません。HTTP観測v3・自律制御v2は維持します。
 
 ### 注視
 
-HTTP `body.request.v1`の`look_direction / look_target / look_player / look_relative_*`を既存`LOOK_AT`へ接続します。相対8方向は受付時の**身体自身のyaw**を基準とする水平8block先、同じ方向は身体の眼からplayerの現在の視線に沿う8block先、対象は現在crosshairの実ヒット点、player注視は本人の現在の眼です。移動先には使いません。
+HTTP `body.request.v1`の`look_direction / look_target / look_player / look_relative_*`を既存`LOOK_AT`へ接続します。相対8方向は受付時の**身体自身のyaw**を基準とする水平8block先、同じ方向は身体の眼からplayerの現在の視線に沿う8block先、対象は現在crosshairの実ヒット点（命中なしは本人の視線方向）、player注視は本人の現在の眼です。移動先には使いません。
 
 - `ActionRequest.destination`は注視点。64block以内の有限点、所有者・context・sequence・期限・重複は既存action受付で検査します。
-- `MOVE_TO`と`LOOK_AT`はadapterの同じsequenceと送信枠を使います。明示CALLはこの枠を越えて既存の呼び寄せ優先処理へ渡します。再送では元の点・観測tick・action IDを保持します。
-- 待機・通常探索中だけ受け、呼び寄せ・進行中action・追従・危険回避を優先します。実行中も優先行動が始まれば解除します。
-- yaw最大6度/tick・pitch最大4度/tickで合わせ、適用後の両角度が1度以内なら`SUCCEEDED/facing_target`。受付から最大100tickだけ保持し、未到達は`EXPIRED/look_timeout`。
+- `MOVE_TO`と`LOOK_AT`は同じsequenceを使い、進行と結果は分けます。snapshotの`actionResult`は移動、追加した`lookResults`は既存の直近32件台帳にある注視結果と、台帳登録前に拒否された直近一件です。snapshotの上限は16KiB、要求は従来の8KiBです。CALL中もLOOKを受理します。再送では元の点・観測tick・action IDを保持します。
+- 注視は移動制御無効・退避／危険・呼び寄せ・進行中action・追従・その他の活動状態を理由に拒否・取消しません。移動計画・速度を変えずにyaw/pitchを適用します。
+- 向きを適用したtickで`SUCCEEDED/facing_target`を一度返します。位置差・角度差・停止や姿勢安定を成功条件にしません。成功後100tickは注視点を保持し、その間も移動・撮影・LLM返答を並行します。ダウン時は未完了の移動と注視をともに終端化します。
+- `PoseObservation.viewPitch`は身体の実pitchです。明示撮影は次の描画frameを使い、保存後の姿勢を理由に画像を破棄しません。[設計方針](../../../../docs/2026-10-26-look-capture-and-darkness.md)を参照してください。
 
 ### 明示呼び寄せ
 

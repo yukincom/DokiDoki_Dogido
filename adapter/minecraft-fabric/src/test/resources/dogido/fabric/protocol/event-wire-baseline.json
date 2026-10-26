@@ -258,7 +258,7 @@
         "audio_count": 1
       },
       "meta": {
-        "adapter_build": "2026-10-21-chat-image-v1",
+        "adapter_build": "2026-10-26-parallel-look",
         "profile_name": "default",
         "debug": false
       }
@@ -509,7 +509,7 @@
         "audio_count": 1
       },
       "meta": {
-        "adapter_build": "2026-10-21-chat-image-v1",
+        "adapter_build": "2026-10-26-parallel-look",
         "profile_name": "default",
         "debug": false
       }
@@ -730,7 +730,7 @@
         "audio_count": 1
       },
       "meta": {
-        "adapter_build": "2026-10-21-chat-image-v1",
+        "adapter_build": "2026-10-26-parallel-look",
         "profile_name": "default",
         "debug": false
       }
@@ -937,7 +937,7 @@
         "audio_count": 0
       },
       "meta": {
-        "adapter_build": "2026-10-21-chat-image-v1",
+        "adapter_build": "2026-10-26-parallel-look",
         "profile_name": "default",
         "debug": false
       }
@@ -1188,7 +1188,7 @@
         "audio_count": 1
       },
       "meta": {
-        "adapter_build": "2026-10-21-chat-image-v1",
+        "adapter_build": "2026-10-26-parallel-look",
         "profile_name": "default",
         "debug": false,
         "death_cause": "fixture death"
@@ -1448,7 +1448,7 @@
         ]
       },
       "meta": {
-        "adapter_build": "2026-10-21-chat-image-v1",
+        "adapter_build": "2026-10-26-parallel-look",
         "profile_name": "default",
         "debug": false
       }
@@ -1707,7 +1707,7 @@
         ]
       },
       "meta": {
-        "adapter_build": "2026-10-21-chat-image-v1",
+        "adapter_build": "2026-10-26-parallel-look",
         "profile_name": "default",
         "debug": false
       }
@@ -1914,7 +1914,7 @@
         "audio_count": 0
       },
       "meta": {
-        "adapter_build": "2026-10-21-chat-image-v1",
+        "adapter_build": "2026-10-26-parallel-look",
         "profile_name": "default",
         "debug": false
       }
@@ -2196,7 +2196,7 @@
         "audio_count": 1
       },
       "meta": {
-        "adapter_build": "2026-10-21-chat-image-v1",
+        "adapter_build": "2026-10-26-parallel-look",
         "profile_name": "default",
         "debug": false
       }
@@ -2464,7 +2464,7 @@
         "audio_count": 1
       },
       "meta": {
-        "adapter_build": "2026-10-21-chat-image-v1",
+        "adapter_build": "2026-10-26-parallel-look",
         "profile_name": "default",
         "debug": false
       }
@@ -2702,7 +2702,7 @@
         "audio_count": 1
       },
       "meta": {
-        "adapter_build": "2026-10-21-chat-image-v1",
+        "adapter_build": "2026-10-26-parallel-look",
         "profile_name": "default",
         "debug": false
       }
@@ -2926,7 +2926,7 @@
         "audio_count": 0
       },
       "meta": {
-        "adapter_build": "2026-10-21-chat-image-v1",
+        "adapter_build": "2026-10-26-parallel-look",
         "profile_name": "default",
         "debug": false
       }
@@ -3194,7 +3194,7 @@
         "audio_count": 1
       },
       "meta": {
-        "adapter_build": "2026-10-21-chat-image-v1",
+        "adapter_build": "2026-10-26-parallel-look",
         "profile_name": "default",
         "debug": false,
         "death_cause": "fixture death"
@@ -3471,7 +3471,7 @@
         ]
       },
       "meta": {
-        "adapter_build": "2026-10-21-chat-image-v1",
+        "adapter_build": "2026-10-26-parallel-look",
         "profile_name": "default",
         "debug": false
       }
@@ -3747,7 +3747,7 @@
         ]
       },
       "meta": {
-        "adapter_build": "2026-10-21-chat-image-v1",
+        "adapter_build": "2026-10-26-parallel-look",
         "profile_name": "default",
         "debug": false
       }
@@ -3971,7 +3971,7 @@
         "audio_count": 0
       },
       "meta": {
-        "adapter_build": "2026-10-21-chat-image-v1",
+        "adapter_build": "2026-10-26-parallel-look",
         "profile_name": "default",
         "debug": false
       }

@@ -132,6 +132,7 @@ impl Dialogue {
             .iter()
             .find(|r| r["turn_id"] == turn)
             .is_some_and(|r| r["combat_resumable"] == true);
+        let look_capture=input.after_look.clone();
         let monitor = monitor::Monitor::spawn(async move {
             loop {
                 tokio::select! {
@@ -141,14 +142,15 @@ impl Dialogue {
                         owner.tick_workshop(&mut d, &monitor_sid);
                         let stale_look = d.sessions.get(&monitor_sid).is_some_and(|s| s.epoch==epoch
                             && d.rows.iter().find(|r| r["turn_id"]==s.current_turn)
-                                .is_some_and(|r| !super::visual_runtime::look_reply_current(s,r)));
-                        if stale_look { Self::cancel_chat(&mut d,&monitor_sid,"look_context_changed");break; }
+                                .is_some_and(|r| !super::visual_runtime::look_input_current(s,r)));
+                        if stale_look { Self::cancel_chat(&mut d,&monitor_sid,"look_input_changed");break; }
                         let stale = d.sessions.get(&monitor_sid).is_some_and(|s| {
                             let workshop_allowed = workshop_id.is_some()
                                 && workshop_focus::quiet_observation(s);
                             s.epoch == epoch && !super::reply_queue::playback_started(&d, &monitor_sid)
                                 && !(fresh(s) || workshop_allowed
-                                || ordinary_reply && observation_fresh(s))
+                                || ordinary_reply && observation_fresh(s)
+                                || look_capture.as_ref().is_some_and(|request| super::visual_runtime::captured_look(s,request)))
                         });
                         if stale {Self::cancel_chat(&mut d,&monitor_sid,"stale_observation");break;}
                         let expired = !super::reply_queue::playback_started(&d, &monitor_sid) && workshop_id.as_ref().is_some_and(|wid| d.sessions.get(&monitor_sid)
