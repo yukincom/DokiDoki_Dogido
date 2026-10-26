@@ -1,6 +1,6 @@
 # Minecraft観測の重複取得を解消する計画
 
-2026-10-26。状態: **段階1〜6完了・統合検証前**。静的監査の基準は `main` の `5274ac1`。実機での取得回数・処理時間は未計測。
+2026-10-26作成、2026-10-27最終確認。状態: **段階1〜6と統合自動検証完了・実機未確認**。静的監査の基準は `main` の `5274ac1`。実機での取得回数・処理時間は未計測。
 
 ## 目的と作業場所
 
@@ -127,7 +127,9 @@
 | 4. 定期身体frame | 実装・対象テスト完了 | rootの一回取得を感覚・撮影・完了監視へ明示配送。身体entityも共有。撮影の期限処理は未接続時も継続。inspect完了監視の追加取得ゼロ・次frame結果・未取得への変化を含む身体／撮影／sessionテスト63件成功。`1ea8ee0`。実機未確認 |
 | 5. 操作受付と音 | 実装・対象テスト完了 | 注視点と受付照合を同じ取得へ統合。inspectの本人注視も既存frameを再利用。対象外音は取得ゼロ、対象音は一回。Java対象テストと操作HTTP6件・注視HTTP3件成功。呼び戻しHTTPテストの古い期待値を現行の受付時返答・到着ACKで重複発話なしへ修正。`69051f7`。実機未確認 |
 | 6. Rust入力投影 | 実装・対象テスト完了 | 同一受信の身体投影を共有。画像なしの注視成功案内は入力の現在性だけを照合し、使わない材料を再構築しない。身体・画像単体26件、身体感覚HTTP11件、警告HTTP6件、通常対話HTTP18件成功。`efb2456`。実機未確認 |
-| 全体検証・実機確認 | 未着手 | |
+| 追加レビュー | 修正・対象テスト完了 | 作業フラグと呼び戻し結果の共有、無効な音での取得抑止。Gradle14件成功。`dfddd6a` |
+| 全体検証 | 完了 | Fabric325件、Rust965件成功・既存ignore1件、模擬HTTP105条件成功。jar・Rust releaseビルド成功 |
+| 実機確認 | 未実施 | Minecraft上の挙動、取得回数・処理時間の実測、稼働版への反映は別途確認 |
 
 ### Rust側で残す再構築
 
@@ -144,3 +146,12 @@
 - 呼び戻し結果はframeに照会IDと未到着を含む結果を載せ、同じtickの枠解放と完了配送で共有する。別の受付が先に終端を見て枠を解放した場合など、そのframeで未照会のIDは既存台帳へ照会する。結果の取りこぼしを避けるため、この別条件の照会は残す。
 - 音の無効座標・非有限／無音の音量・未解決の音IDも身体取得より先に判定する。採用対象や距離の規則は変えず、採用しない音での取得をゼロにする。
 - 作業フラグ・呼び戻し結果の取得回数、未到着から終端への更新、別IDの混同防止、音の除外、身体候補のGradleテスト14件成功。
+
+### 最終検証
+
+- Fabric: `./gradlew test build` 成功。325件、失敗・skipなし。配布jarに `dogido/lab/api/` の複製と追加の内包jarがないことも確認。
+- Rust: `./dogido-rust/cargo.sh test --all-targets --locked` 成功。965件成功、既存の実VOICEVOX・スピーカー試験1件はignore。debug本体更新後の模擬HTTPを確認し、`./dogido-rust/cargo.sh build --release --locked` も成功。
+- 模擬HTTP: `check_body_senses.py` 11条件、`check_body_requests.py` 6条件、`check_body_gaze.py` 3条件、`check_warning_observations.py` 6条件、`check_dialogue.py` 18条件、`check_environment_runtime.py` 31条件、`check_combat_runtime.py` 16条件、`check_workshop_combat.py` 14条件。戦闘は今回のFabricテストが生成した `build/test-results/hostile-margin-wire.json` を使用。環境試験は通常起動用の既存 `dogido-llm/bin/python` で実行。LLM・音声・プレイヤーは模擬で、一時serviceだけを起動・終了した。
+- 全段階と追加修正を読取り専用レビューで照合。Rustの投影共有後の取消・画像待ち・入力世代と、Javaの呼び戻し完了結果・作業観測・音の除外について具体的な回帰は見つからなかった。`git diff --check` も成功。
+- ビルド成果物は `adapter/minecraft-fabric/build/libs/dogido-fabric-client-0.1.0.jar` と `dogido-rust/target/release/dogido-rust`。Minecraftのmodsフォルダへの配置・常駐serviceの再起動は実施していない。実Minecraft、実音声、画像の実表示、処理時間の改善量は未確認。
+- 書類側mainで各段階をローカルコミット。push・tagなし。開始前からの別作業の未追跡文書は変更・stageしていない。
