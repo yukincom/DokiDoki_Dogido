@@ -97,4 +97,40 @@ class DirectedLookTest {
         lease.reset(new Context(context.ownerId(),context.bodyId(),UUID.randomUUID(),context.dimension()));
         assertEquals("stale_context",lease.submit(request,12,null).result().reason());
     }
+    @Test void newerCallReleasesLookAndEndsOnlyItsUnappliedResult() {
+        for(boolean applied:new boolean[]{false,true}) {
+            var context=new Context(UUID.randomUUID(),UUID.randomUUID(),UUID.randomUUID(),"minecraft:overworld");
+            var lease=new ControlLease();lease.reset(context);lease.local(Mode.FOLLOW,false);
+            var look=new DirectedLook();UUID lookId=UUID.randomUUID(),callId=UUID.randomUUID();
+            var request=new ActionRequest(context,1,lookId,10,20,Action.LOOK_AT,new Position(0,8,0),null);
+            assertTrue(lease.submit(request,10,null).execute());look.begin(lookId,request.destination(),10);
+            if(applied)lease.completeAction(look.applied(10),Outcome.SUCCEEDED,"facing_target");
+            var call=new ActionRequest(context,2,callId,10,20,Action.CALL);
+            assertTrue(lease.submit(call,10,null).execute());
+            UUID previous=look.beginCall();
+            if(previous!=null)lease.completeAction(previous,Outcome.INTERRUPTED,"superseded_by_call");
+            assertFalse(look.active());assertNull(look.target());
+            assertEquals(applied?Outcome.SUCCEEDED:Outcome.INTERRUPTED,lease.actionResult(lookId).outcome());
+            assertFalse(lease.submit(call,11,null).execute());
+            look.arrived(new Vec3d(0,2,0));assertTrue(look.arriving());
+            look.arrivalTurnFinished();assertFalse(look.arriving());assertFalse(look.active());
+        }
+    }
+    @Test void newerLookOwnsArrivalEvenAfterItsHoldExpires() {
+        for(boolean expiresBeforeArrival:new boolean[]{false,true}) {
+            var look=new DirectedLook();look.beginCall();
+            look.begin(UUID.randomUUID(),new Position(8,0,0),10);look.applied(10);
+            if(expiresBeforeArrival)look.tick(110);
+            look.arrived(new Vec3d(0,2,0));
+            assertFalse(look.arriving());assertEquals(!expiresBeforeArrival,look.active());
+            look.tick(110);assertFalse(look.active());assertFalse(look.arriving());
+        }
+    }
+    @Test void callCancellationPreservesLaterLookAndClearingCannotReviveArrival() {
+        var look=new DirectedLook();look.beginCall();look.arrived(new Vec3d(0,2,0));
+        look.cancelCall();assertFalse(look.arriving());look.arrived(Vec3d.ZERO);assertFalse(look.arriving());
+        look.beginCall();look.begin(UUID.randomUUID(),new Position(8,0,0),10);
+        look.cancelCall();assertTrue(look.active());
+        look.clear();look.arrived(Vec3d.ZERO);assertFalse(look.active());assertFalse(look.arriving());
+    }
 }

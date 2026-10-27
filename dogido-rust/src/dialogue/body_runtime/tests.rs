@@ -662,3 +662,45 @@ async fn notice_refreshes_current_observations_but_preserves_periodic_changes_an
     drop(permit);
     d.shutdown().await;
 }
+
+#[tokio::test]
+async fn moving_or_non_adjacent_heat_does_not_interrupt_the_recall_reply() {
+    for (activity, distance, interrupted) in [("calling",1.0,false),("moving",1.0,false),
+        ("holding",2.24,false),("holding",1.73,true)] {
+        let d = server();
+        let permit = d.serial.acquire().await.unwrap();
+        let frame = |sequence, tick, activity: &str, distance| {
+            edit(event(sequence,tick,23.0), |v| {
+                let sample = v["body_observation"]["sample"].clone();
+                v["body_autonomy"] = json!({"version":2,"status":"observed","context":sample["context"],
+                    "server_tick":tick,"snapshot_revision":tick*2,"age_ms":0,"enabled":true,"mode":"follow",
+                    "follow_distance":16,"warp_distance":24,"activity":activity,"reason":"within_follow_distance",
+                    "reassurance":{"value":100,"owner_distance":2,"owner_visible":true,"face_visible":true,"owner_working":false},
+                    "attention":{"scope":"ambient","expansion":1},"candidates":[]});
+                v["body_observation"]["sample"]["senses"]["world"] = json!({"biome":"plains","time_phase":"day",
+                    "sky_visible":true,"local_light":15,"nearby_damaging_light_source_count":28,
+                    "nearest_damaging_light_source_distance":distance});
+            })
+        };
+        d.observe("s",frame(1,100,"holding",10.0),Some("initial"));
+        let (turn, _cancel) = {
+            let mut data = d.data.lock().unwrap();
+            Dialogue::cancel_warning(&mut data,"s","test_setup");
+            let mut reply = crate::combat::model::Speech::new("body_recall","せやな、オレから行くわ！");
+            reply.delivery = crate::combat::model::Delivery::PlayerReply;
+            let result = Dialogue::queue_actions(&mut data,"s",&[reply],Some("こっちへ来て"));
+            data.sessions.get_mut("s").unwrap().warning.as_mut().unwrap().started = true;
+            data.rows.iter_mut().find(|r|r["turn_id"]==result.0).unwrap()["playback_status"] = json!("started");
+            result
+        };
+        d.observe("s",frame(2,101,activity,distance),Some("heat"));
+        {
+            let data = d.data.lock().unwrap();
+            let row = data.rows.iter().find(|r|r["turn_id"]==turn).unwrap();
+            assert_eq!(row["playback_status"]=="cancelled",interrupted,"{activity} {distance}: {row}");
+            if interrupted { assert_eq!(row["cancel_reason"],"urgent_environment"); }
+        }
+        drop(permit);
+        d.shutdown().await;
+    }
+}

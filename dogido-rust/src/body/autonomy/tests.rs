@@ -436,15 +436,18 @@ fn arrival_cools_only_the_visited_object_and_not_unselected_objects_of_the_same_
 fn arrival_dwell_and_follow_settling_delay_selection() {
     let at = Instant::now();
     let mut state = State::default();
-    for (i, reason) in ["inspection_dwell", "owner_near_dwell", "owner_face_dwell", "follow_settling"].into_iter().enumerate() {
+    for (i, reason) in ["inspection_dwell", "owner_near_dwell", "owner_face_dwell", "follow_settling", "call_arrival_look"].into_iter().enumerate() {
         let s = sample(i as u64 + 1);
         let mut o = observation(&s);
         data(&mut o).reason = reason.into();
         state.observe(Some(&o), Some(&s), at, Some(0));
-        assert!(state.available(at));
+        assert_eq!(state.available(at), reason != "call_arrival_look");
         assert!(state.prepare(at).is_none());
     }
-    for reason in ["inspection_dwell", "owner_near_dwell", "owner_face_dwell", "follow_settling"] {
+    let s = sample(10);
+    state.observe(Some(&observation(&s)), Some(&s), at, Some(0));
+    assert!(state.prepare(at).is_some(), "回頭後の通常待機では自律選択へ戻る");
+    for reason in ["inspection_dwell", "owner_near_dwell", "owner_face_dwell", "follow_settling", "call_arrival_look"] {
         let (mut state, p) = prepared(at);
         let s = sample(2);
         let mut o = observation(&s);
@@ -1201,4 +1204,55 @@ fn explicit_look_defers_an_old_gaze_choice_without_cancelling_other_model_action
     state.choose(&p,r#"{"action":"look_owner","target_id":null}"#,at,utc()).unwrap();
     assert_eq!(state.commands(at,utc()).len(),1);
     state.explicit_look_completed(at);assert!(state.commands(at,utc()).is_empty());
+}
+
+#[test]
+fn stationary_activity_keeps_floating_and_look_but_excludes_locomotion_and_stale_data() {
+    let at = Instant::now();
+    for activity in [Activity::Holding, Activity::Resting, Activity::Following, Activity::Exploring,
+        Activity::Calling, Activity::Retreating, Activity::Moving, Activity::Downed, Activity::OwnerAbsent] {
+        let mut state = State::default();
+        assert_eq!(state.stationary(at), None);
+        let body = sample(1);
+        let mut observed = observation(&body);
+        data(&mut observed).activity = activity;
+        state.observe(Some(&observed), Some(&body), at, Some(0));
+        assert_eq!(state.stationary(at), Some(matches!(activity, Activity::Holding | Activity::Resting)));
+        assert_eq!(state.stationary(at + Duration::from_secs(3)), None);
+    }
+    let mut state = State::default();
+    for (tick, reason) in [(1,"follow_wait"),(2,"call_arrival_look"),(3,"idle_block_recovery")] {
+        let mut body = sample(tick);
+        // 身体の上下浮遊・回頭を座標差分で移動へ読み替えない。
+        body.self_pose.position.y += tick as f64 * 0.1;
+        body.self_pose.view_yaw = tick as f64 * 20.0;
+        let mut observed = observation(&body);
+        data(&mut observed).reason = reason.into();
+        state.observe(Some(&observed), Some(&body), at, Some(0));
+        assert_eq!(state.stationary(at), Some(reason != "idle_block_recovery"));
+    }
+    state.observe(Some(&Observation::Unavailable { version:2, reason:"stale_or_missing".into() }),
+        Some(&sample(3)), at, Some(0));
+    assert_eq!(state.stationary(at), None);
+}
+
+#[test]
+fn call_arrival_turn_cancels_old_autonomous_commands_even_without_a_moving_snapshot() {
+    for action in ["look_owner", "inspect"] {
+        let at = Instant::now(); let (mut state, prepared) = prepared(at);
+        let choice = json!({"action":action,"target_id":if action=="inspect" {Some("c1")} else {None}});
+        let command = state.choose(&prepared,&choice.to_string(),at,utc()).unwrap().unwrap();
+        assert_eq!(state.commands(at,utc()),vec![command]);
+        let s = sample(2); let mut o = observation(&s);
+        data(&mut o).reason = "call_arrival_look".into();
+        let during = at + Duration::from_millis(100);
+        state.observe(Some(&o),Some(&s),during,Some(0));
+        assert_eq!(state.stationary(during),Some(true));
+        assert!(!state.available(during));
+        assert!(state.commands(during,utc()).is_empty());
+        let s = sample(3); let after = at + Duration::from_millis(200);
+        observe(&mut state,&s,after);
+        assert!(state.available(after));
+        assert!(state.commands(after,utc()).is_empty(),"古い自律命令を回頭後へ持ち越さない");
+    }
 }

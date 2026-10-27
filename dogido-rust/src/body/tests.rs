@@ -499,7 +499,7 @@ fn sensory_view_uses_accepted_body_pose_and_preserves_raw_player_ownership() {
     let changed = crate::events::GameEvent::parse(value).unwrap();
     let mut state = State::default();
     accept(&mut state, changed.body_observation.as_ref().unwrap(), at);
-    let sensory = state.sensory_event(&raw, at);
+    let sensory = state.sensory_event(&raw, at, None);
     assert_eq!(sensory.world.biome.as_deref(), Some("snowy_taiga"));
     assert_eq!(sensory.passive_mobs[0].r#type, "cow");
     assert_eq!(sensory.observer_y(), Some(64.0));
@@ -514,7 +514,7 @@ fn sensory_view_uses_accepted_body_pose_and_preserves_raw_player_ownership() {
     );
     assert!(sensory.world.air_supply.is_none());
     assert_eq!(json!(raw), original);
-    let stale = state.sensory_event(&raw, at + Duration::from_secs(3));
+    let stale = state.sensory_event(&raw, at + Duration::from_secs(3), None);
     assert!(!stale.body_origin().unwrap().available);
     assert!(stale.world.biome.is_none() && stale.passive_mobs.is_empty());
     assert_eq!(stale.player.health, Some(17.0));

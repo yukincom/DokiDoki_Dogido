@@ -56,7 +56,7 @@ fn sheltered_player_and_exposed_dogido_keep_their_own_weather_and_cover() {
         rain_world("foliage", false),
     );
     let now = Instant::now();
-    let event = state(&raw, now).sensory_event(&raw, now);
+    let event = state(&raw, now).sensory_event(&raw, now, None);
     let c = context(&event);
     let p = &c.observations["subject_states"]["player"];
     let d = &c.observations["subject_states"]["dogido"];
@@ -92,7 +92,7 @@ fn body_cover_does_not_supply_the_players_missing_cover_and_body_contact_is_not_
         json!({"weather":"rain","biome":"forest"}),
     );
     let now = Instant::now();
-    let c = context(&state(&raw, now).sensory_event(&raw, now));
+    let c = context(&state(&raw, now).sensory_event(&raw, now, None));
     let p = &c.observations["subject_states"]["player"];
     let d = &c.observations["subject_states"]["dogido"];
     assert!(p["overhead_cover"].is_null());
@@ -177,7 +177,7 @@ fn player_altitude_and_biome_are_not_replaced_by_dogidos_climate() {
         rain_world("none", true),
     );
     let now = Instant::now();
-    let c = context(&state(&raw, now).sensory_event(&raw, now));
+    let c = context(&state(&raw, now).sensory_event(&raw, now, None));
     assert_eq!(
         c.observations["subject_states"]["player"]["precipitation_kind"],
         "rain"
@@ -199,7 +199,7 @@ fn water_contact_is_not_swimming_or_eye_submersion() {
         rain_world("none", true),
     );
     let now = Instant::now();
-    let c = context(&state(&raw, now).sensory_event(&raw, now));
+    let c = context(&state(&raw, now).sensory_event(&raw, now, None));
     assert!(
         c.observations["place"]
             .as_str()
@@ -226,12 +226,12 @@ fn stale_body_drops_its_relations_and_cannot_reuse_player_contact() {
     );
     let now = Instant::now();
     let state = state(&raw, now);
-    let fresh = state.sensory_event(&raw, now);
+    let fresh = state.sensory_event(&raw, now, None);
     assert_eq!(
         context(&fresh).observations["subject_states"]["dogido"]["status"],
         "observed"
     );
-    let stale = state.sensory_event(&raw, now + Duration::from_secs(3));
+    let stale = state.sensory_event(&raw, now + Duration::from_secs(3), None);
     let c = context(&stale);
     assert_eq!(c.observations["sensory_status"], "unavailable");
     assert!(c.observations.get("subject_states").is_none());
@@ -246,7 +246,7 @@ fn current_values_survive_consideration_but_timestamp_only_updates_do_not_create
         rain_world("none", true),
     );
     let now = Instant::now();
-    let c = context(&state(&raw, now).sensory_event(&raw, now));
+    let c = context(&state(&raw, now).sensory_event(&raw, now, None));
     let mut observer = State::default();
     observer.observe(c.clone());
     observer.sample_notice(0, 100, true);

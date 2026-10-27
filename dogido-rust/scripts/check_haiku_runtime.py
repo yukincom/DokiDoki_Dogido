@@ -57,7 +57,7 @@ def fixture(*, combat_settings=None, extra_args=(), initial_lines=None, **settin
             binary = Path(os.environ.get("DOGIDO_RUST_BINARY", ROOT / "target/debug/dogido-rust"))
             with running(binary, folder, dep, haiku_settings=h, combat_settings=combat_settings, extra_args=extra_args) as (base, process, log):
                 state = {"sequence": 0}
-                def send(sid, *, body_state="observed", **extra):
+                def send(sid, *, body_state="observed", body_activity=None, **extra):
                     state["sequence"] += 1
                     e = {"schema_version": "2026-05-24", "adapter": "fixture", "sequence": state["sequence"],
                          "observed_at": datetime.now(timezone.utc).isoformat(),
@@ -65,7 +65,7 @@ def fixture(*, combat_settings=None, extra_args=(), initial_lines=None, **settin
                          "player": {"name": "試験", "dimension": "minecraft:overworld", "held_item": "minecraft:cherry_leaves"},
                          "world": {"biome": "minecraft:plains", "time_phase": "morning", "weather": "clear", "sky_visible": True, "ceiling_height": 20},
                          "inventory": {"minecraft:cherry_leaves": 1, "minecraft:netherite_axe": 1}, **extra}
-                    e = attach_body(e, age_ms=3100 if body_state == "stale" else 0)
+                    e = attach_body(e, age_ms=3100 if body_state == "stale" else 0, activity=body_activity)
                     if body_state == "missing":
                         e.pop("body_observation")
                     elif body_state == "unavailable":

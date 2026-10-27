@@ -211,6 +211,7 @@ fn light_generated_for_an_old_body_epoch_is_discarded() {
                 }),
                 revision: Some(1),
                 position: None,
+                stationary: None,
                 available: true,
                 age_ms: 0,
                 body: json!({}),

@@ -355,8 +355,8 @@ def check_text_delivery(binary, passed):
                 "player": {"name": "試験", "dimension": "minecraft:overworld", "health": 20},
                 "world": {"weather": "clear", "biome": "plains", "sky_visible": True,
                           "ceiling_height": 20, "local_light": 15, "time_phase": "day",
-                          "nearby_damaging_light_source_count": 1, "nearest_damaging_light_source_distance": 2},
-                "combat": {"combat_active_hint": False}}), sid=sid)
+                          "nearby_damaging_light_source_count": 1, "nearest_damaging_light_source_distance": 1.73},
+                "combat": {"combat_active_hint": False}}, activity="holding"), sid=sid)
             warning = wait_for(lambda: next((r for r in snapshot(base)["utterances"]
                                if r["session_id"] == sid and r.get("display_id")
                                and r.get("text") == "触るとあちちやで！"), None))

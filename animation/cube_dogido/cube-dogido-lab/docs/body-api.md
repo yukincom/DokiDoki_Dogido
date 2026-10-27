@@ -2,7 +2,7 @@
 
 ## v12の移動と注視の並行
 
-BERTへ変更済み。旧判定へ戻さない。身体Mod **0.7.13 / protocol 12** とadapterを組で更新します。entrypointは`dogido:body_bridge_v12`、payloadは`body_request_v12`／`body_snapshot_v12`。旧版の受信口とfallbackはありません。HTTP観測v3・自律制御v2は維持します。
+BERTへ変更済み。旧判定へ戻さない。身体Mod **0.7.14 / protocol 12** とadapterを組で更新します。entrypointは`dogido:body_bridge_v12`、payloadは`body_request_v12`／`body_snapshot_v12`。旧版の受信口とfallbackはありません。HTTP観測v3・自律制御v2は維持します。
 
 ### 注視
 
@@ -10,7 +10,7 @@ HTTP `body.request.v1`の`look_direction / look_target / look_player / look_rela
 
 - `ActionRequest.destination`は注視点。64block以内の有限点、所有者・context・sequence・期限・重複は既存action受付で検査します。
 - `MOVE_TO`と`LOOK_AT`は同じsequenceを使い、進行と結果は分けます。snapshotの`actionResult`は移動、追加した`lookResults`は既存の直近32件台帳にある注視結果と、台帳登録前に拒否された直近一件です。snapshotの上限は16KiB、要求は従来の8KiBです。CALL中もLOOKを受理します。再送では元の点・観測tick・action IDを保持します。
-- 注視は移動制御無効・退避／危険・呼び寄せ・進行中action・追従・その他の活動状態を理由に拒否・取消しません。移動計画・速度を変えずにyaw/pitchを適用します。
+- 注視は移動制御無効・退避／危険・呼び寄せ・進行中action・追従・その他の活動状態を理由に拒否しません。移動計画・速度を変えずにyaw/pitchを適用します。後から受理した明示CALLは古い注視保持を解除し、CALL後の新しいLOOKは移動中・到着時とも優先します。
 - 向きを適用したtickで`SUCCEEDED/facing_target`を一度返します。位置差・角度差・停止や姿勢安定を成功条件にしません。成功後100tickは注視点を保持し、その間も移動・撮影・LLM返答を並行します。ダウン時は未完了の移動と注視をともに終端化します。
 - `PoseObservation.viewPitch`は身体の実pitchです。明示撮影は次の描画frameを使い、保存後の姿勢を理由に画像を破棄しません。[設計方針](../../../../docs/2026-10-26-look-capture-and-darkness.md)を参照してください。
 
@@ -22,6 +22,7 @@ HTTP `body.request.v1`の`look_direction / look_target / look_player / look_rela
 - 同じ命令IDは直近32件の結果を再利用し、再度の生成やCALLを起こしません。接続の実playerが変わると別の台帳です。
 - `RecallReceipt`は元のowner・接続・命令ID・dimensionと、実身体から得たcontext・action結果を持ちます。snapshotの`recall_result`で配送し、`recallReceipt(actionId)`から取得します。
 - `QUEUED / ACCEPTED`は受付。`SUCCEEDED/arrived`だけを到着としてHTTPへ返します。同じ個体のCALL転送で変わるepochは実身体から追跡します。
+- 移動中は実際の進行方向へ向き、到着時に後からのLOOKがなければプレイヤーへ回頭します。成功通知は到着時に一度だけ返し、短距離でも回頭は自然に続けます。回頭中の`call_arrival_look`では通常の自律選択と配送待ちを止め、補間終了後に通常注視へ戻ります。[方針と検証](../../../../docs/2026-10-27-heat-warning-and-look-priority.md)。
 
 ### HTTPの寿命と入力世代
 

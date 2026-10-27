@@ -65,6 +65,8 @@ pub(crate) struct Origin {
     pub context: Option<Context>,
     pub revision: Option<u64>,
     pub position: Option<Position>,
+    /// 既存の身体活動から判定した停止状態。Noneは未取得で、通常浮遊は停止に含む。
+    pub stationary: Option<bool>,
     pub available: bool,
     pub age_ms: u64,
     pub body: Value,

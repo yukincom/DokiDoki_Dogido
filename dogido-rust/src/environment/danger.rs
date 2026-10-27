@@ -5,6 +5,8 @@ pub(crate) mod materials;
 pub(crate) mod player;
 mod weather;
 mod words;
+#[cfg(test)]
+mod tests;
 use crate::{
     combat::model::{LeafRequest, Mode, Settings, Speech, elapsed},
     events::{EventName, GameEvent, TimePhase, Weather},
@@ -23,6 +25,14 @@ fn n(s: &Settings, k: &str) -> f64 {
 }
 fn ms(s: &Settings, k: &str) -> u64 {
     n(s, k) as u64
+}
+/// 静止した身体の隣接熱源だけを選ぶ。距離の整数部0〜1を隣接とし、
+/// 候補選択と未再生の警告の再照合で共有する。移動中の候補は保持しない。
+fn adjacent_heat(e: &GameEvent) -> bool {
+    e.body_origin().is_some_and(|origin| origin.available && origin.stationary == Some(true))
+        && e.player_safety_world().standing_on_magma_block != Some(true)
+        && e.world.nearby_damaging_light_source_count.unwrap_or(0) > 0
+        && e.world.nearest_damaging_light_source_distance.is_some_and(|d| d.floor() <= 1.0)
 }
 fn ready(now: u64, last: Option<u64>, s: &Settings, k: &str) -> bool {
     elapsed(now, last, ms(s, k))
@@ -287,8 +297,8 @@ impl Danger {
         if !thunder.is_empty() {
             return thunder;
         }
-        // Nearby heat can hurt before a casual reply finishes. Use the current
-        // geometric observation, not damage, and keep combat/thunder priority.
+        // 静止時の隣接熱源だけを現在観測で確認する。移動中や遠い熱源では
+        // 返答へ割り込まず、クールダウンも消費しない。戦闘・雷の優先は保つ。
         if self.complete
             && let Some(warning) = self.damaging_light(e, now, s)
         {
@@ -507,12 +517,7 @@ impl Danger {
         vec![]
     }
     fn damaging_light(&mut self, e: &GameEvent, now: u64, s: &Settings) -> Option<Speech> {
-        if e.player_safety_world().standing_on_magma_block == Some(true)
-            || e.world.nearby_damaging_light_source_count.unwrap_or(0) <= 0
-            || !e
-                .world
-                .nearest_damaging_light_source_distance
-                .is_some_and(|d| d <= n(s, "damaging_light_warning_max_distance"))
+        if !adjacent_heat(e)
             || !ready(
                 now,
                 self.last_damaging_light,
@@ -780,13 +785,7 @@ pub fn still_applicable(a: &Speech, e: &GameEvent, s: &Settings) -> bool {
                 })
         }
         "magma_block" => e.player_safety_world().standing_on_magma_block == Some(true),
-        "damaging_light" => {
-            e.world.nearby_damaging_light_source_count.unwrap_or(0) > 0
-                && e.world
-                    .nearest_damaging_light_source_distance
-                    .is_some_and(|d| d <= n(s, "damaging_light_warning_max_distance"))
-                && e.player_safety_world().standing_on_magma_block != Some(true)
-        }
+        "damaging_light" => adjacent_heat(e),
         "end_portal_frame" => e
             .world
             .nearby_end_portal_frame_distance

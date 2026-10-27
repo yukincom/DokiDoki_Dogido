@@ -41,7 +41,7 @@ def main():
                     "game": "minecraft-java", "schema_version": "2026-05-24", "player_name": "試験", "player_uuid": OWNER_ID,
                     "execution_capabilities": ["client.hotbar.select.v1"] if capable else []})["session_id"]
             def close(sid): request(base, "/api/v1/adapter-sessions/"+sid, method="DELETE")
-            def event(*, hotbar=None, world=None, player_state=None, **extra):
+            def event(*, hotbar=None, world=None, player_state=None, activity="holding", **extra):
                 nonlocal seq
                 seq += 1
                 return attach_body({"schema_version": "2026-05-24", "adapter": "fixture", "sequence": seq,
@@ -50,7 +50,7 @@ def main():
                     "player": {"name": "試験", "hotbar": hotbar, **(player_state or {})},
                     "world": {"sky_visible": True, "ceiling_height": 20, "local_light": 15, "time_phase": "day", **(world or {})},
                     "nearby_composition": {"mobs":[{"id":m["type"],"quantity":1} for m in extra.get("passive_mobs", [])],
-                        "blocks":[],"mobs_truncated":False,"blocks_truncated":False}, **extra})
+                        "blocks":[],"mobs_truncated":False,"blocks_truncated":False}, **extra}, activity=activity)
             def send(sid, **fields): return request(base, "/api/v1/game-events", event(**fields), sid=sid)
             def say(sid, text, source="voice"):
                 got = request(base, "/api/v1/player-input", {"session_id": sid, "source": source, "text": text})
@@ -385,12 +385,16 @@ def main():
             close(sid); control["delay"] = 0
             passed.append("thunder_resumes_accepted_chat_without_duplicate_history")
 
-            # Heat must warn before damage while casual generation owns speech.
-            heat = {"nearby_damaging_light_source_count": 1, "nearest_damaging_light_source_distance": 4.12}
+            # 隣接かつ停止中だけが会話へ割り込む。移動中・距離2以上では候補とCDを残さない。
+            heat = {"nearby_damaging_light_source_count": 1, "nearest_damaging_light_source_distance": 1.73}
             sid = register(); send(sid)
             control["delay"] = .3
             old = say(sid, "火のそばでも話を続けよう")["turn_id"]
             original = wait_for(lambda: row(base, old, {"generating"}))
+            send(sid, world=heat, activity="calling")
+            assert row(base, old, {"generating"}) and not match(sid,"damaging_light","generating")
+            send(sid, world={**heat,"nearest_damaging_light_source_distance":2.24})
+            assert row(base, old, {"generating"}) and not match(sid,"damaging_light","generating")
             send(sid, world=heat, player_state={"health": 20}, combat={"recent_damage_ms": 60000})
             warning = wait_for(lambda: match(sid, "damaging_light", "completed"))
             assert warning["text"] == control["leaf"] and warning["environment_reaction_outcome"] == "speak", warning
@@ -407,7 +411,7 @@ def main():
             send(sid, world=heat)
             assert len([r for r in rows(sid) if any(a["kind"] == "damaging_light" for a in r.get("combat_actions", []))]) == 1
             close(sid); control["delay"] = 0
-            passed.append("heat_warns_at_four_blocks_before_damage_and_resumes_casual_chat")
+            passed.append("heat_warns_only_when_adjacent_and_stationary_then_resumes_casual_chat")
 
             sid = register(); send(sid)
             (folder / "delay").write_text(".4")

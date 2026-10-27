@@ -427,7 +427,7 @@ fn verified_owner_sound_names_emitter_separately_and_unresolved_sound_stays_unre
         {"type":"block:stone","source_id":"played:block:stone:0:0:0","sound_event":"block.stone.step","heard_ago_ms":0,"direction":{"horizontal":"front"},"distance_band":"close"}]);
     let observation=serde_json::from_value(wire).unwrap();let now=std::time::Instant::now();let mut body=crate::body::State::default();
     body.observe(Some(&observation),Some(&owner),Some("minecraft:overworld"),now,Some(0));
-    let event=body.sensory_event(&frame("2026-10-22T01:00:00Z",json!({})),now);
+    let event=body.sensory_event(&frame("2026-10-22T01:00:00Z",json!({})),now, None);
     let mut memory=ChatObservationMemory::default();memory.observe(&event,&Default::default(),&labels());
     let snapshot=memory.snapshot(&event,&labels());
     assert!(snapshot.hearing.summary.contains("音：石系の足音／音の由来：プレイヤー"));

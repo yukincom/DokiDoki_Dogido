@@ -15,7 +15,7 @@ SENSE_FIELDS = (
 )
 
 
-def attach_body(event, *, senses=None, body_position=None, visibility="visible", age_ms=0):
+def attach_body(event, *, senses=None, body_position=None, visibility="visible", age_ms=0, activity=None):
     """一つの模擬eventへv3観測を加える。元のplayer/戦闘/指差しは書き換えない。"""
     event = deepcopy(event)
     body = json.loads((ROOT / "fixtures/body-observation-v3.json").read_text())
@@ -48,4 +48,14 @@ def attach_body(event, *, senses=None, body_position=None, visibility="visible",
     sample["senses"]["source_server_tick"] = tick
     body["age_ms"] = age_ms
     event["body_observation"] = body
+    if activity is not None:
+        # 熱源等の試験で必要なときだけ、同じframeの実活動を明示する。
+        # HOLDなので自律モデルの見物は開始せず、停止・移動の事実だけを検査できる。
+        event["body_autonomy"] = {"version": 2, "status": "observed", "context": deepcopy(sample["context"]),
+            "server_tick": tick, "snapshot_revision": tick, "age_ms": age_ms,
+            "enabled": True, "mode": "hold", "follow_distance": 16, "warp_distance": 24,
+            "activity": activity, "reason": "fixture_activity",
+            "reassurance": {"value": 100, "owner_distance": 2, "owner_visible": True,
+                            "face_visible": True, "owner_working": False},
+            "attention": {"scope": "ambient", "expansion": 1}, "candidates": []}
     return event

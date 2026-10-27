@@ -94,7 +94,7 @@ def main():
             for world, extra in [
                 ({"weather": "thunder", "thunder_sound_recent_ms": 0}, {}),
                 ({"time_phase": "evening", "sky_visible": True, "local_light": 12}, {}),
-                ({"nearby_damaging_light_source_count": 1, "nearest_damaging_light_source_distance": 4.12}, {}),
+                ({"nearby_damaging_light_source_count": 1, "nearest_damaging_light_source_distance": 1.73}, {"body_activity":"holding"}),
                 ({"local_light": 0, "sky_visible": False, "ceiling_height": 3}, {}),
                 ({}, {"combat": {"recent_damage_ms": 0}, "player": {"name": "試験", "dimension": "minecraft:overworld", "health": 19}}),
                 ({}, {"smell_observation": {"status":"present","components":[{"smell_id":"bread","category":"food","valence":"pleasant","source_kind":"hotbar","effective_strength":3}],"basis":"smell_policy_v2"}}),
@@ -164,9 +164,23 @@ def main():
             text = "敵何体？"
             reply = request(base, "/api/v1/player-input", {"session_id": sid, "text": text, "source": source})
             assert reply.get("reason") in {"request_classification", "combat_workshop_input"} or reply.get("queued"), reply
-            result = drive(send, sid, lambda: next((r for r in rows(sid) if r.get("player_input_text") == text and r["playback_status"] == "completed" and r.get("workshop_action") == "explain"), None))
-            assert len(calls) == 1 and hud(sid)["state"] == "open", result
-            passed.append(f"{source}_input_during_quiet_pause_reaches_workshop_once")
+            # 戦闘終了の部分通知だけでは、現在の安全snapshotを確認できない。
+            # 既存の通常入力結果を保持し、安全な全観測で再開した後の新規入力だけ相談へ渡す。
+            old = reply["turn_id"]
+            result = wait_for(lambda: next((r for r in rows(sid) if r["turn_id"] == old
+                and r["playback_status"] == "not_selected" and r.get("forwarded_input")),None))
+            assert result["forwarded_input"] == {"accepted":False,"reason":"fresh_safe_snapshot_required"}, result
+            classified = result["request_classification"]
+            assert result["classifier_mode"] == "normal" and not calls, result
+            drive(send,sid,lambda: any(r["playback_status"] == "completed" and any(a["kind"] == "workshop_resume"
+                for a in r.get("combat_actions",[])) for r in rows(sid)))
+            assert row(base,old,{"not_selected"})["request_classification"] == classified and not calls
+            fresh = request(base,"/api/v1/player-input",{"session_id":sid,"text":text,"source":source})
+            assert fresh["accepted"] and fresh["turn_id"] != old, fresh
+            fresh = resolve_input_response(base,fresh)
+            result = drive(send,sid,lambda: row(base,fresh["turn_id"],{"completed"}))
+            assert result["workshop_action"] == "explain" and len(calls) == 1 and hud(sid)["state"] == "open", result
+            passed.append(f"{source}_partial_combat_end_keeps_normal_result_and_fresh_input_reaches_workshop_once")
     print(json.dumps({"passed": passed}, ensure_ascii=False, indent=2))
 
 

@@ -36,7 +36,8 @@ pub(super) fn observe(s: &mut Session, event: &GameEvent) {
 }
 /// 姿勢の受理台帳から、その判断一回分の身体感覚を固定する。
 pub(super) fn event(s: &Session, raw: &GameEvent) -> GameEvent {
-    s.body_observation.sensory_event(raw, Instant::now())
+    let now = Instant::now();
+    s.body_observation.sensory_event(raw, now, s.body_autonomy.stationary(now))
 }
 pub(super) fn context(s: &Session) -> Option<Context> {
     let raw = s.environment_latest.as_ref().or(s.latest.as_ref())?;

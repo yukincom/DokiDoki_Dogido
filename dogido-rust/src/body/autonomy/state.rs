@@ -231,6 +231,9 @@ impl State {
             r.fresh(now)
                 && r.data.enabled
                 && r.data.mode == Mode::Follow
+                // 短いCALLで移動中のsnapshotを挟まなくても、古い自律命令を回頭へ割り込ませない。
+                // observeの既存cancel経路で配送待ちも解放し、回頭後は新しい観測から選び直す。
+                && r.data.reason != "call_arrival_look"
                 && matches!(
                     r.data.activity,
                     Activity::Holding | Activity::Exploring | Activity::Moving
@@ -253,6 +256,14 @@ impl State {
             json!({"command_id":pending.id,"type":COMMAND_TYPE,"status":"expired",
             "detail_code":"server_result_timeout","context":pending.context}),
         );
+    }
+    /// 受理済みの活動から停止状態を返す。通常浮遊とその場の回頭は待機のまま扱い、
+    /// 埋まりからの復帰移動は待機中でも除く。観測欠損はNoneで、停止とは推定しない。
+    pub(crate) fn stationary(&self, now: Instant) -> Option<bool> {
+        self.current.as_ref().filter(|r| r.fresh(now))
+            .filter(|r| self.accepted.as_ref().is_some_and(|a| a.context == r.data.context))
+            .map(|r| matches!(r.data.activity, Activity::Holding | Activity::Resting)
+                && r.data.reason != "idle_block_recovery")
     }
     /// 共通の環境判断が発火条件を計算するための実測。古い身体の値は返さない。
     pub fn reassurance(&self, now: Instant) -> Option<&Reassurance> {

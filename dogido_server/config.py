@@ -211,7 +211,6 @@ class Settings(BaseSettings):
     player_input_priority_cooldown_ms: int = COMBAT_DEFAULTS["player_input_priority_cooldown_ms"]
     damaging_light_warning_cooldown_ms: int = COMBAT_DEFAULTS["damaging_light_warning_cooldown_ms"]
     magma_block_comment_cooldown_ms: int = COMBAT_DEFAULTS["magma_block_comment_cooldown_ms"]
-    damaging_light_warning_max_distance: float = COMBAT_DEFAULTS["damaging_light_warning_max_distance"]
     ominous_sound_comment_cooldown_ms: int = COMBAT_DEFAULTS["ominous_sound_comment_cooldown_ms"]
     sculk_ominous_sound_comment_cooldown_ms: int = COMBAT_DEFAULTS["sculk_ominous_sound_comment_cooldown_ms"]
     ominous_sound_reset_ms: int = COMBAT_DEFAULTS["ominous_sound_reset_ms"]

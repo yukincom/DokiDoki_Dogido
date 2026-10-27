@@ -34,10 +34,12 @@ impl State {
 
     /// 会話・環境・川柳が使う感覚用コピー。検証済みの現世代と鮮度を満たした感覚だけを渡す。
     /// 元eventのplayer/combat/指差しは変えず、未取得時もプレイヤーの感覚へ戻さない。
+    /// stationaryは同じ接続の受理済み活動から渡す停止状態。ここで座標差から再判定しない。
     pub(crate) fn sensory_event(
         &self,
         event: &crate::events::GameEvent,
         now: Instant,
+        stationary: Option<bool>,
     ) -> crate::events::GameEvent {
         let reading = self.current.as_ref().filter(|r| r.age(now) < FRESH_MS);
         let sample = reading.map(|r| &r.sample);
@@ -54,6 +56,7 @@ impl State {
                 context: sample.map(|s| s.context.clone()),
                 revision: sample.map(|s| s.snapshot_revision),
                 position: sample.map(|s| s.self_pose.position),
+                stationary,
                 available: senses.is_some(),
                 age_ms: reading.map(|r| r.age(now)).unwrap_or(0),
                 body: self

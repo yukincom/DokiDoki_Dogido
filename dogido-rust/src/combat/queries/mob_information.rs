@@ -441,7 +441,7 @@ mod tests {
     }
     fn event(visual: Value, passive: Value, world: Value, yaw: f64) -> GameEvent {
         let (raw, state, at) = observation(visual, passive, world, yaw);
-        state.sensory_event(&raw, at)
+        state.sensory_event(&raw, at, None)
     }
     fn classified(event: &GameEvent, text: &str, recent: Option<(&str, u64)>, now: u64) -> Speech {
         // BERTへ変更済み。旧判定へ戻さない。依頼性は分類済み入口の契約として与える。
@@ -515,7 +515,7 @@ mod tests {
             json!({}),
             90.0,
         );
-        let body = state.sensory_event(&raw, at);
+        let body = state.sensory_event(&raw, at, None);
         let reply = classified(&body, "牛どこ？", None, 0);
         assert!(reply.text.contains("西") && reply.text.contains("1ブロック"));
         assert!(!reply.text.contains("東"));
@@ -529,7 +529,7 @@ mod tests {
                 .text
                 .contains("確かめられへん")
         );
-        let stale = state.sensory_event(&raw, at + Duration::from_secs(3));
+        let stale = state.sensory_event(&raw, at + Duration::from_secs(3), None);
         assert!(
             classified(&stale, "牛どこ？", None, 0)
                 .text
