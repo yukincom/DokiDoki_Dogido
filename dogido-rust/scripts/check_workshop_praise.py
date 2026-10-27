@@ -35,19 +35,18 @@ def main():
     with fixture() as context:
         base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder = context
         # 分類済み終了にはモデルを呼ばず、未取得のfeedbackを捏造しない。
-        for feedback in [VALID, None, {"kind": "praise", "evidence": 7}]:
-            sid = ready(base, send, rows)
-            before = stored(sid)
-            critiques, lessons = records(folder, "critiques"), records(folder, "lessons")
-            calls = install(control, lambda text, prompt, n: feedback_reply(text, feedback))
-            result = finish(base, send, sid, END_INPUT)
-            assert result["workshop_action"] == "close_workshop" and hud(sid)["state"] == "closed", result
-            assert result["text"] == "ほな、この句はここまでにしよか。", result
-            assert not calls and not result["llm_reports"], result
-            assert stored(sid) == before and not revisions(folder, sid)
-            assert records(folder, "critiques") == critiques and records(folder, "lessons") == lessons
-            assert not result.get("workshop_feedback_outcome"), result
-            request(base, "/api/v1/adapter-sessions/" + sid, method="DELETE")
+        sid = ready(base, send, rows)
+        before = stored(sid)
+        critiques, lessons = records(folder, "critiques"), records(folder, "lessons")
+        calls = install(control, lambda text, prompt, n: feedback_reply(text))
+        result = finish(base, send, sid, END_INPUT)
+        assert result["workshop_action"] == "close_workshop" and hud(sid)["state"] == "closed", result
+        assert result["text"] == "ほな、この句はここまでにしよか。", result
+        assert not calls and not result["llm_reports"], result
+        assert stored(sid) == before and not revisions(folder, sid)
+        assert records(folder, "critiques") == critiques and records(folder, "lessons") == lessons
+        assert not result.get("workshop_feedback_outcome"), result
+        request(base, "/api/v1/adapter-sessions/" + sid, method="DELETE")
         passed.append("bert_end_without_generation_does_not_invent_unreceived_feedback")
 
         sid = ready(base, send, rows)
@@ -68,12 +67,24 @@ def main():
             assert stored(sid) == before and not revisions(folder, sid)
         passed.append("praise_is_saved_without_closing_or_changing_the_verse")
 
+        # モデルへ届く通常会話で、不正feedbackだけを捨て、本文と句を保持する。
+        for feedback in [None, {"kind": "praise", "evidence": 7},
+                         {"kind": "praise", "evidence": "原文にない感想"}]:
+            calls = install(control, lambda text, prompt, n: {"action": "respond", "speech": "気に入ってもらえてうれしいわ。", "feedback": feedback})
+            result = finish(base, send, sid, INPUT)
+            assert result["workshop_action"] == "respond" and len(calls) == 1 and len(result["llm_reports"]) == 1, result
+            assert result["text"] == "気に入ってもらえてうれしいわ。" and not result.get("workshop_feedback_outcome"), result
+            assert records(folder, "critiques") == critiques and records(folder, "lessons") == lessons
+            assert hud(sid)["state"] == "open" and hud(sid)["canonical_lines"] == LINES
+            assert stored(sid) == before and not revisions(folder, sid)
+        passed.append("missing_or_invalid_feedback_keeps_speech_without_saving_or_retrying")
+
         # 会話の補助confidenceが不正でも、発話中の検証済み称賛は一件だけ残る。
-        def skipped_close(text, prompt, n):
+        def unused_metadata(text, prompt, n):
             result = feedback_reply(text, VALID, "また一緒に詠もな。")
             result["confidence"] = "invalid"
             return result
-        calls = install(control, skipped_close)
+        calls = install(control, unused_metadata)
         result = finish(base, send, sid, INPUT)
         assert result["workshop_action"] == "respond" and len(calls) == 1, result
         assert result["text"] == "また一緒に詠もな。" and hud(sid)["state"] == "open", result
@@ -195,13 +206,13 @@ def main():
         assert hud(sid)["state"] == "danger" and not revisions(folder, sid)
         passed.append("feedback_disk_wait_does_not_delay_combat_audio")
 
-    # 編集の再試行応答が壊れていても、戦闘前に得た返答予定をfallbackで消さない。
+    # 会話出力の契約補完は最大2回。編集案の生成前に止まり、戦闘前の返答予定は保持する。
     with fixture(combat_settings=SETTINGS) as context:
         base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder = context
         sid = ready(base, send, rows)
         entered, release = threading.Event(), threading.Event()
         planned = "気に入ってもらえてうれしいわ。もう少しこの余韻を楽しもな。"
-        def invalid_retry(text, prompt, n):
+        def invalid_contract_retry(text, prompt, n):
             if n == 1:
                 result = feedback_reply(text, speech=planned)
                 result["action"] = "propose_revision"
@@ -211,7 +222,7 @@ def main():
             entered.set()
             release.wait(timeout=15)
             return "not a JSON object"
-        calls = install(control, invalid_retry)
+        calls = install(control, invalid_contract_retry)
         try:
             turn = submit(base, sid, INPUT)
             wait_for(entered.is_set)
@@ -222,10 +233,12 @@ def main():
             assert record["result"]["unspoken_text"] == planned, record
             assert record["result"]["workshop_feedback_outcome"] == "saved", record
             assert len(calls) == 2 and len(records(folder, "critiques")) == 1
+            editor_calls = [r for r in seen if r["path"] == "/v1/chat/completions" and r["body"].get("temperature") == .30]
+            assert not editor_calls, editor_calls
             assert hud(sid)["state"] == "danger" and not revisions(folder, sid)
         finally:
             release.set()
-        passed.append("broken_retry_after_combat_keeps_the_original_planned_reply")
+        passed.append("broken_contract_retry_after_combat_keeps_planned_reply_without_editor_generation")
 
     # 接続を閉じた後の遅い返事は、新しい接続の履歴・句へ入れない。
     with fixture(combat_settings=SETTINGS) as context:
@@ -264,7 +277,7 @@ def main():
             assert not records(folder, "critiques") and not records(folder, "lessons")
             assert not revisions(folder, sid)
             passed.append(mode + "_does_not_prevent_conversation")
-    print(json.dumps({"passed": passed, "count": len(passed), "story_record": story_record}, ensure_ascii=False, indent=2))
+    print(json.dumps({"passed": passed, "count": len(passed), "story_record": story_record, "all_owned_processes_stopped": True}, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":
