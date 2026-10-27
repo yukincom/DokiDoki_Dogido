@@ -126,13 +126,18 @@ DOGIDO_MEMORY_DIR=.dogido_memory/rust-migration
 | 詩の知識・通常会話との境界 | `check_poetry_knowledge.py` · `check_knowledge.py` |
 | 発句・workshop・局所編集 | `check_haiku_runtime.py` · `check_workshop_runtime.py` · `check_workshop_edits.py` |
 | 戦闘中断・復帰 | `check_workshop_combat.py` · `check_workshop_provisional.py` |
-| 読み辞書・記憶 | `check_reading_runtime.py` · `check_memory_runtime.py` |
+| 読み辞書 | `check_reading_runtime.py` |
+| 記憶・講評・想起・保存取消 | `check_memory_runtime.py` |
+| 句相談から知識への寄り道・警告待ち | `check_knowledge_handoff.py` |
+| 肯定的講評・戦闘時の未発話記録 | `check_workshop_praise.py` |
 | 録音と音声認識の制御 | `check_voice_runtime.py` |
 
 ```sh
 ./dogido-rust/cargo.sh build --locked
 python dogido-rust/scripts/check_workshop_edits.py
 ```
+
+記憶・知識引継ぎ・肯定的講評の3本は、通常CIの `test_http_check_imports.py` でも起動前のimportを検査します。HTTP動作は表の各スクリプトで別途確認します。
 
 ## 過去の移行記録
 

@@ -86,7 +86,9 @@
 
 ### 段階4のHTTP検証経路
 
-既存 `check_memory_runtime.py` は削除済み `check_workshop_followup.followup` のimportで開始できなかった。今回その広い旧workshop試験を改修せず、既存の一時service・モデル・音声・分類器fixtureを再利用する `check_recall_runtime.py` を追加した。想起の4条件は成功し、全所有プロセスの終了を確認。旧記憶HTTP試験は未修復で、成功件数へ含めない。
+既存 `check_memory_runtime.py` は削除済み `check_workshop_followup.followup` のimportで開始できなかった。今回その広い旧workshop試験を改修せず、既存の一時service・モデル・音声・分類器fixtureを再利用する `check_recall_runtime.py` を追加した。想起の4条件は成功し、全所有プロセスの終了を確認。この段階では記憶HTTP試験は未修復で、成功件数へ含めていない。
+
+後続の[記憶・知識引継ぎ・肯定的講評の試験修復](2026-10-27-memory-http-test-repair.md)で、現行ヘルパーと受付・保存契約へ修復し、記憶11・知識引継ぎ8・肯定的講評12の計31ケースを確認した。`followup` は復活させていない。
 
 ### 段階6の検証境界
 
@@ -106,6 +108,6 @@
 - `./dogido-rust/cargo.sh test --all-targets --locked`: 976件成功、失敗0、実音声の明示試験1件は既存skip。
 - Fabric `./gradlew test build`: 327件成功、失敗・skip 0、Modビルド成功。
 - `./dogido-rust/cargo.sh build --release --locked`: 成功。
-- 段階別の模擬HTTPは環境runtime 31・環境反応22・想起4・辞書編集9の計66条件成功。モデル・音声・入力分類はfixtureで、試験が所有するプロセスは終了済み。旧記憶HTTP試験の未修復箇所は上記のとおり別扱い。
+- 段階別の模擬HTTPは環境runtime 31・環境反応22・想起4・辞書編集9の計66条件成功。モデル・音声・入力分類はfixtureで、試験が所有するプロセスは終了済み。この時点で未修復だった記憶HTTP試験は、上記の後続修復として別計上する。
 - 差分全体と各段階のstaged差分を確認し、コードと対応docsを段階ごとにコミットした。別作業の未追跡文書は対象外。
 - 実Minecraft・実音声・速度測定は今回未実施。Modの配置、常駐serviceの再起動、push・tag・公開は行っていない。

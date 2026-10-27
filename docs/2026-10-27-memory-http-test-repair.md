@@ -1,6 +1,6 @@
 # 記憶・知識引継ぎ・肯定的講評のHTTP試験を修復する計画
 
-2026-10-27作成。状態: **修復中（3本のHTTP試験完了・全体確認待ち）**。開始点は書類側 `main` の `69363ca`。
+2026-10-27作成。状態: **完了**。開始点は書類側 `main` の `69363ca`。
 
 ## 目的と対象
 
@@ -70,7 +70,7 @@
 | 1 記憶 | 完了 | 実HTTP 11ケース成功。分類・生成・音声は模擬、試験所有プロセス終了 |
 | 2 知識引継ぎ | 完了 | 実HTTP 8ケース成功。元の7ケースから分類境界の取消と通常FIFOを分離 |
 | 3 肯定的講評 | 完了 | 実HTTP 12ケース成功。feedbackの欠落・型不正・原文外根拠も通常会話で確認 |
-| 4 再発検出・最終確認 | 未着手 | |
+| 4 再発検出・最終確認 | 完了 | import 3件成功。Python全体221件＋32 subtests成功、既存11件skip、失敗0 |
 
 ### 単位1の実施結果
 
@@ -93,3 +93,19 @@
 - 到達しないBERT終了用feedbackの3反復を1ケースへ整理し、通常の `respond` でfeedbackの欠落・数値evidence・原文にないevidenceを検証した。意味説明用メタデータを混ぜず、本文1回・保存なし・句とlesson不変を確認する。
 - 会話出力の契約補完2回と、編集生成0回を別に確認した。撤去済みの編集案再生成や `followup` は追加していない。
 - `dogido-llm/bin/python -B dogido-rust/scripts/check_workshop_praise.py` は12ケース成功、試験所有プロセス終了。本体コードは変更していない。
+
+### 単位4と最終確認
+
+- `test_http_check_imports.py` は3本をそれぞれ独立したPythonプロセスでimportする。timeout 10秒、隔離モードを使い、先行テストのmodule cacheに依存しない。HTTP・モデル・音声を起動しない軽量検査で、既存CIの `test_*.py` 収集対象に入る。
+- 単独のimport検査は3件成功。既存CIと同じ範囲の `dogido-llm/bin/python -B -m pytest -q tests dogido-rust/scripts/test_*.py` は **221 passed / 11 skipped / 32 subtests passed**、失敗0。skipは明示実行が必要なSSH連携等5件と、ローカルMinecraft DBがない場合の6件。
+- HTTPは記憶11・知識引継ぎ8・肯定的講評12、計31ケース成功。各スクリプトが最終コードで完走し、試験所有プロセスを終了した。その後の変更は独立したimport検査とdocsだけで、3本と依存fixtureは変更していない。
+- `followup` の定義・import・別名を追加していないことを検索確認した。既存の `workshop_followup` 状態名や `meaning_ack` は現役の会話段階を表すため維持する。
+- READMEに試験の責務と入口を追記し、前の重複整理計画の未修復記録へ本書を接続した。変更は試験とdocsに限定。本体・プロンプト・CI設定は変更していない。
+- debug buildは成功。今回の変更に不要なrelease／Fabricビルド、実モデル・実音声・実Minecraft試験、常駐service再起動、push・tag・公開は行っていない。
+
+| 段階 | ローカルコミット |
+|---|---|
+| 計画 | `94927de` |
+| 記憶 | `35b8f6a` |
+| 知識引継ぎ | `3735baf` |
+| 肯定的講評 | `a813a28` |
