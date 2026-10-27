@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Rust feedback/recall HTTP and persistence; all model/audio endpoints are mocks."""
+"""実HTTPで講評・soft lesson・想起・保存取消を検証する。分類・生成・音声は模擬し、記憶は一時領域だけへ保存する。"""
 import fcntl
 import json
 from datetime import datetime, timezone
@@ -9,10 +9,11 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from test_support import read_jsonl
 from check_dialogue import request, register, submit, row, wait_for
-from check_haiku_runtime import fixture, LINES
+from check_haiku_runtime import LINES
+from check_workshop_fixture import fixture
 from check_workshop_runtime import ready, install, step, session
 from check_workshop_edits import adoption, finish, revisions
-from check_workshop_followup import followup
+from check_workshop_followup import meaning_ack
 from check_workshop_revision import wire
 
 
@@ -23,19 +24,18 @@ def records(folder, kind):
 
 def main():
     passed = []
-    with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
+    close_text = "今日はこの句の相談をここでおしまいにしよう"
+    with fixture(bert_labels={close_text: "senryu_end"}) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         def choose(text, prompt, n):
             if text == "そうなんだ":
                 assert "会話段階: meaning_explained" in prompt
-                return followup(text, "acknowledge_meaning", "うん、もう少し話してもええで。")
-            if text == "余韻が心に残る。今日はここまでにしよう":
-                result = step(text, "close_workshop")
+                return meaning_ack(text, "うん、もう少し話してもええで。")
+            if text == "余韻が心に残る":
+                result = step(text, "respond", "その余韻、うちも大事にしたいわ。")
                 result["feedback"] = {"kind": "praise", "evidence": "余韻が心に残る"}
                 return result
             if text == "今日の句を思い出して":
                 return step(text, "respond", "いま開いてる句の話を続けよか。")
-            if text == "今日はこの句の相談をここでおしまいにしよう":
-                return step(text, "close_workshop")
             assert text == "この句はどういう意味？", text
             return step(text)
         calls = install(control, choose)
@@ -59,13 +59,18 @@ def main():
         assert hud(sid)["state"] == "open" and hud(sid)["canonical_lines"] == LINES
         assert not hud(sid)["pending_lines"] and stored(sid) == original
         assert session(base, sid)["workshop_followup"] == "discussion"
-        r = finish(base, send, sid, "余韻が心に残る。今日はここまでにしよう")
-        assert r["workshop_action"] == "close_workshop" and len(calls) == 3, r
-        assert hud(sid)["state"] == "closed" and r.get("workshop_feedback_outcome") == "saved", r
+        # 肯定的講評は会話モデルの返答から保存する。BERT終了とは別の入力で確認する。
+        r = finish(base, send, sid, "余韻が心に残る")
+        assert r["workshop_action"] == "respond" and len(calls) == 3, r
+        assert hud(sid)["state"] == "open" and r.get("workshop_feedback_outcome") == "saved", r
         after_praise = records(folder, "critiques")
         assert len(after_praise) == 2 and after_praise[:-1] == critiques
         assert after_praise[-1]["kind"] == "praise" and records(folder, "lessons") == lessons
         passed.append("meaning_ack_adds_no_feedback_and_praise_does_not_remove_lessons")
+        r = finish(base, send, sid, "余韻が心に残る。今日はここまでにしよう")
+        assert r["workshop_action"] == "close_workshop" and hud(sid)["state"] == "closed", r
+        assert len(calls) == 3 and not r["llm_reports"] and not r.get("workshop_feedback_outcome"), r
+        assert records(folder, "critiques") == after_praise and records(folder, "lessons") == lessons
         r = finish(base, send, sid, "覚えてる句を教えて")
         assert r.get("memory_outcome") == "read" and not r["llm_reports"], r
         assert " / ".join(LINES) in r["text"] and hud(sid)["state"] == "closed"
@@ -87,10 +92,10 @@ def main():
         assert len(calls) == 4 and stored(next_sid) == [entry]
         assert hud(next_sid)["canonical_lines"] == before["canonical_lines"] and hud(next_sid)["state"] == "open"
         passed.append("reconnect_loads_soft_lesson_and_open_workshop_does_not_recall")
-        r = finish(base, send, next_sid, "今日はこの句の相談をここでおしまいにしよう")
+        r = finish(base, send, next_sid, close_text)
         assert r["workshop_action"] == "close_workshop" and hud(next_sid)["state"] == "closed", r
-        assert len(calls) == 5 and not r.get("memory_action") and stored(next_sid) == [entry]
-        passed.append("today_and_poem_in_close_request_reach_workshop_model")
+        assert len(calls) == 4 and not r["llm_reports"] and not r.get("memory_action") and stored(next_sid) == [entry]
+        passed.append("today_and_poem_in_bert_close_request_do_not_recall_or_call_model")
         r = finish(base, send, next_sid, "前の注意はもういらん")
         assert r.get("memory_outcome") == "saved" and not r["llm_reports"], r
         cleared = read_jsonl(folder / "memory/long_term/haiku_lessons.jsonl")
@@ -111,13 +116,11 @@ def main():
         assert r.get("workshop_outcome") == "revision_proposed", r
         pending = hud(sid)["pending_lines"]
         assert pending == ["さくらいろ", *LINES[1:]] and hud(sid)["canonical_lines"] == LINES
-        assert len(editor_calls) == 1 and len(proposal_steps) == 2
+        assert len(editor_calls) == 1 and len(proposal_steps) == 1
         assert stored(sid) == original and not revisions(folder, sid)
         def review_pending(text, prompt, n):
             if text == "採用して":
                 return adoption(text)
-            if text == "終了":
-                return step(text, "close_workshop")
             if text == "保存した句を思い出して":
                 return step(text, "respond", "いまの句と案の話を続けよか。")
             assert text == "どういう意味？", text
@@ -145,7 +148,7 @@ def main():
         assert hud(sid)["canonical_lines"] == pending and not hud(sid)["pending_lines"]
         r = finish(base, send, sid, "終了")
         assert r["workshop_action"] == "close_workshop" and hud(sid)["state"] == "closed", r
-        assert len(review_calls) == 4 and len(editor_calls) == 1 and len(proposal_steps) == 2
+        assert len(review_calls) == 3 and not r["llm_reports"] and len(editor_calls) == 1 and len(proposal_steps) == 1
         r = finish(base, send, sid, "覚えてる句を教えて")
         assert r.get("memory_action") == "haiku_recall" and not r["llm_reports"], r
         assert "元「" in r["text"] and "直し「さくらいろ" in r["text"], r
@@ -175,7 +178,6 @@ def main():
         sid = ready(base, send, rows)
         install(control, lambda text, prompt, n: step(text))
         finish(base, send, sid, "どういう意味？")
-        install(control, lambda text, prompt, n: step(text, "close_workshop"))
         closed = finish(base, send, sid, "終了")
         assert closed["workshop_action"] == "close_workshop" and hud(sid)["state"] == "closed", closed
         for text in ["気にせんで", "覚えてる句を教えて"]:
@@ -196,7 +198,6 @@ def main():
         path.rmdir()
         entry_path = folder / "memory/long_term/haiku_entries.jsonl"
         entry_path.mkdir()
-        install(control, lambda text, prompt, n: step(text, "close_workshop"))
         closed = finish(base, send, sid, "終了")
         assert closed["workshop_action"] == "close_workshop" and hud(sid)["state"] == "closed", closed
         r = finish(base, send, sid, "覚えてる句を教えて")
@@ -223,7 +224,7 @@ def main():
         assert len(records(folder,"lessons")) == 1 and records(folder,"lessons")[0]["polarity"] == "loosen"
         assert not any(p["turn_id"] == turn for p in session(base,sid)["workshop_history"])
         passed.append("authorized_clear_finishes_after_cancellation_without_blocking_snapshot")
-    print(json.dumps({"passed":passed,"live_model":False,"owned_processes_stopped":True},ensure_ascii=False,indent=2))
+    print(json.dumps({"passed":passed,"count":len(passed),"live_model":False,"owned_processes_stopped":True},ensure_ascii=False,indent=2))
 
 
 if __name__ == "__main__":
