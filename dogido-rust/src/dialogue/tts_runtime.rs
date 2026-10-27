@@ -119,7 +119,7 @@ mod tests {
                     entry_id: None,
                     wrong_reading: None,
                     expected_id: None,
-                },
+                }.validate().unwrap(),
                 chrono::Utc::now(),
             )
             .unwrap();
@@ -140,7 +140,7 @@ mod tests {
                     entry_id: None,
                     wrong_reading: None,
                     expected_id: first["id"].as_str().map(str::to_owned),
-                },
+                }.validate().unwrap(),
                 chrono::Utc::now(),
             )
             .unwrap();
@@ -246,7 +246,7 @@ done
                     entry_id: None,
                     wrong_reading: None,
                     expected_id: None,
-                },
+                }.validate().unwrap(),
                 chrono::Utc::now(),
             )
             .unwrap();

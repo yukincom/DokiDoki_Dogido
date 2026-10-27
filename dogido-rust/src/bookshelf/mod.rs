@@ -254,6 +254,7 @@ async fn reading(
     Ok(Json(
         blocking(move || {
             ensure!(app.memory_enabled, "memory_disabled");
+            let value = value.validate()?;
             let row = crate::haiku_record::MemoryStore::new(&app.store.memory)
                 .edit_catalog_reading(&value, Utc::now())?;
             Ok(json!({"correction":row}))
@@ -268,6 +269,7 @@ async fn remove_reading(
     Ok(Json(
         blocking(move || {
             ensure!(app.memory_enabled, "memory_disabled");
+            let value = value.validate()?;
             crate::haiku_record::MemoryStore::new(&app.store.memory)
                 .remove_catalog_reading(&value, Utc::now())?;
             Ok(json!({"removed":true}))

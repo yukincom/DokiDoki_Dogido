@@ -1449,6 +1449,27 @@ async fn http_write_requires_same_host_and_token_and_updates_shared_reading() {
     );
 }
 #[tokio::test]
+async fn http_reading_validation_preserves_disabled_memory_priority() {
+    use tower::ServiceExt;
+    let f = Fixture::new();
+    for enabled in [true, false] {
+        let mut app = test_app(&f);
+        Arc::get_mut(&mut app).unwrap().memory_enabled = enabled;
+        for (method, body) in [
+            ("PUT", json!({"surface":"草地", "reading":"クサチ", "expected_id":null})),
+            ("DELETE", json!({"surface":"", "expected_id":"old"})),
+        ] {
+            let req = axum::http::Request::builder().uri("/api/readings").method(method)
+                .header("host", "127.0.0.1:45678").header("x-dogido-library", "secret-test-token")
+                .header("content-type", "application/json").body(Body::from(body.to_string())).unwrap();
+            let response = router(app.clone()).oneshot(req).await.unwrap();
+            assert_eq!(response.status(), if enabled {StatusCode::BAD_REQUEST} else {StatusCode::CONFLICT});
+        }
+    }
+    assert!(!f.store().memory.exists());
+}
+
+#[tokio::test]
 async fn http_poem_trash_works_without_game_session() {
     let f = Fixture::new();
     f.poem("root", "p1");

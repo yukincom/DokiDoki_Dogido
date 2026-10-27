@@ -1,4 +1,5 @@
-//! Pronunciation edits are explicit typed catalogue operations, not dialogue turns.
+//! フォームの読み編集を一度検証し、保存可能な状態ならMemoryStoreへ渡す。
+//! 会話turnは作らず、状態ロックの外で保存する。保存版の現在性はMemoryStoreが再照合する。
 use super::*;
 use crate::{catalog_editor, haiku_record::MemoryStore};
 use anyhow::ensure;
@@ -34,7 +35,7 @@ impl Dialogue {
     }
 
     pub async fn edit_catalog_reading(&self, edit: catalog_editor::Edit) -> Result<Value> {
-        edit.validate()?;
+        let edit = edit.validate()?;
         let _serial = self.serial.acquire().await?;
         ensure!(!self.data.lock().unwrap().stopped, "server_stopping");
         ensure!(self.config.haiku.memory_enabled, "memory_disabled");
@@ -49,7 +50,7 @@ impl Dialogue {
     }
 
     pub async fn remove_catalog_reading(&self, edit: catalog_editor::Remove) -> Result<Value> {
-        catalog_editor::validate_surface(&edit.surface)?;
+        let edit = edit.validate()?;
         let _serial = self.serial.acquire().await?;
         ensure!(!self.data.lock().unwrap().stopped, "server_stopping");
         ensure!(self.config.haiku.memory_enabled, "memory_disabled");
@@ -59,5 +60,31 @@ impl Dialogue {
         })
         .await??;
         Ok(json!({"removed":true}))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn catalog_input_errors_precede_disabled_memory_and_stopping() {
+        let mut config = DialogueConfig {audio_enabled: false, llm_enabled: false, ..Default::default()};
+        config.haiku.enabled = false;
+        config.haiku.memory_enabled = false;
+        let dialogue = Dialogue::new(config).unwrap();
+        let edit = || catalog_editor::Edit {surface: "草地".into(), reading: "くさち".into(),
+            entry_id: None, wrong_reading: None, expected_id: None};
+        for stopped in [false, true] {
+            dialogue.data.lock().unwrap().stopped = stopped;
+            let invalid = catalog_editor::Edit {reading: "クサチ".into(), ..edit()};
+            assert_eq!(dialogue.edit_catalog_reading(invalid).await.unwrap_err().to_string(), "invalid_reading");
+            let invalid = catalog_editor::Remove {surface: "".into(), expected_id: "old".into()};
+            assert_eq!(dialogue.remove_catalog_reading(invalid).await.unwrap_err().to_string(), "invalid_surface");
+            let reason = if stopped { "server_stopping" } else { "memory_disabled" };
+            assert_eq!(dialogue.edit_catalog_reading(edit()).await.unwrap_err().to_string(), reason);
+            let remove = catalog_editor::Remove {surface: "草地".into(), expected_id: "old".into()};
+            assert_eq!(dialogue.remove_catalog_reading(remove).await.unwrap_err().to_string(), reason);
+        }
     }
 }

@@ -1,5 +1,5 @@
-//! Typed catalogue edits only. A conversation or model cannot submit this operation.
-use crate::reading_correction::Correction;
+//! フォームの読み編集を受け取り、不変な入力と静的カタログを一度検証する。
+//! 検証済みの値は書き換えず保存へ渡す。最新の保存版照合と追記はMemoryStoreが担当する。
 use anyhow::{Result, ensure};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -67,8 +67,18 @@ pub struct Edit {
     pub wrong_reading: Option<String>,
     pub expected_id: Option<String>,
 }
+/// 形式検証済みの編集。外部から生成・書換えできず、未検証入力を保存へ渡せない。
+#[derive(Debug)]
+pub struct ValidatedEdit(Edit);
+impl ValidatedEdit {
+    pub(crate) fn input(&self) -> &Edit {
+        &self.0
+    }
+}
+
 impl Edit {
-    pub fn validate(&self) -> Result<Correction> {
+    /// 入力を消費し、表記・読み・任意カタログIDを検証する。保存ファイルは読まない。
+    pub fn validate(self) -> Result<ValidatedEdit> {
         validate_surface(&self.surface)?;
         ensure!(valid_reading(&self.reading), "invalid_reading");
         ensure!(
@@ -85,12 +95,7 @@ impl Edit {
                 "catalog_entry_mismatch"
             );
         }
-        Ok(Correction {
-            surface: self.surface.clone(),
-            reading: self.reading.clone(),
-            wrong_reading: self.wrong_reading.clone(),
-            explicit: true,
-        })
+        Ok(ValidatedEdit(self))
     }
 }
 #[derive(Clone, Debug, Deserialize)]
@@ -99,7 +104,22 @@ pub struct Remove {
     pub surface: String,
     pub expected_id: String,
 }
-pub fn validate_surface(surface: &str) -> Result<()> {
+/// 形式検証済みの取消。expected_idの現在性は保存ロック取得後に照合する。
+#[derive(Debug)]
+pub struct ValidatedRemove(Remove);
+impl ValidatedRemove {
+    pub(crate) fn input(&self) -> &Remove {
+        &self.0
+    }
+}
+impl Remove {
+    /// 表記の形式を検証して値を固定する。現在の登録IDはここでは読み込まない。
+    pub fn validate(self) -> Result<ValidatedRemove> {
+        validate_surface(&self.surface)?;
+        Ok(ValidatedRemove(self))
+    }
+}
+fn validate_surface(surface: &str) -> Result<()> {
     ensure!(
         !surface.is_empty()
             && surface.trim() == surface

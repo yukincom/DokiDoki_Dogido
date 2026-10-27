@@ -7,9 +7,10 @@ from urllib.error import HTTPError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from test_support import read_jsonl
-from check_haiku_runtime import fixture, LINES
+from check_haiku_runtime import LINES
+from check_workshop_fixture import fixture
 from check_workshop_runtime import ready, install, step, session
-from check_dialogue import request, register, row, wait_for
+from check_dialogue import request, register, row, submit, wait_for
 
 
 def save(base, surface="草地", reading="くさち", expected_id=None):
@@ -25,11 +26,19 @@ def main():
         for source in ["voice","text"]:
             for text in ["何か音はするね","読み: 草地=くさち","草地の読みはくさち","そうちじゃなくてくさち"]:
                 send(sid)
-                turn=request(base,"/api/v1/player-input",{"session_id":sid,"text":text,"source":source})["turn_id"]
+                turn=submit(base,sid,text,source=source)
                 r=wait_for(lambda:row(base,turn,{"completed"}))
                 assert not r.get("memory_action"),r
                 assert request(base,"/api/v1/catalog")["corrections"]==[]
         passed.append("ordinary_voice_and_text_never_register_readings_even_with_old_command_syntax")
+        for body, method, reason in [
+            ({"surface":"草地","reading":"クサチ","expected_id":None}, "PUT", "invalid_reading"),
+            ({"surface":"","expected_id":"old"}, "DELETE", "invalid_surface"),
+        ]:
+            try: request(base,"/api/v1/catalog/readings",body,method=method); raise AssertionError("invalid input saved")
+            except HTTPError as e: assert e.code==422 and reason in e.read().decode()
+        assert not (folder/"memory/long_term/catalog_corrections.jsonl").exists()
+        passed.append("invalid_form_input_returns_422_before_storage")
         before=hud(sid); history=session(base,sid)["workshop_history"]
         saved=save(base)["correction"]
         assert saved["source"]=="biome:meadow" and saved["session_id"] is None
@@ -40,8 +49,17 @@ def main():
         assert persisted[0]["surface"] == "草地" and persisted[0]["reading"] == "くさち", persisted
         assert request(base,"/api/v1/catalog")["corrections"] == [saved]
         passed.append("catalog_form_persists_without_model_turn_speech_or_workshop_change")
+        before_bytes=path.read_bytes()
+        for method, body in [
+            ("PUT", {"surface":"草地","reading":"くさっぱら","expected_id":None}),
+            ("DELETE", {"surface":"草地","expected_id":"stale"}),
+        ]:
+            try: request(base,"/api/v1/catalog/readings",body,method=method); raise AssertionError("stale write accepted")
+            except HTTPError as e: assert e.code==409 and "reading_changed" in e.read().decode()
+        assert path.read_bytes()==before_bytes
+        passed.append("stale_edit_and_remove_return_409_without_appending")
         request(base,"/api/v1/adapter-sessions/"+sid,method="DELETE")
-        next_sid=register(base,preview=False)
+        next_sid=register(base,preview=False,body=True)
         send(next_sid,world={"biome":"minecraft:meadow","time_phase":"morning","weather":"clear","sky_visible":True})
         entry=wait_for(lambda:stored(next_sid))[0]
         constraints=entry["materials_snapshot"]["haiku_constraints"]
@@ -57,6 +75,13 @@ def main():
         assert request(base,"/api/v1/catalog")["enabled"] is False
         try: save(base); raise AssertionError("disabled save succeeded")
         except HTTPError as e: assert e.code==409
+        for method, body, reason in [
+            ("PUT", {"surface":"草地","reading":"クサチ","expected_id":None}, "invalid_reading"),
+            ("DELETE", {"surface":"","expected_id":"old"}, "invalid_surface"),
+        ]:
+            try: request(base,"/api/v1/catalog/readings",body,method=method); raise AssertionError("disabled invalid input accepted")
+            except HTTPError as e: assert e.code==422 and reason in e.read().decode()
+        passed.append("invalid_form_still_returns_422_when_memory_disabled")
         assert not (folder/"memory/long_term/catalog_corrections.jsonl").exists()
         passed.append("disabled_memory_does_not_write")
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
