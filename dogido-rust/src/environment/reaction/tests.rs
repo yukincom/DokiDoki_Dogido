@@ -578,5 +578,11 @@ fn spontaneous_history_labels_speakers_without_changing_stored_roles_or_events()
     let situation = context["situation"].as_str().unwrap();
     assert!(situation.contains("今はプレイヤーから新しい発言を受けてへん"));
     assert!(situation.contains("自分の発言に相づちや返事をせず"));
-    assert!(situation.contains("言葉を変えただけなら、同じ話として扱ってな"));
+    for rule in [
+        "同じ意味合いの話をしたばかりで、新しく伝えることがなければ黙ってな。",
+        "言葉を変えただけなら、同じ話として扱ってな。",
+    ] {
+        assert_eq!(p.request.messages[0].content.matches(rule).count(), 1);
+        assert!(!situation.contains(rule), "shared rule belongs in system grounding only");
+    }
 }

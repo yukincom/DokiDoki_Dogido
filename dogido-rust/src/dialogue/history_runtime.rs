@@ -262,6 +262,33 @@ mod tests {
                     .push(&format!("t{i}"), "assistant", &format!("返答{i}やで。"));
             }
         }
+        fn workshop(&self, start: usize, end: usize) {
+            let fixture: Value = serde_json::from_str(include_str!(
+                "../../scripts/fixtures/workshop_meaning_cases.json"
+            ))
+            .unwrap();
+            let view = &fixture["contexts"]["grass"];
+            let e = &view["emission"];
+            let emission = serde_json::from_value::<crate::haiku_record::PreparedEmission>(json!({
+                "text":e["reading_text"],"surface_text":null,"reading_text":e["reading_text"],
+                "lines":e["lines"],"materials":view["materials"],"interpretation":null,"preface":null,
+                "biome":null,"structure":null,"time_phase":null,"dimension":null,"event_sequence":null,"route":"haiku"
+            })).unwrap().complete(chrono::Utc::now()).unwrap();
+            {
+                let mut d = self.dialogue.data.lock().unwrap();
+                let s = d.sessions.get_mut("s").unwrap();
+                s.haiku.workshop = Some(crate::haiku_record::Workshop::open(
+                    emission,
+                    None,
+                    std::time::Instant::now(),
+                ));
+                for i in start..end {
+                    s.history
+                        .story_turn(&format!("workshop:t{i}"), &format!("川柳相談{i}の往復"));
+                    s.haiku.workshop.as_mut().unwrap().dialogue.push_back(json!({"turn_id":format!("t{i}"),"player_text":format!("相談{i}"),"dogido_text":format!("返答{i}")}));
+                }
+            }
+        }
         async fn compact(&self) {
             let (_tx, mut cancel) = watch::channel(false);
             self.dialogue
@@ -279,31 +306,7 @@ mod tests {
     async fn workshop_defers_all_summaries_reads_last_twenty_and_then_keeps_ten_raw_turns() {
         let f = Fixture::new().await;
         f.seed(0, 5);
-        let fixture: Value = serde_json::from_str(include_str!(
-            "../../scripts/fixtures/workshop_meaning_cases.json"
-        ))
-        .unwrap();
-        let view = &fixture["contexts"]["grass"];
-        let e = &view["emission"];
-        let emission = serde_json::from_value::<crate::haiku_record::PreparedEmission>(json!({
-            "text":e["reading_text"],"surface_text":null,"reading_text":e["reading_text"],
-            "lines":e["lines"],"materials":view["materials"],"interpretation":null,"preface":null,
-            "biome":null,"structure":null,"time_phase":null,"dimension":null,"event_sequence":null,"route":"haiku"
-        })).unwrap().complete(chrono::Utc::now()).unwrap();
-        {
-            let mut d = f.dialogue.data.lock().unwrap();
-            let s = d.sessions.get_mut("s").unwrap();
-            s.haiku.workshop = Some(crate::haiku_record::Workshop::open(
-                emission,
-                None,
-                std::time::Instant::now(),
-            ));
-            for i in 5..40 {
-                s.history
-                    .story_turn(&format!("workshop:t{i}"), &format!("川柳相談{i}の往復"));
-                s.haiku.workshop.as_mut().unwrap().dialogue.push_back(json!({"turn_id":format!("t{i}"),"player_text":format!("相談{i}"),"dogido_text":format!("返答{i}")}));
-            }
-        }
+        f.workshop(5, 40);
         f.compact().await;
         assert!(
             f.seen.lock().unwrap().is_empty(),
@@ -349,6 +352,42 @@ mod tests {
         );
         assert!(!h.lines().contains("川柳相談29の往復"));
         assert!(h.lines().contains("川柳相談30の往復"));
+    }
+
+    #[tokio::test]
+    async fn workshop_exit_obeys_twenty_turn_threshold_and_keeps_last_ten() {
+        for turns in [0, 10, 11, 19, 20, 26] {
+            let f = Fixture::new().await;
+            let normal = turns.min(5);
+            f.seed(0, normal);
+            f.workshop(normal, turns);
+            f.compact().await;
+            assert!(f.seen.lock().unwrap().is_empty(), "during workshop: {turns}");
+            let before = {
+                let mut d = f.dialogue.data.lock().unwrap();
+                let s = d.sessions.get_mut("s").unwrap();
+                s.haiku.workshop.as_mut().unwrap().close("explicit_close");
+                s.history.rows()
+            };
+            f.compact().await;
+            if turns < 20 {
+                assert!(f.seen.lock().unwrap().is_empty(), "after workshop: {turns}");
+                assert_eq!(f.dialogue.data.lock().unwrap().sessions["s"].history.rows(), before);
+                assert!(crate::journey::load(&f.root).unwrap().is_empty());
+                // 川柳を終えても、完了対話が20になるまでは要約しない。
+                f.seed(turns, 20);
+                f.compact().await;
+            }
+            assert_eq!(f.seen.lock().unwrap().len(), 1);
+            {
+                let d = f.dialogue.data.lock().unwrap();
+                let h = &d.sessions["s"].history;
+                assert_eq!(h.synopses()[0].turns, turns.max(20) - 10);
+                assert_eq!(h.final_compaction().unwrap().turns, 10);
+            }
+            f.compact().await;
+            assert_eq!(f.seen.lock().unwrap().len(), 1, "retained ten must not trigger another summary");
+        }
     }
 
     #[tokio::test]

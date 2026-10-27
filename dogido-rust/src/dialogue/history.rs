@@ -40,17 +40,16 @@ impl History {
     pub(super) fn compaction(&self) -> Option<Compaction> {
         let rows = self.rows_with_summaries(&[]);
         let turns = terminal_turns(&rows);
-        // 川柳中に溜めた分は終了後に一括し、直近10往復だけを原文で残す。
-        let count = if self.deferred_for_haiku {
-            turns.len().saturating_sub(COMPACT_TURNS)
-        } else if turns.len() >= MAX_TURNS {
-            COMPACT_TURNS
-        } else {
-            0
-        };
-        if count == 0 {
+        // 開始条件は通常・川柳終了後とも20ターン。川柳による保留で緩めない。
+        if turns.len() < MAX_TURNS {
             return None;
         }
+        // 川柳中に溜めた分は終了後に一括し、直近10往復だけを原文で残す。
+        let count = if self.deferred_for_haiku {
+            turns.len() - COMPACT_TURNS
+        } else {
+            COMPACT_TURNS
+        };
         let all: HashSet<String> = turns
             .iter()
             .flat_map(|id| [id.to_string(), format!("{id}:reply")])

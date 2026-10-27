@@ -206,7 +206,9 @@ async fn existing_environment_model_gets_one_image_request_and_can_select_silenc
     assert!(context["situation"].as_str().unwrap().contains("今はプレイヤーから新しい発言を受けてへん"));
     let shared = crate::reaction_leaf::context("surroundings_notice", &json!({})).unwrap();
     assert_eq!(context["situation"], shared["situation"]);
-    assert!(context["situation"].as_str().unwrap().contains("同じ意味合いの話をしたばかりで、新しく伝えることがなければ黙ってな"));
+    let rule = "同じ意味合いの話をしたばかりで、新しく伝えることがなければ黙ってな";
+    assert_eq!(requests[0]["messages"][0]["content"].as_str().unwrap().matches(rule).count(), 1);
+    assert!(!context["situation"].as_str().unwrap().contains(rule));
     assert_eq!(result["observation_revision"], context["world_context"]["revision"]);
     assert!(!context.to_string().contains(PNG));
     // 添付の有無で、共通の状況文・全観測・変化・履歴が削られない。

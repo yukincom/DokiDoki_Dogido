@@ -615,6 +615,13 @@ mod tests {
                     false
                 )
             );
+            for rule in [
+                "同じ意味合いの話をしたばかりで、新しく伝えることがなければ黙ってな。",
+                "言葉を変えただけなら、同じ話として扱ってな。",
+            ] {
+                assert_eq!(reply[0].content.matches(rule).count(), 1);
+            }
+            assert!(!reply[0].content.contains("今はプレイヤーから新しい発言を受けてへん"));
             let speech = messages(&json!({"character_mode":mode})).unwrap();
             assert_eq!(speech[0].content, crate::companion_prompt::speech(mode));
         }
