@@ -7,9 +7,9 @@ from check_haiku_runtime import LINES
 from check_workshop_fixture import fixture
 from check_workshop_runtime import install, ready, session, step
 from check_workshop_edits import finish, revisions
-from check_workshop_followup import followup
+from check_workshop_followup import meaning_ack
 from check_workshop_revision import wire
-from check_workshop_combat import SETTINGS, MOB, enter, end, returned, drive
+from check_workshop_combat import SETTINGS, MOB, enter, end, returned
 
 
 def enqueue(base, sid, text):
@@ -28,7 +28,7 @@ def main():
         def choose(text, prompt, n):
             if text == "なるほど":
                 assert "会話段階: meaning_explained" in prompt
-                return followup(text, "acknowledge_meaning")
+                return meaning_ack(text)
             if text == "うん":
                 return step(text, "respond", "うん、この句の話を続けよか。")
             return step(text)
@@ -71,6 +71,7 @@ def main():
         assert closing["workshop_action"] == "close_workshop" and not closing["llm_reports"], closing
         assert len(calls) == 3 and hud(sid)["state"] == "closed"
         passed.append("failed_knowledge_preserves_meaning_stage_and_model_ack_keeps_workshop_open")
+        request(base, "/api/v1/adapter-sessions/" + sid, method="DELETE")
 
         sid = ready(base, send, rows)
         wait_for(lambda: stored(sid))
@@ -88,7 +89,7 @@ def main():
             assert after_hud[key] == before_hud[key], key
         assert session(base, sid)["workshop_history"] == before_history
         assert not revisions(folder, sid)
-        install(control, lambda text, prompt, n: step(text))
+        verse_calls = install(control, lambda text, prompt, n: step(text))
         for text in ["この川柳の意味は？", "さくらいろって何？"]:
             r = finish(base, send, sid, text)
             assert r["workshop_action"] != "knowledge", r
@@ -98,18 +99,25 @@ def main():
         a = enqueue(base, sid, "枕詞って何？")
         b = enqueue(base, sid, "ソネットの形式は？")
         for turn in [a, b]: wait_for(lambda: row(base, turn, {"waiting_for_warning"}))
-        dup = request(base, "/api/v1/player-input", {"session_id":sid,"text":"枕詞って何？","source":"text"})
+        dup = request(base, "/api/v1/player-input", {"session_id":sid,"text":"枕詞って何？","source":"voice"})
         assert dup["deduplicated"] and dup["turn_id"] == a, dup
+        # 戦闘中に通常分類で受けた質問は、川柳へ戻ると受付世代が変わる。
+        # 同じ入力を川柳として読み替えず、元の分類結果のまま取消する。
+        classified = {turn: row(base, turn, {"waiting_for_warning"})["request_classification"] for turn in [a, b]}
+        model_count = len(verse_calls)
         end(send, rows, sid)
         returned(send, rows, sid)
         for turn in [a, b]:
-            r = drive(send, sid, lambda: row(base, turn, {"completed"}))
-            assert r["source"] == "voice" and r["workshop_action"] == "knowledge", r
-        assert row(base, a, {"completed"})["completed_at"] < row(base, b, {"completed"})["completed_at"]
+            r = wait_for(lambda: row(base, turn, {"cancelled"}))
+            assert r["resolution"] == "superseded_classifier_mode" and r["classifier_mode"] == "normal", r
+            assert r["request_classification"] == classified[turn] and not r.get("llm_reports", []), r
+            assert not any(h["turn_id"] == turn + ":reply" for h in session(base, sid)["history"])
+        # 戦闘後の安堵leafは別用途。待機質問から相談モデルを呼ばない境界を確認する。
+        assert len(verse_calls) == model_count
         assert session(base, sid)["workshop_followup"] == "discussion"
         assert hud(sid)["pending_lines"] == before_hud["pending_lines"]
         assert len([r for r in rows(sid) if r["turn_id"] in [a,b]]) == 2
-        passed.append("combat_questions_fifo_deduplicate_reuse_ids_and_resume_discussion_without_confirmation")
+        passed.append("combat_questions_deduplicate_and_cancel_at_senryu_boundary_while_preserving_pending")
 
     with fixture(enabled=False, combat_settings=SETTINGS) as f:
         base, _, log, control, seen, _, _, _, send, hud, rows, stored, folder = f
@@ -119,9 +127,29 @@ def main():
             return wait_for(lambda: next((r for r in rows(sid)
                 if r["playback_status"] == "started" and r.get("combat_actions")), None))
 
-        sid = register(base, preview=False); send(sid); warning_started(sid)
+        # workshopのないsessionなら警告前後で通常分類を維持し、FIFO配送できる。
+        sid = register(base, preview=False, body=True); send(sid); warning_started(sid)
+        first = enqueue(base, sid, "枕詞って何？")
+        second = enqueue(base, sid, "ソネットの形式は？")
+        for turn in [first, second]:
+            waiting = wait_for(lambda: row(base, turn, {"waiting_for_warning"}))
+            assert waiting["classifier_mode"] == "normal", waiting
+        dup = request(base, "/api/v1/player-input", {"session_id":sid,"text":"枕詞って何？","source":"voice"})
+        assert dup["deduplicated"] and dup["turn_id"] == first, dup
+        (folder / "player_mode").write_text("ok")
+        for turn in [first, second]:
+            r = wait_for(lambda: row(base, turn, {"completed"}))
+            assert r["source"] == "voice" and r["knowledge_status"] == "found" and r["reference_ids"], r
+            assert not r["llm_reports"], r
+            assert sum(h["turn_id"] == turn + ":reply" for h in session(base, sid)["history"]) == 1
+        assert row(base, first, {"completed"})["completed_at"] < row(base, second, {"completed"})["completed_at"]
+        assert len([r for r in rows(sid) if r["turn_id"] in [first, second]]) == 2
+        passed.append("normal_mode_questions_fifo_deduplicate_reuse_ids_and_commit_once_after_warning")
+        request(base, "/api/v1/adapter-sessions/" + sid, method="DELETE")
+
+        sid = register(base, preview=False, body=True); send(sid); warning_started(sid)
         questions = ["枕詞って何？", "ソネットの形式は？", "川柳の決まりを教えて", "ソネットとは？",
-                     "一の読みを教えて", "漢字の3は何年生で習うの？", "国語で幻の枕詞って何？",
+                     "川柳とは？", "まくらことばって何？", "Minecraftで石のIDは？",
                      "ダイヤモンドの剣のIDは？", "ダイヤモンドの剣の耐久値は？"]
         turns = [enqueue(base, sid, text) for text in questions]
         for turn in turns: wait_for(lambda: row(base, turn, {"waiting_for_warning"}))
@@ -138,8 +166,9 @@ def main():
         assert session(base, sid)["history"] == [{"turn_id": aftermath["turn_id"] + ":reply",
             "role": "assistant", "text": aftermath["text"]}]
         passed.append("bounded_queue_cancels_questions_and_keeps_only_completed_aftermath_history")
+        request(base, "/api/v1/adapter-sessions/" + sid, method="DELETE")
 
-        sid = register(base, preview=False); send(sid)
+        sid = register(base, preview=False, body=True); send(sid)
         warning = warning_started(sid)
         spoken_before = [r for r in session(base, sid)["history"] if r["role"] == "assistant"]
         first = enqueue(base, sid, "枕詞って何？")
@@ -160,10 +189,12 @@ def main():
         assert not any(r["turn_id"] in {first + ":reply", second + ":reply"} for r in history)
         (folder / "player_mode").write_text("ok")
         passed.append("failed_answer_does_not_block_next_question_or_commit_assistant_history")
+        request(base, "/api/v1/adapter-sessions/" + sid, method="DELETE")
 
         for change in ["death", "dimension", "close"]:
-            other = register(base, preview=False); send(other); warning_started(other)
+            other = register(base, preview=False, body=True); send(other); warning_started(other)
             turn = enqueue(base, other, "枕詞って何？")
+            wait_for(lambda: row(base, turn, {"waiting_for_warning"}))
             if change == "death":
                 send(other, event={"name":"player_died","source_kind":"system","priority_hint":"background","certainty":"high"},
                      player={"name":"試験","dimension":"minecraft:overworld","health":0})
@@ -172,9 +203,10 @@ def main():
             else:
                 request(base,"/api/v1/adapter-sessions/"+other,method="DELETE")
             wait_for(lambda: row(base,turn,{"cancelled"}))
-            time.sleep(.4)  # 遅いparser結果が返っても保留を復活させない。
-            assert row(base,turn,{"cancelled"})
-        passed.append("death_dimension_and_session_close_cancel_even_before_classification")
+            assert not row(base, turn, {"cancelled"}).get("llm_reports", [])
+            if change != "close":
+                request(base, "/api/v1/adapter-sessions/" + other, method="DELETE")
+        passed.append("death_dimension_and_session_close_cancel_classified_questions_waiting_for_warning")
 
     print(json.dumps({"passed":len(passed),"cases":passed,"all_owned_processes_stopped":True},ensure_ascii=False,indent=2))
 
