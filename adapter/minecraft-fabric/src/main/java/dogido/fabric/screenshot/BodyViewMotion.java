@@ -1,7 +1,8 @@
 package dogido.fabric.screenshot;
 
-/** client tickの身体姿勢から停止と、静止中10秒ごとの観測更新を数える。単位はblockと度。
- * 2 tick（通常100ms）の静止を確認し、細かな補間中やyawの±180度境界では余分な撮影を作らない。
+/** client tickの身体姿勢から、視点の変化量と静止中10秒ごとの観測更新を数える。単位はblockと度。
+ * 通常観測は2 tick（通常100ms）の静止後、前回の観測基準から0.5 blockか10度変われば進める。
+ * 小さな浮遊・向き直しでは基準を更新せず、徐々に進む変化は次の判定へ残す。
  * translationは旋回だけの連続を画像比較側へ伝える番号。往復して元の座標へ戻っても移動を失わない。
  */
 final class BodyViewMotion {
@@ -12,21 +13,23 @@ final class BodyViewMotion {
     private Object context;
     private Pose previous,anchor,translationAnchor;
     static final int REFRESH_TICKS = 200;
+    static final double CAPTURE_DISTANCE = .5;
+    static final double CAPTURE_ANGLE = 10;
     private int quiet, sinceCapture;
-    private boolean dirty;
     private long sequence,translation;
-    void clear() { context=null;previous=null;anchor=null;translationAnchor=null;quiet=sinceCapture=0;dirty=false; }
+    void clear() { context=null;previous=null;anchor=null;translationAnchor=null;quiet=sinceCapture=0; }
     void observe(Object key,Pose pose) {
         if (!key.equals(context)) {
-            clear();context=key;previous=anchor=translationAnchor=pose;dirty=true;translation++;return;
+            clear();context=key;previous=translationAnchor=pose;translation++;return;
         }
         if (pose.distance(translationAnchor)>=.02) { translation++;translationAnchor=pose; }
-        if (pose.distance(anchor)>=.02 || pose.angle(anchor)>=.5) dirty=true;
         boolean moving=pose.distance(previous)>.0001 || pose.angle(previous)>.05;
         quiet=moving?0:Math.min(quiet+1,2);previous=pose;
         sinceCapture++;
-        if (quiet==2 && (dirty || sinceCapture>=REFRESH_TICKS)) {
-            sequence++;dirty=false;anchor=pose;sinceCapture=0;
+        // 経路の最大変化ではなく、停止した現在の視点を比較する。往復して戻れば追加撮影しない。
+        boolean changed=anchor==null || pose.distance(anchor)>=CAPTURE_DISTANCE || pose.angle(anchor)>=CAPTURE_ANGLE;
+        if (quiet==2 && (changed || sinceCapture>=REFRESH_TICKS)) {
+            sequence++;anchor=pose;sinceCapture=0;
         }
     }
     boolean still(Pose pose) { return previous!=null && quiet==2 && pose.distance(previous)<=.0001 && pose.angle(previous)<=.05; }
@@ -34,7 +37,7 @@ final class BodyViewMotion {
     long afterLookSequence(long after) {
         long previous=Math.max(sequence,after);
         if(previous==Long.MAX_VALUE)throw new IllegalStateException("motion_sequence_exhausted");
-        sequence=previous+1;dirty=false;anchor=this.previous;sinceCapture=0;return sequence;
+        sequence=previous+1;anchor=this.previous;sinceCapture=0;return sequence;
     }
     long sequence() { return sequence; }
     long translation() { return translation; }
