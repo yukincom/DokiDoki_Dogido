@@ -230,7 +230,7 @@ async fn resumed_question_has_new_display_and_epoch_and_rejects_old_callbacks() 
         Status::Completed,
         Some(&json!({"text":"古い返答。"}))
     ));
-    dialogue.acknowledge_display("s", &[old_display.clone()]);
+    dialogue.acknowledge_display("s", std::slice::from_ref(&old_display));
     let result = json!({"text":"今の返答やで。"});
     assert!(dialogue.update("s", "question", epoch, Status::Queued, Some(&result)));
     let new_display = {

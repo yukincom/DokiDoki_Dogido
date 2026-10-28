@@ -252,9 +252,9 @@ print(json.dumps(dict(h,schema='dogido.j_lens.v1',status='exploratory_transfer',
         let outside = f.root.join("outside-bookshelf");
         fs::rename(store.memory.join("bookshelf"), &outside).unwrap();
         std::os::unix::fs::symlink(&outside, store.memory.join("bookshelf")).unwrap();
-        let before = fs::read(&outside.join("j-lens").join(cache.file_name().unwrap())).unwrap();
+        let before = fs::read(outside.join("j-lens").join(cache.file_name().unwrap())).unwrap();
         assert!(store.j_lens("root:p", 1, &config, true).is_err());
-        assert_eq!(fs::read(&outside.join("j-lens").join(cache.file_name().unwrap())).unwrap(), before);
+        assert_eq!(fs::read(outside.join("j-lens").join(cache.file_name().unwrap())).unwrap(), before);
     }
 
 }

@@ -313,7 +313,7 @@ impl Store {
             .map(|p| (p["id"].as_str().unwrap().to_owned(), p))
             .collect();
         let catalog: BTreeSet<String> = crate::catalog_editor::entries()
-            .into_iter()
+            .iter()
             .filter_map(|e| e["id"].as_str().map(str::to_owned))
             .collect();
         let mut failures = Vec::new();

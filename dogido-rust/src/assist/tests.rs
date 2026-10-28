@@ -25,7 +25,7 @@ fn state() -> AssistState {
 }
 fn dispatch(s: Submission) -> Dispatch {
     match s {
-        Submission::Handled(d) => d,
+        Submission::Handled(d) => *d,
         _ => panic!("handled expected"),
     }
 }

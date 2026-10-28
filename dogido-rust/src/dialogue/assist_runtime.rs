@@ -41,15 +41,15 @@ impl Dialogue {
         }
     }
     pub(super) fn cancel_assist(d: &mut Data, sid: &str) {
-        if let Some(s) = d.sessions.get_mut(sid) {
-            if let Some(p) = s.assist_pending.take() {
-                let _ = p.cancel.send(true);
-                if let Some(row) = d.rows.iter_mut().find(|r| r["turn_id"] == p.turn) {
-                    row["playback_status"] = "cancelled".into();
-                    row["assist_status"] = "cancelled".into();
-                }
-                d.revision += 1;
+        if let Some(s) = d.sessions.get_mut(sid)
+            && let Some(p) = s.assist_pending.take()
+        {
+            let _ = p.cancel.send(true);
+            if let Some(row) = d.rows.iter_mut().find(|r| r["turn_id"] == p.turn) {
+                row["playback_status"] = "cancelled".into();
+                row["assist_status"] = "cancelled".into();
             }
+            d.revision += 1;
         }
     }
     pub(super) fn queue_fixed_reply(

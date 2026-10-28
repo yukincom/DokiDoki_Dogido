@@ -69,6 +69,15 @@ pub struct State {
     reports: VecDeque<Report>,
 }
 
+/// 現在の入力世代と身体の所属をまとめた借用ビュー。保持せず、その場の照合だけに使う。
+struct RequestObservation<'a> {
+    generation: u64,
+    owner: Option<&'a str>,
+    dimension: Option<&'a str>,
+    context: Option<&'a Context>,
+    active: bool,
+}
+
 impl State {
     pub fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
@@ -145,16 +154,8 @@ impl State {
         self.finish("cancelled", "input_or_session_changed", None);
     }
 
-    fn refresh(
-        &mut self,
-        generation: u64,
-        owner: Option<&str>,
-        dimension: Option<&str>,
-        context: Option<&Context>,
-        active: bool,
-        now: Instant,
-        utc: DateTime<Utc>,
-    ) {
+    fn refresh(&mut self, observed: RequestObservation<'_>, now: Instant, utc: DateTime<Utc>) {
+        let RequestObservation { generation, owner, dimension, context, active } = observed;
         let Some(p) = &self.pending else {
             return;
         };
@@ -190,7 +191,11 @@ impl State {
         now: Instant,
         utc: DateTime<Utc>,
     ) -> Vec<Value> {
-        self.refresh(generation, owner, dimension, context, active, now, utc);
+        self.refresh(
+            RequestObservation { generation, owner, dimension, context, active },
+            now,
+            utc,
+        );
         self.pending
             .as_ref()
             .filter(|p| {
@@ -214,7 +219,11 @@ impl State {
         now: Instant,
         utc: DateTime<Utc>,
     ) -> Vec<Report> {
-        self.refresh(generation, owner, dimension, context, active, now, utc);
+        self.refresh(
+            RequestObservation { generation, owner, dimension, context, active },
+            now,
+            utc,
+        );
         for r in incoming {
             let Some(p) = &self.pending else {
                 break;

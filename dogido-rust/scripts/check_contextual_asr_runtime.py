@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Rust音近傍補正の実HTTP配線。モデル/TTSは模擬、全所有プロセスを回収する。"""
 import json
-from check_dialogue import row, submit, wait_for
+from check_dialogue import request, row, submit, wait_for
 from check_haiku_runtime import LINES
 from check_workshop_fixture import fixture
 from check_workshop_runtime import install, ready, session, step
 from check_workshop_edits import edit, finish, revisions
-from check_workshop_combat import enter, end, SETTINGS
+from check_workshop_combat import enter, end, returned, SETTINGS
 from check_workshop_provisional import done
 
 
@@ -77,16 +77,35 @@ def main():
         assert not hud(sid)["pending_lines"]
         passed.append("superseded_canonical_candidate_does_not_leak_to_next_turn")
 
+        # 川柳として受け付けた入力を、戦闘中も保持して同じ句へ一度だけ戻す。
+        identity = (result["workshop_id"], result["workshop_state_before"]["version"])
+        before_revisions = revisions(folder, sid)
         calls = install(control, lambda text, prompt, n: step(text))
+        (folder / "player_mode").write_text("slow")
+        send(sid)
+        speaking = submit(base, sid, "この句の説明を聞かせて")
+        wait_for(lambda: row(base, speaking, {"started"}))
+        calls.clear()
+        accepted = request(base, "/api/v1/player-input", {"session_id": sid, "source": "voice", "text": raw})
+        assert accepted["accepted"], accepted
+        turn = accepted["turn_id"]
+        held = wait_for(lambda: row(base, turn, {"waiting_for_warning"}))
+        assert held["player_input_text"] == raw and held["classifier_mode"] == "senryu", held
+        classification = held["request_classification"]
+        assert held["resolution"] == "reply_queued" and not calls and not held.get("asr_corrections"), held
+        (folder / "player_mode").write_text("ok")
         enter(send, rows, sid)
-        turn = submit(base, sid, raw)
-        held = wait_for(lambda: row(base, turn, {"queued"}))
-        assert held["combat_input_outcome"] == "held" and held["player_input_text"] == raw, held
-        assert held["combat_input_result"]["analysis"]["action"] == "deferred_input", held
-        assert held["combat_input_result"]["provider"] == "code" and not held["combat_input_result"]["llm_reports"], held
+        held = row(base, turn, {"waiting_for_warning"})
+        assert held and held["request_classification"] == classification, held
         assert not calls and not held.get("asr_corrections") and hud(sid)["state"] == "danger", held
+        assert revisions(folder, sid) == before_revisions
         end(send, rows, sid)
+        returned(send, rows, sid)
+        # 原文を再送せず、元の受付turnの配送先を最後まで追う。
         result = done(base, send, sid, turn, hostile=False)
+        assert (result["workshop_id"], result["workshop_state_before"]["version"]) == identity, result
+        assert result["request_classification"] == classification, result
+        assert revisions(folder, sid) == before_revisions and stored(sid) == original
         assert result["player_input_text"] == raw and result["interpreted_player_input_text"] == interpreted, result
         assert result["asr_corrections"] and result["workshop_action"] == "explain", result
         assert len(calls) == 1 and calls[0][0] == interpreted and hud(sid)["state"] == "open", calls

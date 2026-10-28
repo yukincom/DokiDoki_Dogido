@@ -216,7 +216,7 @@ fn light_generated_for_an_old_body_epoch_is_discarded() {
                 age_ms: 0,
                 body: json!({}),
                 player_safety: e.world.clone(),
-                player_observed_at: e.observed_at.clone(),
+                player_observed_at: e.observed_at,
             },
         )
     };

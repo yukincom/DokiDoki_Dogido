@@ -50,7 +50,6 @@ impl Dialogue {
                 } else {
                     InputSource::Text
                 },
-                ..Input::default()
             },
             turn: turn.clone(),
             cancel,

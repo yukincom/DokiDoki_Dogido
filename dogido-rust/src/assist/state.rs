@@ -41,7 +41,7 @@ pub struct Dispatch {
 #[serde(tag = "kind", content = "value", rename_all = "snake_case")]
 pub enum Submission {
     NotHandled,
-    Handled(Dispatch),
+    Handled(Box<Dispatch>),
 }
 #[derive(Clone, Debug, Serialize)]
 pub struct ObservedResult {
@@ -115,7 +115,7 @@ impl AssistState {
         if classification.prediction.label != crate::request_classifier::Label::EquipSword {
             return Submission::NotHandled;
         }
-        Submission::Handled(self.issue(
+        Submission::Handled(Box::new(self.issue(
             IntentEvidence {
                 source: "modernbert".into(),
                 evidence: classification.text.clone(),
@@ -125,7 +125,7 @@ impl AssistState {
             event,
             now,
             has_speech,
-        ))
+        )))
     }
     fn issue(
         &mut self,

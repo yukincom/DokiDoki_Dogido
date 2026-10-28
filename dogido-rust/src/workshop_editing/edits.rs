@@ -145,9 +145,9 @@ impl Engine {
         };
         let match_in = |line: &HaikuLine| -> Option<String> {
             let fragment = fragment?;
-            if line.surface_text.contains(fragment) {
-                Some(fragment.to_owned())
-            } else if !line.reading_text.is_empty() && line.reading_text.contains(fragment) {
+            if line.surface_text.contains(fragment)
+                || (!line.reading_text.is_empty() && line.reading_text.contains(fragment))
+            {
                 Some(fragment.to_owned())
             } else {
                 normalized_fragment

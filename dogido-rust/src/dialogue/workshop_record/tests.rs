@@ -248,10 +248,11 @@ async fn retired_event_text_cannot_admit_input_or_change_its_generation() {
     let result = f.d.observe("s", GameEvent::parse(raw).unwrap(), None);
     assert_eq!(result["accepted"], true);
     assert!(result.get("player_input").is_none());
-    let data = f.d.data.lock().unwrap();
-    assert_eq!(data.sessions["s"].input_generation, generation);
-    assert_eq!(data.sessions["s"].combat.shut_up_count, 0);
-    drop(data);
+    {
+        let data = f.d.data.lock().unwrap();
+        assert_eq!(data.sessions["s"].input_generation, generation);
+        assert_eq!(data.sessions["s"].combat.shut_up_count, 0);
+    }
     assert!(f.records().await.iter().all(|r| r["event_kind"] != "input_admission"));
     f.finish().await;
 }

@@ -35,11 +35,9 @@ pub(super) async fn render_image(
     image: Option<&crate::chat_image::Attachment>,
 ) -> Result<Run> {
     if image.is_none() { return render(request, llm, cancel).await; }
-    if image.is_some() {
-        if let Some(system) = request.messages.iter_mut().find(|m| m.role == crate::types::Role::System) {
-            system.content.push('\n');
-            system.content.push_str(crate::companion_prompt::chat_image());
-        }
+    if let Some(system) = request.messages.iter_mut().find(|m| m.role == crate::types::Role::System) {
+        system.content.push('\n');
+        system.content.push_str(crate::companion_prompt::chat_image());
     }
     render_with(request, cancel, |request| async move {
         match image {

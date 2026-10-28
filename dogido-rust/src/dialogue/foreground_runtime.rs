@@ -147,20 +147,21 @@ mod tests {
             s.haiku.workshop = Some(workshop);
         }
 
-        let mut d = dialogue.data.lock().unwrap();
-        let before_tick = dialogue.clock.elapsed().as_millis() as u64;
-        dialogue.tick_foreground(&mut d, "s");
-        let after_tick = dialogue.clock.elapsed().as_millis() as u64;
-        let foreground = &d.sessions["s"].foreground;
-        assert_eq!(foreground.route, Route::None);
-        // 同一ms内の終了でも成立する。時計のresetが抜けた場合は前の100秒が残って失敗する。
-        let elapsed = foreground.clock.elapsed(after_tick);
-        assert!(elapsed <= after_tick - before_tick);
-        assert_eq!(
-            foreground.clock.elapsed(after_tick + 60_000),
-            elapsed + 60_000
-        );
-        drop(d);
+        {
+            let mut d = dialogue.data.lock().unwrap();
+            let before_tick = dialogue.clock.elapsed().as_millis() as u64;
+            dialogue.tick_foreground(&mut d, "s");
+            let after_tick = dialogue.clock.elapsed().as_millis() as u64;
+            let foreground = &d.sessions["s"].foreground;
+            assert_eq!(foreground.route, Route::None);
+            // 同一ms内の終了でも成立する。時計のresetが抜けた場合は前の100秒が残って失敗する。
+            let elapsed = foreground.clock.elapsed(after_tick);
+            assert!(elapsed <= after_tick - before_tick);
+            assert_eq!(
+                foreground.clock.elapsed(after_tick + 60_000),
+                elapsed + 60_000
+            );
+        }
         dialogue.shutdown().await;
     }
 }

@@ -474,12 +474,11 @@ impl Dialogue {
                         payload.remove("line_reference");
                     }
                     if let Some(index) = discussion_target.as_ref().map(|target| target.line_index)
+                        && payload["action"] == "propose_revision"
                     {
-                        if payload["action"] == "propose_revision" {
-                            payload["findings"] = json!([{"line_index":index,
-                                "fragment":lines[index].reading_text, "problem":"other",
-                                "note":text, "confidence":1.0}]);
-                        }
+                        payload["findings"] = json!([{"line_index":index,
+                            "fragment":lines[index].reading_text, "problem":"other",
+                            "note":text, "confidence":1.0}]);
                     }
                     if matches!(classified, Some(ClassifiedWorkshop::End))
                         && matches!(
@@ -553,11 +552,10 @@ impl Dialogue {
                         }
                         if let Some(index) =
                             discussion_target.as_ref().map(|target| target.line_index)
+                            && let Some(findings) = step["analysis"]["findings"].as_array_mut()
                         {
-                            if let Some(findings) = step["analysis"]["findings"].as_array_mut() {
-                                for finding in findings {
-                                    finding["line_index"] = index.into();
-                                }
+                            for finding in findings {
+                                finding["line_index"] = index.into();
                             }
                         }
                         selected = Some(step);

@@ -40,10 +40,16 @@ def main():
             wait_for(lambda:row(base,wt,{'started'}))
             for _ in range(5):send(sid)
             wait_for(lambda:row(base,wt,{'completed'}))
-            assert row(base,chat,{'cancelled'})['cancel_reason']=='visual_hostile'
+            # 通常の敵発見は再生中の会話が終わってから警告する。
+            completed=row(base,chat,{'completed'}); assert completed
+            trace=log.read_text()
+            chat_done=re.search(r'event="dialogue_status"[^\n]*turn_id="'+re.escape(chat)+r'" playback_status="completed"',trace)
+            warning_started=re.search(r'event="warning_status"[^\n]*turn_id="'+re.escape(wt)+r'" playback_status="started"',trace)
+            assert chat_done and warning_started and chat_done.start()<warning_started.start()
             assert len(warnings(sid))==1 and llm_count()==calls
-            assert all(r['role']!='assistant' for r in snapshot(base)['sessions'][0]['history'])
-            passed.append('chat_cancel_then_warning_repeat_ticks_no_llm_no_history'); close(sid)
+            history=snapshot(base)['sessions'][0]['history']
+            assert sum(r['role']=='assistant' and r['text']==completed['text'] for r in history)==1,history
+            passed.append('chat_finishes_before_warning_repeat_ticks_no_extra_llm_history_once'); close(sid)
 
             sid=fresh(); (folder/'mode').write_text('slow'); send(sid)
             wt=wait_for(lambda:warnings(sid))[-1]['turn_id']; wait_for(lambda:row(base,wt,{'started'}))

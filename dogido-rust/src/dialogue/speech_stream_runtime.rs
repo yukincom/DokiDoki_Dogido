@@ -65,9 +65,7 @@ impl Source {
             &config,
             &owner.audio,
             llm,
-            &request,
-            image,
-            corrections,
+            SpeechInput { request: &request, image, corrections },
             cancel,
             || {
                 // 最初の実player起動時だけStartedへ進める。部分本文を表示ACKへ公開しない。
@@ -252,17 +250,23 @@ async fn send_sentences(
     Ok(())
 }
 
+/// 一返答の生成入力と読み補正。画像は借用し、寿命と取消は呼出元が管理する。
+struct SpeechInput<'a> {
+    request: &'a GenerationRequest,
+    image: Option<&'a crate::chat_image::Attachment>,
+    corrections: Vec<Value>,
+}
+
 async fn pipeline(
     config: &DialogueConfig,
     audio: &Audio,
     llm: &RigLlm,
-    request: &GenerationRequest,
-    image: Option<&crate::chat_image::Attachment>,
-    corrections: Vec<Value>,
+    input: SpeechInput<'_>,
     cancel: &mut watch::Receiver<bool>,
     started: impl FnOnce(),
     ready: impl FnOnce(&chat_validation::Outcome, &[Value]) -> Result<()>,
 ) -> Result<Run> {
+    let SpeechInput { request, image, corrections } = input;
     let (stop, stop_rx) = watch::channel(false);
     // 空deltaは送らず、各要素は最低1 byte。LLM側で同じ総byte上限を守るため、
     // 音声待ち中も一返答を受信でき、要素数も本文byte数もこの上限を越えない。

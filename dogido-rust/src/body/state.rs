@@ -52,7 +52,7 @@ impl State {
             super::senses::Origin {
                 player_safety: event.world.clone(),
                 environment: senses.and_then(|s| s.environment.clone()),
-                player_observed_at: event.observed_at.clone(),
+                player_observed_at: event.observed_at,
                 context: sample.map(|s| s.context.clone()),
                 revision: sample.map(|s| s.snapshot_revision),
                 position: sample.map(|s| s.self_pose.position),

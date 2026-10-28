@@ -884,8 +884,8 @@ impl Dialogue {
                         s.danger.begin_player_hazard_generation(action);
                     }
                     let result=if let Some(image)=action.image.as_deref() {
-                        super::reaction_runtime::render_image(&config,&self.llm,&input,&mut cancel,Some(image)).await
-                    } else {bridge::render(&config,&self.llm,input,&mut cancel).await};
+                        super::reaction_runtime::render_image(config,&self.llm,&input,&mut cancel,Some(image)).await
+                    } else {bridge::render(config,&self.llm,input,&mut cancel).await};
                     if crate::reaction_leaf::is_model_reaction(action) {
                         anyhow::ensure!(!*cancel.borrow(),"cancelled");
                         let mut d=self.data.lock().unwrap();
@@ -939,20 +939,20 @@ impl Dialogue {
                 if action.light_comment.is_some() {
                     // 照明は選択時に本文が完成している。追加生成をせず、表示本文を保ったまま
                     // 共通の読み訂正・辞書処理だけを音声用テキストへ適用する。
-                    text=super::tts_runtime::read(&config,&text,&mut cancel,
+                    text=super::tts_runtime::read(config,&text,&mut cancel,
                         tokio::time::Instant::now()+Duration::from_secs(35)).await?;
                 }
                 if let Some(plan)=&action.visual_plan{
                     if let Some(cue)=&plan.cue{
-                        if let Some(path)=config.warnings.cue_dir.as_deref().and_then(|dir|cue_path(dir,cue.id)){self.audio.play_file(&config,&path,&mut cancel,0,&started).await?;}
-                        else{tracing::warn!(event="warning_cue_fallback",cue_id=cue.id,reason="file_missing");self.audio.speak(&config,cue.text,&mut cancel,&started).await?;}
+                        if let Some(path)=config.warnings.cue_dir.as_deref().and_then(|dir|cue_path(dir,cue.id)){self.audio.play_file(config,&path,&mut cancel,0,&started).await?;}
+                        else{tracing::warn!(event="warning_cue_fallback",cue_id=cue.id,reason="file_missing");self.audio.speak(config,cue.text,&mut cancel,&started).await?;}
                     }
                     if let Some(paths)=config.warnings.cue_dir.as_deref().and_then(|dir|plan.fragment_paths(dir)){
                         tracing::info!(event="warning_fragments",fragments=paths.len());
                         for (i,path) in paths.iter().enumerate(){self.audio.play_file_at_rate(config,path,&mut cancel,i,callout_rate,&started).await?;}
                     }else if !text.is_empty(){
                         if !plan.cue_sequence.is_empty(){tracing::warn!(event="warning_fragments_fallback",reason="file_missing");}
-                        self.audio.speak(&config,&text,&mut cancel,&started).await?;
+                        self.audio.speak(config,&text,&mut cancel,&started).await?;
                     }
                     continue;
                 }
@@ -960,10 +960,10 @@ impl Dialogue {
                     else if !action.cue_sequence.is_empty(){action.cue_sequence.iter().map(|id|config.warnings.cue_dir.as_deref().and_then(|dir|cue_path(dir,id))).collect::<Option<Vec<_>>>()}
                     else{None};
                 if let Some(paths)=paths{
-                    for (i,path) in paths.iter().enumerate(){self.audio.play_file(&config,path,&mut cancel,i,&started).await?;}
+                    for (i,path) in paths.iter().enumerate(){self.audio.play_file(config,path,&mut cancel,i,&started).await?;}
                 }else if let Some(path)=action.cue_id.and_then(|id|config.warnings.cue_dir.as_deref().and_then(|dir|cue_path(dir,id))){
-                    self.audio.play_file(&config,&path,&mut cancel,0,&started).await?;
-                }else if !text.is_empty(){self.audio.speak(&config,&text,&mut cancel,&started).await?;}
+                    self.audio.play_file(config,&path,&mut cancel,0,&started).await?;
+                }else if !text.is_empty(){self.audio.speak(config,&text,&mut cancel,&started).await?;}
                 if action.kind=="thunder_cue" && action_began.load(Ordering::SeqCst) { thunder_scream_completed=true; }
             }
             Ok::<PlaybackStatus,anyhow::Error>(if silent_only { PlaybackStatus::NotSelected } else if config.audio_enabled { PlaybackStatus::Completed } else { PlaybackStatus::AudioDisabled })

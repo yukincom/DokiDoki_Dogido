@@ -611,14 +611,16 @@ async fn a_queued_return_checks_work_and_departure_again_before_generation() {
         observe(&d,follow_arrival_wire(3,!departs,true));
         drop(slot);
         until(|| d.data.lock().unwrap().sessions["s"].warning.is_none() && d.serial.available_permits()==1).await;
-        let requests=mock.seen.lock().unwrap();
-        if departs { assert!(requests.is_empty()); }
-        else {
-            assert_eq!(requests.len(),1);
-            let input:Value=serde_json::from_str(requests[0]["messages"][1]["content"].as_str().unwrap()).unwrap();
-            assert_eq!(input["body_options"]["available_actions"],json!({"stay":"その場におる","look_owner":"その場でプレイヤーを見る"}));
+        {
+            let requests=mock.seen.lock().unwrap();
+            if departs { assert!(requests.is_empty()); }
+            else {
+                assert_eq!(requests.len(),1);
+                let input:Value=serde_json::from_str(requests[0]["messages"][1]["content"].as_str().unwrap()).unwrap();
+                assert_eq!(input["body_options"]["available_actions"],json!({"stay":"その場におる","look_owner":"その場でプレイヤーを見る"}));
+            }
         }
-        drop(requests); d.shutdown().await;
+        d.shutdown().await;
     }
 }
 

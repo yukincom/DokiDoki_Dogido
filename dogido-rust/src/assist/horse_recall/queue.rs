@@ -210,7 +210,7 @@ mod tests {
         ) else {
             panic!("expected explicit sword request");
         };
-        dispatch
+        *dispatch
     }
 
     #[test]
