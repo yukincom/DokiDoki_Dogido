@@ -1,1 +1,0 @@
-{"id":"live_20261028_report_01","group_id":"live_20261028_report_normal","text":"上の方にいるんじゃない?","context":[],"label":null,"classifier_mode":"normal","gold_intent_text":"上を向く","label_mapping_status":"pending_label_definition","source":"observed_text","rationale":"ユーザーの正解意図は確定。現行16分類に上方向専用ラベルがないため、学習用ラベルの対応のみ未確定として収集する。","source_keys":["live_20261028_report:01"]}
