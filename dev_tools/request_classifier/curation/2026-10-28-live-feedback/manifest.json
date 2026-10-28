@@ -1,0 +1,34 @@
+{
+  "schema": "user_runtime_feedback.v1",
+  "date": "2026-10-28",
+  "status": "collected_not_integrated",
+  "feedback_count": 3,
+  "candidate_count": 2,
+  "pending_count": 1,
+  "mode_counts": {
+    "normal": 1,
+    "senryu": 2
+  },
+  "label_counts": {
+    "not_target": 2
+  },
+  "pending_intents": [
+    {
+      "id": "live_20261028_report_01",
+      "user_specification": "上を向く",
+      "reason": "上方向専用ラベルが現行16分類にないため、既存ラベルとの対応は未確定。"
+    }
+  ],
+  "split": null,
+  "new_synthetic_examples": 0,
+  "source_prediction_values_preserved": true,
+  "classifier_re_inference": false,
+  "training_performed": false,
+  "runtime_modified": false,
+  "sha256": {
+    "README.md": "9b8cac28ce0ded04e29ce038a9958881740e2fb16ece6bf0bd5e034755baf0d9",
+    "candidates.jsonl": "cc2384218e390ed8fa534ca26b864c3fdcd14e0707df01f82a6dd4dd4918f209",
+    "evidence.jsonl": "f22acfadd801fc1f09fb7014e37e889ee31cf91700b3efa70453faf14621b629",
+    "pending.jsonl": "8ac82f7efe7c0d43debd9617eca17bc891d0a150f41b22e532cdfffe1a442c78"
+  }
+}

@@ -6,6 +6,8 @@
 
 本体で使用・配布するのは[川柳8分類と通常16分類の採用済み2本](../../docs/2026-10-24-bundled-request-classifier.md)です。以下は旧5分類の研究記録です。
 
+追加収集：[2026-10-28の実機フィードバック3件](curation/2026-10-28-live-feedback/README.md)（学習・本体反映前）。
+
 ## v1.7の記録
 
 ModernBERT-Jaの日本語依頼5分類を試すデータと学習・評価補助です。以下はv1.7のデータ・評価記録です。後に採用されたv1.9 seed43の本体接続と現在発話だけの入力契約は[接続記録](../../docs/2026-10-15-modernbert-integration-preparation.md)を参照してください。
