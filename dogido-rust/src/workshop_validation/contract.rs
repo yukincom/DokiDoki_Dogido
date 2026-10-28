@@ -157,7 +157,9 @@ pub(super) fn errors(payload: &Value, details: &Value) -> Vec<String> {
     }
     let evidence = text(&payload["evidence"]);
     let player = text(&details["player_text"]);
-    if sanitize::strip(evidence).chars().count() < 2 || !player.contains(evidence) {
+    if action != "stage_player_edit"
+        && (sanitize::strip(evidence).chars().count() < 2 || !player.contains(evidence))
+    {
         errors.push("evidence:not_exact".into());
     }
     if close
@@ -170,7 +172,10 @@ pub(super) fn errors(payload: &Value, details: &Value) -> Vec<String> {
     } else {
         player
     };
-    if ASSETS["mutation_purposes"].get(action).is_some() && !original.contains(evidence) {
+    if action != "stage_player_edit"
+        && ASSETS["mutation_purposes"].get(action).is_some()
+        && !original.contains(evidence)
+    {
         errors.push("evidence:not_in_original".into());
     }
     if close && !original.contains(close_evidence) {

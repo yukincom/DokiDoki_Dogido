@@ -331,11 +331,7 @@ impl Dialogue {
                                 .push_str("本人から尋ねられた読み方・保存材料の参照はinspect_verseや。編集の前提確認には使わへん。");
                         }
                         if allowed.contains(&"stage_player_edit") {
-                            if classified_line.is_some() {
-                                instruction.push_str("stage_player_editの対象行と元句はコードが補完する。「AをBに変えて」ならtarget_fragmentはA、replacement_textはBだけで、変更後の行は作らない。evidenceも今回の原文から抜く。");
-                            } else {
-                                instruction.push_str("本人が今回、新しい語を指定してその語への変更を頼んだらstage_player_editを呼ぶ。置換語を指定せず新しい案を考えてほしい場合だけpropose_revisionの本文JSONや。expected_textは変更前の対象行全体。「AをBに変えて」ならtarget_fragmentはA、replacement_textはBだけで、変更後の行は作らない。evidenceも今回の原文から抜く。以前の案を選ぶだけの返事はstage_conversation_candidateや。");
-                            }
+                            instruction.push_str("stage_player_editの対象行と元句はコードが補完する。今回の依頼と会話の流れから、target_fragmentへ旧語、replacement_textへ置換語を返してな。一行全体ならtarget_fragmentは空文字。音声認識の誤りや表記の違いは解釈してええで。evidenceは解釈の記録で、原文との文字列一致は求めへん。");
                         }
                         instruction.push_str("本文JSONは会話の返答と、本文JSONで使えるaction一覧の処理に使う。tool呼出し時は本文の返事を付けず結果を待つ。コードが対象へ差分を適用し、保存結果を返すで。");
                         let system = prepared["messages"][0]["content"].as_str().unwrap_or("");
@@ -603,13 +599,12 @@ impl Dialogue {
                             }
                             break;
                         }
-                        // 受け取った操作の根拠が今回原文に属することだけを実行前に確認する。
+                        // 採否・提案生成等の根拠は従来どおり扱う。具体変更はBERTとLLMの解釈を使う。
                         if matches!(
                             a,
                             "close_workshop"
                                 | "accept_pending"
                                 | "reject_pending"
-                                | "stage_player_edit"
                                 | "stage_conversation_candidate"
                                 | "propose_revision"
                         ) {
@@ -773,14 +768,6 @@ impl Dialogue {
                         } else {
                             &step["analysis"]["line_proposal"]
                         };
-                        if a == "stage_player_edit" {
-                            ensure!(
-                                proposal["replacement_text"]
-                                    .as_str()
-                                    .is_some_and(|t| !t.is_empty() && text.contains(t)),
-                                "replacement not in original input"
-                            );
-                        }
                         let mut edit_view = snapshot.clone();
                         if a == "stage_conversation_candidate" {
                             // Selecting the validated candidate explicitly selects its
@@ -1013,10 +1000,16 @@ impl Dialogue {
         }
         let candidate = w.conversation_candidate.as_ref().map(|c| c.view());
         // 共有文脈と同じ20ターンの窓を使い、専用履歴から古い相談を戻さない。
-        let dialogue: Vec<_> = w.dialogue.iter().filter(|row| {
-            let id = format!("workshop:{}", row["turn_id"].as_str().unwrap_or(""));
-            !all.iter().any(|r| r["turn_id"] == id) || visible.iter().any(|r| r["turn_id"] == id)
-        }).cloned().collect();
+        let dialogue: Vec<_> = w
+            .dialogue
+            .iter()
+            .filter(|row| {
+                let id = format!("workshop:{}", row["turn_id"].as_str().unwrap_or(""));
+                !all.iter().any(|r| r["turn_id"] == id)
+                    || visible.iter().any(|r| r["turn_id"] == id)
+            })
+            .cloned()
+            .collect();
         let lines = w
             .pending
             .as_ref()

@@ -51,7 +51,7 @@ fn native_edit_keeps_verified_target_and_returns_failure_to_same_call() {
 }
 
 #[test]
-fn batch_unknown_function_and_stale_raw_evidence_never_become_edits() {
+fn batch_and_unknown_function_never_become_edits() {
     let current = view();
     let original = edit_message();
     let mut batch = original.clone();
@@ -63,7 +63,6 @@ fn batch_unknown_function_and_stale_raw_evidence_never_become_edits() {
     let mut unknown = original.clone();
     unknown["tool_calls"][0]["function"]["name"] = "save_verse".into();
     assert!(Call::decode_for_target(unknown, &current, RAW, Some(1)).is_err());
-    assert!(Call::decode_for_target(original, &current, "前の案はやめといて", Some(1)).is_err());
 }
 
 #[test]

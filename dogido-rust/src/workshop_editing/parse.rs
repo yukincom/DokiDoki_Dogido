@@ -108,23 +108,7 @@ pub(super) fn unquote(text: &str) -> &str {
     text
 }
 
-/// 引用外の導入部候補と、後続に空白・読点・引用開始があるかを返す。
-/// 区切りのない形は、Engineが旧語全体の読みを現在句へ照合してから分ける。
-pub(super) fn without_intro(text: &str) -> Option<(&str, bool)> {
-    ["では", "じゃあ"]
-        .iter()
-        .find_map(|prefix| text.strip_prefix(prefix))
-        .map(|s| {
-            let trimmed = s.trim_start_matches(|c| space(c) || matches!(c, '、' | ','));
-            (
-                trimmed,
-                trimmed != s || trimmed.starts_with(['「', '『', '"', '\'']),
-            )
-        })
-        .filter(|(s, _)| !s.is_empty())
-}
-
-/// 一つの明示置換に限り、モデルの部分文字列ではなく今回の原文からA/Bを得る。
+/// 生成前の直接編集に使う、一意な原文A/Bを得る。モデル出力の再解析には使わない。
 /// 引用内部の「を」は語句の一部。複数の区切りや閉じていない引用は推測で選ばない。
 /// この形以外の自由な依頼はNoneで既存のモデル抽出へ戻す。
 pub(super) fn verbatim_edit(input: &str) -> Result<Option<VerbatimEdit<'_>>> {

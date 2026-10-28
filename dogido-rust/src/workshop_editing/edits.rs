@@ -120,57 +120,7 @@ impl Engine {
             replacement.index = Some(target.line_index as i64);
             replacement.fragment = (!target.fragment.is_empty()).then_some(target.fragment);
         }
-        // 明示A/Bの旧語が現在行へ実際に対応するときだけ、モデルが短縮した旧語を補完する。
-        // 漢字表記も既存辞書で照合する。前置き込みのAや未解決の語は採用せずモデルの対象を保つ。
-        if replacement.fragment.as_ref().is_some_and(|fragment| {
-            !editing_records(s)
-                .iter()
-                .any(|line| fragment == &line.surface_text || fragment == &line.reading_text)
-        }) && let Ok(Some(verbatim)) = parse::verbatim_edit(input)
-        {
-            let raw = parse::fragment_prefix(verbatim.target);
-            let raw = parse::unquote(&raw);
-            let records = editing_records(s);
-            let exact = records
-                .iter()
-                .any(|line| line.surface_text.contains(raw) || line.reading_text.contains(raw));
-            let reading = if raw.is_empty() || exact {
-                None
-            } else {
-                self.normalized(raw, true)?
-            };
-            let matches: Vec<_> = records
-                .iter()
-                .enumerate()
-                .filter_map(|(i, line)| {
-                    (!raw.is_empty()
-                        && (line.surface_text.contains(raw)
-                            || line.reading_text.contains(raw)
-                            || reading
-                                .as_ref()
-                                .is_some_and(|r| line.reading_text.contains(r))))
-                    .then_some(i)
-                })
-                .collect();
-            if matches.len() == 1 && replacement.index.is_none_or(|i| i == matches[0] as i64) {
-                replacement.fragment = Some(raw.to_owned());
-            }
-        }
-        // 「ではじめる」など旧語自身の先頭を、依頼の「では」と取り違えない。
-        // 空白・読点・引用開始で分かれた導入部、または原文A全体の辞書読みが現在句の
-        // どこにも一致しない場合だけ分ける。引用内や任意の接頭語は削らない。
-        if let Some(fragment) = replacement.fragment.as_ref()
-            && let Ok(Some(verbatim)) = parse::verbatim_edit(input)
-            && !verbatim.target_quoted
-            && fragment == verbatim.target
-            && let Some((without_intro, separated)) = parse::without_intro(fragment)
-            && (separated
-                || self.normalized(fragment, true)?.is_some_and(|reading| {
-                    !editing_lines(s).iter().any(|line| line.contains(&reading))
-                }))
-        {
-            replacement.fragment = Some(parse::unquote(without_intro).to_owned());
-        }
+        // 確定した旧語・置換語を原文から取り直さず、対象行の実際の語へ適用する。
         self.revise(&f["workshop"], s, &replacement)
             .map(PlayerEditResult::Validated)
     }

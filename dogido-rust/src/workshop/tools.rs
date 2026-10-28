@@ -8,11 +8,11 @@ use serde_json::{Value, json};
 fn player_edit_definition() -> Value {
     json!({"type":"function","function":{
         "name":"stage_player_edit",
-        "description":"BERTが決めた行への具体変更について、原文の旧語・新語・根拠だけを渡す。行IDと元句はコードが補完する。変更後の行は作らず、本人の新しい語をそのまま抜く。",
+        "description":"BERTが決めた行への具体変更を解釈し、差し替える旧語と置換語を渡す。行IDと元句はコードが補完する。音声認識の誤りや表記の違いを文脈から解釈してよい。",
         "parameters":{"type":"object","properties":{
             "target_fragment":{"type":"string","description":"差し替える旧語。一行全体の置換なら空文字。"},
-            "replacement_text":{"type":"string","description":"今回原文にある新しい語句だけ。補作・読み変換しない。"},
-            "evidence":{"type":"string","description":"今回の連続した原文根拠。"},
+            "replacement_text":{"type":"string","description":"今回の変更依頼から解釈した置換語句。"},
+            "evidence":{"type":"string","description":"今回の変更依頼を解釈した根拠。記録用。"},
             "confidence":{"type":"number","minimum":0,"maximum":1}},
             "required":["target_fragment","replacement_text","evidence","confidence"],
             "additionalProperties":false}
@@ -112,7 +112,7 @@ impl Call {
         }
     }
 
-    /// schema検証済みの一手へ、元句・原文との照合を終えた行番号を保持する。
+    /// schema検証済みの一手へ、BERTと現在句から確定した行番号を保持する。
     /// 独自JSONのline_proposal schemaへ新しいmodel入力フィールドは足さない。
     pub fn retain_verified_target(&self, step: &mut Value) {
         if let Self::PlayerEdit { frame, .. } = self {

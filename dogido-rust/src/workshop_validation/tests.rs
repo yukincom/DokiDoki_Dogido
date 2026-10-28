@@ -79,7 +79,10 @@ fn canonical_corpus_preserves_structural_and_execution_boundaries() {
     let mut accepted = 0;
     let mut structural_rejections = 0;
     for context in array(&FIXTURES["contexts"]) {
-        assert_eq!(context["details"]["allowed_checks"], json!(["reading", "source"]));
+        assert_eq!(
+            context["details"]["allowed_checks"],
+            json!(["reading", "source"])
+        );
     }
     for case in array(&FIXTURES["cases"]) {
         let context = &FIXTURES["contexts"][case["context"].as_u64().unwrap() as usize];
@@ -91,7 +94,10 @@ fn canonical_corpus_preserves_structural_and_execution_boundaries() {
             continue;
         }
         let actual = actual.unwrap_or_else(|e| panic!("{}: {e}", case["name"]));
-        if array(&case["payload"]["checks"]).iter().any(|check| check == "meter") {
+        if array(&case["payload"]["checks"])
+            .iter()
+            .any(|check| check == "meter")
+        {
             assert_eq!(case["payload"]["action"], "inspect");
             assert!(actual["step"].is_null());
             assert_eq!(actual, case["expected"], "retired check {}", case["name"]);
@@ -100,7 +106,13 @@ fn canonical_corpus_preserves_structural_and_execution_boundaries() {
         let read_only = conversation::handles(text(&frame["payload"]["action"]));
         if !read_only
             && legacy_errors.iter().any(|e| {
-                e != "speech:not_allowed" && !e.as_str().is_some_and(|s| s.starts_with("purpose:"))
+                e != "speech:not_allowed"
+                    && !e.as_str().is_some_and(|s| s.starts_with("purpose:"))
+                    && !(frame["payload"]["action"] == "stage_player_edit"
+                        && matches!(
+                            e.as_str(),
+                            Some("evidence:not_exact" | "evidence:not_in_original")
+                        ))
             })
         {
             assert!(
@@ -133,7 +145,7 @@ fn canonical_corpus_preserves_structural_and_execution_boundaries() {
                 step["speech"],
                 sanitize::strip(text(&frame["payload"]["speech"]))
             );
-            if ASSETS["mutation_purposes"].get(action).is_some() {
+            if action != "stage_player_edit" && ASSETS["mutation_purposes"].get(action).is_some() {
                 assert!(text(&frame["text"]).contains(text(&step["evidence"])));
                 assert!(workshop_input_guard::state_change_safe(
                     action,
@@ -468,14 +480,21 @@ fn short_edit_selects_only_the_exact_current_candidate_with_current_evidence() {
     ] {
         let mut wrong = frame.clone();
         wrong["payload"]["line_proposal"][key] = value.into();
-        assert!(validate(&wrong, &details).unwrap()["step"].is_null());
+        // 新しい解釈済み語句は、古い候補へ付け替えず編集として保持する。
+        assert_eq!(
+            validate(&wrong, &details).unwrap()["step"]["action"],
+            "stage_player_edit"
+        );
     }
     let mut wrong = frame.clone();
     wrong["payload"]["evidence"] = "のくさふゆむをくささむしに変更しよう".into();
     assert!(validate(&wrong, &details).unwrap()["step"].is_null());
     wrong = frame.clone();
     wrong["workshop"]["conversation_candidate"] = Value::Null;
-    assert!(validate(&wrong, &details).unwrap()["step"].is_null());
+    assert_eq!(
+        validate(&wrong, &details).unwrap()["step"]["action"],
+        "stage_player_edit"
+    );
     for input in [
         "今度は上五をそれに変えて",
         "変えないで！",

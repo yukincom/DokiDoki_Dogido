@@ -175,16 +175,22 @@ fn finalize(payload: &Value, d: &Value) -> Value {
         player
     });
     let evidence = cut(&payload["evidence"], 120);
-    if compact(&evidence).chars().count() < 2 || !compact(player).contains(&compact(&evidence)) {
+    if action != "stage_player_edit"
+        && (compact(&evidence).chars().count() < 2
+            || !compact(player).contains(&compact(&evidence)))
+    {
         return reject("ungrounded_evidence");
     }
     let analysis = analysis::finalize(payload, d, action, confidence, player);
     let safe = workshop_input_guard::state_change_safe(action, original, &evidence);
-    if (ASSETS["mutation_purposes"].get(action).is_some() || action == "propose_revision") && !safe
+    if action != "stage_player_edit"
+        && (ASSETS["mutation_purposes"].get(action).is_some() || action == "propose_revision")
+        && !safe
     {
         return reject("unsafe_state_change_evidence");
     }
-    if ASSETS["mutation_purposes"].get(action).is_some()
+    if action != "stage_player_edit"
+        && ASSETS["mutation_purposes"].get(action).is_some()
         && !compact(original).contains(&compact(&evidence))
     {
         return reject("mutation_evidence_not_in_original");
@@ -216,9 +222,7 @@ fn finalize(payload: &Value, d: &Value) -> Value {
         .filter(|s| !s.is_empty())
         .collect();
     if checks.len() != checks.iter().collect::<BTreeSet<_>>().len()
-        || checks
-            .iter()
-            .any(|s| !matches!(*s, "reading" | "source"))
+        || checks.iter().any(|s| !matches!(*s, "reading" | "source"))
     {
         return reject("invalid_checks");
     }
@@ -247,16 +251,6 @@ fn finalize(payload: &Value, d: &Value) -> Value {
         let p = &analysis["line_proposal"];
         if p.is_null() {
             return reject("grounded_line_proposal_required");
-        }
-        let replacement = compact(text(&p["replacement_text"]));
-        let pe = compact(text(&p["evidence"]));
-        let raw = compact(original);
-        if replacement.is_empty()
-            || pe.is_empty()
-            || !raw.contains(&replacement)
-            || !raw.contains(&pe)
-        {
-            return reject("player_edit_not_in_original");
         }
     }
     if action == "compare" && !truth(&d["pending_verse"]) {

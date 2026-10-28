@@ -49,7 +49,7 @@ fn matching(verse: &[&str], fragment: &str) -> Option<usize> {
         None
     }
 }
-fn reference(raw: &Value, player: &str) -> Value {
+fn reference(raw: &Value, player: &str, interpreted_edit: bool) -> Value {
     if raw["found"] != true {
         return Value::Null;
     }
@@ -64,8 +64,7 @@ fn reference(raw: &Value, player: &str) -> Value {
     let evidence = cut(&raw["evidence"], 48);
     let ec = compact_kana(&evidence);
     if !(0.0..=1.0).contains(&confidence)
-        || ec.chars().count() < 2
-        || !compact_kana(player).contains(&ec)
+        || (!interpreted_edit && (ec.chars().count() < 2 || !compact_kana(player).contains(&ec)))
     {
         return Value::Null;
     }
@@ -90,7 +89,8 @@ pub(super) fn finalize(
         "propose_revision" => "request_repair",
         _ => "other_haiku",
     };
-    let reference = reference(&payload["line_reference"], player);
+    let interpreted_edit = action == "stage_player_edit";
+    let reference = reference(&payload["line_reference"], player, interpreted_edit);
     let verse = lines(text(&d["working_reading"]));
     let mut findings = Vec::new();
     for row in array(&payload["findings"]).iter().take(3) {
@@ -128,10 +128,11 @@ pub(super) fn finalize(
         let conflict = target.is_some() && concept.is_some() && target != concept;
         if (0.0..=1.0).contains(&confidence)
             && !rc.is_empty()
-            && !pc.is_empty()
-            && pc.contains(&rc)
-            && ec.chars().count() >= 2
-            && pc.contains(&ec)
+            && (interpreted_edit
+                || (!pc.is_empty()
+                    && pc.contains(&rc)
+                    && ec.chars().count() >= 2
+                    && pc.contains(&ec)))
             && !conflict
         {
             proposal = json!({"replacement_text":replacement,"target_fragment":fragment,"line_index":target.or(concept),"evidence":evidence,"confidence":confidence});

@@ -110,6 +110,26 @@ def main():
         assert r["workshop_action"]=="close_workshop" and hud(sid)["state"]=="closed"
         passed.append("polite_explicit_close_needs_no_second_adoption")
 
+    # BERTの具体変更とLLMの解釈を保存まで通す。原文表記・語尾への例外は使わない。
+    for text in ["紙の句を松松がにしましょう", "上を端末に変えて", "一番上はあの明かりの名前で"]:
+        with fixture(bert_labels={text:"senryu_change_upper"}) as (base,process,log,control,seen,gate,drafting,checks,send,hud,rows,stored,folder):
+            def interpreted_edit(raw,prompt,n):
+                payload=edit(raw,replacement="松明")
+                payload["evidence"]="上五を松明へ変更"
+                payload["line_proposal"]["evidence"]="上五を松明へ変更"
+                return payload
+            calls=install(control,interpreted_edit)
+            sid=ready(base,send,rows)
+            original=stored(sid)
+            r=finish(base,send,sid,text)
+            assert r["workshop_outcome"]=="player_edit_saved",r
+            assert hud(sid)["canonical_lines"]==["松明",*LINES[1:]] and not hud(sid)["pending_lines"],r
+            rs=revisions(folder,sid)
+            assert len(rs)==1 and rs[0]["source"]=="player_line_confirmed" and stored(sid)==original
+            assert rs[0]["lines"][0]["surface_text"]=="松明" and len(rs[0]["edits"])==1
+            assert len(calls)==1,calls
+    passed.append("interpreted_bert_edits_save_once_without_raw_word_or_evidence_matching")
+
     # このケースの変更意思は固定BERT結果。Rustは音数・重複・文の語形で覆さない。
     for text, word in [
         ("上五を『さくら』にして", "さくら"),

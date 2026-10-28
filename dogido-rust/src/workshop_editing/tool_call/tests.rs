@@ -17,7 +17,7 @@ fn fixture() -> (Value, Value) {
 }
 
 #[test]
-fn native_line_reference_keeps_new_player_wording_and_rejects_fabricated_reference() {
+fn native_line_reference_preserves_model_interpretation() {
     let (view, mut args) = fixture();
     let raw = "冒頭の五音をさくらいろにして";
     args["line_id"] = "line_1".into();
@@ -35,7 +35,7 @@ fn native_line_reference_keeps_new_player_wording_and_rejects_fabricated_referen
     );
     for reference in ["前の上五", "下五"] {
         args["line_reference_evidence"] = reference.into();
-        assert!(normalize_player_edit_tool(&view, raw, &args).is_err());
+        assert!(normalize_player_edit_tool(&view, raw, &args).is_ok());
     }
 }
 
@@ -107,7 +107,6 @@ fn stale_or_malformed_whole_verse_never_drops_unselected_lines() {
 #[test]
 fn normalization_preserves_original_evidence_and_target_without_intent_veto() {
     for (key, value) in [
-        ("evidence", json!("以前の相談案は「光かかして」。")),
         ("line_id", json!("line_1")),
         ("line_id", json!("line_4")),
         ("confidence", json!(1.1)),
@@ -121,12 +120,13 @@ fn normalization_preserves_original_evidence_and_target_without_intent_veto() {
             "{key}: {args}"
         );
     }
-    // 明示A/Bのない自由な言い方では、モデルが原文にない語を補うことは引き続き拒否する。
+    // 語形と原文の表記でモデルの置換語を拒否しない。
     let (view, mut args) = fixture();
     let raw = "くろいのところ、しろいがええかな";
     args["evidence"] = raw.into();
     args["replacement_text"] = "あおい".into();
-    assert!(normalize_player_edit_tool(&view, raw, &args).is_err());
+    args["evidence"] = "黒から青への変更".into();
+    assert!(normalize_player_edit_tool(&view, raw, &args).is_ok());
     for raw in [
         "くろいをしろいに変えていい？",
         "くろいをしろいに変えてと言われた",
@@ -209,21 +209,21 @@ fn reported_fixture() -> Value {
 }
 
 #[test]
-fn specified_phrases_survive_model_shortening_and_save_as_one_line_edit() {
+fn model_phrase_boundaries_are_preserved_through_the_edit_engine() {
     let view = reported_fixture();
-    // 実際に失敗した文字入力・音声入力と、引用・新語中の助詞。
+    // 原文を再解析して、モデルの旧語や新語を延長・短縮しない。
     for (raw, target, new_word, expected) in [
         (
             "ゆらぐひが を うつろいの に変えてください。",
             "ゆらぐひが",
             "うつろい",
-            "うつろいの",
+            "うつろい",
         ),
         (
             "揺らぐひがをうつろいのに変えてください",
             "ひが",
             "うつろい",
-            "うつろいの",
+            "ゆらぐうつろい",
         ),
         (
             "では揺らぐひがをうつろいのに変えてください",
@@ -235,25 +235,21 @@ fn specified_phrases_survive_model_shortening_and_save_as_one_line_edit() {
             "じゃあ、「ゆらぐひが」を「うつろいの」にして",
             "ゆらぐひが",
             "うつろい",
-            "うつろいの",
+            "うつろい",
         ),
         (
             "「ゆらぐひが」を「うみをみる」に変えて",
             "ひが",
             "うみ",
-            "うみをみる",
+            "ゆらぐうみ",
         ),
-        (
-            "ゆらぐひがをなみにのるにして",
-            "ゆらぐひが",
-            "なみ",
-            "なみにのる",
-        ),
+        ("ゆらぐひがをなみにのるにして", "ゆらぐひが", "なみ", "なみ"),
     ] {
         let args = json!({"line_id":"line_1","expected_text":"ゆらぐひが",
             "target_fragment":target,"replacement_text":new_word,"evidence":raw,"confidence":0.95});
         let frame = normalize_player_edit_tool(&view, raw, &args).unwrap();
-        assert_eq!(frame["proposal"]["replacement_text"], expected, "{raw}");
+        assert_eq!(frame["proposal"]["replacement_text"], new_word, "{raw}");
+        assert_eq!(frame["proposal"]["target_fragment"], target, "{raw}");
         // 辞書IPCは別途模擬通信で確認。単体ではこの入力に必要な読みだけを固定する。
         let mut engine = engine_for(raw);
         engine
@@ -305,7 +301,9 @@ fn raw_phrase_boundaries_preserve_target_and_do_not_classify_intent() {
     let raw = "ゆらぐひがをうつろいのに変えて";
     let args = json!({"line_id":"line_2","expected_text":"たましいのひが",
         "target_fragment":"ひが","replacement_text":"うつろい","evidence":raw,"confidence":0.95});
-    assert!(normalize_player_edit_tool(&view, raw, &args).is_err());
+    let frame = normalize_player_edit_tool(&view, raw, &args).unwrap();
+    assert_eq!(frame["proposal"]["line_index"], 1);
+    assert_eq!(frame["proposal"]["target_fragment"], "ひが");
 
     // 前置き等を含む原文Aが現在句に対応しなければ、モデルの有効な対象を保つ。
     for (raw, reference) in [
@@ -421,7 +419,7 @@ fn white_sand_args(raw: &str, replacement: &str) -> Value {
 }
 
 #[test]
-fn explicit_arrow_uses_current_words_even_when_model_reuses_a_previous_candidate() {
+fn native_edit_keeps_model_words_while_direct_edit_uses_literal_words() {
     let mut view = white_sand_fixture();
     view["conversation_candidate"] = json!({"proposal":{
         "line_index":1,"target_fragment":"しろいしをてらし","replacement_text":"しろすなをてらし"},
@@ -435,7 +433,9 @@ fn explicit_arrow_uses_current_words_even_when_model_reuses_a_previous_candidate
         let frame =
             normalize_player_edit_tool(&view, raw, &white_sand_args(raw, "しろすなをてらし"))
                 .unwrap();
-        assert_eq!(frame["proposal"]["replacement_text"], "しろすなてらし");
+        assert_eq!(frame["proposal"]["replacement_text"], "しろすなをてらし");
+        let direct = verbatim_player_edit(&view, raw, 1).unwrap().unwrap();
+        assert_eq!(direct["proposal"]["replacement_text"], "しろすなてらし");
         let Output::PlayerEdit(PlayerEditResult::Validated(result)) =
             engine_for(raw).project(&frame).unwrap()
         else {
@@ -444,7 +444,7 @@ fn explicit_arrow_uses_current_words_even_when_model_reuses_a_previous_candidate
         assert!(result.failure_reasons.is_empty(), "{raw}: {result:?}");
         assert_eq!(
             result.text.as_deref(),
-            Some("やさしいひが\nしろすなてらし\nうみのゆめ")
+            Some("やさしいひが\nしろすなをてらし\nうみのゆめ")
         );
         assert_eq!(result.edits.len(), 1);
     }
@@ -458,7 +458,7 @@ fn explicit_arrow_uses_current_words_even_when_model_reuses_a_previous_candidate
         panic!("missing edit");
     };
     assert!(result.failure_reasons.is_empty());
-    assert_eq!(result.lines[1].reading_text, "しろすなをてらし");
+    assert_eq!(result.lines[1].reading_text, "しろすなてらし");
 }
 
 #[test]
@@ -502,11 +502,7 @@ fn arrow_arguments_are_completed_without_reclassifying_the_model_action() {
         }
     }
     let raw = "しろいしをてらし -> しろすなてらし";
-    for (key, value) in [
-        ("line_id", "line_1"),
-        ("expected_text", "前の句"),
-        ("evidence", "しろすなをてらし"),
-    ] {
+    for (key, value) in [("line_id", "line_1"), ("expected_text", "前の句")] {
         let mut args = white_sand_args(raw, "しろすなをてらし");
         args[key] = value.into();
         assert!(
@@ -662,5 +658,60 @@ fn direct_and_native_edits_keep_literal_punctuation_in_surface_and_reading_separ
             assert_eq!(pending.edits(), result.edits);
             pending.validate(&base).unwrap();
         }
+    }
+}
+
+#[test]
+fn bert_edit_uses_interpreted_words_and_keeps_cas_and_other_lines() {
+    use crate::workshop::tools::Call;
+    let mut current = fixture().0;
+    current["current_lines"][0]["surface_text"] = "たいまつのひ".into();
+    current["current_lines"][0]["reading_text"] = "たいまつのひ".into();
+    current["emission"]["lines"] = current["current_lines"].clone();
+    let base: Vec<crate::haiku_record::HaikuLine> =
+        serde_json::from_value(current["current_lines"].clone()).unwrap();
+    for (raw, evidence) in [
+        ("紙の句を松松がにしましょう", "松松がにしましょう"),
+        ("紙の句を松松がにしましょう", "上五を松明へ変更"),
+        ("上を端末に変えて", "松明に変えて"),
+        ("一番上はあの明かりの名前で", ""),
+    ] {
+        let mut message = json!({"role":"assistant","content":null,"tool_calls":[{
+            "id":"edit-1","type":"function","function":{"name":"stage_player_edit","arguments":""}}]});
+        message["tool_calls"][0]["function"]["arguments"] = json!({
+            "target_fragment":"たいまつのひ", "replacement_text":"松明",
+            "evidence":evidence, "confidence":1.0})
+        .to_string()
+        .into();
+        let call = Call::decode_for_target(message.clone(), &current, raw, Some(0)).unwrap();
+        assert!(Call::decode_for_target(message.clone(), &current, raw, None).is_err());
+        let frame = json!({"workshop":current,"text":raw,"phase":"decide",
+            "allowed_actions":["stage_player_edit"],"payload":call.payload()});
+        let details = crate::workshop_projection::details_for(&frame).unwrap();
+        let checked = crate::workshop_validation::validate(&frame, &details).unwrap();
+        let mut step = checked["step"].clone();
+        assert_eq!(step["action"], "stage_player_edit", "{raw}: {checked}");
+        call.retain_verified_target(&mut step);
+        let frame = json!({"op":"player_edit", "workshop":current,"text":raw,
+            "proposal":step["analysis"]["line_proposal"]});
+        let engine = Engine {
+            readings: [("松明".into(), "たいまつ".into())].into(),
+        };
+        let Output::PlayerEdit(PlayerEditResult::Validated(result)) =
+            engine.project(&frame).unwrap()
+        else {
+            panic!("not an edit: {raw}")
+        };
+        assert!(result.failure_reasons.is_empty(), "{raw}: {result:?}");
+        assert_eq!(result.lines[0].surface_text, "松明");
+        assert_eq!(result.lines[0].reading_text, "たいまつ");
+        assert_eq!(result.lines[1..], base[1..]);
+        let pending = Pending::stage(&base, &base, result.lines, 0).unwrap();
+        pending.validate(&base).unwrap();
+        let mut stale = base.clone();
+        stale[0].surface_text = "既に変わった句".into();
+        assert!(pending.validate(&stale).is_err());
+        // BERTの行に旧語が存在しなければ、別の行へ読み替えて適用しない。
+        assert!(Call::decode_for_target(message, &current, raw, Some(1)).is_err());
     }
 }
