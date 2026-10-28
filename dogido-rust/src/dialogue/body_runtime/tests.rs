@@ -114,8 +114,8 @@ async fn body_comparison_stays_internal_while_model_context_contains_no_raw_pose
     let context = second.context.world_context.as_ref().unwrap();
     assert_eq!(context.changes.len(), 5);
     assert_eq!(context.changes[4].kind, "body_position_relation");
-    assert_eq!(context.changes[4].before["distance_blocks"], 3.0);
-    assert_eq!(context.changes[4].now["distance_blocks"], 8.0);
+    assert_eq!(context.changes[4].before["facts"][2], "ドギドとプレイヤーの足元間の直線距離は3ブロック。");
+    assert_eq!(context.changes[4].now["facts"][2], "ドギドとプレイヤーの足元間の直線距離は8ブロック。");
     assert_eq!(body(&second)["current"]["position_relation"], context.changes[4].now);
     for change in &context.changes[..3] {
         assert!(change.before.is_null());
@@ -516,8 +516,8 @@ async fn old_reply_ack_cannot_consume_new_body_generation_changes() {
     assert!(current.revision > offered.revision);
     assert_eq!(current.changes.len(), 2);
     assert_eq!(current.changes[1].kind, "body_position_relation");
-    assert_eq!(current.changes[1].before["distance_blocks"], 79.0);
-    assert_eq!(current.changes[1].now["distance_blocks"], 78.0);
+    assert_eq!(current.changes[1].before["facts"][2], "ドギドとプレイヤーの足元間の直線距離は79ブロック。");
+    assert_eq!(current.changes[1].now["facts"][2], "ドギドとプレイヤーの足元間の直線距離は78ブロック。");
     assert!(current.changes[0].before.is_null());
     assert_eq!(current.changes[0].now, json!({"changed":true}));
     {
@@ -543,9 +543,11 @@ async fn position_current_survives_ack_and_changes_are_latest_only() {
     let first = capture(&d, &a).context.world_context.unwrap();
     assert!(first.changes.is_empty());
     let current = &first.observations["body_observation"]["current"]["position_relation"];
-    assert_eq!(current["distance_blocks"], 3.0);
-    assert_eq!(current["relative_positions"][0]["horizontal"], "front");
-    assert_eq!(current["relative_positions"][1]["horizontal"], "right");
+    assert_eq!(current["facts"], json!([
+        "プレイヤーはドギドの身体の向きを基準に前にいる。プレイヤーの足元はドギドの足元と同じ高さにある。",
+        "ドギドはプレイヤーの身体の向きを基準に右にいる。ドギドの足元はプレイヤーの足元と同じ高さにある。",
+        "ドギドとプレイヤーの足元間の直線距離は3ブロック。"
+    ]));
     let b = event(2, 110, 26.0);
     d.observe("s", b.clone(), None);
     let offered = capture(&d, &b).context.world_context.unwrap();
@@ -558,8 +560,8 @@ async fn position_current_survives_ack_and_changes_are_latest_only() {
     let latest = capture(&d, &c).context.world_context.unwrap();
     let relation_changes: Vec<_> = latest.changes.iter().filter(|c| c.kind == "body_position_relation").collect();
     assert_eq!(relation_changes.len(), 1);
-    assert_eq!(relation_changes[0].before["distance_blocks"], 6.0);
-    assert_eq!(relation_changes[0].now["distance_blocks"], 9.0);
+    assert_eq!(relation_changes[0].before["facts"][2], "ドギドとプレイヤーの足元間の直線距離は6ブロック。");
+    assert_eq!(relation_changes[0].now["facts"][2], "ドギドとプレイヤーの足元間の直線距離は9ブロック。");
     {
         let mut data = d.data.lock().unwrap();
         data.sessions.get_mut("s").unwrap().conversation_observation.considered(latest.revision);
@@ -570,7 +572,7 @@ async fn position_current_survives_ack_and_changes_are_latest_only() {
     let stationary = event(4, 130, 29.0);
     d.observe("s", stationary.clone(), None);
     assert!(capture(&d, &stationary).context.world_context.unwrap().changes.is_empty());
-    // 表示する方向と0.1ブロック単位の距離が同じなら、位置関係の差分は作らない。
+    // 方向・既存の0.1ブロック単位の比較値・会話用整数距離が同じなら、差分は作らない。
     let small_move = event(5, 140, 29.01);
     d.observe("s", small_move.clone(), None);
     assert!(!capture(&d, &small_move).context.world_context.unwrap().changes.iter().any(|c| c.kind == "body_position_relation"));
@@ -580,9 +582,9 @@ async fn position_current_survives_ack_and_changes_are_latest_only() {
     d.observe("s", rotated.clone(), None);
     let rotated = capture(&d, &rotated).context.world_context.unwrap();
     let change = rotated.changes.iter().find(|c| c.kind == "body_position_relation").unwrap();
-    assert_eq!(change.now["relative_positions"][0]["horizontal"], "front");
-    assert_eq!(change.before["relative_positions"][1]["horizontal"], "right");
-    assert_eq!(change.now["relative_positions"][1]["horizontal"], "back");
+    assert_eq!(change.now["facts"][0], current["facts"][0]);
+    assert_eq!(change.before["facts"][1], current["facts"][1]);
+    assert_eq!(change.now["facts"][1], "ドギドはプレイヤーの身体の向きを基準に後ろにいる。ドギドの足元はプレイヤーの足元と同じ高さにある。");
     drop(permit);
     d.shutdown().await;
 }
@@ -645,7 +647,7 @@ async fn notice_refreshes_current_observations_but_preserves_periodic_changes_an
         let s = data.sessions.get_mut("s").unwrap();
         assert!(super::super::environment_runtime::refresh_dialogue_context(s, std::slice::from_mut(&mut action)));
         let refreshed = &action.leaf.as_ref().unwrap().details["reaction_context"]["world_context"];
-        assert_eq!(refreshed["observations"]["body_observation"]["current"]["position_relation"]["distance_blocks"], 9.0);
+        assert_eq!(refreshed["observations"]["body_observation"]["current"]["position_relation"]["facts"][2], "ドギドとプレイヤーの足元間の直線距離は9ブロック。");
         assert_eq!(refreshed["observations"]["nearby_mob_types"], json!([]));
         assert_eq!(refreshed["changes"][0]["now"],json!(["cow"]));
         assert_eq!(refreshed["changes"], json!(periodic.changes));

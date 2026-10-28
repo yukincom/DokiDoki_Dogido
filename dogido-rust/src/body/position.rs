@@ -30,8 +30,10 @@ fn vertical(dy: f64) -> &'static str {
     }
 }
 pub fn unavailable() -> Value {
-    json!({"position_status":"unavailable","relative_positions":[],"distance_blocks":null})
+    json!({"position_status":"unavailable","relative_positions":[],"distance_blocks":null,"distance_blocks_floor":null})
 }
+/// 既存の0.1ブロック単位の比較値と、丸め前の実距離から切り捨てた会話表示値を分ける。
+/// 幾何計算・操作判断の精度は変えず、整数境界で表示値を繰り上げない。
 pub fn calculate(sample: &Sample) -> Value {
     let r = geometry::relation(sample);
     let inverse = [-r.delta[0], -r.delta[1], -r.delta[2]];
@@ -39,7 +41,8 @@ pub fn calculate(sample: &Sample) -> Value {
     json!({"position_status":"available", "relative_positions":[
         {"observer":"dogido", "target":"player", "horizontal":horizontal(r.delta[0], r.delta[2], r.forward, r.right), "vertical":vertical(r.delta[1])},
         {"observer":"player", "target":"dogido", "horizontal":horizontal(inverse[0], inverse[2], forward, right), "vertical":vertical(inverse[1])}
-    ], "distance_blocks":(r.distance * 10.0).round() / 10.0})
+    ], "distance_blocks":(r.distance * 10.0).round() / 10.0,
+        "distance_blocks_floor":r.distance.floor() as u64})
 }
 
 #[cfg(test)]

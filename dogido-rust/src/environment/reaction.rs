@@ -295,6 +295,13 @@ impl Prepared {
                     .get("observations")
                     .is_some_and(|observations| observations["smell"].is_object()));
         let body_actions = context.get("body_options").is_some();
+        let mut system = crate::companion_prompt::environment(smell_observed, body_actions);
+        if context.get("world_context").is_some_and(|world| {
+            world["observations"]["body_observation"].is_object()
+        }) {
+            system.push('\n');
+            system.push_str(&crate::companion_prompt::body_observation("プレイヤー"));
+        }
         let request = GenerationRequest {
             schema_version: 1,
             kind: KIND.into(),
@@ -302,7 +309,7 @@ impl Prepared {
             messages: vec![
                 ChatMessage {
                     role: Role::System,
-                    content: crate::companion_prompt::environment(smell_observed, body_actions),
+                    content: system,
                 },
                 ChatMessage {
                     role: Role::User,

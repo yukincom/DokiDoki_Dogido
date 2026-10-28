@@ -1,0 +1,51 @@
+   Compiling dogido-rust v0.1.0 (/private/tmp/dogido-acceptance-20261028/part1/dogido-rust)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 9.27s
+     Running unittests src/lib.rs (/private/tmp/dogido-acceptance-20261028/target-body/debug/deps/dogido_rust-3b05f0013177c941)
+
+running 12 tests
+test dialogue::acceptance_position::changing_visibility_preserves_known_position ... ok
+test dialogue::acceptance_position::common_observation_distinguishes_subject_reference_and_invisible_position ... ok
+test dialogue::acceptance_position::distance_0_99_is_0_not_1_block ... FAILED
+test dialogue::acceptance_position::distance_10_01_is_10_blocks_without_decimal_suffix ... FAILED
+test dialogue::acceptance_position::distance_9_38_is_9_blocks ... FAILED
+test dialogue::acceptance_position::distance_9_99_is_9_not_10_blocks ... FAILED
+test dialogue::acceptance_position::environment_receives_the_same_subject_facts ... ok
+test dialogue::acceptance_position::ordinary_reply_receives_subject_facts ... ok
+test dialogue::acceptance_position::position_changes_use_subject_facts_and_internal_comparison_keeps_numeric_data ... ok
+test dialogue::acceptance_position::rotating_only_dogido_changes_only_dogido_reference ... ok
+test dialogue::acceptance_position::rotating_only_player_changes_only_player_reference ... ok
+test dialogue::acceptance_position::unavailable_observation_clears_previous_position_in_both_model_routes ... ok
+
+failures:
+
+---- dialogue::acceptance_position::distance_0_99_is_0_not_1_block stdout ----
+
+thread 'dialogue::acceptance_position::distance_0_99_is_0_not_1_block' (19968630) panicked at src/dialogue/../../tests/acceptance/position.rs:157:5:
+会話用距離は実距離の小数点以下切り捨て（0ブロック）: ["ドギドとプレイヤーの足元間の直線距離は1.0ブロック"]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- dialogue::acceptance_position::distance_10_01_is_10_blocks_without_decimal_suffix stdout ----
+
+thread 'dialogue::acceptance_position::distance_10_01_is_10_blocks_without_decimal_suffix' (19968631) panicked at src/dialogue/../../tests/acceptance/position.rs:157:5:
+会話用距離は実距離の小数点以下切り捨て（10ブロック）: ["ドギドとプレイヤーの足元間の直線距離は10.0ブロック"]
+
+---- dialogue::acceptance_position::distance_9_38_is_9_blocks stdout ----
+
+thread 'dialogue::acceptance_position::distance_9_38_is_9_blocks' (19968632) panicked at src/dialogue/../../tests/acceptance/position.rs:157:5:
+会話用距離は実距離の小数点以下切り捨て（9ブロック）: ["ドギドとプレイヤーの足元間の直線距離は9.4ブロック"]
+
+---- dialogue::acceptance_position::distance_9_99_is_9_not_10_blocks stdout ----
+
+thread 'dialogue::acceptance_position::distance_9_99_is_9_not_10_blocks' (19968634) panicked at src/dialogue/../../tests/acceptance/position.rs:157:5:
+会話用距離は実距離の小数点以下切り捨て（9ブロック）: ["ドギドとプレイヤーの足元間の直線距離は10.0ブロック"]
+
+
+failures:
+    dialogue::acceptance_position::distance_0_99_is_0_not_1_block
+    dialogue::acceptance_position::distance_10_01_is_10_blocks_without_decimal_suffix
+    dialogue::acceptance_position::distance_9_38_is_9_blocks
+    dialogue::acceptance_position::distance_9_99_is_9_not_10_blocks
+
+test result: FAILED. 8 passed; 4 failed; 0 ignored; 0 measured; 871 filtered out; finished in 0.15s
+
+error: test failed, to rerun pass `--lib`

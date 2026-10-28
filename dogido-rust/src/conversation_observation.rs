@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 mod body_changes;
+mod body_facts;
 pub(crate) mod subjects;
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
@@ -32,19 +33,26 @@ pub struct Change {
 }
 
 impl Context {
-    /// 内部の比較台帳を保ったまま、モデル用コピーから位置計算の入力を除く。
+    /// 内部の比較台帳を保ち、モデル用コピーの位置・視認を主語付きの事実へ表示する。
+    /// 現在値とbefore/nowに同じ変換を使い、位置計算の入力はモデルへ渡さない。
     pub fn for_model(mut self) -> Self {
         if let Some(body) = self.observations.get_mut("body_observation") {
             *body = if body["status"] == "observed" {
                 json!({"status":"observed", "current":{
-                    "vision":body["current"]["vision"], "senses":body["current"]["senses"],
-                    "position_relation":body["current"]["position_relation"]}})
+                    "vision":body_facts::vision(&body["current"]["vision"]), "senses":body["current"]["senses"],
+                    "position_relation":body_facts::position(&body["current"]["position_relation"])}})
             } else { json!({"status":"unavailable","reason":body["reason"]}) };
         }
         for change in &mut self.changes {
             if matches!(change.kind.as_str(), "body_self_position" | "body_player_position" | "body_self_orientation" | "body_player_orientation") {
                 change.before = Value::Null;
                 change.now = json!({"changed":true});
+            } else if change.kind == "body_position_relation" {
+                change.before = body_facts::position(&change.before);
+                change.now = body_facts::position(&change.now);
+            } else if change.kind == "body_player_visibility" {
+                change.before = body_facts::vision(&change.before);
+                change.now = body_facts::vision(&change.now);
             }
         }
         self

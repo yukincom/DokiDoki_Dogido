@@ -1023,3 +1023,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "../../tests/acceptance/position.rs"]
+mod acceptance_position;

@@ -209,18 +209,23 @@ fn mode(kind: &str, d: &Value) -> &'static str {
 
 pub(super) fn messages(kind: &str, d: &Value) -> Result<Vec<ChatMessage>> {
     let context = context(kind, d)?;
+    let mut system = crate::companion_prompt::dialogue(
+        mode(kind, d),
+        if kind == "body_recall" {
+            crate::companion_prompt::DialoguePurpose::Reply
+        } else {
+            crate::companion_prompt::DialoguePurpose::Ambient
+        },
+        context["world_context"]["observations"]["smell"]["status"] == "present",
+    );
+    if context["world_context"]["observations"]["body_observation"].is_object() {
+        system.push('\n');
+        system.push_str(&crate::companion_prompt::body_observation("プレイヤー"));
+    }
     Ok(vec![
         ChatMessage {
             role: Role::System,
-            content: crate::companion_prompt::dialogue(
-                mode(kind, d),
-                if kind == "body_recall" {
-                    crate::companion_prompt::DialoguePurpose::Reply
-                } else {
-                    crate::companion_prompt::DialoguePurpose::Ambient
-                },
-                context["world_context"]["observations"]["smell"]["status"] == "present",
-            ),
+            content: system,
         },
         ChatMessage {
             role: Role::User,
