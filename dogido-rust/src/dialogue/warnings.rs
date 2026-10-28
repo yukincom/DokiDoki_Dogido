@@ -515,6 +515,21 @@ impl Dialogue {
         } else {
             "speech"
         };
+        // DeliveryはSpeechのJSONへ出さないため、配送元が分かるこの時点で契機を保持する。
+        let utterance_kind = if actions.iter().any(|a| {
+            matches!(a.delivery, Delivery::Combat | Delivery::UrgentEnvironment)
+        }) {
+            Some(super::history::UtteranceKind::Warning)
+        } else if actions.iter().any(|a| {
+            // 自動再開案内も音声優先度にはPlayerReplyを使うが、新入力への返答ではない。
+            a.delivery == Delivery::PlayerReply && a.kind != "workshop_resume"
+        }) {
+            Some(super::history::UtteranceKind::Reply)
+        } else if !actions.is_empty() {
+            Some(super::history::UtteranceKind::Spontaneous)
+        } else {
+            None
+        };
         let mut pending_display = actions.to_vec();
         for action in &mut pending_display {
             if crate::reaction_leaf::is_model_reaction(action) {
@@ -525,7 +540,7 @@ impl Dialogue {
         d.rows.push_back(json!({"utterance_id":id("utt"),"turn_id":turn,"session_id":sid,"session_instance":session_instance,"category":category,
             "source":if input.is_some(){"player_input"}else{"game_observation"},"player_input_text":input,
             "text":display_text(&pending_display),"created_at":chrono::Utc::now(),"reference_ids":[],"output_mode":"both",
-            "playback_status":"queued","warning":plan,"combat_actions":actions,
+            "playback_status":"queued","warning":plan,"combat_actions":actions,"utterance_kind":utterance_kind,
             "llm_reports":actions.iter().filter_map(|a|a.light_comment.as_ref()).flat_map(|c|c.reports.iter()).collect::<Vec<_>>()}));
         d.revision += 1;
         tracing::info!(event="warning_queued",session_id=sid,turn_id=turn,actions=%json!(actions));
@@ -707,7 +722,13 @@ impl Dialogue {
             if body.is_empty() {
                 return false;
             }
-            s.history.push(turn, "assistant", body);
+            // 固定返答の入力は本文だけで、元入力IDを持たない。直近の会話へ誤接続しない。
+            s.history.push_spoken(
+                turn,
+                body,
+                serde_json::from_value(row["utterance_kind"].clone()).ok(),
+                None,
+            );
             if let Some(revision) = row["observation_revision"].as_u64() {
                 s.conversation_observation.considered(revision);
             }

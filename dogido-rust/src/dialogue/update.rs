@@ -179,6 +179,7 @@ impl Dialogue {
                 .unwrap_or_default();
             let now = self.clock.elapsed().as_millis() as u64;
             let player_at = row.and_then(|r| r["input_at_ms"].as_u64()).unwrap_or(now);
+            let input_occurred_at = row.map_or(Value::Null, |r| r["created_at"].clone());
             let s = d.sessions.get_mut(sid).unwrap();
             if !preserve_started {
                 s.status = status;
@@ -210,7 +211,7 @@ impl Dialogue {
                     && result["dialogue_action"] == "silent"
                     && !workshop_reply
                 {
-                    s.history.push(turn, "user", &player_text);
+                    s.history.push_input(turn, &player_text, input_occurred_at.clone());
                     if matches!(
                         result["dialogue_outcome"].as_str(),
                         Some("rejected" | "generation_error")
@@ -233,7 +234,7 @@ impl Dialogue {
                     && !workshop_reply
                     && result["memory_action"].is_null()
                 {
-                    s.history.push(turn, "user", &player_text);
+                    s.history.push_input(turn, &player_text, input_occurred_at.clone());
                     if !knowledge_detour {
                         s.foreground
                             .select(turn, &player_text, route, now, player_at);
@@ -241,7 +242,7 @@ impl Dialogue {
                 }
                 if status == PlaybackStatus::Queued && workshop_id.is_some() && !knowledge_detour {
                     if !workshop_reply {
-                        s.history.push(turn, "user", &player_text);
+                        s.history.push_input(turn, &player_text, input_occurred_at.clone());
                     }
                     if let Some(w) = s
                         .haiku

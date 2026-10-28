@@ -282,12 +282,13 @@ impl Dialogue {
             row["player_input_text"] == prepared.original,
             "horse_input_changed"
         );
+        let input_occurred_at = row["created_at"].clone();
         let s = d.sessions.get_mut(sid).context("horse_session_missing")?;
         ensure!(
             s.epoch == epoch && s.current_turn == turn && available(s),
             "horse_turn_no_longer_current"
         );
-        let command = enqueue(s, turn, prepared, &choice)?;
+        let command = enqueue(s, turn, prepared, &choice, input_occurred_at)?;
         if let Some(row) = d.rows.iter_mut().find(|r| r["turn_id"] == turn) {
             row["horse_command_id"] = command.command_id.clone().into();
         }
@@ -306,6 +307,7 @@ fn enqueue(
     turn: &str,
     prepared: &Prepared,
     choice: &Choice,
+    input_occurred_at: Value,
 ) -> Result<crate::assist::horse_recall::queue::Command> {
     ensure!(available(s), "horse_session_unavailable");
     let latest = s
@@ -326,7 +328,7 @@ fn enqueue(
             return Err(error);
         }
     };
-    s.history.push(turn, "user", &prepared.original);
+    s.history.push_input(turn, &prepared.original, input_occurred_at);
     s.history.story(
         &format!("{turn}:horse_request"),
         "プレイヤーの依頼で乗れる動物の呼び戻しを要求した。移動結果はまだ確認していない。",

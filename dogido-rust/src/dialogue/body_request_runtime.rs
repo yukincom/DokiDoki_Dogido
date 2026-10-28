@@ -73,6 +73,7 @@ impl Dialogue {
         };
         let turn = row["turn_id"].as_str().unwrap().to_owned();
         let source = row["source"].as_str().unwrap_or("typed").to_owned();
+        let input_occurred_at = row["created_at"].clone();
         Self::cancel_chat(d, sid, "completed_body_look");
         let s = d.sessions.get_mut(sid).unwrap();
         let Some(event) = s.latest.clone() else {
@@ -113,7 +114,7 @@ impl Dialogue {
         input.after_look = Some(capture.clone());
         input.request_classification =
             super::request_runtime::classification(s, &report.original, &source).cloned();
-        s.history.push(&turn, "user", &report.original);
+        s.history.push_input(&turn, &report.original, input_occurred_at);
         let (cancel, rx) = tokio::sync::watch::channel(false);
         s.cancel = Some(cancel);
         let binding = super::request_runtime::Binding::capture(s);

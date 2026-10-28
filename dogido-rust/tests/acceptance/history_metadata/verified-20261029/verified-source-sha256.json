@@ -1,0 +1,19 @@
+{
+  "base_commit": "844b2913859e21479596ac29def83e921a839c77",
+  "source_sha256": {
+    "dogido-rust/src/dialogue/body_request_runtime.rs": "e07fa5d373707cb780d300b1ee23a10e4cad50ceebe45f13216ba6dff1434947",
+    "dogido-rust/src/dialogue/haiku_runtime.rs": "145e340068b79ed0e7cc4b6d544341af288bdc8d5c649709276dfd849a34821f",
+    "dogido-rust/src/dialogue/history.rs": "984ec2f255a20de41fefae919b045c3ff482d0da2cbcb724af81a675f2c9978a",
+    "dogido-rust/src/dialogue/horse_recall_runtime.rs": "5ce24c6935096ad5f76191ff3d0aac06631635402300518bda3717fb3ad764ed",
+    "dogido-rust/src/dialogue/horse_recall_runtime/assist.rs": "0043ff02189e0c0a7310232abca2e5e3e6e000557b04f7659db8d057e9edd09a",
+    "dogido-rust/src/dialogue/mod.rs": "8acff407ff36cbb9f679fa8e403686057923439bc2f323b5294ac7a164bad6d7",
+    "dogido-rust/src/dialogue/reply_delivery.rs": "389e7a797ba1591f74b76870ceeaf9d785eabebf216363798fad46a960f51816",
+    "dogido-rust/src/dialogue/speech_stream_runtime.rs": "7f0183ab23a1669515da1d1802983b2cbb768dc9db06e8b397d68896707e9c3f",
+    "dogido-rust/src/dialogue/submit.rs": "9a19c4280503bd49de88bcbc26c23e18c719943e815478f08865e1e265652856",
+    "dogido-rust/src/dialogue/update.rs": "e2e6e717f7d661827624d66e50d9f398a1f618e4e6b946614e645125e6f65575",
+    "dogido-rust/src/dialogue/warnings.rs": "b662c2c3b19e6219527894201bb3baf5c225390e70c43dc1438ef0bc38e054d5",
+    "dogido-rust/tests/acceptance/history_metadata.rs": "b13cc49f742d288023b61f6a1e3d6310d2c1cde0f7b0e3980bec1481c31332b9",
+    "dogido-rust/tests/acceptance/history_metadata/support.rs": "08a05ddcba73f44f92b6cf06e2846dddba10bd6c41e0300f11d5d6e4846bebb1",
+    "dogido-rust/tests/python/fixtures/workshop_meaning_cases.json": "7aef4aaf68a04ffebb9e3bfaba8b50722703d52cc45879edc6fb7cab293539ed"
+  }
+}

@@ -505,7 +505,12 @@ impl Dialogue {
             return false;
         }
         if part != "poem" {
-            s.history.push(turn, "assistant", body);
+            s.history.push_spoken(
+                turn,
+                body,
+                Some(super::history::UtteranceKind::Spontaneous),
+                None,
+            );
         } else {
             if let Some(w) = s.haiku.workshop.as_ref()
                 && row["haiku_job_id"] == s.haiku.workshop_generation

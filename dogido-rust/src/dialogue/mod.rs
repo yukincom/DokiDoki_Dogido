@@ -1027,3 +1027,7 @@ mod tests {
 #[cfg(test)]
 #[path = "../../tests/acceptance/position.rs"]
 mod acceptance_position;
+
+#[cfg(test)]
+#[path = "../../tests/acceptance/history_metadata.rs"]
+mod acceptance_history_metadata;

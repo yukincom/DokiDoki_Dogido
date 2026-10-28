@@ -1,0 +1,14 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running unittests src/lib.rs (/private/tmp/dogido-tests-final-20261029/target-combined/debug/deps/dogido_rust-3b05f0013177c941)
+
+running 7 tests
+test dialogue::text_delivery::tests::another_session_cancelled_reply_and_stale_epoch_cannot_confirm_display ... ok
+test dialogue::text_delivery::tests::pending_close_keeps_canonical_and_confirms_its_text_once_after_version_changes ... ok
+test dialogue::text_delivery::tests::recognition_log_is_bounded_separate_from_history_and_suppressed_while_off ... ok
+test dialogue::text_delivery::tests::stale_or_paused_pending_close_cannot_discard_the_current_proposal ... ok
+test dialogue::text_delivery::tests::visible_reply_is_history_once_and_never_fake_audio_completion ... ok
+test dialogue::text_delivery::tests::voice_switch_cancels_active_work_and_rejects_previous_capture_generation ... ok
+test dialogue::text_delivery::tests::warning_display_confirms_only_authoritative_text_once ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 889 filtered out; finished in 0.06s
+

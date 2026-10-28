@@ -96,6 +96,9 @@ impl Dialogue {
             if d.stopped || *cancel.borrow() {
                 return;
             }
+            let input_occurred_at = d.rows.iter()
+                .find(|r| r["session_id"] == sid && r["turn_id"] == turn)
+                .map_or(Value::Null, |r| r["created_at"].clone());
             let Some(s) = d.sessions.get_mut(&sid) else {
                 return;
             };
@@ -122,6 +125,7 @@ impl Dialogue {
                             .as_ref()
                             .context("horse_prepared_missing")?,
                         &choice,
+                        input_occurred_at,
                     )
                 })();
                 match dispatch {

@@ -1,6 +1,7 @@
 //! 通常会話の短期履歴と、戦闘前の会話の一時退避を管理する。
 //! 永続保存や再生判定は行わず、assistantを加える時機は呼出側が配送結果から決める。
 //! 沈黙とコード由来の出来事はeventとして残し、発話済みのassistantや川柳用の会話対には数えない。
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::{HashSet, VecDeque};
 
@@ -8,6 +9,16 @@ const MAX_TURNS: usize = 20;
 const COMPACT_TURNS: usize = 10;
 const AUXILIARY_ROWS: usize = 40;
 const ACTIVE_SUMMARIES: usize = 5;
+
+/// 本文やIDから推測せず、入力受付・配送元のコードが指定する発話契機。
+#[derive(Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(super) enum UtteranceKind {
+    PlayerInput,
+    Reply,
+    Spontaneous,
+    Warning,
+}
 
 /// 配送確定済みの古い10ターン。生成中の追加・取消・訂正と照合する元行を保持する。
 pub(super) struct Compaction {
@@ -158,8 +169,11 @@ impl History {
                 self.story_record(id, text, row["dialogue_turn"] == true);
             }
             ("event", Some("silent")) => self.silent(id.strip_suffix(":reply").unwrap_or(id)),
-            ("user", _) => self.push(id, role, text),
-            ("assistant", _) => self.push(id.strip_suffix(":reply").unwrap_or(id), role, text),
+            // 保存済み属性だけを戻す。古い履歴に現在時刻や推測した契機を足さない。
+            ("user", _) => self.push_record(id, role, text, row),
+            ("assistant", _) => {
+                self.push_record(id.strip_suffix(":reply").unwrap_or(id), role, text, row)
+            }
             _ => {}
         }
     }
@@ -346,7 +360,31 @@ impl History {
         }
         lines.join("\n")
     }
+    #[cfg(test)]
     pub fn push(&mut self, turn: &str, role: &str, text: &str) {
+        self.push_record(turn, role, text, &Value::Null);
+    }
+    /// 遅れて履歴へ加える入力も、元の受付台帳の時刻を使う。不明ならnullを保持する。
+    pub(super) fn push_input(&mut self, turn: &str, text: &str, occurred_at: Value) {
+        self.push_record(turn, "user", text, &json!({
+            "occurred_at":occurred_at, "utterance_kind":UtteranceKind::PlayerInput,
+            "reply_to_turn_id":null,
+        }));
+    }
+    /// 呼出側が確認した最初の配送時刻を記録する。再通知では既存行を変更しない。
+    pub(super) fn push_spoken(
+        &mut self,
+        turn: &str,
+        text: &str,
+        kind: Option<UtteranceKind>,
+        reply_to_turn_id: Option<&str>,
+    ) {
+        self.push_record(turn, "assistant", text, &json!({
+            "occurred_at":chrono::Utc::now(), "utterance_kind":kind,
+            "reply_to_turn_id":reply_to_turn_id,
+        }));
+    }
+    fn push_record(&mut self, turn: &str, role: &str, text: &str, metadata: &Value) {
         let text = normalize(text);
         if text.is_empty()
             || (role == "assistant" && ["ハッ", "ハァハァ……", "ハァハァ"].contains(&text.as_str()))
@@ -361,8 +399,13 @@ impl History {
         if self.compacted_ids.contains(&id) || self.rows().iter().any(|r| r["turn_id"] == id) {
             return;
         }
-        self.rows
-            .push_back(json!({"turn_id":id,"role":role,"text":text}));
+        let mut row = json!({"turn_id":id,"role":role,"text":text});
+        for key in ["occurred_at", "utterance_kind", "reply_to_turn_id"] {
+            if let Some(value) = metadata.get(key) {
+                row[key] = value.clone();
+            }
+        }
+        self.rows.push_back(row);
         self.trim_auxiliary();
         if role == "user"
             && !self.danger_active

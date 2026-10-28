@@ -71,11 +71,9 @@ impl Source {
                 // 最初の実player起動時だけStartedへ進める。部分本文を表示ACKへ公開しない。
                 if owner.update(&self.sid, &self.turn, self.epoch, Status::Started, None) {
                     let mut data = owner.data.lock().unwrap();
-                    let text = data
-                        .rows
-                        .iter()
-                        .find(|r| r["turn_id"] == self.turn)
-                        .and_then(|r| r["player_input_text"].as_str())
+                    let row = data.rows.iter().find(|r| r["turn_id"] == self.turn);
+                    let input_occurred_at = row.map_or(serde_json::Value::Null, |r| r["created_at"].clone());
+                    let text = row.and_then(|r| r["player_input_text"].as_str())
                         .unwrap_or("")
                         .to_owned();
                     if let Some(session) = data
@@ -83,7 +81,7 @@ impl Source {
                         .get_mut(&self.sid)
                         .filter(|s| s.epoch == self.epoch)
                     {
-                        session.history.push(&self.turn, "user", &text);
+                        session.history.push_input(&self.turn, &text, input_occurred_at);
                     }
                 }
             },

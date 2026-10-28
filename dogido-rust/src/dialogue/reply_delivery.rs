@@ -126,8 +126,12 @@ impl Dialogue {
         // 通常雑談の対だけを、後の川柳の会話材料へ渡す。
         if !workshop_reply && result["memory_action"].is_null() {
             s.last_completed_conversation = Some(now);
-            s.history
-                .push(turn, "assistant", result["text"].as_str().unwrap_or(""));
+            s.history.push_spoken(
+                turn,
+                result["text"].as_str().unwrap_or(""),
+                Some(super::history::UtteranceKind::Reply),
+                Some(turn),
+            );
             s.foreground.completed(
                 turn,
                 &player_text,

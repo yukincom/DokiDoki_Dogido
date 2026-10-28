@@ -1,0 +1,22 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running unittests src/lib.rs (/private/tmp/dogido-tests-final-20261029/target-combined/debug/deps/dogido_rust-3b05f0013177c941)
+
+running 15 tests
+test dialogue::history::tests::chosen_silence_is_a_reaction_visible_next_turn_but_never_a_spoken_pair ... ok
+test dialogue::history::tests::compaction_ignores_unanswered_inputs_and_standalone_reactions ... ok
+test dialogue::history::tests::delivered_workshop_turns_count_toward_twenty_but_not_poem_material_pairs ... ok
+test dialogue::history::tests::empty_bookmark_does_not_capture_incombat_dialogue_on_repeated_threat ... ok
+test dialogue::history::tests::final_turn_count_excludes_unanswered_input_and_keeps_its_text ... ok
+test dialogue::history::tests::old_synopses_remain_in_archive_but_only_last_five_enter_model_context ... ok
+test dialogue::history::tests::precombat_bookmark_releases_after_three_inputs_without_evicting_recent_dialogue ... ok
+test dialogue::history::tests::refresh_keeps_normal_and_retained_history_bounded_without_restarting_lifetime ... ok
+test dialogue::history::tests::refresh_preserves_third_input_bookmark_and_adds_delivered_reactions ... ok
+test dialogue::history::tests::replay_drops_unanswered_retained_row_and_counts_same_input_once ... ok
+test dialogue::history::tests::short_reentry_keeps_first_bookmark_and_zero_releases_it ... ok
+test dialogue::history::tests::situation_notes_expire_with_retention_and_do_not_cross_danger_episodes ... ok
+test dialogue::history::tests::story_keeps_full_text_and_updates_both_current_and_retained_copies ... ok
+test dialogue::history::tests::story_preserves_retention_limits_and_never_replaces_a_spoken_row ... ok
+test dialogue::history::tests::twenty_turns_compact_ten_at_a_time_and_keep_full_recent_text ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 881 filtered out; finished in 0.35s
+

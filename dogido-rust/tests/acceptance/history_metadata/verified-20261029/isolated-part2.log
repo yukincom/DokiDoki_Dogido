@@ -1,0 +1,21 @@
+   Compiling dogido-rust v0.1.0 (/private/tmp/dogido-part2-history-20261029/verify/dogido-rust)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 22.53s
+     Running unittests src/lib.rs (/private/tmp/dogido-tests-final-20261029/target-combined/debug/deps/dogido_rust-3b05f0013177c941)
+
+running 13 tests
+test dialogue::acceptance_history_metadata::ambient_delivery_is_spontaneous_without_invented_reply_target ... ok
+test dialogue::acceptance_history_metadata::audio_completion_records_delivery_time_and_actual_reply_target ... ok
+test dialogue::acceptance_history_metadata::combat_delivery_is_warning_even_when_its_words_match_ambient ... ok
+test dialogue::acceptance_history_metadata::duplicate_ack_and_audio_completion_preserve_first_record_in_either_order ... ok
+test dialogue::acceptance_history_metadata::failed_cancelled_and_old_epoch_results_do_not_create_spoken_history ... ok
+test dialogue::acceptance_history_metadata::input_admission_records_time_and_player_input_kind ... ok
+test dialogue::acceptance_history_metadata::legacy_rows_keep_missing_time_kind_and_reply_target_unknown ... ok
+test dialogue::acceptance_history_metadata::retention_and_compaction_still_keep_twenty_turns_and_forty_auxiliary_rows ... ok
+test dialogue::acceptance_history_metadata::silence_remains_event_and_never_becomes_spoken_reply_or_haiku_material ... ok
+test dialogue::acceptance_history_metadata::snapshot_json_and_real_restore_preserve_time_kind_and_reply_target ... ok
+test dialogue::acceptance_history_metadata::text_ack_records_reply_metadata_without_faking_audio_completion ... ok
+test dialogue::acceptance_history_metadata::urgent_environment_delivery_is_warning_even_when_its_words_match_ambient ... ok
+test dialogue::acceptance_history_metadata::wrong_session_and_old_epoch_display_ack_cannot_confirm_history ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 883 filtered out; finished in 3.46s
+

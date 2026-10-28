@@ -601,6 +601,14 @@ impl Dialogue {
         self.tick_foreground(&mut d, &session_id);
         let text_prompt = d.text_prompts.clone();
         let text_prompt_version = d.text_prompt_version;
+        let input_occurred_at = replay.as_ref().map_or_else(
+            || json!(chrono::Utc::now()),
+            |original| {
+                d.rows.iter().find(|row| {
+                    row["session_id"] == session_id && row["turn_id"] == original.turn
+                }).map_or(Value::Null, |row| row["created_at"].clone())
+            },
+        );
         let s = d.sessions.get_mut(&session_id).unwrap();
         let workshop = Self::workshop_view(s, text);
         let (interpreted_text, asr_corrections) =
@@ -693,7 +701,7 @@ impl Dialogue {
             && poem_input.is_none()
             && !crate::haiku_memory::memory_candidate(text)
         {
-            s.history.push(&turn, "user", text);
+            s.history.push_input(&turn, text, input_occurred_at.clone());
         }
         let (cancel, rx) = watch::channel(false);
         s.cancel = Some(cancel);
@@ -701,7 +709,7 @@ impl Dialogue {
             d.rows.pop_front();
         }
         let mut new_row = json!({"utterance_id":id("utt"),"turn_id":turn,"session_id":session_id,"category":"speech","text":"",
-            "created_at":chrono::Utc::now(),"input_at_ms":now,"epoch":epoch,"session_instance":input["session_instance"],"reference_ids":[],"output_mode":"both","player_input_text":text,"source":source,"playback_status":"generating",
+            "created_at":input_occurred_at,"input_at_ms":now,"epoch":epoch,"session_instance":input["session_instance"],"reference_ids":[],"output_mode":"both","player_input_text":text,"source":source,"playback_status":"generating",
             "interpreted_player_input_text":interpreted_text,"asr_corrections":asr_corrections,
             "workshop_id":workshop.as_ref().map(|w| &w["workshop_id"]),"workshop_fixed_close":false,"workshop_state_before":audit_before,"workshop_record_private":private});
         new_row["combat_resumable"] = ordinary_reply.into();
