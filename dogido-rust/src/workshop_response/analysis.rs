@@ -1,5 +1,4 @@
-//! Only the pure analysis projection called by finalize_workshop_agent_step.
-//! Its evaluation and close_request are always found=false at that call site.
+//! モデルの解釈を記録へ投影する。原文一致・確信度・表現で落とさない。
 use super::*;
 fn compact_kana(text: &str) -> String {
     text.chars()
@@ -49,7 +48,7 @@ fn matching(verse: &[&str], fragment: &str) -> Option<usize> {
         None
     }
 }
-fn reference(raw: &Value, player: &str, interpreted_edit: bool) -> Value {
+fn reference(raw: &Value) -> Value {
     if raw["found"] != true {
         return Value::Null;
     }
@@ -62,12 +61,6 @@ fn reference(raw: &Value, player: &str, interpreted_edit: bool) -> Value {
     };
     let confidence = raw["confidence"].as_f64().unwrap_or(0.);
     let evidence = cut(&raw["evidence"], 48);
-    let ec = compact_kana(&evidence);
-    if !(0.0..=1.0).contains(&confidence)
-        || (!interpreted_edit && (ec.chars().count() < 2 || !compact_kana(player).contains(&ec)))
-    {
-        return Value::Null;
-    }
     // 呼称の意味はモデルが返した既知の行概念を受け取る。原文の別の行名で上書きしない。
     let mut result = concept.clone();
     result.as_object_mut().unwrap().remove("reference_examples");
@@ -75,13 +68,7 @@ fn reference(raw: &Value, player: &str, interpreted_edit: bool) -> Value {
     result["confidence"] = json!(confidence);
     result
 }
-pub(super) fn finalize(
-    payload: &Value,
-    d: &Value,
-    action: &str,
-    confidence: f64,
-    player: &str,
-) -> Value {
+pub(super) fn finalize(payload: &Value, d: &Value, action: &str, confidence: f64) -> Value {
     let intent = match action {
         "explain" => "ask_meaning",
         "show_current" => "show_current",
@@ -89,8 +76,7 @@ pub(super) fn finalize(
         "propose_revision" => "request_repair",
         _ => "other_haiku",
     };
-    let interpreted_edit = action == "stage_player_edit";
-    let reference = reference(&payload["line_reference"], player, interpreted_edit);
+    let reference = reference(&payload["line_reference"]);
     let verse = lines(text(&d["working_reading"]));
     let mut findings = Vec::new();
     for row in array(&payload["findings"]).iter().take(3) {
@@ -105,37 +91,31 @@ pub(super) fn finalize(
             continue;
         }
         let fragment = cut(&row["fragment"], 40);
-        let index = matching(&verse, &fragment);
+        let index = row["line_index"]
+            .as_u64()
+            .map(|n| n as usize)
+            .or_else(|| matching(&verse, &fragment));
         let problem = sanitize::strip(text(&row["problem"]));
+        let problem = if strings(&ASSETS["problems"]).contains(problem) {
+            problem
+        } else {
+            "other"
+        };
         let confidence = row["confidence"].as_f64().unwrap_or(0.);
-        if !strings(&ASSETS["problems"]).contains(problem) || !(0.0..=1.0).contains(&confidence) {
-            continue;
-        }
         findings.push(json!({"line_index":index,"fragment":fragment,"problem":problem,"note":cut(&row["note"],120),"confidence":confidence}));
     }
     let raw = &payload["line_proposal"];
     let mut proposal = Value::Null;
     if raw["found"] == true {
-        let replacement = cut(&raw["replacement_text"], 48);
-        let fragment = cut(&raw["target_fragment"], 48);
+        let replacement = text(&raw["replacement_text"]).trim();
+        let fragment = text(&raw["target_fragment"]).trim();
         let evidence = cut(&raw["evidence"], 120);
         let confidence = raw["confidence"].as_f64().unwrap_or(0.);
-        let pc = compact_kana(player);
-        let rc = compact_kana(&replacement);
-        let ec = compact_kana(&evidence);
-        let target = matching(&verse, &fragment);
+        let target = matching(&verse, fragment);
         let concept = reference["line_index"].as_u64().map(|n| n as usize);
-        let conflict = target.is_some() && concept.is_some() && target != concept;
-        if (0.0..=1.0).contains(&confidence)
-            && !rc.is_empty()
-            && (interpreted_edit
-                || (!pc.is_empty()
-                    && pc.contains(&rc)
-                    && ec.chars().count() >= 2
-                    && pc.contains(&ec)))
-            && !conflict
-        {
-            proposal = json!({"replacement_text":replacement,"target_fragment":fragment,"line_index":target.or(concept),"evidence":evidence,"confidence":confidence});
+        // 行が明示されていればその解釈を保持する。実際の置換位置は編集時に照合する。
+        if !replacement.is_empty() {
+            proposal = json!({"replacement_text":replacement,"target_fragment":fragment,"line_index":concept.or(target),"evidence":evidence,"confidence":confidence});
         }
     }
     json!({"intent":intent,"confidence":confidence,"repair_requested":action=="propose_revision","findings":findings,"line_proposal":proposal,"line_reference":reference,"close_request":null,"evaluation":null})

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""native stage_player_editを既存の原文補完・保存経路へ通す。観測・初期句・音声は模擬。"""
+"""native stage_player_editを既存の対象補完・保存経路へ通す。観測・初期句・音声は模擬。"""
 import argparse
 import json
 import time
@@ -18,7 +18,7 @@ def edit_args(text, replacement="しろい"):
 
 
 def run_case(name, text, arguments, *, expected_lines=None, expected_code=None, batch=False, base_url=None,
-             legacy_action=None, sampling=None, initial_lines=None, label="senryu_change_middle", direct=False,
+             legacy_action=None, sampling=None, initial_lines=None, label="senryu_change_middle",
              expected_readings=None):
     calls = []
     responses = []
@@ -101,10 +101,10 @@ def run_case(name, text, arguments, *, expected_lines=None, expected_code=None, 
         if expected_lines is not None:
             passed = passed and current["canonical_lines"] == expected_lines and len(saved) == 1
             passed = passed and reply.get("workshop_outcome") == "player_edit_saved"
-            passed = passed and (not native_calls if direct else bool(native_calls))
+            passed = passed and bool(native_calls)
             passed = passed and current["editing"] and current["selected_line"] == next(
                 i for i, pair in enumerate(zip(base_lines, expected_lines)) if pair[0] != pair[1])
-            passed = passed and any(s.get("transport") == ("modernbert_verbatim" if direct else "native_tool")
+            passed = passed and any(s.get("transport") == "native_tool"
                 for s in reply.get("workshop_steps", []))
             if saved:
                 changed = [i for i, pair in enumerate(zip(base_lines, expected_lines)) if pair[0] != pair[1]]
@@ -119,7 +119,7 @@ def run_case(name, text, arguments, *, expected_lines=None, expected_code=None, 
                     assert [line["reading_text"] for line in saved[0]["lines"]] == expected_readings, saved
                 assert saved[0]["base_text"] == "\n".join(base_lines), saved
             if not base_url:
-                assert len(calls) == (0 if direct else 1), calls
+                assert len(calls) == 1, calls
         else:
             passed = passed and current["canonical_lines"] == base_lines and not saved and not current["pending_lines"]
             if expected_code:
@@ -155,10 +155,10 @@ def main():
         full = "中七をしろいおのへとに変えて"
         cases.append(run_case("whole_replacement_keeps_other_lines", full,
             edit_args(full, "\n".join([LINES[0], "しろいおのへと", LINES[2]])),
-            expected_lines=[LINES[0], "しろいおのへと", LINES[2]], direct=True))
+            expected_lines=[LINES[0], "しろいおのへと", LINES[2]]))
         short = "くろいをあおに変えて"
         cases.append(run_case("short_meter_is_saved", short, edit_args(short, "あお"),
-                              expected_lines=[LINES[0], "あおおのへと", LINES[2]], direct=True))
+                              expected_lines=[LINES[0], "あおおのへと", LINES[2]]))
         # 2026-10-22の実入力。指定した上句が5音でも長くても、音数照会を挟まず保存する。
         for replacement in ["ひのあかり", "とてもながいひのあかり"]:
             text = f"上の句を{replacement}に変更してください。"
@@ -166,30 +166,29 @@ def main():
                 "replacement_text":replacement, "evidence":text, "confidence":.2}
             cases.append(run_case("fire_light_no_meter_" + replacement, text, arguments,
                 initial_lines=["ひかりさす", "じゃんぐるのなか", "あめがふる"],
-                expected_lines=[replacement, "じゃんぐるのなか", "あめがふる"], label="senryu_change_upper", direct=True))
+                expected_lines=[replacement, "じゃんぐるのなか", "あめがふる"], label="senryu_change_upper"))
         stale = edit_args(raw)
         stale["expected_text"] = "\n".join(["さくらいろ", *LINES[1:]])
         cases.append(run_case("old_expected_text_field_cannot_override_code_target", raw, stale, expected_code="classified_target_fields_are_code_owned"))
         stale_evidence = edit_args(raw)
         stale_evidence["evidence"] = "前の案をしろいにするつもり"
-        cases.append(run_case("past_evidence_cannot_authorize_edit", raw, stale_evidence,
-                              expected_code="tool_evidence_not_in_original"))
+        cases.append(run_case("interpreted_evidence_does_not_reject_edit", raw, stale_evidence,
+                              expected_lines=[LINES[0], "しろいおのへと", LINES[2]]))
         cases.append(run_case("multiple_calls_execute_nothing", raw, edit_args(raw),
                               batch=True, expected_code="one_workshop_tool_required"))
         for action in ("stage_player_edit", "inspect"):
             cases.append(run_case("removed_json_" + action + "_cannot_execute", raw, edit_args(raw),
                                   legacy_action=action, expected_code="native_tool_required"))
-        # 2026-10-18実ログの原文と誤ったtool引数を再現。モデルによる末尾・旧語の短縮後も
-        # 原文の「うつろいの」を使い、同じ保存経路で上五一行だけを一度保存する。
+        # 2026-10-18実ログ由来の入力。コードは解釈済みの旧語と置換語を原文から取り直さない。
         reported_lines = ["ゆらぐひが", "たましいのひが", "ゆらゆらと"]
         for name, text, target in [
-            ("reported_typed_keeps_trailing_no", "ゆらぐひが を うつろいの に変えてください。", "ゆらぐひが"),
-            ("reported_voice_keeps_both_phrases", "揺らぐひがをうつろいのに変えてください", "ひが"),
-            ("reported_voice_with_intro_keeps_both_phrases", "では揺らぐひがをうつろいのに変えてください", "ゆらぐひが"),
+            ("reported_typed_keeps_model_phrase", "ゆらぐひが を うつろいの に変えてください。", "ゆらぐひが"),
+            ("reported_voice_keeps_model_fragment", "揺らぐひがをうつろいのに変えてください", "ひが"),
+            ("reported_voice_with_intro_keeps_model_phrase", "では揺らぐひがをうつろいのに変えてください", "ゆらぐひが"),
         ]:
             arguments = {"target_fragment":target, "replacement_text":"うつろい", "evidence":text, "confidence":1.0}
             cases.append(run_case(name, text, arguments, initial_lines=reported_lines,
-                expected_lines=["うつろいの", *reported_lines[1:]], label="senryu_change_upper", direct=name=="reported_typed_keeps_trailing_no"))
+                expected_lines=["ゆらぐうつろい" if target=="ひが" else "うつろい", *reported_lines[1:]], label="senryu_change_upper"))
         # 2026-10-21実発話。句中の「もし」で変更を棄却し、音数説明だけへ戻っていた。
         lamp_lines = ["いしのそこ", "ゆれるともしのひ", "だいじょうぶや"]
         for name, text, fragment, reference in [
@@ -201,34 +200,34 @@ def main():
             arguments = {"target_fragment":fragment,
                 "replacement_text":"ゆれるともしび", "evidence":text, "confidence":1.0}
             case = run_case(name, text, arguments, initial_lines=lamp_lines,
-                expected_lines=[lamp_lines[0], "ゆれるともしび", lamp_lines[2]], direct=name in {"lamp_arrow", "lamp_full_request"})
+                expected_lines=[lamp_lines[0], "ゆれるともしび", lamp_lines[2]])
             assert case["reply"]["text"] == "変更したで。", case["reply"]
             cases.append(case)
         text = "ではじめるをおわるに変えて"
         arguments = {"target_fragment":"ではじめる", "replacement_text":"おわる", "evidence":text, "confidence":1.0}
         cases.append(run_case("word_initial_dewa_is_not_removed_to_fit_meter", text, arguments,
-            initial_lines=["ではじめる", *reported_lines[1:]], expected_lines=["おわる", *reported_lines[1:]], label="senryu_change_upper", direct=True))
+            initial_lines=["ではじめる", *reported_lines[1:]], expected_lines=["おわる", *reported_lines[1:]], label="senryu_change_upper"))
         # 17:01の矢印入力。今回の7音を指定したのに、モデルが前の8音を再利用したケース。
         sand_lines = ["やさしいひが", "しろいしをてらし", "うみのゆめ"]
         for name, text, model_word, expected_lines, expected_code, expected_readings in [
             ("reported_arrow_eight_mora_is_saved",
              "しろいしをてらし -> しろすなをてらし", "しろすなをてらし", [sand_lines[0], "しろすなをてらし", sand_lines[2]], None, None),
-            ("reported_arrow_seven_mora_overrides_previous_model_word",
+            ("reported_arrow_keeps_interpreted_model_word",
              "しろいしをてらし -> しろすなてらし", "しろすなをてらし",
-             [sand_lines[0], "しろすなてらし", sand_lines[2]], None, None),
-            ("arrow_preserves_players_eight_mora",
-             "しろいしをてらし → しろすなをてらし", "しろすなてらし", [sand_lines[0], "しろすなをてらし", sand_lines[2]], None, None),
-            ("arrow_preserves_literal_denial_suffix",
-             "しろいしをてらし → しろさではない", "しろさ", [sand_lines[0], "しろさではない", sand_lines[2]], None, None),
-            ("arrow_preserves_literal_condition_suffix",
-             "しろいしをてらし → さくらいろなら", "さくらいろ", [sand_lines[0], "さくらいろなら", sand_lines[2]], None, None),
-            ("arrow_preserves_literal_question_suffix",
-             "しろいしをてらし → さくらいろかな。", "さくらいろ", [sand_lines[0], "さくらいろかな。", sand_lines[2]], None,
-             [sand_lines[0], "さくらいろかな", sand_lines[2]]),
+             [sand_lines[0], "しろすなをてらし", sand_lines[2]], None, None),
+            ("arrow_keeps_interpreted_shorter_phrase",
+             "しろいしをてらし → しろすなをてらし", "しろすなてらし", [sand_lines[0], "しろすなてらし", sand_lines[2]], None, None),
+            ("arrow_keeps_interpreted_denial_suffix",
+             "しろいしをてらし → しろさではない", "しろさ", [sand_lines[0], "しろさ", sand_lines[2]], None, None),
+            ("arrow_keeps_interpreted_condition_suffix",
+             "しろいしをてらし → さくらいろなら", "さくらいろ", [sand_lines[0], "さくらいろ", sand_lines[2]], None, None),
+            ("arrow_keeps_interpreted_question_suffix",
+             "しろいしをてらし → さくらいろかな。", "さくらいろ", [sand_lines[0], "さくらいろ", sand_lines[2]], None,
+             [sand_lines[0], "さくらいろ", sand_lines[2]]),
         ]:
             arguments = {"target_fragment":sand_lines[1], "replacement_text":model_word, "evidence":text, "confidence":.95}
             cases.append(run_case(name, text, arguments, initial_lines=sand_lines,
-                expected_lines=expected_lines, expected_code=expected_code, direct=True,
+                expected_lines=expected_lines, expected_code=expected_code,
                 expected_readings=expected_readings))
     if args.output:
         with args.output.open("x") as handle:

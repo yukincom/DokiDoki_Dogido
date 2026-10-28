@@ -103,16 +103,10 @@ impl Target {
         Some(target)
     }
 
-    /// A model-resolved line reference has already passed the line-concept and
-    /// verbatim-evidence checks. This permits new player wording beyond aliases.
-    pub fn from_reference(reference: &Value, player: &str, lines: &[HaikuLine]) -> Option<Self> {
+    /// 解釈済みの行番号を実在する行IDへ結ぶ。発話の意味は再審査しない。
+    pub fn from_reference(reference: &Value, lines: &[HaikuLine]) -> Option<Self> {
         let index = reference["line_index"].as_u64()? as usize;
-        let evidence = reference["evidence"].as_str()?;
-        if lines.len() != 3
-            || index >= 3
-            || evidence.chars().count() < 2
-            || !player.contains(evidence)
-        {
+        if lines.len() != 3 || index >= 3 {
             return None;
         }
         Some(Self {
@@ -157,14 +151,18 @@ mod tests {
     }
 
     #[test]
-    fn model_resolves_new_player_line_wording_with_verbatim_evidence() {
+    fn interpreted_line_reference_needs_only_an_existing_line() {
         let lines = lines();
         let player = "今度は冒頭の五音を見よう";
         assert!(Target::explicit(player, &lines).is_none());
         let reference = json!({"line_index":0,"evidence":"冒頭の五音","confidence":0.95});
-        let target = Target::from_reference(&reference, player, &lines).unwrap();
+        let target = Target::from_reference(&reference, &lines).unwrap();
         assert_eq!(target.line_index, 0);
-        assert!(Target::from_reference(&reference, "もう少し話そう", &lines).is_none());
+        assert_eq!(
+            Target::from_reference(&json!({"line_index":0}), &lines).unwrap(),
+            target
+        );
+        assert!(Target::from_reference(&json!({"line_index":3}), &lines).is_none());
     }
 
     #[test]

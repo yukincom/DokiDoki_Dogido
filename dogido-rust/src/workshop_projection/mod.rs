@@ -16,7 +16,7 @@ use std::{
     sync::LazyLock,
 };
 static RULES: LazyLock<Value> = LazyLock::new(|| {
-    serde_json::from_str(include_str!("../workshop_validation/assets.json"))
+    serde_json::from_str(include_str!("../workshop_response/assets.json"))
         .expect("workshop shared constants")
 });
 fn value_text(v: &Value) -> String {
@@ -253,6 +253,7 @@ fn allowed_actions(workshop: &Snapshot, phase: &str) -> Vec<String> {
             "show_current",
             "stage_player_edit",
             "close_workshop",
+            "clear_lessons",
             "unrelated",
         ],
         _ => return vec![],

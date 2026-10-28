@@ -258,14 +258,13 @@ impl Dialogue {
                                 result["workshop_conversation_candidate"].clone(),
                             )
                             && let Some(candidate) =
-                                crate::workshop_candidate::Candidate::from_player(
+                                crate::workshop_candidate::Candidate::from_interpreted(
                                     draft,
                                     &w.current_lines,
                                     w.version,
-                                    &player_text,
                                 )
                         {
-                            // Only the player's idea: independent of Dogido's reply playback.
+                            // 解釈済みの相談案は、返答の配送状態と分けて現在句・版へ結び付ける。
                             w.conversation_candidate = Some(candidate);
                         }
                         if let Some(steps) = result["workshop_steps"].as_array() {

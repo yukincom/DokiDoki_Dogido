@@ -94,7 +94,7 @@
 
 - Fabricの`DogidoClientAdapter.buildLookTarget`がクライアントのクロスヘア結果を読み、観測イベントへ付与する。
 - Rustの[イベント型](../dogido-rust/src/events/models.rs)が受理し、[会話観測](../dogido-rust/src/chat_observation.rs)と[planner](../dogido-rust/src/planner/)が指差し・在否・戦況を区別する。
-- 固定の入力補正は[player_text](../dogido-rust/src/player_text.rs)。[contextual_asr](../dogido-rust/src/contextual_asr.rs)の音近傍補正は、音声かつworkshop内で、現在句・未採用案・保存材料を候補に使う。解釈面だけを補正し、原文を操作根拠として保持する。
+- 固定の入力補正は[player_text](../dogido-rust/src/player_text.rs)。[contextual_asr](../dogido-rust/src/contextual_asr.rs)の音近傍補正は、音声かつworkshop内で、現在句・未採用案・保存材料を候補に使う。解釈面だけを補正し、原文を入力記録として保持する。WSの編集はBERT・LLMの解釈を受け取り、原文一致を適用条件にしない。[受信・適用](rust-workshop-validation.md)を参照する。
 
 ※上記の受け入れ例は実機で確認すべき検証条件であり、本ドキュメントの記述更新をもって確認完了とみなすものではありません。
 

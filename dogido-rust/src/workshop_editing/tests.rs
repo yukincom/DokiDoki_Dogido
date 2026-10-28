@@ -9,7 +9,25 @@ fn current_inputs_keep_data_integrity_under_model_owned_edits() {
         let mut engine = Engine {
             readings: serde_json::from_value(case["readings"].clone()).unwrap(),
         };
-        let f = &case["input"];
+        let mut prepared = case["input"].clone();
+        if prepared["workshop"]["pending"]["generated_basis"]["present"] == true {
+            // 移植時の入力コーパスの存在マーカーを、現行の生成案の実記録へ組み立てる。
+            // 本体には互換経路を追加せず、このテストでも正しい型のpendingを使う。
+            let pending = &mut prepared["workshop"]["pending"];
+            let mut targets = std::collections::BTreeSet::new();
+            for i in 0..3 {
+                if pending["base"][i] != pending["lines"][i] {
+                    targets.insert(i);
+                    pending["lines"][i]["provenance"] = "generated_confirmed".into();
+                }
+            }
+            pending["generated_basis"] = json!(crate::haiku::revision::Basis {
+                target_indices: targets,
+                source_atoms: vec![],
+                details: Default::default(),
+            });
+        }
+        let f = &prepared;
         let op = text(&case["op"]);
         let actual: Result<Value> = match op {
             "normalize" => engine.normalized(text(&f["text"]), true).map(|v| json!(v)),
@@ -33,10 +51,8 @@ fn current_inputs_keep_data_integrity_under_model_owned_edits() {
                 loop {
                     match engine.project(&f) {
                         Err(error)
-                            if matches!(
-                                op,
-                                "player_edit" | "discussion_candidate"
-                            ) && error.downcast_ref::<NeedsReading>().is_some() =>
+                            if matches!(op, "player_edit" | "discussion_candidate")
+                                && error.downcast_ref::<NeedsReading>().is_some() =>
                         {
                             // 辞書fixtureにない語は辞書未解決として模擬する。
                             // 読みを推測せず、表記を保持したまま編集できることを確認する。
@@ -80,9 +96,16 @@ fn current_inputs_keep_data_integrity_under_model_owned_edits() {
                     workshop_edit::editing_text(&snapshot.current_lines)
                 );
                 assert_eq!(actual["text"], workshop_edit::editing_text(&output));
-                let pending =
+                let pending = if f["workshop"]["pending"].is_object() {
+                    let previous: workshop_edit::Pending =
+                        serde_json::from_value(f["workshop"]["pending"].clone()).unwrap();
+                    previous
+                        .restage(&snapshot.current_lines, output, target)
+                        .unwrap()
+                } else {
                     workshop_edit::Pending::stage(&snapshot.current_lines, working, output, target)
-                        .unwrap();
+                        .unwrap()
+                };
                 assert_eq!(
                     actual["edits"],
                     serde_json::to_value(pending.edits()).unwrap()
@@ -108,7 +131,6 @@ fn current_inputs_keep_data_integrity_under_model_owned_edits() {
                                 | "ambiguous_target_fragment"
                                 | "missing_target"
                                 | "invalid_line_records"
-                                | "pending_source_conflict"
                                 | "no_change"
                                 | "not_hiragana"
                         ),
@@ -119,9 +141,9 @@ fn current_inputs_keep_data_integrity_under_model_owned_edits() {
         } else if op == "discussion_candidate" {
             if let Some(candidate) = actual["candidate"].as_object() {
                 let proposal = &candidate["proposal"];
-                assert!(
-                    text(&f["text"]).contains(text(&proposal["replacement_text"])),
-                    "case {index}"
+                assert_eq!(
+                    proposal["replacement_text"], f["proposal"]["replacement_text"],
+                    "case {index}: model wording"
                 );
                 assert_eq!(candidate["evidence"], f["text"], "case {index}");
                 assert!(
@@ -130,10 +152,16 @@ fn current_inputs_keep_data_integrity_under_model_owned_edits() {
                     "case {index}"
                 );
                 if case["expected"]["candidate"].is_object() {
-                    assert_eq!(
-                        proposal, &case["expected"]["candidate"]["proposal"],
-                        "case {index}"
-                    );
+                    let expected = &case["expected"]["candidate"]["proposal"];
+                    for key in ["target_fragment", "replacement_text"] {
+                        assert_eq!(proposal[key], expected[key], "case {index}: {key}");
+                    }
+                    if !expected["line_index"].is_null() {
+                        assert_eq!(
+                            proposal["line_index"], expected["line_index"],
+                            "case {index}"
+                        );
+                    }
                 }
             } else {
                 assert!(
@@ -154,14 +182,21 @@ fn current_inputs_keep_data_integrity_under_model_owned_edits() {
 #[test]
 fn retired_operations_are_unsupported_with_a_valid_current_workshop() {
     let cases: Value = serde_json::from_str(include_str!("fixtures.json")).unwrap();
-    let current = cases.as_array().unwrap().iter()
-        .find(|case| case["op"] == "player_edit").unwrap();
+    let current = cases
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|case| case["op"] == "player_edit")
+        .unwrap();
     let mut frame = current["input"].clone();
     Snapshot::from_view(&frame["workshop"]).unwrap();
     for op in ["combat_fallback", "explicit_discussion"] {
         frame["op"] = op.into();
         let error = Engine::default().project(&frame).err().unwrap();
-        assert_eq!(error.to_string(), "unsupported native workshop edit operation");
+        assert_eq!(
+            error.to_string(),
+            "unsupported native workshop edit operation"
+        );
     }
 }
 
@@ -369,13 +404,12 @@ fn typed_proposal_preserves_model_evidence_boundary_and_rejects_invalid_indices(
     assert!(draft.validation_codes.is_empty());
     assert_eq!(draft.evidence, frame["text"].as_str().unwrap());
     assert!(
-        crate::workshop_candidate::Candidate::from_player(
+        crate::workshop_candidate::Candidate::from_interpreted(
             draft,
             &Snapshot::from_view(&frame["workshop"])
                 .unwrap()
                 .current_lines,
-            0,
-            frame["text"].as_str().unwrap()
+            0
         )
         .is_some()
     );
@@ -507,4 +541,64 @@ async fn unknown_reading_edits_preserve_surface_and_can_be_edited_again() {
     helper.finish(false).await.unwrap();
     reaped(&dir);
     std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn model_word_edit_applies_to_generated_pending_without_adopting_it() {
+    let cases: Value = serde_json::from_str(include_str!("fixtures.json")).unwrap();
+    let case = cases
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["op"] == "player_edit" && c["expected"]["text"].is_string())
+        .unwrap();
+    let mut frame = case["input"].clone();
+    frame["op"] = "player_edit".into();
+    let current = Snapshot::from_view(&frame["workshop"])
+        .unwrap()
+        .current_lines;
+    let basis = crate::haiku::revision::Basis {
+        target_indices: std::collections::BTreeSet::from([0, 2]),
+        source_atoms: vec![],
+        details: Default::default(),
+    };
+    let mut proposed: Vec<String> = current
+        .iter()
+        .map(|line| line.surface_text.clone())
+        .collect();
+    proposed[0] = "さくらいろ".into();
+    proposed[2] = "あさひかる".into();
+    let revision = crate::haiku::revision::Revision {
+        accepted: true,
+        lines: proposed.clone(),
+        line_sources: proposed
+            .iter()
+            .enumerate()
+            .map(|(i, text)| crate::haiku::LineSource {
+                line_index: i,
+                text: text.clone(),
+                atom_ids: vec![],
+                sources: vec![],
+            })
+            .collect(),
+        failure_reason: None,
+        feedback: vec![],
+    };
+    let pending = workshop_edit::Pending::stage_generated(&current, revision, basis).unwrap();
+    frame["workshop"]["pending"] = json!(pending);
+    frame["text"] = "いろをふぶきにして".into();
+    frame["proposal"] =
+        json!({"line_index":0,"target_fragment":"いろ","replacement_text":"ふぶき"});
+    let engine = Engine::default();
+    let Output::PlayerEdit(PlayerEditResult::Validated(edit)) = engine.project(&frame).unwrap()
+    else {
+        panic!("missing edit");
+    };
+    assert_eq!(edit.lines[0].surface_text, "さくらふぶき");
+    assert_eq!(edit.lines[1..], pending.lines[1..]);
+    let next = pending.restage(&current, edit.lines, 0).unwrap();
+    assert_eq!(next.edits(), edit.edits);
+    assert!(next.validate(&current).is_ok());
+    assert_eq!(next.base, current);
+    assert_eq!(next.lines[2].provenance, "generated_confirmed");
 }

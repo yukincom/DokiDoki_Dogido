@@ -19,7 +19,6 @@ impl Engine {
             };
             let index = &proposal["line_index"];
             if replacement.is_empty()
-                || !input.contains(&replacement)
                 || (!index.is_null() && !index.as_i64().is_some_and(|i| i >= 0))
             {
                 return Ok(None);
@@ -30,17 +29,7 @@ impl Engine {
                 fragment: (!fragment.is_empty()).then_some(fragment),
             }
         } else {
-            let pairs = parse::pattern("quoted_discussion")
-                .captures_iter(input)
-                .collect::<Vec<_>>();
-            if pairs.len() != 1 || parse::explicit_lines(input).len() > 1 {
-                return Ok(None);
-            }
-            Replacement {
-                text: pairs[0]["alternative"].into(),
-                fragment: Some(pairs[0]["target"].into()),
-                index: parse::explicit_line(input).map(|i| i as i64),
-            }
+            return Ok(None);
         };
         let result = self.revise(&f["workshop"], s, &r)?;
         Ok(Some(crate::workshop_candidate::Draft {
@@ -78,7 +67,7 @@ impl Engine {
         }
         let Some(replacement_text) = proposal.get("replacement_text").and_then(Value::as_str)
         else {
-            return Ok(conflict("not_hiragana"));
+            return Ok(conflict("replacement_text_required"));
         };
         let mut replacement = Replacement {
             text: replacement_text.into(),
@@ -139,11 +128,6 @@ impl Engine {
             failure_reasons: vec![code.into()],
             target_line_index: target,
         };
-        if s.pending_revision.as_ref().is_some_and(|s| !s.is_empty())
-            && truth(&view["pending"]["generated_basis"])
-        {
-            return Ok(failure("pending_source_conflict", None));
-        }
         let mut source = editing_records(s).to_vec();
         if s.current_lines.len() != 3 || source.len() != 3 {
             return Ok(failure("invalid_line_records", None));
@@ -266,10 +250,13 @@ impl Engine {
                 expected_text: workshop_edit::editing_text(std::slice::from_ref(old)),
                 replacement_text: workshop_edit::editing_text(std::slice::from_ref(new)),
                 provenance: new.provenance.clone(),
-                atom_ids: None,
+                atom_ids: view["pending"]["generated_basis"]
+                    .is_object()
+                    .then(|| new.source_atom_ids.clone()),
             })
             .collect::<Vec<_>>();
-        if edits.is_empty() {
+        // 未採用案から正本へ戻す変更は、runtimeが既存の案破棄へ渡す。
+        if edits.is_empty() && !view["pending"].is_object() {
             return Ok(failure("no_change", Some(target)));
         }
         Ok(EditResult {

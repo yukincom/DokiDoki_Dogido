@@ -48,7 +48,7 @@ def native_mock_message(payload, prompt, number):
         arguments = {key:payload[key] for key in ("checks", "inspect_text", "inspect_line_index") if key in payload}
     else:
         name = action
-        # 行IDと元句はBERT結果から本体が補完する。モデルは原文の語句だけを渡す。
+        # 行IDと元句はBERT結果から本体が補完する。モデルは解釈した語句を渡す。
         proposal = payload.get("line_proposal", {})
         arguments = {"target_fragment":proposal.get("target_fragment", ""),
             "replacement_text":proposal.get("replacement_text", ""),

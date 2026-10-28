@@ -13,8 +13,8 @@ fn player_edit_definition() -> Value {
             "target_fragment":{"type":"string","description":"差し替える旧語。一行全体の置換なら空文字。"},
             "replacement_text":{"type":"string","description":"今回の変更依頼から解釈した置換語句。"},
             "evidence":{"type":"string","description":"今回の変更依頼を解釈した根拠。記録用。"},
-            "confidence":{"type":"number","minimum":0,"maximum":1}},
-            "required":["target_fragment","replacement_text","evidence","confidence"],
+            "confidence":{"type":"number","description":"任意の自己申告値。記録用。"}},
+            "required":["replacement_text"],
             "additionalProperties":false}
     }})
 }
@@ -112,9 +112,9 @@ impl Call {
         }
     }
 
-    /// schema検証済みの一手へ、BERTと現在句から確定した行番号を保持する。
+    /// 受け取った一手へ、BERTと現在句から確定した行番号を保持する。
     /// 独自JSONのline_proposal schemaへ新しいmodel入力フィールドは足さない。
-    pub fn retain_verified_target(&self, step: &mut Value) {
+    pub fn retain_classified_target(&self, step: &mut Value) {
         if let Self::PlayerEdit { frame, .. } = self {
             step["analysis"]["line_proposal"] = frame["proposal"].clone();
         }

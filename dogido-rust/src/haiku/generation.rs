@@ -338,28 +338,6 @@ fn atom_reservations(atom: &SourceAtom) -> BTreeSet<String> {
         atom.basis_atom_ids.iter().cloned().collect()
     }
 }
-pub(super) fn reservations(
-    ids: &[String],
-    atoms: &BTreeMap<String, SourceAtom>,
-) -> BTreeSet<String> {
-    ids.iter()
-        .filter_map(|id| atoms.get(id))
-        .flat_map(atom_reservations)
-        .collect()
-}
-pub(super) fn eligible_atoms(atoms: &[SourceAtom], used: &BTreeSet<String>) -> Vec<SourceAtom> {
-    atoms
-        .iter()
-        .filter(|a| used.is_disjoint(&atom_reservations(a)))
-        .cloned()
-        .collect()
-}
-pub(super) fn clean_line(text: &str) -> Option<String> {
-    let text = text
-        .trim_matches(|c: char| c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c))
-        .trim_matches(['「', '」', '"', '\'', ' ']);
-    (!text.is_empty() && !text.contains(['\n', '\r'])).then(|| text.to_owned())
-}
 pub(super) use crate::compat::json_truthy as truthy;
 pub(super) fn structured_accepted(payload: &Value) -> bool {
     payload.is_object()

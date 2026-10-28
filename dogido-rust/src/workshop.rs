@@ -24,7 +24,7 @@ pub fn allowed_actions(
         actions.push("propose_revision");
     }
     if phase == "decide" {
-        actions.extend(["inspect", "unrelated", "close_workshop"]);
+        actions.extend(["inspect", "unrelated", "close_workshop", "clear_lessons"]);
         if pending {
             actions.extend(["accept_pending", "reject_pending"]);
         } else if conversation_candidate {

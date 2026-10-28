@@ -240,7 +240,7 @@
       "role": "user",
       "segments": [
         {
-          "literal": "川柳の固定行は一字も変えず、指定された行だけを直す。\nプレイヤーの指摘を優先し、元の表現を弁護しない。\n各修正は expected_text に現在の対象行を一字も変えず写し、replacement_text に置換後の一行を書く。全文や対象外行は返さない。\n修正行ごとに、意味の根として実際に使った候補の atom_id を付ける。候補外ID、行どうしのID重複、説明にない性質の推測は禁止。\n本人の意図に沿う表記と表現で、一行の修正案を返す。\n\n【現在の句】\n"
+          "literal": "川柳の固定行は一字も変えず、指定された行だけを直す。\nプレイヤーの指摘を優先し、元の表現を弁護しない。\n各修正は expected_text に現在の対象行を一字も変えず写し、replacement_text に置換後の一行を書く。全文や対象外行は返さない。\n材料は表現を考える参考や。使った材料を記録したいときだけatom_idsを添えてな。同じ材料を複数行で使ってもええし、材料の記録がない案も作れるで。材料の記録を実際の世界の観測や意味の証明にはせんといてな。\n本人の意図に沿う表記と表現で、一行の修正案を返す。\n\n【現在の句】\n"
         },
         {
           "slot": "current"
@@ -252,13 +252,13 @@
           "slot": "target_text"
         },
         {
-          "literal": "\n【確認済みの指摘】\n"
+          "literal": "\n【今回の相談と指摘】\n"
         },
         {
           "slot": "finding_lines"
         },
         {
-          "literal": "\n【使える原文材料】\n"
+          "literal": "\n【参考材料】\n"
         },
         {
           "slot": "atom_lines"
@@ -302,7 +302,7 @@
     "missing_regenerated_line": "再生成結果が欠けた",
     "slot_dependency": "同じ生成スロットの行が不合格"
   },
-  "revision_suffix": "\nexpected_textは元行の写し、replacement_textは必ず元行と違う表現にする。同じ行の再提出は修正にならず、検査で不合格になる。",
+  "revision_suffix": "\nexpected_textは元行の写し、replacement_textは変更後の一行や。同じ本文なら差分がないので、新しい版は作らへん。",
   "retry": {
     "haiku_irony": [
       {
@@ -398,7 +398,7 @@
         "slot": "previous"
       },
       {
-        "literal": "\n現行JSON Schema:\n{\"$defs\":{\"_WorkshopRevisionLine\":{\"additionalProperties\":false,\"properties\":{\"line_index\":{\"title\":\"Line Index\",\"type\":\"integer\"},\"expected_text\":{\"minLength\":1,\"title\":\"Expected Text\",\"type\":\"string\"},\"replacement_text\":{\"minLength\":1,\"title\":\"Replacement Text\",\"type\":\"string\"},\"atom_ids\":{\"items\":{\"minLength\":1,\"type\":\"string\"},\"minItems\":1,\"title\":\"Atom Ids\",\"type\":\"array\"}},\"required\":[\"line_index\",\"expected_text\",\"replacement_text\",\"atom_ids\"],\"title\":\"_WorkshopRevisionLine\",\"type\":\"object\"}},\"additionalProperties\":false,\"properties\":{\"lines\":{\"items\":{\"$ref\":\"#/$defs/_WorkshopRevisionLine\"},\"title\":\"Lines\",\"type\":\"array\"}},\"required\":[\"lines\"],\"title\":\"_WorkshopRevision\",\"type\":\"object\"}\nリクエスト固有制約:\natom IDは次の文字列から意味に合うものだけを正確にコピーする: "
+        "literal": "\n現行JSON Schema:\n{\"$defs\":{\"_WorkshopRevisionLine\":{\"additionalProperties\":false,\"properties\":{\"line_index\":{\"title\":\"Line Index\",\"type\":\"integer\"},\"expected_text\":{\"minLength\":1,\"title\":\"Expected Text\",\"type\":\"string\"},\"replacement_text\":{\"minLength\":1,\"title\":\"Replacement Text\",\"type\":\"string\"},\"atom_ids\":{\"items\":{\"minLength\":1,\"type\":\"string\"},\"title\":\"Atom Ids\",\"type\":\"array\"}},\"required\":[\"line_index\",\"expected_text\",\"replacement_text\"],\"title\":\"_WorkshopRevisionLine\",\"type\":\"object\"}},\"additionalProperties\":false,\"properties\":{\"lines\":{\"items\":{\"$ref\":\"#/$defs/_WorkshopRevisionLine\"},\"title\":\"Lines\",\"type\":\"array\"}},\"required\":[\"lines\"],\"title\":\"_WorkshopRevision\",\"type\":\"object\"}\nリクエスト固有制約:\natom IDを記録するなら次の実在する資料から選ぶ。空配列・省略・再利用も可能: "
       },
       {
         "slot": "ids"

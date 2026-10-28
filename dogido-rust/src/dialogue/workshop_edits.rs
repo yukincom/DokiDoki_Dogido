@@ -16,7 +16,8 @@ impl Dialogue {
         result: &mut Value,
     ) -> Result<()> {
         let action = result["workshop_action"].as_str().unwrap_or("").to_owned();
-        let generated_proposal = result["workshop_proposed"]["generated_basis"].is_object();
+        let generated_proposal = action == "propose_revision"
+            && result["workshop_proposed"]["generated_basis"].is_object();
         if !generated_proposal
             && !matches!(
                 action.as_str(),
@@ -71,6 +72,12 @@ impl Dialogue {
                 let working = w.pending.as_ref().map_or(&w.current_lines, |p| &p.lines);
                 if generated_proposal {
                     ensure!(w.pending.is_none(), "pending_exists");
+                } else if let Some(previous) = &w.pending {
+                    previous.restage(
+                        &w.current_lines,
+                        proposed.lines.clone(),
+                        proposed.selected_line,
+                    )?;
                 } else {
                     Pending::stage(
                         &w.current_lines,

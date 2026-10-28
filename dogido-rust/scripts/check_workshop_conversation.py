@@ -2,13 +2,14 @@
 """Model decisions and wording, retained target, validation recovery and saved revisions."""
 import json
 from check_haiku_runtime import LINES
+from check_dialogue import request
 from check_workshop_fixture import fixture
 from check_workshop_runtime import install, ready, session, step
 from check_workshop_edits import edit, finish, revisions, adoption
 
 
 def discuss_candidate(text, replacement):
-    # 旧事前抽出へ戻さず、現行prompt契約どおりmodelが相談案の原文を返す。
+    # 旧事前抽出へ戻さず、現行prompt契約どおりmodelが解釈した相談案を返す。
     p = edit(text, replacement=replacement, reference="", fragment=LINES[0])
     p["action"] = "respond"
     p["speech"] = "その言い方の響き、一緒に考えよか。"
@@ -31,6 +32,7 @@ def main():
             assert r["workshop_action"] == "close_workshop" and hud(sid)["state"] == "closed", r
             assert len(calls) == count and not r["llm_reports"], r
             assert stored(sid) == before and not revisions(folder, sid)
+            request(base, "/api/v1/adapter-sessions/" + sid, method="DELETE")
         passed.append("bert_explicit_close_keeps_saved_storage_without_model_metadata")
 
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
@@ -131,6 +133,7 @@ def main():
             p = edit(text, replacement="あさひかる", reference="上五")
             del p["confidence"]
             del p["evidence"]
+            del p["line_proposal"]["replacement_text"]
             return p
         install(control, missing_arguments)
         sid = ready(base, send, rows)

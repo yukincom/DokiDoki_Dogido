@@ -30,6 +30,7 @@ pub mod haiku_response;
 pub mod ingress;
 pub mod input_context;
 pub mod input_policy;
+pub mod journey;
 pub mod knowledge;
 pub mod light_plan;
 pub mod llm;
@@ -38,7 +39,6 @@ pub mod mob_identity;
 pub mod playback;
 pub mod player_text;
 pub mod poem_book;
-pub mod journey;
 pub mod poem_input;
 pub mod python_worker;
 pub mod reading_correction;
@@ -66,8 +66,6 @@ pub mod reaction_leaf;
 
 pub mod chat_validation;
 
-pub mod workshop_input_guard;
-
 pub mod chat_hints;
 
 pub mod chat_world;
@@ -88,4 +86,4 @@ pub mod bookshelf;
 pub mod poem_trash;
 pub mod screenshot;
 pub mod workshop_editing;
-mod workshop_validation;
+mod workshop_response;

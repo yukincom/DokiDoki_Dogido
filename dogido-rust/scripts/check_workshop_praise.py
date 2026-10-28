@@ -67,19 +67,23 @@ def main():
             assert stored(sid) == before and not revisions(folder, sid)
         passed.append("praise_is_saved_without_closing_or_changing_the_verse")
 
-        # モデルへ届く通常会話で、不正feedbackだけを捨て、本文と句を保持する。
-        for feedback in [None, {"kind": "praise", "evidence": 7},
-                         {"kind": "praise", "evidence": "原文にない感想"}]:
+        # 称賛の解釈は任意のevidenceや原文一致で再審査しない。
+        for feedback in [None, {"kind": "other"}, {"kind": "praise", "evidence": 7},
+                         {"kind": "praise", "evidence": "原文にない感想"}, {"kind":"praise"}]:
             calls = install(control, lambda text, prompt, n: {"action": "respond", "speech": "気に入ってもらえてうれしいわ。", "feedback": feedback})
             result = finish(base, send, sid, INPUT)
             assert result["workshop_action"] == "respond" and len(calls) == 1 and len(result["llm_reports"]) == 1, result
-            assert result["text"] == "気に入ってもらえてうれしいわ。" and not result.get("workshop_feedback_outcome"), result
-            assert records(folder, "critiques") == critiques and records(folder, "lessons") == lessons
+            assert result["text"] == "気に入ってもらえてうれしいわ。", result
+            expected = bool(feedback and feedback.get("kind") == "praise")
+            after = records(folder, "critiques")
+            assert len(after) == len(critiques) + int(expected), result
+            critiques = after
+            assert records(folder, "lessons") == lessons
             assert hud(sid)["state"] == "open" and hud(sid)["canonical_lines"] == LINES
             assert stored(sid) == before and not revisions(folder, sid)
-        passed.append("missing_or_invalid_feedback_keeps_speech_without_saving_or_retrying")
+        passed.append("interpreted_praise_survives_missing_or_nonverbatim_evidence_without_retry")
 
-        # 会話の補助confidenceが不正でも、発話中の検証済み称賛は一件だけ残る。
+        # 会話の補助confidenceが不正でも、モデルが解釈した称賛は一件だけ残る。
         def unused_metadata(text, prompt, n):
             result = feedback_reply(text, VALID, "また一緒に詠もな。")
             result["confidence"] = "invalid"

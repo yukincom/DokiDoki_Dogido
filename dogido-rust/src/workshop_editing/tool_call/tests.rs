@@ -28,7 +28,7 @@ fn native_line_reference_preserves_model_interpretation() {
     args["line_reference_evidence"] = "冒頭の五音".into();
     let frame = normalize_player_edit_tool(&view, raw, &args).unwrap();
     let details = workshop_projection::details_for(&frame).unwrap();
-    let checked = workshop_validation::validate(&frame, &details).unwrap();
+    let checked = workshop_response::decode(&frame, &details).unwrap();
     assert_eq!(
         checked["step"]["analysis"]["line_reference"]["line_index"],
         0
@@ -105,13 +105,11 @@ fn stale_or_malformed_whole_verse_never_drops_unselected_lines() {
 }
 
 #[test]
-fn normalization_preserves_original_evidence_and_target_without_intent_veto() {
+fn normalization_keeps_interpreted_words_and_checks_the_current_target() {
     for (key, value) in [
         ("line_id", json!("line_1")),
         ("line_id", json!("line_4")),
-        ("confidence", json!(1.1)),
         ("expected_text", Value::Null),
-        ("extra", json!(true)),
     ] {
         let (view, mut args) = fixture();
         args[key] = value;
@@ -419,7 +417,7 @@ fn white_sand_args(raw: &str, replacement: &str) -> Value {
 }
 
 #[test]
-fn native_edit_keeps_model_words_while_direct_edit_uses_literal_words() {
+fn native_edit_keeps_model_words_across_arrow_and_quoted_inputs() {
     let mut view = white_sand_fixture();
     view["conversation_candidate"] = json!({"proposal":{
         "line_index":1,"target_fragment":"しろいしをてらし","replacement_text":"しろすなをてらし"},
@@ -434,8 +432,6 @@ fn native_edit_keeps_model_words_while_direct_edit_uses_literal_words() {
             normalize_player_edit_tool(&view, raw, &white_sand_args(raw, "しろすなをてらし"))
                 .unwrap();
         assert_eq!(frame["proposal"]["replacement_text"], "しろすなをてらし");
-        let direct = verbatim_player_edit(&view, raw, 1).unwrap().unwrap();
-        assert_eq!(direct["proposal"]["replacement_text"], "しろすなてらし");
         let Output::PlayerEdit(PlayerEditResult::Validated(result)) =
             engine_for(raw).project(&frame).unwrap()
         else {
@@ -530,7 +526,7 @@ fn arrow_arguments_are_completed_without_reclassifying_the_model_action() {
 }
 
 #[test]
-fn verbatim_deictic_target_preserves_only_the_matching_retained_line() {
+fn interpreted_target_preserves_only_the_matching_current_line() {
     for (target, retained, selected, succeeds) in [
         ("それ", Some(2), 2, true),
         ("「それ」", Some(2), 2, true),
@@ -620,7 +616,7 @@ fn model_selected_edit_with_tomoshibi_needs_no_word_exemption() {
 }
 
 #[test]
-fn direct_and_native_edits_keep_literal_punctuation_in_surface_and_reading_separate() {
+fn native_edits_keep_punctuation_in_surface_and_reading_separate() {
     let view = white_sand_fixture();
     let base: Vec<HaikuLine> = serde_json::from_value(view["current_lines"].clone()).unwrap();
     for (raw, expected) in [
@@ -634,30 +630,27 @@ fn direct_and_native_edits_keep_literal_punctuation_in_surface_and_reading_separ
             "さくらいろかな？",
         ),
     ] {
-        let direct = verbatim_player_edit(&view, raw, 1).unwrap().unwrap();
-        let native =
+        let frame =
             normalize_player_edit_tool(&view, raw, &white_sand_args(raw, expected)).unwrap();
-        for frame in [direct, native] {
-            assert_eq!(frame["proposal"]["replacement_text"], expected, "{raw}");
-            let Output::PlayerEdit(PlayerEditResult::Validated(result)) =
-                engine_for(raw).project(&frame).unwrap()
-            else {
-                panic!("not an edit: {raw}")
-            };
-            assert!(result.failure_reasons.is_empty(), "{raw}: {result:?}");
-            assert_eq!(result.lines[1].surface_text, expected, "{raw}");
-            assert_eq!(result.lines[1].reading_text, "さくらいろかな", "{raw}");
-            assert_eq!(result.lines[0], base[0]);
-            assert_eq!(result.lines[2], base[2]);
-            assert_eq!(result.edits.len(), 1);
-            // 保存差分は既存の確定読み契約を維持し、表示表記は行正本で保持する。
-            assert_eq!(result.edits[0].replacement_text, "さくらいろかな");
-            let pending = Pending::stage(&base, &base, result.lines, 1).unwrap();
-            assert_eq!(pending.lines[1].surface_text, expected);
-            assert_eq!(pending.lines[1].reading_text, "さくらいろかな");
-            assert_eq!(pending.edits(), result.edits);
-            pending.validate(&base).unwrap();
-        }
+        assert_eq!(frame["proposal"]["replacement_text"], expected, "{raw}");
+        let Output::PlayerEdit(PlayerEditResult::Validated(result)) =
+            engine_for(raw).project(&frame).unwrap()
+        else {
+            panic!("not an edit: {raw}")
+        };
+        assert!(result.failure_reasons.is_empty(), "{raw}: {result:?}");
+        assert_eq!(result.lines[1].surface_text, expected, "{raw}");
+        assert_eq!(result.lines[1].reading_text, "さくらいろかな", "{raw}");
+        assert_eq!(result.lines[0], base[0]);
+        assert_eq!(result.lines[2], base[2]);
+        assert_eq!(result.edits.len(), 1);
+        // 保存差分は既存の確定読み契約を維持し、表示表記は行正本で保持する。
+        assert_eq!(result.edits[0].replacement_text, "さくらいろかな");
+        let pending = Pending::stage(&base, &base, result.lines, 1).unwrap();
+        assert_eq!(pending.lines[1].surface_text, expected);
+        assert_eq!(pending.lines[1].reading_text, "さくらいろかな");
+        assert_eq!(pending.edits(), result.edits);
+        pending.validate(&base).unwrap();
     }
 }
 
@@ -688,10 +681,10 @@ fn bert_edit_uses_interpreted_words_and_keeps_cas_and_other_lines() {
         let frame = json!({"workshop":current,"text":raw,"phase":"decide",
             "allowed_actions":["stage_player_edit"],"payload":call.payload()});
         let details = crate::workshop_projection::details_for(&frame).unwrap();
-        let checked = crate::workshop_validation::validate(&frame, &details).unwrap();
+        let checked = crate::workshop_response::decode(&frame, &details).unwrap();
         let mut step = checked["step"].clone();
         assert_eq!(step["action"], "stage_player_edit", "{raw}: {checked}");
-        call.retain_verified_target(&mut step);
+        call.retain_classified_target(&mut step);
         let frame = json!({"op":"player_edit", "workshop":current,"text":raw,
             "proposal":step["analysis"]["line_proposal"]});
         let engine = Engine {

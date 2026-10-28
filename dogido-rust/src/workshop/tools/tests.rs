@@ -29,10 +29,10 @@ fn native_edit_keeps_verified_target_and_returns_failure_to_same_call() {
     let frame = json!({"op":"validate","workshop":current,"text":RAW,"phase":"decide",
         "allowed_actions":["stage_player_edit"],"payload":payload});
     let details = crate::workshop_projection::details_for(&frame).unwrap();
-    let checked = crate::workshop_validation::validate(&frame, &details).unwrap();
+    let checked = crate::workshop_response::decode(&frame, &details).unwrap();
     let mut step = checked["step"].clone();
     assert_eq!(step["action"], "stage_player_edit");
-    call.retain_verified_target(&mut step);
+    call.retain_classified_target(&mut step);
     assert_eq!(step["analysis"]["line_proposal"]["line_index"], 1);
     assert_eq!(
         step["analysis"]["line_proposal"]["replacement_text"],

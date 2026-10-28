@@ -1,4 +1,4 @@
-//! 発話・表示・読み取りには、編集や保存の根拠検証を要求しない。
+//! 発話・表示・読み取りに必要な値を受け取り、補助情報を記録する。
 //! 付随情報は用途ごとに拾い、壊れた補助項目で会話本文を捨てない。
 use super::*;
 
@@ -16,7 +16,7 @@ pub(super) fn handles(action: &str) -> bool {
     )
 }
 
-pub(super) fn validate(raw: &Value, details: &Value) -> Value {
+pub(super) fn decode(raw: &Value, details: &Value) -> Value {
     let action = text(&raw["action"]);
     if !strings(&details["allowed_actions"]).contains(action) {
         return reject("action_not_allowed");
@@ -61,12 +61,7 @@ pub(super) fn validate(raw: &Value, details: &Value) -> Value {
             inspect_line_index = Some(index);
         }
     }
-    // 自己申告の確信度や引用は会話の通行証ではない。未確認値を補って
-    // findingsや採用権限へ昇格させず、ログには確定できる情報だけ残す。
-    let confidence = raw["confidence"]
-        .as_f64()
-        .filter(|c| (0.0..=1.0).contains(c))
-        .unwrap_or(0.0);
+    let confidence = raw["confidence"].as_f64().unwrap_or(0.0);
     let purpose = match text(&raw["purpose"]) {
         p @ ("continue_discussion"
         | "understand_meaning"
@@ -77,21 +72,8 @@ pub(super) fn validate(raw: &Value, details: &Value) -> Value {
         | "other") => p,
         _ => "continue_discussion",
     };
-    let player = text(&details["player_text"]);
-    let evidence = text(&raw["evidence"]);
-    let evidence = if !evidence.is_empty() && player.contains(evidence) {
-        evidence
-    } else {
-        ""
-    };
-    let mut analysis = analysis::finalize(raw, details, action, confidence, player);
-    // 発話だけを救済したときに、原文へ結べない評価からlessonを増やさない。
-    // 提案候補と行対象は、それぞれ自身の根拠検証で保持する。
-    let feedback_allowed = confidence >= 0.72 && !evidence.is_empty();
-    analysis["feedback_allowed"] = json!(feedback_allowed);
-    if !feedback_allowed {
-        analysis["findings"] = json!([]);
-    }
+    let evidence = cut(&raw["evidence"], 120);
+    let analysis = analysis::finalize(raw, details, action, confidence);
     let mut step = json!({"action":action,"purpose":purpose,"confidence":confidence,
         "evidence":evidence,"speech":speech,"checks":checks,
         "close_after_action":false,"close_evidence":"","analysis":analysis});

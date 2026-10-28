@@ -49,7 +49,7 @@ def main():
         assert len(calls) == 1 and stored(sid) == original
         assert read_jsonl(folder / "memory/long_term/haiku_lessons.jsonl") == lessons
         assert read_jsonl(folder / "memory/long_term/haiku_critiques.jsonl") == critiques
-        passed.append("validated_feedback_persists_as_jsonl_without_extra_inference")
+        passed.append("interpreted_feedback_persists_as_jsonl_without_extra_inference")
         assert session(base, sid)["workshop_followup"] == "meaning_explained"
         r = finish(base, send, sid, "そうなんだ")
         assert r["workshop_action"] == "acknowledge_meaning" and len(r["llm_reports"]) == 1, r
@@ -190,6 +190,7 @@ def main():
         sid = ready(base, send, rows)
         path = folder / "memory/long_term/haiku_lessons.jsonl"
         path.mkdir(parents=True)
+        install(control, lambda text, prompt, n: {"action": "clear_lessons"})
         r = finish(base, send, sid, "緩めて")
         assert r.get("memory_outcome") == "save_failed" and hud(sid)["state"] == "open", r
         install(control, lambda text, prompt, n: step(text))
@@ -206,7 +207,7 @@ def main():
 
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         sid = ready(base, send, rows)
-        calls = install(control, lambda text, prompt, n: step(text, "show_current"))
+        calls = install(control, lambda text, prompt, n: {"action": "clear_lessons"} if text == "前の注意やめて" else step(text, "show_current"))
         path = folder / "memory/long_term/haiku_lessons.jsonl"
         path.parent.mkdir(parents=True)
         with path.open("a+") as lock:
@@ -220,7 +221,7 @@ def main():
             finally:
                 fcntl.flock(lock,fcntl.LOCK_UN)
         result = wait_for(lambda:row(base,newer,{"completed"}))
-        assert result["workshop_action"] == "show_current" and len(calls) == 1, result
+        assert result["workshop_action"] == "show_current" and len(calls) == 2, result
         assert len(records(folder,"lessons")) == 1 and records(folder,"lessons")[0]["polarity"] == "loosen"
         assert not any(p["turn_id"] == turn for p in session(base,sid)["workshop_history"])
         passed.append("authorized_clear_finishes_after_cancellation_without_blocking_snapshot")

@@ -8,7 +8,7 @@ from check_workshop_fixture import fixture
 from check_workshop_runtime import install, ready, step
 from check_workshop_edits import edit, adoption
 from check_workshop_provisional import done
-from check_workshop_combat import SETTINGS, enter, end
+from check_workshop_combat import SETTINGS, enter, end, returned, rejected_normal_input
 
 
 def records(folder, sid):
@@ -199,24 +199,32 @@ def main():
         calls = install(control, model)
         sid = ready(base, send, rows)
         enter(send, rows, sid)
-        turn = submit(base, sid, "なんの話？")
-        held = wait_for(lambda: row(base, turn, {"queued"}))
-        assert held["combat_input_outcome"] == "held", held
-        assert held["combat_input_result"]["provider"] == "code", held
-        assert held["combat_input_result"]["analysis"]["action"] == "deferred_input", held
-        assert not calls and not held["combat_input_result"]["llm_reports"], held
+        # 中断後の新規入力は通常分類。川柳の保留・終了へ読み替えない。
+        before = records(folder, sid)
+        rejected = [rejected_normal_input(base, sid, text) for text in ["なんの話？", "終了"]]
+        assert not calls and hud(sid)["state"] == "danger"
+        # 通常分類の受付・拒否は記録するが、WSの操作・状態変更にはしない。
+        for turn in rejected:
+            result = finished(folder, sid, turn)
+            assert result["state_before"] == result["state_after"], result
+            assert result["state_after"]["combat_paused"] and result["state_after"]["open"], result
+            assert result["result"]["playback_status"] == "not_selected", result
+            assert result["result"]["forwarded_input"] == {"accepted": False, "reason": "fresh_safe_snapshot_required"}, result
+            assert not result["result"].get("workshop_action"), result
+        added = [v for v in records(folder, sid) if v["id"] not in {v["id"] for v in before}]
+        assert not any(v["event_kind"] == "decision" for v in added), added
         end(send, rows, sid)
-        result = done(base, send, sid, turn, hostile=False)
-        assert result["workshop_action"] == "explain" and len(calls) == 1, result
-        r = finished(folder, sid, turn)
-        assert r["result"]["combat_action"] == "deferred_input", r
-        assert r["state_before"]["combat_paused"], r
-        enter(send, rows, sid)
+        returned(send, rows, sid)
+        assert hud(sid)["state"] == "open" and not calls
+        send(sid)
+        turn = submit(base, sid, "この句はどういう意味？")
+        resumed = finished(folder, sid, turn)
+        assert resumed["result"]["workshop_action"] == "explain" and len(calls) == 1
+        assert resumed["state_before"]["open"] and not resumed["state_before"]["combat_paused"]
+        send(sid)
         closing = submit(base, sid, "終了")
-        result = done(base, send, sid, closing)
-        assert result["combat_input_outcome"] == "close_checked", result
         closed = finished(folder, sid, closing)
-        assert closed["result"]["combat_action"] == "close_workshop", closed
+        assert closed["result"]["workshop_action"] == "close_workshop", closed
         assert closed["state_before"]["open"] and not closed["state_after"]["open"], closed
         assert len(calls) == 1
         count += 2

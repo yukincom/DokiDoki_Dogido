@@ -1,0 +1,98 @@
+{
+  "followups": [
+    "acknowledge_meaning"
+  ],
+  "actions": [
+    "accept_pending",
+    "ask",
+    "close_workshop",
+    "compare",
+    "explain",
+    "inspect",
+    "propose_revision",
+    "reject_pending",
+    "respond",
+    "show_current",
+    "stage_conversation_candidate",
+    "stage_player_edit",
+    "unrelated",
+    "clear_lessons"
+  ],
+  "purposes": [
+    "adopt_pending",
+    "continue_discussion",
+    "discard_pending",
+    "evaluate_verse",
+    "finish_workshop",
+    "improve_wording",
+    "other",
+    "review_pending",
+    "show_verse",
+    "understand_meaning"
+  ],
+  "problems": [
+    "forced_compression",
+    "off_scene",
+    "other",
+    "preference",
+    "reading",
+    "repetition",
+    "unnatural_japanese",
+    "unreadable"
+  ],
+  "mutation_purposes": {
+    "accept_pending": "adopt_pending",
+    "reject_pending": "discard_pending",
+    "close_workshop": "finish_workshop",
+    "stage_player_edit": "improve_wording",
+    "stage_conversation_candidate": "improve_wording",
+    "clear_lessons": "continue_discussion"
+  },
+  "concepts": [
+    {
+      "concept_id": "line_1",
+      "concept_number": 1,
+      "line_index": 0,
+      "position": "upper",
+      "canonical_name": "上五",
+      "reference_examples": [
+        "一行目",
+        "上五",
+        "上の句",
+        "最初の句",
+        "最初のパート",
+        "前のパート"
+      ]
+    },
+    {
+      "concept_id": "line_2",
+      "concept_number": 2,
+      "line_index": 1,
+      "position": "middle",
+      "canonical_name": "中七",
+      "reference_examples": [
+        "二行目",
+        "中七",
+        "中の句",
+        "二の句",
+        "真ん中",
+        "真ん中のパート"
+      ]
+    },
+    {
+      "concept_id": "line_3",
+      "concept_number": 3,
+      "line_index": 2,
+      "position": "lower",
+      "canonical_name": "下五",
+      "reference_examples": [
+        "三行目",
+        "下五",
+        "下の句",
+        "最後の句",
+        "後ろのパート",
+        "終わりのパート"
+      ]
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-//! 発話から行・置換語を抽出し、未採用の編集案と検査結果を構成する。
+//! 解釈済みの行・置換語から編集差分と適用結果を構成する。
 //! 生入力はValue境界で受け、編集案・行差分・検査結果は型で渡す。句・pending・記憶は変更しない。
 //! workshop_edit::Pendingが正本への差分とCASを検証し、dialogue/workshop_editsが採用・保存する。
 //! 辞書の読みは明示的な依存であり、Pythonへ編集判断を渡さない。
@@ -6,9 +6,7 @@ mod edits;
 pub mod materials;
 mod parse;
 mod tool_call;
-pub use tool_call::{
-    fill_classified_edit_target, normalize_player_edit_tool, verbatim_player_edit,
-};
+pub use tool_call::{fill_classified_edit_target, normalize_player_edit_tool};
 #[cfg(test)]
 mod tests;
 use crate::{

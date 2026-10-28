@@ -206,7 +206,7 @@ async fn native_preparation_uses_no_helper_for_nonedit_or_kana_fragments() {
         assert_eq!(frame, case["frame"]);
         frame["payload"] = json!({"action":"ask","purpose":"continue_discussion","confidence":0.9,"evidence":frame["text"],"speech":"気になるところを教えてな。","checks":[]});
         assert_eq!(
-            super::super::validation::validate(&frame, &details).unwrap()["reason"],
+            super::super::response::decode(&frame, &details).unwrap()["reason"],
             "accepted"
         );
         helper.finish(false).await.unwrap();
@@ -267,7 +267,12 @@ fn native_runtime_materials_match_every_canonical_preparation() {
 
 #[tokio::test]
 async fn consultation_preparation_does_not_use_helper() {
-    for (index, case) in FIXTURES["projection_cases"].as_array().unwrap().iter().enumerate() {
+    for (index, case) in FIXTURES["projection_cases"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .enumerate()
+    {
         let mut frame = case["frame"].clone();
         if index == 0 {
             frame["allowed_actions"] = json!(["respond", "ask"]);
@@ -318,6 +323,9 @@ async fn native_projection_limits_reject_before_fragment_ipc() {
 fn all_consultation_templates_drop_retired_gate_instructions() {
     let instructions = ASSETS.to_string();
     for stale in [
+        "confidenceと今回の原文evidenceを付けて",
+        "今回の認識原文から抜いたevidence",
+        "evidenceは今回の認識原文から取って",
         "confidence 0.85",
         "confidence（0.85以上）",
         "meter_delta",

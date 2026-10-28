@@ -51,7 +51,7 @@ Minecraft Java Edition
        <-- typed assist command --
      -> event normalizer
      -> state machine
-     -> Rustのコードによる発話優先・採否検証
+     -> Rustのコードによる発話優先・実行整合性の確認
      -> LLM response generator（必要なときだけ）
      -> episode decision log（評価用。会話・川柳記憶とは分離）
      -> audio router
@@ -94,7 +94,7 @@ Minecraft Java Edition
 - 緊急音声と通常会話を分離する
 - 必要なときだけ LLM を呼ぶ
 - 詩の基礎知識とMinecraft資料の質問は既存の正本DBを参照する。資料照会中は `knowledge` foregroundで発句時計を休止する。対象外の一般文法・漢字・語学の問いは通常会話へ渡す。旧learn worker・専用Chrome・Web foregroundは撤去済み。
-- 川柳の行指定・具体変更・終了は共通BERTで分類する。自然な返答・説明・比較・新案は会話モデルが担当し、本人から読み方・保存材料を尋ねられたときだけ既存toolを参照して一度返答を続ける。川柳WSの音数計測・品質判定・編集後の返答再生成は行わない。対象・原文語句・現在句・版・採否・保存・戦闘中断はコードが所有する（[相談仕様](rust-workshop-validation.md)）。
+- 川柳の行指定・具体変更・終了は共通BERTで分類する。自然な返答・説明・比較・新案は会話モデルが担当し、本人から読み方・保存材料を尋ねられたときだけ既存toolを参照して一度返答を続ける。川柳WSの音数計測・品質判定・編集後の返答再生成は行わない。語句・採否・lesson解除はLLMが解釈し、コードは対象・現在句・版・取消・保存・戦闘中断を所有する。WSの出力は `workshop_response` で受信し、原文一致・confidence・語形・品質では拒否しない（[相談仕様](rust-workshop-validation.md)）。
 - 非重複イベントごとの判断と最終アクションを評価用 JSONL へbest-effortで記録する
 - 共通BERTで分類した剣・乗用動物・身体の依頼について、現在観測とcapability・対象・期限等をコードで照合して型付きcommandを返す
 - command発行とadapter実結果をcommand IDで同じ評価JSONLへ相関記録する
@@ -501,7 +501,7 @@ adapterから本体へのendpointは [受信API仕様](adapter-api.md) を参照
 5. audio cue 一覧と優先度を定義する（PC 再生まで）
 6. 発話あり／なしの決定を schema version 付き episode JSONL へ記録する
 7. 最初の限定支援 `select_sword` をhotbar実測・typed command・Fabric再検証・実結果ログまで接続する（実機確認済み）
-8. 川柳workshopの自然な返答と新案生成、原文の本人編集、未採用案の採否、CAS保存、戦闘中断と現在観測に基づく復帰を接続。行指定・具体変更・終了はBERT、元句・版・保存はコードが担当する（現在版の実機確認範囲は[接続記録](2026-10-23-modernbert-23class-integration.md)を参照）
+8. 川柳workshopの自然な返答と新案生成、本人の依頼を解釈した編集、未採用案の採否、CAS保存、戦闘中断と現在観測に基づく復帰を接続。行指定・具体変更・終了はBERT、元句・版・保存はコードが担当する（2026-10-28の受信・適用への変更は自動テスト・ビルド確認済み、実機再確認は未実施。[変更記録](2026-10-28-workshop-interpreted-edits.md)を参照）
 9. 詩の基礎資料とMinecraft資料を正本DBから照会し、`knowledge` foregroundと発句時計の休止へ接続。旧learnと専用Chrome調査は撤去済み
 
 ### 進行中 / 優先して磨く

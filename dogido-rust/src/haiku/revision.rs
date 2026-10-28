@@ -1,8 +1,8 @@
 //! 川柳の明示修正依頼から一回だけ候補を生成する。
-//! 原文一致・対象外不変・出典IDの整合性を照合し、受け取った候補を既存の採用待ちへ渡す。
+//! 元句・対象外不変を照合し、受け取った表現を既存の採用待ちへ渡す。材料の記録は任意。
 //! 意味や自然さを別LLMで採点しない。失敗時は元句を返し、採用・保存は呼出元が担当する。
 use super::{generation::*, *};
-use anyhow::{Result, ensure};
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet};
@@ -41,39 +41,8 @@ fn rejected(input: &Input, reason: &str, feedback: Vec<Value>) -> Revision {
     }
 }
 
-/// 採用待ちの作成時と保存前に、現在の正本三行に対して出典ID・重複・形式を再照合する。
-/// 出典IDの整合性を確認する処理であり、候補の意味や自然さを検証済みとは扱わない。
-pub fn validate_sources(basis: &Basis, lines: &[String], sources: &[Vec<String>]) -> Result<()> {
-    ensure!(
-        lines.len() == 3
-            && sources.len() == 3
-            && !basis.target_indices.is_empty()
-            && basis.target_indices.iter().all(|i| *i < 3),
-        "invalid_targets"
-    );
-    let atoms: BTreeMap<_, _> = basis
-        .source_atoms
-        .iter()
-        .map(|a| (a.atom_id.clone(), a.clone()))
-        .collect();
-    let mut used = BTreeSet::new();
-    for i in 0..3 {
-        let ids = &sources[i];
-        ensure!(
-            !ids.is_empty()
-                && ids.iter().all(|id| atoms.contains_key(id))
-                && ids.iter().collect::<BTreeSet<_>>().len() == ids.len(),
-            "invalid_line_sources"
-        );
-        let claims = reservations(ids, &atoms);
-        ensure!(used.is_disjoint(&claims), "source_reused");
-        used.extend(claims);
-    }
-    Ok(())
-}
-
-/// 対象と固定行の出典を先に確かめ、一案だけ生成し、コード検査の合否を返す。
-/// 不成立の候補を追加のモデル評価・再生成へ回さない。
+/// 指定行の一案を受け取る。材料は参考情報であり、未使用・重複・欠落で本文を拒否しない。
+/// 読みへの変換で表記を上書きせず、元句と実行対象だけを照合する。
 pub async fn generate<B: Backend>(backend: &mut B, input: Input) -> Result<Revision> {
     let targets = &input.basis.target_indices;
     if input.lines.len() != 3 || targets.is_empty() || targets.iter().any(|i| *i >= 3) {
@@ -85,43 +54,6 @@ pub async fn generate<B: Backend>(backend: &mut B, input: Input) -> Result<Revis
         .iter()
         .map(|a| (a.atom_id.clone(), a.clone()))
         .collect();
-    if atoms.is_empty() {
-        return Ok(rejected(&input, "no_source_atoms", vec![]));
-    }
-    let frozen: Indices = (0..3).filter(|i| !targets.contains(i)).collect();
-    let mut used = BTreeSet::new();
-    for i in &frozen {
-        let Some(ids) = input.line_sources.get(i).filter(|ids| !ids.is_empty()) else {
-            return Ok(rejected(&input, "missing_frozen_line_sources", vec![]));
-        };
-        if ids.iter().any(|id| !atoms.contains_key(id)) {
-            return Ok(rejected(&input, "invalid_frozen_line_sources", vec![]));
-        }
-        let claims = reservations(ids, &atoms);
-        if !used.is_disjoint(&claims) {
-            return Ok(rejected(&input, "source_reused", vec![]));
-        }
-        used.extend(claims);
-    }
-    let eligible = eligible_atoms(&input.basis.source_atoms, &used);
-    if eligible.len() < targets.len() {
-        return Ok(rejected(&input, "insufficient_source_atoms", vec![]));
-    }
-    let eligible_ids: BTreeSet<_> = eligible.iter().map(|a| a.atom_id.clone()).collect();
-    let mut original = Vec::new();
-    for (i, t) in input.lines.iter().enumerate() {
-        original.push(
-            transform(
-                backend,
-                t.clone(),
-                i,
-                TransformMode::Normalize,
-                vec![],
-                vec![],
-            )
-            .await?,
-        );
-    }
     let mut details = input.basis.details.clone();
     details.insert(
         "current_lines".into(),
@@ -136,7 +68,7 @@ pub async fn generate<B: Backend>(backend: &mut B, input: Input) -> Result<Revis
     );
     details.insert("target_line_indices".into(), json!(targets));
     details.insert("workshop_findings".into(), json!(input.findings));
-    details.insert("source_atoms".into(), json!(eligible));
+    details.insert("source_atoms".into(), json!(input.basis.source_atoms));
     details.insert("edit_contract".into(), json!(CONTRACT));
     let payload = request(
         backend,
@@ -150,10 +82,9 @@ pub async fn generate<B: Backend>(backend: &mut B, input: Input) -> Result<Revis
         },
     )
     .await;
-    let mut lines = original.clone();
+    let mut lines = input.lines.clone();
     let mut failures = Vec::<String>::new();
     let mut indices = BTreeSet::new();
-    let mut selected_ids = BTreeSet::new();
     let mut source_by_line = input.line_sources.clone();
     if let Some(rows) = payload
         .get("lines")
@@ -161,25 +92,14 @@ pub async fn generate<B: Backend>(backend: &mut B, input: Input) -> Result<Revis
         .filter(|_| structured_accepted(&payload))
     {
         for row in rows {
-            if !row.as_object().is_some_and(|r| {
-                r.len() == 4
-                    && [
-                        "line_index",
-                        "expected_text",
-                        "replacement_text",
-                        "atom_ids",
-                    ]
-                    .iter()
-                    .all(|k| r.contains_key(*k))
-            }) {
-                failures.push("invalid_edit_row".into());
-                continue;
-            }
-            let Some(i) = row["line_index"]
+            let index = row["line_index"]
                 .as_u64()
                 .and_then(|i| usize::try_from(i).ok())
-                .filter(|i| targets.contains(i))
-            else {
+                .or_else(|| {
+                    (row.get("line_index").is_none() && targets.len() == 1)
+                        .then(|| *targets.first().unwrap())
+                });
+            let Some(i) = index.filter(|i| targets.contains(i)) else {
                 failures.push("unexpected_line_index".into());
                 continue;
             };
@@ -187,39 +107,34 @@ pub async fn generate<B: Backend>(backend: &mut B, input: Input) -> Result<Revis
                 failures.push("duplicate_target_edit".into());
                 continue;
             }
-            if row["expected_text"]
-                .as_str()
-                .and_then(clean_line)
-                .as_deref()
-                != Some(input.lines[i].as_str())
+            // 既知の元句は省略時に補える。モデルが別の元句を返した場合は適用しない。
+            if let Some(expected) = row.get("expected_text")
+                && expected.as_str().map(str::trim) != Some(input.lines[i].trim())
             {
                 failures.push("expected_text_mismatch".into());
             }
-            let Some(text) = row["replacement_text"].as_str().and_then(clean_line) else {
-                failures.push("empty_replacement".into());
+            let Some(text) = row["replacement_text"]
+                .as_str()
+                .map(str::trim)
+                .filter(|s| !s.is_empty() && !s.contains(['\n', '\r']))
+            else {
+                failures.push("invalid_replacement_shape".into());
                 continue;
             };
-            lines[i] =
-                transform(backend, text, i, TransformMode::Normalize, vec![], vec![]).await?;
-            if lines[i].signature == original[i].signature {
+            if text == input.lines[i] {
                 failures.push("unchanged_replacement".into());
             }
-            let ids: Option<Vec<&str>> = row["atom_ids"]
+            lines[i] = text.into();
+            // 実在する材料だけを任意の注記として保存する。未確認IDを出典に捏造しない。
+            let ids: BTreeSet<String> = row["atom_ids"]
                 .as_array()
-                .and_then(|v| v.iter().map(Value::as_str).collect());
-            if let Some(ids) = ids.filter(|ids| !ids.is_empty()) {
-                source_by_line.insert(i, ids.iter().map(|id| (*id).to_owned()).collect());
-                for id in ids {
-                    if !eligible_ids.contains(id) {
-                        failures.push("unknown_atom_id".into());
-                    }
-                    if !selected_ids.insert(id.to_owned()) {
-                        failures.push("source_reused".into());
-                    }
-                }
-            } else {
-                failures.push("invalid_atom_ids".into());
-            }
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .filter(|id| atoms.contains_key(*id))
+                .map(str::to_owned)
+                .collect();
+            source_by_line.insert(i, ids.into_iter().collect());
         }
     } else {
         failures.push("structured_rejected".into());
@@ -227,49 +142,37 @@ pub async fn generate<B: Backend>(backend: &mut B, input: Input) -> Result<Revis
     if &indices != targets {
         failures.push("missing_target_edit".into());
     }
-    let signatures: BTreeSet<_> = lines.iter().map(|l| l.signature.as_str()).collect();
-    if signatures.contains("") {
-        failures.push("empty_line_signature".into());
-    }
-    let output: Vec<_> = (0..3)
-        .map(|i| {
-            if targets.contains(&i) {
-                lines[i].text.clone()
-            } else {
-                input.lines[i].clone()
-            }
-        })
-        .collect();
-    let sources: Vec<Vec<String>> = (0..3)
-        .map(|i| source_by_line.get(&i).cloned().unwrap_or_default())
-        .collect();
-    if failures.is_empty() {
-        if let Err(error) = validate_sources(&input.basis, &output, &sources) {
-            failures.push(error.to_string());
-        }
-    }
     if !failures.is_empty() {
-        tracing::info!(event = "workshop_revision_rejected", ?failures);
+        tracing::info!(event = "workshop_revision_not_applied", ?failures);
         return Ok(rejected(
             &input,
             "invalid_revision",
             vec![json!({
                 "attempt":1,"global_failure_reasons":failures,
-                "rejected_replacements":targets.iter().map(|i|json!({"line_index":i,"replacement_text":lines[*i].text})).collect::<Vec<_>>()
+                "rejected_replacements":targets.iter().map(|i|json!({"line_index":i,"replacement_text":lines[*i]})).collect::<Vec<_>>()
             })],
         ));
     }
     let line_sources = (0..3)
-        .map(|i| LineSource {
-            line_index: i,
-            text: output[i].clone(),
-            sources: sources[i].iter().map(|id| atoms[id].clone()).collect(),
-            atom_ids: sources[i].clone(),
+        .map(|i| {
+            let ids: Vec<_> = source_by_line
+                .get(&i)
+                .into_iter()
+                .flatten()
+                .filter(|id| atoms.contains_key(*id))
+                .cloned()
+                .collect();
+            LineSource {
+                line_index: i,
+                text: lines[i].clone(),
+                sources: ids.iter().map(|id| atoms[id].clone()).collect(),
+                atom_ids: ids,
+            }
         })
         .collect();
     Ok(Revision {
         accepted: true,
-        lines: output,
+        lines,
         line_sources,
         failure_reason: None,
         feedback: vec![],
@@ -355,29 +258,70 @@ mod tests {
                 .as_array()
                 .unwrap()
                 .len(),
-            1
+            3
         );
     }
     #[tokio::test]
-    async fn invalid_or_missing_frozen_evidence_never_calls_model() {
-        for unknown in [false, true] {
+    async fn missing_or_reused_materials_never_block_revision_generation() {
+        for mode in 0..5 {
             let mut i = input();
-            i.line_sources.insert(
-                1,
-                if unknown {
-                    vec!["unknown".into()]
-                } else {
-                    vec![]
-                },
-            );
-            let mut mock = Mock::new(vec![]);
+            let mut proposal = edit();
+            match mode {
+                0 => {
+                    i.basis.source_atoms.clear();
+                    i.line_sources.clear();
+                }
+                1 => {
+                    i.line_sources.insert(1, vec![]);
+                }
+                2 => {
+                    proposal["lines"][0]["atom_ids"] = json!(["s1", "s1", "unknown"]);
+                }
+                3 => {
+                    proposal["lines"][0]
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("atom_ids");
+                }
+                _ => {
+                    proposal["lines"][0]["atom_ids"] = json!({"invalid":"optional annotation"});
+                }
+            }
+            let mut mock = Mock::new(vec![proposal]);
             let out = generate(&mut mock, i).await.unwrap();
-            assert!(!out.accepted);
-            assert!(mock.requests.is_empty());
+            assert!(out.accepted, "{mode}: {out:?}");
+            assert_eq!(out.lines[0], "さくらいろ");
+            assert_eq!(mock.requests.len(), 1);
+            assert!(
+                out.line_sources[0]
+                    .atom_ids
+                    .iter()
+                    .all(|id| id != "unknown")
+            );
+            if mode == 2 {
+                assert_eq!(out.line_sources[0].atom_ids, vec!["s1"]);
+            }
         }
     }
     #[tokio::test]
-    async fn invalid_cas_indices_and_sources_keep_original_without_retry() {
+    async fn optional_cas_fields_are_completed_and_surface_is_preserved() {
+        let mut proposal = edit();
+        let row = proposal["lines"][0].as_object_mut().unwrap();
+        row.remove("line_index");
+        row.remove("expected_text");
+        row.remove("atom_ids");
+        row.insert("replacement_text".into(), json!("桜色、春の風"));
+        row.insert("comment".into(), json!("任意の補助情報"));
+        let mut mock = Mock::new(vec![proposal]);
+        let out = generate(&mut mock, input()).await.unwrap();
+        assert!(out.accepted);
+        assert_eq!(out.lines[0], "桜色、春の風");
+        assert!(out.line_sources[0].sources.is_empty());
+        assert_eq!(&out.lines[1..], &input().lines[1..]);
+        assert_eq!(mock.requests.len(), 1);
+    }
+    #[tokio::test]
+    async fn invalid_cas_indices_and_empty_changes_keep_original_without_retry() {
         for case in 0..9 {
             let mut bad = edit();
             match case {
@@ -396,10 +340,18 @@ mod tests {
             }
             let mut mock = Mock::new(vec![bad]);
             let out = generate(&mut mock, input()).await.unwrap();
-            assert_eq!(out.accepted, matches!(case, 4 | 5), "{case}");
+            assert_eq!(out.accepted, matches!(case, 2 | 3 | 4 | 5 | 7), "{case}");
             assert_eq!(mock.requests.len(), 1);
-            if matches!(case, 4 | 5) {
-                assert_eq!(out.lines[0], if case == 4 { "は" } else { "あさのいろ" });
+            if matches!(case, 2 | 3 | 4 | 5 | 7) {
+                assert_eq!(
+                    out.lines[0],
+                    match case {
+                        4 => "は",
+                        5 => "あさのいろ",
+                        7 => "/////",
+                        _ => "さくらいろ",
+                    }
+                );
                 assert_eq!(&out.lines[1..], &input().lines[1..]);
                 continue;
             }
@@ -429,7 +381,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn generator_cannot_borrow_frozen_claim_via_basis_id() {
+    async fn generated_expression_can_reuse_materials_from_other_lines() {
         let mut i = input();
         let mut derived = i.basis.source_atoms[0].clone();
         derived.atom_id = "derived".into();
@@ -438,7 +390,7 @@ mod tests {
         let mut bad = edit();
         bad["lines"][0]["atom_ids"] = json!(["derived"]);
         let mut mock = Mock::new(vec![bad]);
-        assert!(!generate(&mut mock, i).await.unwrap().accepted);
+        assert!(generate(&mut mock, i).await.unwrap().accepted);
         assert_eq!(mock.requests.len(), 1);
     }
 }

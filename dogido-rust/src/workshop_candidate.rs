@@ -1,5 +1,5 @@
-//! Player discussion ideas are not staged revisions. Keep their identity and
-//! inspection failures across side conversations; revalidate before staging.
+//! モデルが解釈した相談案を現在句・版と一緒に保持する。
+//! 保持だけでは反映せず、後続の選択で同じ版へ適用する。
 use crate::haiku_record::HaikuLine;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -68,7 +68,6 @@ impl Candidate {
             };
             Some(crate::workshop_target::Target::from_reference(
                 &json!({"line_index":index,"evidence":raw_reference["evidence"],"confidence":raw_reference["confidence"]}),
-                player_text,
                 current,
             )?)
         } else {
@@ -86,35 +85,24 @@ impl Candidate {
         } else {
             None
         }?;
-        Self::from_player(
+        Self::from_interpreted(
             Draft {
                 proposal: Proposal {
                     line_index: Some(index),
                     target_fragment: fragment.into(),
                     replacement_text: raw["replacement_text"].as_str()?.into(),
                 },
-                evidence: raw["evidence"].as_str()?.into(),
+                evidence: raw["evidence"].as_str().unwrap_or("").into(),
                 validation_codes: vec![],
             },
             current,
             version,
-            player_text,
         )
     }
-    pub fn from_player(
-        draft: Draft,
-        current: &[HaikuLine],
-        version: u64,
-        player_text: &str,
-    ) -> Option<Self> {
+    pub fn from_interpreted(draft: Draft, current: &[HaikuLine], version: u64) -> Option<Self> {
         let p = &draft.proposal;
         if current.len() != 3
-            || draft.evidence.is_empty()
-            || !player_text.contains(&draft.evidence)
-            || p.replacement_text.is_empty()
-            || p.replacement_text.chars().count() > 80
-            || !draft.evidence.contains(&p.replacement_text)
-            || p.target_fragment.chars().count() > 80
+            || p.replacement_text.trim().is_empty()
             || p.line_index.is_some_and(|i| i > 2)
             || (p.line_index.is_none() && p.target_fragment.is_empty())
         {
@@ -155,7 +143,7 @@ mod tests {
             .collect()
     }
     #[test]
-    fn model_discussion_keeps_only_player_words_and_respects_new_line_reference() {
+    fn model_discussion_keeps_interpreted_words_and_current_line_reference() {
         let current = lines();
         let player = "じゃあ、のくさふゆむをくささむしに変更しよう！どう？";
         let mut payload = json!({"action":"stage_player_edit","line_proposal":{"found":true,
@@ -188,8 +176,7 @@ mod tests {
         ] {
             payload["line_proposal"]["evidence"] = invalid.into();
             assert!(
-                Candidate::from_model(&payload, &current, 0, invalid, None).is_some()
-                    == (invalid != "原文にない案"),
+                Candidate::from_model(&payload, &current, 0, invalid, None).is_some(),
                 "{invalid}"
             );
         }
@@ -204,7 +191,7 @@ mod tests {
         assert!(Candidate::from_model(&payload, &current, 0, player, Some(&retained)).is_none());
     }
     #[test]
-    fn raw_words_are_required_even_when_an_idea_is_only_discussed() {
+    fn interpreted_idea_keeps_its_base_without_raw_word_matching() {
         let draft = Draft {
             proposal: Proposal {
                 line_index: Some(0),
@@ -214,6 +201,10 @@ mod tests {
             evidence: "はるをなつにするのはどう？".into(),
             validation_codes: vec![],
         };
-        assert!(Candidate::from_player(draft, &[], 0, "発話にない案").is_none());
+        assert!(Candidate::from_interpreted(draft.clone(), &[], 0).is_none());
+        let candidate = Candidate::from_interpreted(draft, &lines(), 3).unwrap();
+        assert!(candidate.is_current(&lines(), 3, false));
+        assert!(!candidate.is_current(&lines(), 4, false));
+        assert!(!candidate.is_current(&lines(), 3, true));
     }
 }

@@ -655,11 +655,10 @@ mod tests {
             evidence: "くさちをはるにするのはどう？".into(),
             validation_codes: vec!["meter_not_exact".into()],
         };
-        w.conversation_candidate = crate::workshop_candidate::Candidate::from_player(
+        w.conversation_candidate = crate::workshop_candidate::Candidate::from_interpreted(
             draft,
             &w.current_lines,
             w.version,
-            "くさちをはるにするのはどう？",
         );
         assert!(w.conversation_candidate.as_ref().unwrap().is_current(
             &w.current_lines,

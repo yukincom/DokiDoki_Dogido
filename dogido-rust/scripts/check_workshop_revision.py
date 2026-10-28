@@ -28,7 +28,7 @@ def wire(control, stored, sid, *, bad=False, blocked=None, inspect=False):
         return original(incoming)
     control["structured_handler"]=editor
     def select(text,prompt,n):
-        # 補正後も修正依頼の根拠は原文。相談・検査の根拠は会話理解用の文。
+        # 認識原文は記録へ残す。語句と採否はモデルの解釈を返す。
         recognized=re.search(r"今回のプレイヤー発話（認識原文）: ([^\n]+)",prompt)
         original_text=recognized.group(1) if recognized else text
         if text == "その案で":

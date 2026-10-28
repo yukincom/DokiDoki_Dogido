@@ -20,10 +20,10 @@ impl Dialogue {
             let mut d = self.data.lock().unwrap();
             if let Some(s) = d.sessions.get_mut(sid)
                 && s.epoch == epoch
-                && s.haiku.workshop.as_ref().is_some_and(|w| {
-                    w.open
-                        && input["workshop"]["workshop_id"] == w.hud_id
-                })
+                && s.haiku
+                    .workshop
+                    .as_ref()
+                    .is_some_and(|w| w.open && input["workshop"]["workshop_id"] == w.hud_id)
             {
                 let text = input["text"].as_str().unwrap_or("").to_owned();
                 if let Some(view) = Self::workshop_view(s, &text) {
@@ -141,7 +141,7 @@ impl Dialogue {
             .iter()
             .find(|r| r["turn_id"] == turn)
             .is_some_and(|r| r["combat_resumable"] == true);
-        let look_capture=input.after_look.clone();
+        let look_capture = input.after_look.clone();
         let monitor = monitor::Monitor::spawn(async move {
             loop {
                 tokio::select! {
@@ -178,6 +178,7 @@ impl Dialogue {
         let result = if input["poem_input"].is_object() {
             self.save_poem_input(&sid, epoch, &input, &mut cancel).await
         } else if input.after_look.is_none()
+            && input["workshop"].is_null()
             && crate::haiku_memory::clear_requested(input["text"].as_str().unwrap_or(""))
         {
             self.clear_lessons(&sid, epoch, &input).await
@@ -238,6 +239,17 @@ impl Dialogue {
             .await
         };
         let result = match result {
+            Ok(mut r)
+                if input["workshop"].is_object() && r["workshop_action"] == "clear_lessons" =>
+            {
+                // 会話モデルの解釈を既存の保存処理へ渡す。語句で意図を再分類しない。
+                self.clear_lessons(&sid, epoch, &input).await.map(|saved| {
+                    for key in ["text", "spoken_text", "memory_action", "memory_outcome"] {
+                        r[key] = saved[key].clone();
+                    }
+                    r
+                })
+            }
             Ok(r) if r["memory_query"].is_object() => {
                 self.recall_poems(&sid, epoch, &input, &r["memory_query"], &mut cancel)
                     .await

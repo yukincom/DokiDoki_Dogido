@@ -201,12 +201,12 @@ def main():
         calls=install(control,lambda text,prompt,n:edit(text,
             replacement="桜色" if "桜色" in text else "さくらさく", reference="", fragment="桜の葉" if "桜の葉" in text else "さくらいろ"))
         sid=ready(base,send,rows);original=stored(sid)
-        for text,want,expected_calls in [("桜の葉を桜色に変えて","桜色",1),("さくらいろをさくらさくに変えて","さくらさく",0)]:
+        for text,want,expected_calls in [("桜の葉を桜色に変えて","桜色",1),("さくらいろをさくらさくに変えて","さくらさく",1)]:
             r=finish(base,send,sid,text)
             assert r["workshop_outcome"]=="player_edit_saved" and len(r["llm_reports"])==expected_calls,r
             assert hud(sid)["canonical_lines"]==[want,*LINES[1:]] and not hud(sid)["pending_lines"]
         assert len(revisions(folder,sid))==2 and stored(sid)==original
-        assert len(calls)==1
+        assert len(calls)==2
         first=revisions(folder,sid)[0]["lines"][0]
         assert first["surface_text"]=="桜色" and first["reading_text"]=="さくらいろ"
         token_requests=[json.loads(line) for line in (token_dir/"requests.jsonl").read_text().splitlines()]
@@ -223,11 +223,11 @@ def main():
 
     with token_fixture("unavailable") as (args, token_dir), fixture(extra_args=args) as (base,process,log,control,seen,gate,drafting,checks,send,hud,rows,stored,folder):
         def no_dictionary(text,prompt,n):
-            raise AssertionError("verbatim edit must not call a model")
+            return edit(text, replacement="桜色")
         calls=install(control,no_dictionary)
         sid=ready(base,send,rows);original=stored(sid)
         r=finish(base,send,sid,"上五を『桜色』にして")
-        assert r["workshop_outcome"]=="player_edit_saved" and len(calls)==0 and not r["llm_reports"],r
+        assert r["workshop_outcome"]=="player_edit_saved" and len(calls)==1 and len(r["llm_reports"])==1,r
         assert hud(sid)["canonical_lines"]==["桜色",*LINES[1:]] and not hud(sid)["pending_lines"]
         saved=revisions(folder,sid)
         assert stored(sid)==original and len(saved)==1

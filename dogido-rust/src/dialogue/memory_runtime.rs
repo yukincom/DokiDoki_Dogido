@@ -83,10 +83,6 @@ impl Dialogue {
         epoch: u64,
         input: &Value,
     ) -> Result<Value> {
-        ensure!(
-            crate::haiku_memory::clear_requested(input["text"].as_str().unwrap_or("")),
-            "clear_request_required"
-        );
         self.memory_live(sid, epoch, input, false)?;
         let (text, outcome) = if !self.config.haiku.memory_enabled {
             ("記憶機能は今止まっとるで。", "memory_disabled")

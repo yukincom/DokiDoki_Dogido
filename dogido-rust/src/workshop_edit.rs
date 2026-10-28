@@ -1,5 +1,5 @@
 //! 未採用の行差分Pendingと、採用時のCAS・追記保存の契約。
-//! 発話から案を作るworkshop_editingとは分担し、元句一致・対象外不変・読みをここで再検証する。
+//! 発話から案を作るworkshop_editingとは分担し、元句一致・対象外不変・保存記録の対応をここで照合する。
 //! pendingの変更はdialogue/workshop_editsが所有し、本棚の直接編集も共通の追記境界を使う。
 use crate::haiku_record::{Emission, HaikuLine, MemoryStore, SAVE_LOCK, append_line, locked_file};
 use anyhow::{Context, Result, ensure};
@@ -42,6 +42,34 @@ impl Pending {
         lines: Vec<HaikuLine>,
         selected: usize,
     ) -> Result<Self> {
+        Self::stage_with_basis(base, working, lines, selected, None)
+    }
+
+    /// 既存の未採用案の一行を直し、元句と他行の生成来歴・資料記録を引き継ぐ。
+    /// 既存案の採用にはならず、保存時には同じ元句と現在版を再照合する。
+    pub fn restage(
+        &self,
+        current: &[HaikuLine],
+        lines: Vec<HaikuLine>,
+        selected: usize,
+    ) -> Result<Self> {
+        self.validate(current)?;
+        Self::stage_with_basis(
+            current,
+            &self.lines,
+            lines,
+            selected,
+            self.generated_basis.clone(),
+        )
+    }
+
+    fn stage_with_basis(
+        base: &[HaikuLine],
+        working: &[HaikuLine],
+        mut lines: Vec<HaikuLine>,
+        selected: usize,
+        mut generated_basis: Option<crate::haiku::revision::Basis>,
+    ) -> Result<Self> {
         ensure!(
             base.len() == 3 && working.len() == 3 && lines.len() == 3 && selected < 3,
             "invalid_line_records"
@@ -57,12 +85,29 @@ impl Pending {
                 || lines[selected].reading_text != working[selected].reading_text,
             "no_change"
         );
+        // 元の内容へ戻した行は元記録に戻す。本文が同じなのに来歴だけを書き換えない。
+        if lines[selected].surface_text == base[selected].surface_text
+            && lines[selected].reading_text == base[selected].reading_text
+        {
+            lines[selected] = base[selected].clone();
+        }
+        if let Some(basis) = &mut generated_basis {
+            basis.target_indices = base
+                .iter()
+                .zip(&lines)
+                .enumerate()
+                .filter_map(|(i, (old, new))| {
+                    (old.surface_text != new.surface_text || old.reading_text != new.reading_text)
+                        .then_some(i)
+                })
+                .collect();
+        }
         let pending = Self {
             id: format!("hr_{}", uuid::Uuid::new_v4().simple()),
             base: base.to_vec(),
             lines,
             selected_line: selected,
-            generated_basis: None,
+            generated_basis,
         };
         pending.validate(base)?;
         Ok(pending)
@@ -165,11 +210,13 @@ impl Pending {
                     "invalid_surface"
                 );
                 if let Some(basis) = &self.generated_basis {
-                    ensure!(
-                        basis.target_indices.contains(&i)
-                            && new.provenance == "generated_confirmed",
-                        "untargeted_line_changed"
-                    );
+                    ensure!(basis.target_indices.contains(&i), "untargeted_line_changed");
+                }
+                if new.provenance == "generated_confirmed" {
+                    let basis = self
+                        .generated_basis
+                        .as_ref()
+                        .context("missing_generated_basis")?;
                     let expected: Vec<_> = new
                         .source_atom_ids
                         .iter()
@@ -193,12 +240,12 @@ impl Pending {
                             && new.source_atoms.is_empty(),
                         "invented_player_source"
                     );
-                    // 読み未確定は空のまま保存する。表記と版が一致する差分へ実行を限定する。
-                    ensure!(
-                        !new.reading_text.contains(['\n', '\r']),
-                        "invalid_reading_shape"
-                    );
                 }
+                // 読み未確定は空のまま保存する。表記と版が一致する差分へ実行を限定する。
+                ensure!(
+                    !new.reading_text.contains(['\n', '\r']),
+                    "invalid_reading_shape"
+                );
             }
         }
         if let Some(basis) = &self.generated_basis {
@@ -210,19 +257,6 @@ impl Pending {
                     "target_unchanged"
                 );
             }
-            crate::haiku::revision::validate_sources(
-                basis,
-                &self
-                    .lines
-                    .iter()
-                    .map(|l| l.reading_text.clone())
-                    .collect::<Vec<_>>(),
-                &self
-                    .lines
-                    .iter()
-                    .map(|l| l.source_atom_ids.clone())
-                    .collect::<Vec<_>>(),
-            )?;
         }
         Ok(())
     }
@@ -404,8 +438,7 @@ mod tests {
         .complete(chrono::Utc::now())
         .unwrap()
     }
-    #[test]
-    fn generated_pending_preserves_frozen_records_and_rechecks_evidence_on_adoption() {
+    fn generated_pending() -> Pending {
         use crate::haiku::{
             LineSource, SourceAtom,
             revision::{Basis, Revision},
@@ -453,7 +486,13 @@ mod tests {
             failure_reason: None,
             feedback: vec![],
         };
-        let good = Pending::stage_generated(&base, revision, basis).unwrap();
+        Pending::stage_generated(&base, revision, basis).unwrap()
+    }
+
+    #[test]
+    fn generated_pending_preserves_frozen_lines_and_source_records_on_adoption() {
+        let good = generated_pending();
+        let base = good.base.clone();
         assert_eq!(good.lines[1], base[1]);
         assert_eq!(good.source(), "generated_confirmed");
         assert_eq!(good.edits().len(), 2);
@@ -487,6 +526,97 @@ mod tests {
             assert_eq!(bad.validate(&base).is_ok(), case == 3, "{case}");
         }
     }
+
+    #[test]
+    fn player_edit_of_generated_pending_keeps_other_lines_sources_and_saves_once() {
+        let pending = generated_pending();
+        let base = pending.base.clone();
+        let revised = pending
+            .restage(&base, replace(pending.lines.clone(), 0, "さくらふぶき"), 0)
+            .unwrap();
+        assert_eq!(revised.base, base);
+        assert_eq!(revised.lines[1..], pending.lines[1..]);
+        assert_eq!(revised.lines[0].provenance, "player_explicit");
+        assert!(revised.lines[0].source_atoms.is_empty());
+        assert_eq!(revised.lines[2].provenance, "generated_confirmed");
+        assert_eq!(
+            revised.generated_basis.as_ref().unwrap().source_atoms,
+            pending.generated_basis.as_ref().unwrap().source_atoms
+        );
+        assert_eq!(
+            revised.generated_basis.as_ref().unwrap().target_indices,
+            std::collections::BTreeSet::from([0, 2])
+        );
+        assert!(revised.validate(&base).is_ok());
+        assert!(revised.validate(&pending.lines).is_err());
+        let mut untargeted = replace(pending.lines.clone(), 0, "さくらふぶき");
+        untargeted[1].surface_text = "対象外の変更".into();
+        assert!(pending.restage(&base, untargeted, 0).is_err());
+        let mut invented = revised.clone();
+        invented.lines[0].source_atom_ids.push("source:0".into());
+        assert!(invented.validate(&base).is_err());
+        let mut damaged = revised.clone();
+        damaged.lines[2].source_atoms.clear();
+        assert!(damaged.validate(&base).is_err());
+
+        let dir = std::env::temp_dir().join(format!("dogido-mixed-edit-{}", uuid::Uuid::new_v4()));
+        let store = MemoryStore::new(&dir);
+        let mut original = emission();
+        original.prepared.lines = base.clone();
+        store
+            .save_agent_haiku("mixed", "player", &original)
+            .unwrap();
+        let id = store
+            .save_player_revision(&original, &revised, None)
+            .unwrap();
+        assert_eq!(
+            store
+                .save_player_revision(&original, &revised, None)
+                .unwrap(),
+            id
+        );
+        let data = std::fs::read_to_string(dir.join("long_term/haiku_revisions.jsonl")).unwrap();
+        assert_eq!(data.lines().count(), 1);
+        let row: Value = serde_json::from_str(data.lines().next().unwrap()).unwrap();
+        assert_eq!(row["lines"][0]["provenance"], "player_explicit");
+        assert_eq!(row["lines"][2]["provenance"], "generated_confirmed");
+        assert_eq!(
+            row["lines"][2]["source_atoms"],
+            json!(pending.lines[2].source_atoms)
+        );
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn edits_can_extend_generated_pending_and_restore_one_line_without_losing_the_rest() {
+        let pending = generated_pending();
+        let extended = pending
+            .restage(
+                &pending.base,
+                replace(pending.lines.clone(), 1, "くろきおの"),
+                1,
+            )
+            .unwrap();
+        assert_eq!(
+            extended.generated_basis.as_ref().unwrap().target_indices,
+            std::collections::BTreeSet::from([0, 1, 2])
+        );
+        let restored = extended
+            .restage(
+                &pending.base,
+                replace(extended.lines.clone(), 0, &pending.base[0].surface_text),
+                0,
+            )
+            .unwrap();
+        assert_eq!(restored.lines[0], pending.base[0]);
+        assert_eq!(restored.lines[1..], extended.lines[1..]);
+        assert_eq!(
+            restored.generated_basis.as_ref().unwrap().target_indices,
+            std::collections::BTreeSet::from([1, 2])
+        );
+        assert!(restored.validate(&pending.base).is_ok());
+    }
+
     #[test]
     fn one_then_two_edits_keep_canonical_base() {
         let original = lines();
@@ -536,8 +666,7 @@ mod tests {
         unknown[0].reading_text.clear();
         let first = Pending::stage(&base, &base, unknown, 0).unwrap();
         assert_eq!(
-            crate::workshop::inspect(&first.lines, &["reading".into()])["lines"][0]
-                ["reading_status"],
+            crate::workshop::inspect(&first.lines, &["reading".into()])["lines"][0]["reading_status"],
             "unavailable"
         );
         let mut next = first.lines.clone();

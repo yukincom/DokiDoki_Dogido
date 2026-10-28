@@ -1,5 +1,5 @@
 //! 共通の発話整形・危険助言検査と、反応別の内容検査を同じモジュールに置いている。
-//! 現役反応のforbiddenとworkshop_validation用のstripを持つ。旧clean/usabilityはfixture試験だけに残す。
+//! 現役反応のforbiddenとworkshop_response用のstripを持つ。旧clean/usabilityはfixture試験だけに残す。
 //! final_guardは反応固有の主張検査。通常会話はchat_validationで形式補完と明らかな出力破損だけを検査する。
 use super::prompts::truth;
 use crate::text_format::{self, ContainerFormat::CompactJson};

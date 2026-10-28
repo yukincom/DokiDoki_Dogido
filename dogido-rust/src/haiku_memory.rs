@@ -43,7 +43,7 @@ fn rows(path: &Path) -> Result<Vec<Value>> {
     Ok(out)
 }
 
-/// Whole raw utterance only: quotation, questions and negated requests fail.
+/// 川柳相談外だけの既存ショートカット。相談中の注意解除は会話モデルのactionを使う。
 pub fn clear_requested(raw: &str) -> bool {
     let mut s = raw.trim().trim_end_matches(['。', '！', '!']);
     if let Some(rest) = s.strip_prefix("うん").or_else(|| s.strip_prefix("はい")) {
@@ -130,22 +130,27 @@ pub fn feedback_kind(step: &Value) -> Option<&'static str> {
         .flatten()
         .filter_map(|f| f["problem"].as_str())
         .collect();
-    Some(
-        if problems.contains("forced_compression") {
-            "forced_compress"
-        } else if ["unreadable", "unnatural_japanese", "reading"]
-            .iter()
-            .any(|s| problems.contains(s))
-        {
-            "unreadable"
-        } else if problems.contains("off_scene") {
-            "off_context"
-        } else if action == "explain" && step["purpose"] == "understand_meaning" {
-            "ask_meaning"
-        } else {
-            "other"
-        },
-    )
+    // 通常の本文だけから講評を捏造しない。モデルが返したfindingか意味説明を記録する。
+    if problems.is_empty()
+        && !(action == "explain" && step["purpose"] == "understand_meaning")
+        && action != "propose_revision"
+    {
+        return None;
+    }
+    Some(if problems.contains("forced_compression") {
+        "forced_compress"
+    } else if ["unreadable", "unnatural_japanese", "reading"]
+        .iter()
+        .any(|s| problems.contains(s))
+    {
+        "unreadable"
+    } else if problems.contains("off_scene") {
+        "off_context"
+    } else if action == "explain" && step["purpose"] == "understand_meaning" {
+        "ask_meaning"
+    } else {
+        "other"
+    })
 }
 
 pub fn lesson(kind: &str) -> Option<Value> {
@@ -453,4 +458,29 @@ fn select_lessons(lessons: &[Value], entries: &[Value], now: DateTime<Utc>) -> V
         }
     }
     out
+}
+
+#[cfg(test)]
+mod interpreted_feedback_tests {
+    use super::*;
+
+    #[test]
+    fn plain_conversation_does_not_invent_feedback_but_model_findings_are_kept() {
+        assert_eq!(
+            feedback_kind(&json!({"action":"respond","findings":[]})),
+            None
+        );
+        assert_eq!(feedback_kind(&json!({"action":"ask"})), None);
+        assert_eq!(
+            feedback_kind(
+                &json!({"action":"respond","findings":[{"problem":"off_scene","confidence":0.0}]})
+            ),
+            Some("off_context")
+        );
+        assert_eq!(
+            feedback_kind(&json!({"action":"explain","purpose":"understand_meaning"})),
+            Some("ask_meaning")
+        );
+        assert_eq!(feedback_kind(&json!({"action":"praise"})), Some("praise"));
+    }
 }
