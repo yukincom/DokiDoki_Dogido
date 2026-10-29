@@ -126,7 +126,13 @@ pub(super) fn attach(s: &mut Session, turn: &str, action: &mut Speech, now_ms: u
     tracing::info!(event="environment_body_prepared",turn_id=turn,after_owner_arrival=prepared.after_owner_arrival,
         available_actions=%json!(prepared.available_actions),owner_working=%prepared.reassurance["owner_working"]);
     details["body_options"] = json!({"available_actions":prepared.model_actions(),
-        "candidates":prepared.model_candidates,"recent_choices":prepared.recent_choices});
+        "candidates":prepared.model_candidates,"recent_choices":prepared.recent_choices,
+        "current_body":s.body_autonomy.current_body(Instant::now())});
+    // 通常返答にも使う共通材料から、当回の身体判断欄へ移す。同じ履歴を二重に渡さない。
+    if let Some(observations) = details["world_context"]["observations"].as_object_mut() {
+        observations.remove("body_action_history");
+        observations.remove("current_body");
+    }
     if prepared.after_owner_arrival { details["body_options"]["after_owner_arrival"] = json!(true); }
     details["world_context"]["observations"]["reassurance"] = super::body_runtime::reassurance_context(prepared.reassurance.clone());
     s.body_interest_pending = Some(Pending { turn: turn.to_owned(), instance: s.instance_id.clone(),

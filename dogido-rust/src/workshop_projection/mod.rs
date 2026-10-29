@@ -192,6 +192,14 @@ fn dialogue_from_view(pairs: &[Value]) -> Result<String> {
         .join("\n"))
 }
 
+/// 表示用の行名を本文へ対応付ける。保存行・音数・材料・生成処理には触れない。
+fn labelled_verse(lines: &[HaikuLine], fallback: String) -> String {
+    if lines.len() != 3 { return fallback; }
+    ["上の句", "中の句", "下の句"].into_iter().zip(lines)
+        .map(|(label, line)| format!("{label}: {}", line.surface_text))
+        .collect::<Vec<_>>().join("\n")
+}
+
 pub fn workshop_context_details(workshop: &Snapshot) -> Value {
     let pending = workshop.has_pending() && workshop.pending_revision_lines.len() == 3;
     let lines = if pending {
@@ -320,6 +328,13 @@ pub fn details_for(frame: &Value) -> Result<Value> {
         &frame["observation"],
         list(&frame["turn_steps"]),
     );
+    // 相談のモデル入力だけに行名を付ける。新案生成も使う共有投影は変えない。
+    details["workshop_context"]["current_verse"] =
+        labelled_verse(&workshop.current_lines, workshop.display_surface()).into();
+    if workshop.has_pending() {
+        details["workshop_context"]["pending_verse"] =
+            labelled_verse(&workshop.pending_revision_lines, workshop.editing_surface()).into();
+    }
     let mut actions = list(&details["allowed_actions"])
         .iter()
         .filter(|a| frame_actions.contains(a))
@@ -336,13 +351,12 @@ pub fn details_for(frame: &Value) -> Result<Value> {
         details["workshop_context"]["current_verse_saved"] = saved.into();
     }
     let candidate = &view["conversation_candidate"];
-    if frame_actions
-        .iter()
-        .any(|a| a == "stage_conversation_candidate")
-        && candidate.is_object()
-    {
-        actions.push(json!("stage_conversation_candidate"));
+    if candidate.is_object() {
+        // 分類済みの具体変更でも、相談していた一案を読む。公開する操作は今回の一覧のまま。
         details["workshop_context"]["conversation_candidate"] = candidate.clone();
+        if frame_actions.iter().any(|a| a == "stage_conversation_candidate") {
+            actions.push(json!("stage_conversation_candidate"));
+        }
     }
     if truth(&view["current_player_idea"]) {
         details["workshop_context"]["current_player_idea"] = view["current_player_idea"].clone();

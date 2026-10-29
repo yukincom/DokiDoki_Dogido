@@ -62,11 +62,21 @@ pub struct Report {
     pub completed_look: Option<CompletedLook>,
 }
 
+/// 既存の受付・終端処理が確定した直近一件の表示用記録。命令照合や再実行には使わない。
+struct Operation {
+    command_id: String,
+    owner: String,
+    dimension: String,
+    context: Option<Context>,
+    value: Value,
+}
+
 #[derive(Default)]
 pub struct State {
     enabled: bool,
     pending: Option<Pending>,
     reports: VecDeque<Report>,
+    latest_operation: Option<Operation>,
 }
 
 /// 現在の入力世代と身体の所属をまとめた借用ビュー。保持せず、その場の照合だけに使う。
@@ -122,6 +132,12 @@ impl State {
             "issued_at":utc, "expires_at":utc+UtcDuration::seconds(5),
             "input_generation":generation, "owner_id":owner, "dimension":dimension,
             "mode":mode, "context":context});
+        self.latest_operation = Some(Operation {
+            command_id: command["command_id"].as_str().unwrap().to_owned(),
+            owner: owner.to_owned(), dimension: dimension.to_owned(), context: context.clone(),
+            value: json!({"mode":mode,"status":"queued","detail_code":"waiting_for_result",
+                "issued_at":utc,"executed_at":null,"source":"service"}),
+        });
         self.pending = Some(Pending {
             command: command.clone(),
             context,
@@ -136,6 +152,11 @@ impl State {
 
     fn finish(&mut self, status: &str, detail: &str, feedback: Option<&'static str>) {
         if let Some(p) = self.pending.take() {
+            if let Some(operation) = &mut self.latest_operation
+                && p.command["command_id"].as_str() == Some(operation.command_id.as_str()) {
+                operation.value["status"] = json!(status);
+                operation.value["detail_code"] = json!(detail);
+            }
             self.reports.push_back(Report {
                 command_id: p.command["command_id"].as_str().unwrap().to_owned(),
                 original: p.original,
@@ -152,6 +173,19 @@ impl State {
 
     pub fn cancel(&mut self) {
         self.finish("cancelled", "input_or_session_changed", None);
+    }
+
+    /// 返答時の同じ所有者・世界・身体だけへ直近の実行状態を示す。
+    /// 入力世代が進んだことによる取消も説明できるが、旧身体の結果を現在状態に付け替えない。
+    pub fn model_operation(
+        &self, owner: Option<&str>, dimension: Option<&str>, context: Option<&Context>,
+    ) -> Option<Value> {
+        let operation = self.latest_operation.as_ref()?;
+        if owner != Some(operation.owner.as_str()) || dimension != Some(operation.dimension.as_str())
+            || operation.context.as_ref().is_some_and(|expected| Some(expected) != context) {
+            return None;
+        }
+        Some(operation.value.clone())
     }
 
     fn refresh(&mut self, observed: RequestObservation<'_>, now: Instant, utc: DateTime<Utc>) {
@@ -293,6 +327,19 @@ impl State {
                 &r.detail_code,
                 feedback,
             );
+            if let Some(operation) = &mut self.latest_operation
+                && operation.command_id == r.command_id {
+                operation.value["executed_at"] = json!(r.executed_at);
+                operation.value["source"] = json!("adapter");
+                if success {
+                    // recallのwarp後は、照合済みの実到着が報告した新しいepochへ結び直す。
+                    operation.context = Some(Context {
+                        owner_id: operation.owner.clone(), dimension: operation.dimension.clone(),
+                        body_id: r.extra["body_id"].as_str().unwrap().to_owned(),
+                        epoch: r.extra["epoch"].as_str().unwrap().to_owned(),
+                    });
+                }
+            }
             if let Some(report) = self.reports.back_mut() {
                 report.completed_look = completed_look;
             }

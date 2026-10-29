@@ -67,6 +67,20 @@ pub(super) fn context_for(s: &Session, event: &GameEvent) -> Context {
     if let Some(attention) = s.body_autonomy.attention(Instant::now()) {
         c.observations["attention"] = attention;
     }
+    let now = Instant::now();
+    if let Some(current) = s.body_autonomy.current_body(now) {
+        c.observations["current_body"] = current;
+        let choices = s.body_autonomy.recent_choices(now);
+        if choices.as_array().is_some_and(|choices| !choices.is_empty()) {
+            c.observations["body_action_history"] = choices;
+        }
+    }
+    if let Some(operation) = s.body_requests.model_operation(
+        s.player_uuid.as_deref(), event.player.dimension.as_deref(),
+        s.body_observation.accepted(now).map(|sample| &sample.context),
+    ) {
+        c.observations["body_operation"] = operation;
+    }
     c
 }
 /// 共通観測には実測値と尺度のラベルだけを渡す。回復・視野の計算規則は身体コードに置く。

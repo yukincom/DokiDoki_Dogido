@@ -8,10 +8,10 @@ use serde_json::{Value, json};
 fn player_edit_definition() -> Value {
     json!({"type":"function","function":{
         "name":"stage_player_edit",
-        "description":"BERTが決めた行への具体変更を解釈し、差し替える旧語と置換語を渡す。行IDと元句はコードが補完する。音声認識の誤りや表記の違いを文脈から解釈してよい。",
+        "description":"BERTが決めた行への具体変更を解釈し、本人の指定語か、今回選ばれた同じ対象行のconversation_candidateから旧語と置換語を渡す。行IDと元句はコードが補完する。音声認識の誤りや表記の違いは解釈してよい。置換語を新しく補作せず、不明ならaskで尋ねる。",
         "parameters":{"type":"object","properties":{
             "target_fragment":{"type":"string","description":"差し替える旧語。一行全体の置換なら空文字。"},
-            "replacement_text":{"type":"string","description":"今回の変更依頼から解釈した置換語句。"},
+            "replacement_text":{"type":"string","description":"今回の指定語、または今回選ばれた相談案の置換語句。新しい表現の生成欄ではない。"},
             "evidence":{"type":"string","description":"今回の変更依頼を解釈した根拠。記録用。"},
             "confidence":{"type":"number","description":"任意の自己申告値。記録用。"}},
             "required":["replacement_text"],

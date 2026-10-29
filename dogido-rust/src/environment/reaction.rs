@@ -286,6 +286,10 @@ impl Prepared {
                     .is_some_and(|observations| observations["smell"].is_object()));
         let body_actions = context.get("body_options").is_some();
         let mut system = crate::companion_prompt::environment(smell_observed, body_actions);
+        if let Some(options) = context.get("body_options") {
+            system.push('\n');
+            system.push_str(&crate::companion_prompt::environment_body_examples(options));
+        }
         if context.get("world_context").is_some_and(|world| {
             world["observations"]["body_observation"].is_object()
         }) {

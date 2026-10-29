@@ -113,6 +113,22 @@ pub fn environment(smell_observed: bool, body_actions: bool) -> String {
     }
 }
 
+/// 当回に許可された行動だけの完成例。inspectの一時IDも当回の候補から埋める。
+/// 例の選択は表示だけで、行動の受付・実行契約は変更しない。
+pub fn environment_body_examples(options: &Value) -> String {
+    let Some(actions) = options["available_actions"].as_object() else {
+        return String::new();
+    };
+    actions.keys().filter_map(|action| {
+        let mut example = TEXT["environment_body_examples"].get(action)?.clone();
+        if action == "inspect" {
+            let candidate = options["candidates"].as_array()?.first()?;
+            example["body_action"]["target_id"] = candidate.get("id")?.clone();
+        }
+        Some(example.to_string())
+    }).collect::<Vec<_>>().join("\n")
+}
+
 /// Expand references in generated task assets from the same source as live dialogue.
 pub fn expand(text: &str) -> String {
     text.replace("__DOGIDO_SHARED_BASE__", base())

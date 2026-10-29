@@ -252,6 +252,8 @@ impl State {
             return;
         }
         let pending = self.pending.take().expect("expired pending");
+        self.finish_choice(&pending, json!({"status":"expired","detail_code":"server_result_timeout",
+            "executed_at":null,"source":"service"}));
         self.diagnostics.push(
             json!({"command_id":pending.id,"type":COMMAND_TYPE,"status":"expired",
             "detail_code":"server_result_timeout","context":pending.context}),
@@ -286,6 +288,37 @@ impl State {
         value["basis"] = json!("body_attention");
         Some(value)
     }
+    /// 当回の受理済み身体状態。選択履歴から移動・到着を推定しない。
+    pub fn current_body(&self, now: Instant) -> Option<Value> {
+        let reading = self.current.as_ref().filter(|r| r.fresh(now))
+            .filter(|r| self.accepted.as_ref().is_some_and(|a| a.context == r.data.context))?;
+        Some(json!({"mode":reading.data.mode,"activity":reading.data.activity,"reason":reading.data.reason}))
+    }
+    /// モデルへは選択とその結果だけを渡す。命令ID・身体世代は内部の結果照合用。
+    pub fn recent_choices(&self, now: Instant) -> Value {
+        if self.current_body(now).is_none() { return json!([]); }
+        Value::Array(self.choices.iter().map(|choice| {
+            let mut value = choice.clone();
+            let fields = value.as_object_mut().expect("recorded body choice");
+            fields.remove("command_id");
+            fields.remove("context");
+            value
+        }).collect())
+    }
+    fn finish_choice(&mut self, pending: &Pending, execution: Value) {
+        if let Some(choice) = self.choices.iter_mut().find(|choice| {
+            choice["command_id"] == pending.id && choice["context"] == json!(pending.context)
+                && choice["execution"]["status"] == "pending"
+        }) {
+            choice["execution"] = execution;
+        }
+    }
+    fn cancel_pending(&mut self, detail: &str) {
+        if let Some(pending) = self.pending.take() {
+            self.finish_choice(&pending, json!({"status":"cancelled","detail_code":detail,
+                "executed_at":null,"source":"service"}));
+        }
+    }
     /// 実到着後の相談を保持できる同一FOLLOWの待機。距離だけでは到着を作らない。
     fn owner_arrival_holding(data: &Observed) -> bool {
         data.enabled && data.mode == Mode::Follow && data.activity == Activity::Holding
@@ -302,7 +335,9 @@ impl State {
     /// 配送待ちの自律注視は取り下げるが、進行中の移動・他の選択・全体の判断周期は維持する。
     pub fn explicit_look_completed(&mut self, now: Instant) {
         self.next_owner_look=Some(now+EXPLICIT_LOOK_INTERVAL);
-        if self.pending.as_ref().is_some_and(|p| p.command["purpose"]=="look_owner") { self.pending=None; }
+        if self.pending.as_ref().is_some_and(|p| p.command["purpose"]=="look_owner") {
+            self.cancel_pending("explicit_look_completed");
+        }
     }
     fn owner_look_ready(&self, now: Instant) -> bool {
         self.next_owner_look.is_none_or(|next| now>=next)
@@ -373,7 +408,7 @@ impl State {
             context: data.context.clone(),
             candidates,
             model_candidates,
-            recent_choices: Value::Array(self.choices.iter().cloned().collect()),
+            recent_choices: self.recent_choices(now),
             reassurance: json!(data.reassurance),
             available_actions,
             after_owner_arrival,
@@ -495,13 +530,18 @@ impl State {
                 Some(selected.clone())
             }
         };
+        let command_id = (choice.action != Action::Stay).then(|| uuid::Uuid::new_v4().to_string());
         self.choices.push_back(json!({"type_id":target.as_ref().map(|c| &c.type_id),"label":target.as_ref().map(|c| &c.label),
-            "action":action_name,"reason":choice.reason}));
+            "action":action_name,"reason":choice.reason,"image_target":choice.image_target,
+            "command_id":command_id,"context":prepared.context,"issued_at":utc,
+            "execution":{"status":if command_id.is_some() {"pending"} else {"not_requested"},
+                "detail_code":if command_id.is_some() {"waiting_for_result"} else {"stay_selected"},
+                "executed_at":null,"source":"service"}}));
         while self.choices.len() > CHOICE_LIMIT {
             self.choices.pop_front();
         }
         if choice.action == Action::Stay { return Ok(None); }
-        let id = uuid::Uuid::new_v4().to_string();
+        let id = command_id.expect("non-stay body command");
         let mut command = json!({"command_id":id,"type":COMMAND_TYPE,"issued_at":utc,
             "expires_at":utc+UtcDuration::seconds(5),"context":prepared.context,
             "purpose":if choice.action==Action::InspectImage {"inspect"} else {&action_name},"target":target});
@@ -574,6 +614,10 @@ impl State {
             {
                 continue;
             }
+            // 既存のID・身体世代・期限・成功理由の照合を通った終端だけを選択記録へ結ぶ。
+            let pending = self.pending.take().expect("matched body result");
+            self.finish_choice(&pending, json!({"status":result.status,"detail_code":result.detail_code,
+                "executed_at":result.executed_at,"source":"adapter"}));
             out.push(json!({"command_id":pending.id,"type":COMMAND_TYPE,"status":result.status,"detail_code":result.detail_code,
                 "executed_at":result.executed_at,"context":pending.context}));
             if result.status == AdapterCommandResultStatus::Succeeded
@@ -590,7 +634,6 @@ impl State {
                     type_id: target.type_id.clone(), arrived: now });
                 while self.visits.len() > VISIT_LIMIT { self.visits.pop_front(); }
             }
-            self.pending = None;
         }
         out
     }
@@ -599,7 +642,7 @@ impl State {
         self.prepared = None;
     }
     pub fn cancel(&mut self) {
-        self.pending = None;
+        self.cancel_pending("input_or_control_changed");
         self.prepared = None;
     }
 }

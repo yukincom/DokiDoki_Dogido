@@ -28,7 +28,7 @@
     ],
     "editing": [
       {
-        "literal": "今回の具体変更と対象行はBERTで分類済みや。stage_player_editのfunction callにはtarget_fragmentとreplacement_textを返してな。evidenceやconfidenceは任意の記録や。行IDと元句はコードが補完するので、行を選び直さへん。認識原文と会話の流れから、差し替える旧語と置換語を解釈してな。音声認識の誤りや表記の違いを直した語も使えるで。原文との文字列一致は求めへん。一行全体の置換ならtarget_fragmentは空文字。evidenceは今回の依頼をどう解釈したかの記録や。現在句への適用・保存と未採用案の扱いはコードの実行結果に従う。\n"
+        "literal": "今回の具体変更と対象行はBERTで分類済みや。stage_player_editのfunction callにはtarget_fragmentとreplacement_textを返してな。evidenceやconfidenceは任意の記録や。行IDと元句はコードが補完するので、行を選び直さへん。置換語は、本人が今回指定した語か、今回選んだ同じ対象行のconversation_candidateから使うで。今回の指定語が前の案と違うなら、今回の語を保ってな。認識原文と会話の流れから旧語と置換語を解釈し、音声認識の誤りや表記の違いを直してええで。原文との文字列一致は求めへん。指定語も選ばれた相談案もなく置換語が分からんときは、新しい句や語を補作せずaskで何に変えるか尋ねてな。一行全体の置換ならtarget_fragmentは空文字。現在句への適用・保存と未採用案の扱いはコードの実行結果に従う。\n"
       }
     ],
     "conversation_candidate": [

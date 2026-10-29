@@ -60,7 +60,7 @@ impl ClassifiedWorkshop {
             Self::Line(index) => format!(
                 "今回の対象は分類済みの{}や。対象行を再判定せず、この行について自然に返答してな。行の指定だけを修正依頼とは扱わへん。意味の質問、感想、新案の依頼は今回の相談内容に沿って返す。新案を求められた場合だけpropose_revisionを選ぶ。", lines[index].line_id),
             Self::Change(index) => format!(
-                "今回の分類は{}の具体的な語句変更や。行と変更意思を再判定せず、stage_player_editには認識原文・補正された言葉・会話から解釈した旧語と置換語を渡してな。行IDと元句はコードが補完する。語句の範囲が決められへんときだけaskで不足を尋ねてな。", lines[index].line_id),
+                "今回の分類は{}の具体的な語句変更や。行と変更意思を再判定せず、stage_player_editには本人が指定した語、または今回選んだ同じ対象行のconversation_candidateの語を渡してな。認識原文・補正された言葉・会話から旧語と置換語を解釈してええけど、置換語を自分で補作せんといてな。行IDと元句はコードが補完する。指定語も選ばれた相談案もなく置換語が分からんときや、範囲が決められへんときはaskで不足を尋ねてな。", lines[index].line_id),
             Self::End => "今回の相談終了は分類済みや。終了意思は再判定せんでええ。未採用案について、今回の発話で採用か破棄が指定されていればaccept_pendingかreject_pendingを選び、その意思を会話の流れから受け取ってな。採否が不明ならaskで採用か破棄かだけ確認する。終了だけで案を採用・破棄せんといてな。".into(),
         }
     }
@@ -319,7 +319,7 @@ impl Dialogue {
                                 .push_str("本人から尋ねられた読み方・保存材料の参照はinspect_verseや。編集の前提確認には使わへん。");
                         }
                         if allowed.contains(&"stage_player_edit") {
-                            instruction.push_str("stage_player_editの対象行と元句はコードが補完する。今回の依頼と会話の流れから、target_fragmentへ旧語、replacement_textへ置換語を返してな。一行全体ならtarget_fragmentは空文字。音声認識の誤りや表記の違いは解釈してええで。evidenceは解釈の記録で、原文との文字列一致は求めへん。");
+                            instruction.push_str("stage_player_editの対象行と元句はコードが補完する。今回の指定語か、今回選ばれた同じ対象行のconversation_candidateを使い、target_fragmentへ旧語、replacement_textへ置換語を返してな。一行全体ならtarget_fragmentは空文字。音声認識の誤りや表記の違いは解釈してええで。置換語が分からんときは新しく作らずaskで尋ねてな。evidenceは解釈の記録で、原文との文字列一致は求めへん。");
                         }
                         instruction.push_str("本文JSONは会話の返答と、本文JSONで使えるaction一覧の処理に使う。tool呼出し時は本文の返事を付けず結果を待つ。コードが対象へ差分を適用し、保存結果を返すで。");
                         let system = prepared["messages"][0]["content"].as_str().unwrap_or("");
