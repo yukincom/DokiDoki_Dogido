@@ -235,6 +235,11 @@ fn parse_regeneration(payload: &Value, failed: &Indices) -> BTreeMap<usize, Stri
         let mut out = BTreeMap::new();
         for row in rows {
             let i: usize = row.get("line_index")?.as_u64()?.try_into().ok()?;
+            // 合格済みの行は呼出側の本文を保持する。モデルが再掲・変更して返しても、
+            // その行だけを読み飛ばし、再生成対象の受信・音数検査は続ける。
+            if i < meter::TARGETS.len() && !failed.contains(&i) {
+                continue;
+            }
             let text = line_format::one(row.get("text")?.as_str()?)?;
             if !failed.contains(&i) || out.insert(i, text).is_some() {
                 return None;

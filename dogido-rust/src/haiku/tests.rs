@@ -261,6 +261,69 @@ async fn malformed_regeneration_never_overwrites_fixed_lines() {
         assert_eq!(b.requests[2].details["current_lines"][1]["text"], "あ");
     }
 }
+
+// 見込み: 合格済みの中七・下五を再掲されても、その部分を無視すれば上五の修正を受け取れる。
+// 合格: 固定行の同文再掲・変更返却とも元の二行を保持し、上五だけ採用する。モデル応答は固定。
+#[tokio::test]
+async fn regeneration_ignores_echoed_or_changed_fixed_lines() {
+    for fixed in [[LINES[1], LINES[2]], ["べつのなか", "べつのした"]] {
+        let mut b = Scripted::new(vec![
+            json!({"lines":["あ", LINES[1], LINES[2]]}),
+            json!({"lines":[
+                {"line_index":1,"text":fixed[0]},
+                {"line_index":0,"text":LINES[0]},
+                {"line_index":2,"text":fixed[1]}
+            ]}),
+        ]);
+        let result = generate(&mut b, input()).await.unwrap();
+        assert!(result.accepted);
+        assert_eq!(result.text, LINES.join("\n"));
+        assert_eq!(result.regeneration_rounds, 1);
+        assert_eq!(b.requests.len(), 2);
+    }
+}
+
+// 見込み: 固定行を含む実応答の上五を受け取れば、次は欠落でなく7音超過を具体的に伝えられる。
+// 合格: 次の送信文に現在7音・目標5音・許容4〜6音があり、固定二行は保持。最後の修正応答だけ模擬。
+#[tokio::test]
+async fn echoed_fixed_lines_do_not_hide_the_revised_line_or_its_meter() {
+    let mut b = Scripted::new(vec![
+        json!({"lines":["くろいな、","きいろいひかり","そらにある"]}),
+        json!({"lines":[
+            {"line_index":0,"text":"くろいこくせき"},
+            {"line_index":1,"text":"きいろいひかり"},
+            {"line_index":2,"text":"そらにある"}
+        ]}),
+        json!({"lines":[{"line_index":0,"text":"くろいいし"}]}),
+    ]);
+    let result = generate(&mut b, input()).await.unwrap();
+    assert!(result.accepted);
+    assert_eq!(result.text, "くろいいし\nきいろいひかり\nそらにある");
+    assert_eq!(result.regeneration_rounds, 2);
+    assert_eq!(b.requests.len(), 3);
+    let request = &b.requests[2];
+    assert_eq!(request.details["failed_line_indices"], json!([0]));
+    let row = &request.details["current_lines"][0];
+    assert_eq!(row["text"], "くろいこくせき");
+    assert_eq!(row["sound_count"], 7);
+    assert_eq!(row["target_sound_count"], 5);
+    assert_eq!(row["allowed_sound_min"], 4);
+    assert_eq!(row["allowed_sound_max"], 6);
+    assert_eq!(row["failure_reasons"], json!(["meter_too_long"]));
+    let messages = crate::haiku_prompt::messages(request).unwrap();
+    let prompt = messages
+        .iter()
+        .map(|m| m.content.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(prompt.contains("くろいこくせき"));
+    assert!(prompt.contains("現在7音 → 目標5音、許容4〜6音"));
+    assert!(prompt.contains("音数が長い"));
+    assert!(!prompt.contains("再生成結果が欠けた"));
+    assert!(prompt.contains("きいろいひかり（固定）"));
+    assert!(prompt.contains("そらにある（固定）"));
+}
+
 #[tokio::test]
 async fn line_wraps_and_blank_rows_are_completed_without_an_extra_call() {
     let mut b = Scripted::new(vec![
