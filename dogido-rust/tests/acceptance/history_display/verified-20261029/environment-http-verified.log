@@ -1,0 +1,30 @@
+{
+  "passed": [
+    "surroundings_speak_one_call_and_consideration_consumed",
+    "thunder_speak_one_call_and_consideration_consumed",
+    "surroundings_silent_one_call_and_consideration_consumed",
+    "thunder_silent_one_call_and_consideration_consumed",
+    "only_fresh_periodic_snapshot_triggers_and_unchanged_table_stays_quiet",
+    "mob_quantities_and_villager_subsets_reach_model_without_count_only_reaction",
+    "busy_period_is_consumed_without_replaying_its_change",
+    "ordinary_table_change_during_tts_keeps_the_sampled_utterance",
+    "smell_strength_reaches_model_and_fixed_questions_cannot_locate_source",
+    "changed_smell_strength_cancels_unplayed_words_and_retries_once",
+    "changed_smell_strength_retries_once_and_consumes_speak",
+    "changed_smell_strength_retries_once_and_consumes_silent",
+    "invalid_decision_uses_safe_code_fallback_without_retry",
+    "short_acknowledgement_is_spoken_and_only_clear_loop_falls_back",
+    "truncated_valid_child_is_not_a_silent_decision",
+    "pending_reaction_cancelled_on_dimension_changed",
+    "pending_reaction_cancelled_on_session_closed",
+    "pending_reaction_cancelled_on_new_player_input",
+    "pending_reaction_cancelled_on_hostile_arrived",
+    "thunder_cue_precedes_model_and_combat_never_waits_for_reaction",
+    "combat_does_not_start_environment_model_work",
+    "completed_speech_and_chosen_silence_share_recent_context"
+  ],
+  "count": 22,
+  "live_model": false,
+  "real_microphone": false,
+  "real_minecraft": false
+}

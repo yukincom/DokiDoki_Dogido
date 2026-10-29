@@ -330,33 +330,49 @@ impl History {
     pub fn lines(&self) -> String {
         Self::lines_for(&self.rows())
     }
+    /// 保存情報だけから共通表示を作る。IDは返答先の照合に使い、モデルには出さない。
     pub fn lines_for(rows: &[Value]) -> String {
         let mut lines = Vec::new();
-        for row in rows {
-            if row["reaction"] == "summary" {
-                lines.push(format!(
-                    "過去の冒険のあらすじ（現在の観測ではない）: {}",
-                    row["text"].as_str().unwrap_or("")
-                ));
-                continue;
-            }
-            if row["role"] == "event" && row["reaction"] == "silent" {
-                lines.push("ドギドの反応: 黙って受け止めた（沈黙を選択。発話なし）".into());
-                continue;
-            }
-            if row["role"] == "event" && row["reaction"] == "story" {
-                lines.push(format!("出来事: {}", row["text"].as_str().unwrap_or("")));
-                continue;
-            }
-            lines.push(format!(
-                "{}: {}",
-                if row["role"] == "user" {
-                    "プレイヤー"
+        for (index, row) in rows.iter().enumerate() {
+            let occurred_at = row["occurred_at"]
+                .as_str()
+                .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
+                .map(|time| time.with_timezone(&chrono::Utc).format("%Y-%m-%d %H:%M:%S UTC").to_string())
+                .unwrap_or_else(|| "時刻不明".into());
+            let kind = match row["utterance_kind"].as_str() {
+                Some("player_input") => "本人入力",
+                Some("reply") => "返答",
+                Some("spontaneous") => "自発発話",
+                Some("warning") => "警告",
+                _ => "契機不明",
+            };
+            let mut metadata = format!("{occurred_at} | {kind}");
+            if row["utterance_kind"] == "reply" {
+                let target = row["reply_to_turn_id"].as_str().filter(|id| !id.is_empty())
+                    .and_then(|id| rows[..index].iter().rev().find(|candidate| {
+                        candidate["role"] == "user" && candidate["turn_id"] == id
+                    }))
+                    .and_then(|target| target["text"].as_str()).filter(|text| !text.is_empty());
+                if let Some(target) = target {
+                    metadata.push_str(&format!(" | 返答先: プレイヤー「{target}」"));
                 } else {
-                    "ドギド"
-                },
-                row["text"].as_str().unwrap_or("")
-            ));
+                    metadata.push_str(" | 返答対象不明");
+                }
+            }
+            let text = row["text"].as_str().unwrap_or("");
+            let content = if row["reaction"] == "summary" {
+                format!("過去の冒険のあらすじ（現在の観測ではない）: {text}")
+            } else if row["role"] == "event" && row["reaction"] == "silent" {
+                "ドギドの反応: 黙って受け止めた（沈黙を選択。発話なし）".into()
+            } else {
+                let speaker = match row["role"].as_str() {
+                    Some("user") => "プレイヤー",
+                    Some("assistant") => "ドギド",
+                    _ => "出来事",
+                };
+                format!("{speaker}: {text}")
+            };
+            lines.push(format!("[{metadata}] {content}"));
         }
         lines.join("\n")
     }

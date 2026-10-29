@@ -208,7 +208,12 @@ fn mode(kind: &str, d: &Value) -> &'static str {
 }
 
 pub(super) fn messages(kind: &str, d: &Value) -> Result<Vec<ChatMessage>> {
-    let context = context(kind, d)?;
+    let mut context = context(kind, d)?;
+    if let Some(conversation) = context.pointer_mut("/recent/conversation")
+        && let Some(rows) = conversation.as_array()
+    {
+        *conversation = crate::dialogue::history::History::lines_for(rows).into();
+    }
     let mut system = crate::companion_prompt::dialogue(
         mode(kind, d),
         if kind == "body_recall" {

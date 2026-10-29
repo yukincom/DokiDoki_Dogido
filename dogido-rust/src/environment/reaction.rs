@@ -246,22 +246,12 @@ impl Prepared {
             .context("reaction context")?
             .clone();
         let mut context = context;
-        // 生成用の複製だけへ話者名を添える。保存済みrole・原文・沈黙の種別は変えず、
-        // 過去のドギドの発話を、今回のプレイヤー入力として受け取らせない。
-        if let Some(rows) = context
-            .get_mut("recent")
+        // 保存行の複製だけを通常会話と同じ表示へ投影する。
+        if let Some(conversation) = context.get_mut("recent")
             .and_then(|recent| recent.get_mut("conversation"))
-            .and_then(Value::as_array_mut)
+            && let Some(rows) = conversation.as_array()
         {
-            for row in rows {
-                let speaker = match row["role"].as_str() {
-                    Some("user") => "プレイヤー",
-                    Some("assistant") => "ドギド",
-                    Some("event") => "出来事",
-                    _ => continue,
-                };
-                row["speaker"] = speaker.into();
-            }
+            *conversation = crate::dialogue::history::History::lines_for(rows).into();
         }
         crate::catalog_knowledge::separate(&mut context);
         crate::villager_routines::separate(&mut context);

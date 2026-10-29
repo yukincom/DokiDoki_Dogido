@@ -1,0 +1,21 @@
+{
+  "baseline_commit": "08585203eb541bc842d5ed8e5dfa065196df0404",
+  "acceptance": {
+    "main": 7,
+    "isolated": 7,
+    "failed": 0
+  },
+  "related": {
+    "passed": 61,
+    "failed": 1,
+    "preexisting_failure": "body_guidance_uses_existing_player_name_only_when_body_is_present"
+  },
+  "http": {
+    "passed": 22,
+    "failed": 0
+  },
+  "production_build": "pass",
+  "live_model": false,
+  "real_minecraft": false,
+  "real_audio": false
+}

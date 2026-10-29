@@ -1,0 +1,12 @@
+    Blocking waiting for file lock on build directory
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 15.96s
+     Running unittests src/lib.rs (/private/tmp/dogido-part2-history-20261029/verify/dogido-rust/target/debug/deps/dogido_rust-3b05f0013177c941)
+
+running 4 tests
+test reaction_leaf::tests::cleaner_usable_style_and_final_guards_match_fixture ... ok
+test reaction_leaf::tests::explicit_silence_bypasses_suffix_and_invalid_contracts_keep_fallback ... ok
+test reaction_leaf::tests::prompts_match_fixture_for_all_kinds_and_branches ... ok
+test reaction_leaf::tests::reactions_do_not_impose_old_emotions_or_vocabulary_but_keep_observed_outcomes ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 899 filtered out; finished in 6.25s
+

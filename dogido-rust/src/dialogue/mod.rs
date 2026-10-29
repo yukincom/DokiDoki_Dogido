@@ -22,7 +22,7 @@ mod environment_runtime;
 mod episode_runtime;
 mod foreground_runtime;
 mod haiku_runtime;
-mod history;
+pub(crate) mod history;
 mod history_runtime;
 mod journey_runtime;
 mod horse_recall_runtime;
@@ -1031,3 +1031,7 @@ mod acceptance_position;
 #[cfg(test)]
 #[path = "../../tests/acceptance/history_metadata.rs"]
 mod acceptance_history_metadata;
+
+#[cfg(test)]
+#[path = "../../tests/acceptance/history_display.rs"]
+mod acceptance_history_display;

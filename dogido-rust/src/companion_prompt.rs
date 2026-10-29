@@ -72,6 +72,11 @@ pub enum DialoguePurpose {
     Ambient,
 }
 
+/// プレイヤーの新しい入力がない環境判断の用件。
+pub fn ambient_request() -> &'static str {
+    TEXT["dialogue"]["ambient_request"].as_str().unwrap()
+}
+
 /// Smell guidance is attached only for a current, code-resolved smell observation.
 pub fn dialogue(mode_name: &str, purpose: DialoguePurpose, smell_observed: bool) -> String {
     let purpose_key = match purpose {
@@ -87,6 +92,7 @@ pub fn dialogue(mode_name: &str, purpose: DialoguePurpose, smell_observed: bool)
         } else {
             ""
         },
+        if matches!(purpose, DialoguePurpose::Ambient) { ambient_request() } else { "" },
         TEXT["dialogue"][purpose_key].as_str().unwrap(),
         choice_contract(),
     ]

@@ -1,0 +1,14 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.21s
+     Running unittests src/lib.rs (/private/tmp/dogido-part3-display-20261029/target-main/debug/deps/dogido_rust-3b05f0013177c941)
+
+running 7 tests
+test dialogue::acceptance_history_display::acceptance_history_display_control_keeps_all_retained_rows_in_both_requests ... ok
+test dialogue::acceptance_history_display::acceptance_history_display_current_question_follows_history_and_surrounding_material ... ok
+test dialogue::acceptance_history_display::acceptance_history_display_environment_declares_no_new_player_input ... ok
+test dialogue::acceptance_history_display::acceptance_history_display_environment_uses_same_readable_history_without_uuid ... ok
+test dialogue::acceptance_history_display::acceptance_history_display_missing_metadata_stays_unknown ... ok
+test dialogue::acceptance_history_display::acceptance_history_display_missing_reply_target_stays_unknown ... ok
+test dialogue::acceptance_history_display::acceptance_history_display_normal_identifies_time_kind_and_reply_target_per_row ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 939 filtered out; finished in 0.08s
+

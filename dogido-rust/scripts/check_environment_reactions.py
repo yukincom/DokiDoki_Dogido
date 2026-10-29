@@ -439,12 +439,14 @@ def main():
             trigger(sid, "smell")
             result = wait_for(lambda: next((r for r in reactions(sid) if r["playback_status"] == "completed"), None))
             context = reaction_context(calls()[-1]["body"])
-            assert [r["reaction"] for r in context["recent"]["conversation"] if r["role"] == "event"] == ["silent"], context
-            assert not [r for r in context["recent"]["conversation"] if r["role"] == "assistant"], context
+            history = context["recent"]["conversation"]
+            assert isinstance(history, str) and history.count("沈黙を選択。発話なし") == 1, context
+            assert "ドギド:" not in history, context
             trigger(sid, "weather")
             wait_for(lambda: len([r for r in reactions(sid) if r["playback_status"] == "completed"]) == 2)
             context = reaction_context(calls()[-1]["body"])
-            assert [r["text"] for r in context["recent"]["conversation"] if r["role"] == "assistant"] == [result["text"]], context
+            history = context["recent"]["conversation"]
+            assert history.count("ドギド:") == 1 and history.count(result["text"]) == 1, context
             close(sid)
             passed.append("completed_speech_and_chosen_silence_share_recent_context")
 

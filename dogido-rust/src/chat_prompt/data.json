@@ -18,9 +18,7 @@
     {"text": "/no_think\n【材料】\n"},
     {"field": "history_block"},
     {"field": "digest_block"},
-    {"text": "プレイヤー:「"},
-    {"field": "user_text"},
-    {"text": "」\n呼び名: "},
+    {"text": "呼び名: "},
     {"field": "player_name"},
     {"text": "（自然なら一度だけ）\n"},
     {"field": "world_context_block"},
@@ -36,6 +34,7 @@
     {"field": "inventory_block"},
     {"text": "\n"}
   ],
+  "current_request": "\n【今回の用件】\nプレイヤー:「@@DOGIDO_user_text@@」\n",
   "inventory": [
     "- 所持品は渡された要約をもとに、話に関係ありそうな持ち物に触れてええよ\n",
     "手持ち: @@DOGIDO_held@@。\n所持品（インベントリ要約）: @@DOGIDO_inventory@@。\n"

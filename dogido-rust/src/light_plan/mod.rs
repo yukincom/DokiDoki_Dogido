@@ -34,12 +34,19 @@ fn actions(details: &Value) -> BTreeSet<&str> {
 /// 既存の共有人格と、反応選択・本文をまとめた一回分の指示を作る。
 /// 個数や入手方法を推定せず、コードが段階化した観測だけを渡す。
 pub fn messages(details: &Value) -> Vec<ChatMessage> {
+    let mut details = details.clone();
+    if let Some(recent) = details.pointer_mut("/context/recent")
+        && let Some(rows) = recent.as_array()
+    {
+        *recent = crate::dialogue::history::History::lines_for(rows).into();
+    }
     vec![
         ChatMessage {
             role: Role::System,
             content: [
                 crate::companion_prompt::base(),
                 crate::companion_prompt::grounding(),
+                crate::companion_prompt::ambient_request(),
                 PROMPTS["instruction"].as_str().unwrap(),
                 PROMPTS["contract"].as_str().unwrap(),
             ]
@@ -47,7 +54,7 @@ pub fn messages(details: &Value) -> Vec<ChatMessage> {
         },
         ChatMessage {
             role: Role::User,
-            content: spaced_json(details),
+            content: spaced_json(&details),
         },
     ]
 }

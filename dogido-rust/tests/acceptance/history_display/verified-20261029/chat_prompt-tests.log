@@ -1,0 +1,25 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.13s
+     Running unittests src/lib.rs (/private/tmp/dogido-part2-history-20261029/verify/dogido-rust/target/debug/deps/dogido_rust-3b05f0013177c941)
+
+running 5 tests
+test chat_prompt::tests::body_guidance_uses_existing_player_name_only_when_body_is_present ... FAILED
+test chat_prompt::tests::closed_projection_rejects_unknown_fields_and_invalid_types ... ok
+test chat_prompt::tests::initial_messages_match_fixture ... ok
+test chat_prompt::tests::player_reply_uses_reply_purpose_and_preserves_speech_only_path ... ok
+test chat_prompt::tests::retired_planner_and_repair_fields_are_not_prompt_inputs ... ok
+
+failures:
+
+---- chat_prompt::tests::body_guidance_uses_existing_player_name_only_when_body_is_present stdout ----
+
+thread 'chat_prompt::tests::body_guidance_uses_existing_player_name_only_when_body_is_present' (21640301) panicked at src/chat_prompt.rs:646:17:
+assertion failed: out[0].content.contains(&format!("player は{expected}のことやで。"))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    chat_prompt::tests::body_guidance_uses_existing_player_name_only_when_body_is_present
+
+test result: FAILED. 4 passed; 1 failed; 0 ignored; 0 measured; 898 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `--lib`

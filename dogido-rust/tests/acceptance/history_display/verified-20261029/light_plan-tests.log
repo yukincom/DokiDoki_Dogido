@@ -1,0 +1,11 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running unittests src/lib.rs (/private/tmp/dogido-part2-history-20261029/verify/dogido-rust/target/debug/deps/dogido_rust-3b05f0013177c941)
+
+running 4 tests
+test light_plan::tests::cancellation_before_and_during_generation_stops_delivery ... ok
+test light_plan::tests::every_result_finishes_after_exactly_one_generation ... ok
+test light_plan::tests::one_call_prompt_and_action_speech_contract ... ok
+test light_plan::tests::pending_generation_is_dropped_on_timeout_and_cancellation ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 899 filtered out; finished in 0.03s
+

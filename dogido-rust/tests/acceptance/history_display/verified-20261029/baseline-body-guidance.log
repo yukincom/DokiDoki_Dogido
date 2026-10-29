@@ -1,0 +1,22 @@
+   Compiling dogido-rust v0.1.0 (/private/tmp/dogido-part3-display-20261029/baseline/dogido-rust)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 23.16s
+     Running unittests src/lib.rs (/private/tmp/dogido-part3-display-20261029/target-main/debug/deps/dogido_rust-3b05f0013177c941)
+
+running 1 test
+test chat_prompt::tests::body_guidance_uses_existing_player_name_only_when_body_is_present ... FAILED
+
+failures:
+
+---- chat_prompt::tests::body_guidance_uses_existing_player_name_only_when_body_is_present stdout ----
+
+thread 'chat_prompt::tests::body_guidance_uses_existing_player_name_only_when_body_is_present' (21654693) panicked at src/chat_prompt.rs:645:17:
+assertion failed: out[0].content.contains(&format!("player は{expected}のことやで。"))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    chat_prompt::tests::body_guidance_uses_existing_player_name_only_when_body_is_present
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 895 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `--lib`

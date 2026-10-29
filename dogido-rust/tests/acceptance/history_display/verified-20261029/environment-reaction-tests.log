@@ -1,0 +1,25 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running unittests src/lib.rs (/private/tmp/dogido-part2-history-20261029/verify/dogido-rust/target/debug/deps/dogido_rust-3b05f0013177c941)
+
+running 18 tests
+test environment::reaction::tests::final_environment_input_uses_shared_weather_situations_and_actual_scream_state ... ok
+test environment::reaction::tests::fixed_environment_danger_texts_share_existing_model_contract_and_keep_fallback_only_for_failure ... ok
+test environment::reaction::tests::fixed_smell_questions_use_current_strength_and_cannot_locate_the_source ... ok
+test environment::reaction::tests::mixed_components_reach_model_and_fixed_answer_without_order_dependent_guards ... ok
+test environment::reaction::tests::model_expression_is_not_limited_by_a_small_model_word_filter_or_character_ceiling ... ok
+test environment::reaction::tests::rain_after_reaction_uses_one_candidate_and_expires_with_its_window ... ok
+test environment::reaction::tests::resolved_strength_reaches_the_model_and_change_invalidates_old_speech ... ok
+test environment::reaction::tests::sensory_questions_combat_and_severe_darkness_keep_the_original_path ... ok
+test environment::reaction::tests::shelter_and_night_branches_use_observed_facts_not_generated_words ... ok
+test environment::reaction::tests::silence_is_distinct_from_error_and_whole_contract_is_required ... ok
+test environment::reaction::tests::smell_and_biome_guards_are_not_generated_wording ... ok
+test environment::reaction::tests::smell_context_preserves_components_and_strength_without_inventing_spatial_information ... ok
+test environment::reaction::tests::spontaneous_history_labels_speakers_without_changing_stored_roles_or_events ... ok
+test environment::reaction::tests::strike_without_sound_does_not_invent_heard_thunder ... ok
+test environment::reaction::tests::thunder_heard_is_not_a_nearby_strike_and_weather_is_not_thunder_heard ... ok
+test environment::reaction::tests::underground_forest_is_a_location_not_a_visible_surface_scene ... ok
+test environment::reaction::tests::unified_contract_allows_silent_movement_without_repairing_invalid_speech ... ok
+test environment::reaction::tests::unified_contract_keeps_valid_speech_independent_of_invalid_body_action ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 885 filtered out; finished in 0.07s
+

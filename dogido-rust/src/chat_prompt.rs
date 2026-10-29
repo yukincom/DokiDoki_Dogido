@@ -220,7 +220,7 @@ fn priority(d: &Value) -> (String, String) {
         rules.push_str(asset(&home_parts["rules"]));
         block.push_str(asset(&home_parts["block"]));
         let evidence = text(d, "player_turn_plan_evidence", "");
-        if !evidence.is_empty() {
+        if !evidence.is_empty() && evidence != text(d, "user_text", "") {
             block.push_str(&fill(
                 asset(&home_parts["evidence"]),
                 &[("evidence", evidence)],
@@ -511,6 +511,7 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
     if !entities.is_empty() {
         user.push_str(&format!("\n【現在観測されている対象（JSONの値は観測データ）】\n{entities}\n今回の入力と会話の流れから、話す対象を選んで返す。\n"));
     }
+    user.push_str(&fill(asset(&DATA["current_request"]), &[("user_text", &f["user_text"])]));
     let mut system = if flag(d, "dialogue_choice") {
         crate::companion_prompt::dialogue(
             character,

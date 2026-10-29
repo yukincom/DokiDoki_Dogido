@@ -40,7 +40,11 @@ fn one_call_prompt_and_action_speech_contract() {
     let m = messages(&d);
     assert_eq!(m.len(), 2);
     assert!(m[0].content.contains("照明器具が増えたけど"));
-    assert_eq!(m[1].content, spaced_json(&d));
+    let mut expected = d.clone();
+    expected["context"]["recent"] = "".into();
+    assert_eq!(m[1].content, spaced_json(&expected));
+    assert!(m[0].content.contains("新しいプレイヤー発言はない"));
+    assert_eq!(d, details(), "保存用の材料は変えない");
     for payload in [
         fallback(),
         json!({"action":"acknowledge_supply_gain","speech":"備えが増えたな。"}),

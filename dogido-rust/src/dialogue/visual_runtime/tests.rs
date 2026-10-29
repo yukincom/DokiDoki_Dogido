@@ -200,9 +200,9 @@ async fn existing_environment_model_gets_one_image_request_and_can_select_silenc
     assert!(changes.iter().any(|c| c["kind"] == "weather"));
     assert!(changes.iter().any(|c| c["kind"] == "body_view"));
     assert!(!changes.iter().any(|c| c["kind"] == "nearby_mob_types" || c["kind"] == "smell"));
-    assert_eq!(context["recent"]["conversation"][0]["text"], "カメさん、砂浜でゆっくりしとるなぁ。");
-    assert_eq!(context["recent"]["conversation"][0]["speaker"], "ドギド");
-    assert_eq!(context["recent"]["conversation"][0]["role"], "assistant");
+    let history = context["recent"]["conversation"].as_str().unwrap();
+    assert!(history.contains("ドギド: カメさん、砂浜でゆっくりしとるなぁ。"));
+    assert!(history.contains("契機不明"));
     assert!(context["situation"].as_str().unwrap().contains("今はプレイヤーから新しい発言を受けてへん"));
     let shared = crate::reaction_leaf::context("surroundings_notice", &json!({})).unwrap();
     assert_eq!(context["situation"], shared["situation"]);
