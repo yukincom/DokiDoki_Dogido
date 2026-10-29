@@ -42,7 +42,7 @@ fn canonical_raw_catalog_entries_are_not_fixture_backed() {
     }
 }
 #[tokio::test]
-async fn canonical_persistent_preparation_traces() {
+async fn canonical_capture_and_fixed_emission_traces() {
     let mut n = 0;
     for (i, line) in include_str!("../fixtures/haiku-preparation.jsonl")
         .lines()
@@ -57,21 +57,20 @@ async fn canonical_persistent_preparation_traces() {
         let (mut prep, context) = Preparation::capture(start).unwrap();
         assert_eq!(json!(context), row["context"], "context {i}");
         if context.fixed_text.is_none() {
-            row["emission"]["materials"]["source_attribution"] =
-                json!("provided_materials_unverified");
-            if let Some(lines) = row["emission"]["lines"].as_array_mut() {
-                for line in lines {
-                    line["provenance"] = json!("generated_material_assignment");
-                }
-            }
-            let mut inspiration = prep.inspiration(&row["irony_payload"]).unwrap();
-            assert_eq!(json!(inspiration), row["inspiration"], "inspiration {i}");
-            inspiration.text.clear();
-            inspiration.request.details.clear();
-            let mut materials = prep.materials(&row["scene_payload"]).unwrap();
-            assert_eq!(json!(materials), row["materials"], "materials {i}");
-            materials.materials.clear();
-            materials.input.source_atoms.clear();
+            // 保存oracleのscene→句用資料は旧仕様。前置き本文と予算は維持し、
+            // 新しい材料選択→保存の契約はhaiku_preface_materialsで独立に検査する。
+            let inspiration = prep.inspiration(&row["irony_payload"]).unwrap();
+            assert_eq!(json!(inspiration.text), row["inspiration"]["text"]);
+            assert_eq!(
+                json!(inspiration.spoken_text),
+                row["inspiration"]["spoken_text"]
+            );
+            assert_eq!(
+                json!(inspiration.request.max_tokens),
+                row["inspiration"]["request"]["max_tokens"]
+            );
+            n += 1;
+            continue;
         }
         let result: GroundedHaikuResult = serde_json::from_value(row["result"].clone()).unwrap();
         let emission = prep
@@ -205,7 +204,7 @@ fn companion_start(turns: Value, name: &str) -> Start {
     serde_json::from_value(row["start"].clone()).unwrap()
 }
 #[test]
-fn routine_cat_and_wolf_do_not_drive_the_scene_but_one_can_supply_background() {
+fn routine_followers_are_not_added_after_preface_selection() {
     let start = companion_start(json!([]), "クロちゃん");
     let original = json!(start.event);
     let (mut prep, context) = Preparation::capture(start.clone()).unwrap();
@@ -220,25 +219,10 @@ fn routine_cat_and_wolf_do_not_drive_the_scene_but_one_can_supply_background() {
             .contains("クロちゃん")
     );
     let result = prep.materials(&json!({"found":false})).unwrap();
-    assert_eq!(
-        result.materials["background_companions"]
-            .as_array()
-            .unwrap()
-            .len(),
-        1
-    );
-    let references: std::collections::HashSet<_> = result
-        .input
-        .source_atoms
-        .iter()
-        .filter(|a| a.observation_role == "background_companion")
-        .map(|a| a.source_ref.clone())
-        .collect();
-    assert_eq!(
-        references.len(),
-        1,
-        "routine followers cannot make a two-pet contrast"
-    );
+    // 見込み: 前置きで選ばれていない同行者を、句の補助資料として追加しない。
+    // 合格: 空の選択で背景個体は入らず、元観測は保持する。モデル応答は模擬。
+    assert!(result.materials.get("background_companions").is_none());
+    assert!(result.input.source_atoms.is_empty());
     assert_eq!(
         json!(start.event),
         original,
@@ -264,7 +248,8 @@ fn completed_pet_topic_can_be_primary_and_name_and_species_share_a_source() {
     assert!(cat["extra_fields"].to_string().contains("くろちゃん"));
     prep.inspiration(&json!({"found":false})).unwrap();
     let result = prep.materials(&json!({"found":false})).unwrap();
-    assert!(result.input.source_atoms.iter().any(|a|a.claim_scopes==["player_reported_context"] && a.text.contains("クロちゃん")));
+    // 前置き候補への昇格と句用選択は別。選択のない会話資料を後段へ追加しない。
+    assert!(result.input.source_atoms.is_empty());
     assert!(
         !result
             .input

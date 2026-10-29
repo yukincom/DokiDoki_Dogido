@@ -1,5 +1,7 @@
 # 川柳の Rust プロンプト組立
 
+自動発句の現行手順は [元材料と前置きの分離](2026-10-29-haiku-preface-materials.md) を参照。以下の移植時記録にあるscene生成・行別材料割当・評価leafは、現在の自動発句の契約とは異なる。
+
 `haiku_irony`、`haiku_scene`、`haiku_draft`、`haiku_line_grounding`、`haiku_line_regeneration`、`haiku_workshop_revision` のメッセージ組立は `haiku_prompt` が所有する。`StructuredRequest` を読み取り、モデル、route、温度、token 上限、fallback を変更しない。`python_worker::Helper::prepare` は Python への送受信を行わず、この純粋関数を呼ぶ。
 
 固定文の正本は `dogido-rust/src/haiku_prompt/templates.json`。literal／slot の文章部品へ、材料、制約、出典、共有文脈、失敗理由を Rust で組み込む。検査要求は合否先行・一時整数番号・不合格理由の形式を使い、revision の同案拒否案内もこのテンプレートで管理する。

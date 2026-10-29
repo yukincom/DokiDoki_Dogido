@@ -101,97 +101,103 @@ async fn first_pass_uses_one_generation_and_records_provided_materials() {
     assert_eq!(b.requests[0].route, "haiku");
     assert_eq!(b.requests[0].max_tokens, Some(192));
     assert!(b.requests[0].details.get("source_atoms").is_none());
-    for (i, source) in r.line_sources.iter().enumerate() {
-        assert_eq!(source.atom_ids, vec![atoms()[i].atom_id.clone()]);
-        let material = &b.requests[0].details["available_line_materials"][i]["materials"][0];
-        assert_eq!(material["text"], atoms()[i].text);
-        assert!(material.get("atom_id").is_none());
+    for source in &r.line_sources {
+        assert_eq!(
+            source.atom_ids,
+            atoms()
+                .iter()
+                .map(|a| a.atom_id.clone())
+                .collect::<Vec<_>>()
+        );
     }
+    let material = &b.requests[0].details["available_poem_materials"][0]["facts"][0];
+    assert_eq!(material["text"], atoms()[0].text);
+    assert!(material.get("atom_id").is_none());
     assert!(
         b.transforms
             .iter()
             .all(|t| t.mode == TransformMode::Normalize)
     );
 }
+// 見込み: 一部行の音数失敗でも、前置きで選んだ材料は減らず完成句全体で使える。
+// 合格: 対象行だけ再生成し、同じ材料・方針と固定行を再提示する。モデル内容は固定応答。
 #[tokio::test]
-async fn invalid_meter_retries_only_target_with_unadopted_material() {
+async fn invalid_meter_retries_only_target_with_the_same_material_pool() {
+    let mut i = input();
+    i.source_atoms.truncate(2);
+    i.details.insert(
+        "preface_direction".into(),
+        json!("草地と黒い剣の取り合わせ"),
+    );
     let mut b = Scripted::new(vec![
         json!({"lines":[LINES[0],"あ",LINES[2]]}),
         json!({"lines":[{"line_index":1,"text":LINES[1]}]}),
     ]);
-    let r = generate(&mut b, input()).await.unwrap();
+    let r = generate(&mut b, i).await.unwrap();
     assert!(r.accepted);
     assert_eq!(r.regeneration_rounds, 1);
     let d = &b.requests[1].details;
     assert_eq!(d["failed_line_indices"], json!([1]));
-    assert_eq!(d["available_line_materials"].as_array().unwrap().len(), 1);
     assert_eq!(
-        d["available_line_materials"][0]["materials"][0]["text"],
-        atoms()[1].text
+        d["available_poem_materials"],
+        b.requests[0].details["available_poem_materials"]
     );
-    assert!(
-        !d["available_line_materials"]
-            .to_string()
-            .contains(&atoms()[0].text)
-    );
-    assert!(
-        !d["available_line_materials"]
-            .to_string()
-            .contains(&atoms()[2].text)
+    assert_eq!(
+        d["preface_direction"],
+        b.requests[0].details["preface_direction"]
     );
     assert_eq!(d["current_lines"][0]["frozen"], true);
     assert_eq!(d["current_lines"][2]["text"], LINES[2]);
     assert!(b.requests.iter().all(|r| r.kind != "haiku_line_grounding"));
 }
+
+// 見込み: 材料が1〜3個でも三行へ水増し・分割せず、選んだ全件を共通提示できる。
+// 合格: 初案が呼ばれ、元材料数と本文が保たれる。句での実使用はこの固定応答では判定しない。
 #[tokio::test]
-async fn all_current_materials_reach_model_without_splitting_same_source_between_lines() {
-    let mut i = input();
-    let mut apple = atoms()[0].clone();
-    apple.atom_id = "apple-note".into();
-    apple.text = "同じリンゴの別の性質".into();
-    i.source_atoms.insert(1, apple);
-    let mut b = Scripted::new(vec![draft()]);
-    let r = generate(&mut b, i.clone()).await.unwrap();
-    assert!(r.accepted);
-    let delivered = b.requests[0].details["available_line_materials"].to_string();
-    for a in &i.source_atoms {
-        assert!(delivered.contains(&a.text), "{}", a.text);
+async fn one_two_and_three_materials_are_all_offered_without_forcing_three() {
+    for count in 1..=3 {
+        let mut i = input();
+        i.source_atoms.truncate(count);
+        let mut b = Scripted::new(vec![draft()]);
+        let r = generate(&mut b, i).await.unwrap();
+        assert!(r.accepted);
+        let pool = &b.requests[0].details["available_poem_materials"];
+        assert_eq!(pool.as_array().unwrap().len(), count);
+        for a in atoms().iter().take(count) {
+            assert!(pool.to_string().contains(&a.text));
+        }
+        assert!(r.line_sources.iter().all(|s| s.sources.len() == count));
     }
-    assert_eq!(r.line_sources[0].atom_ids.len(), 2);
-    assert_eq!(r.line_sources[1].atom_ids, vec![atoms()[1].atom_id.clone()]);
-    assert_eq!(r.line_sources[2].atom_ids, vec![atoms()[2].atom_id.clone()]);
 }
+
+// 見込み: 名称と説明は一つの元材料で、前置きの節は資料候補に混ざらない。
+// 合格: 同出典の2本文が一組となり、前置きatomとaliasは初案・再生成に出ない。通信は模擬。
 #[tokio::test]
-async fn composite_preface_does_not_exhaust_materials_on_whole_poem_retry() {
+async fn source_facts_stay_together_and_preface_is_never_an_ingredient() {
     let mut i = input();
-    i.generation_strategy = "whole_poem".into();
-    let mut composite = atoms()[0].clone();
-    composite.atom_id = "preface".into();
-    composite.kind = "preface_clause".into();
-    composite.basis_atom_ids = vec![atoms()[0].atom_id.clone(), atoms()[1].atom_id.clone()];
-    i.source_atoms.push(composite);
-    let mut b = Scripted::new(vec![
-        json!({"lines":[LINES[0],"あ",LINES[2]]}),
-        json!({"lines":(0..3).map(|n|json!({"line_index":n,"text":LINES[n]})).collect::<Vec<_>>()}),
-    ]);
-    let r = generate(&mut b, i).await.unwrap();
-    assert!(r.accepted);
-    assert_eq!(r.regeneration_rounds, 1);
-}
-#[tokio::test]
-async fn material_alias_cannot_repeat_a_fixed_lines_primary_fact() {
-    let mut i = input();
-    let mut alias = atoms()[0].clone();
-    alias.atom_id = "alias".into();
-    alias.basis_atom_ids = vec![atoms()[0].atom_id.clone()];
-    i.source_atoms.push(alias);
+    let mut note = atoms()[0].clone();
+    note.atom_id = "note".into();
+    note.text = "草地の別の説明".into();
+    i.source_atoms.push(note);
+    for kind in ["preface_clause", "poetic_interpretation", "alias"] {
+        let mut a = atoms()[0].clone();
+        a.atom_id = kind.into();
+        a.kind = kind.into();
+        a.text = format!("混ぜない文章_{kind}");
+        a.basis_atom_ids = vec![atoms()[0].atom_id.clone()];
+        i.source_atoms.push(a);
+    }
     let mut b = Scripted::new(vec![
         json!({"lines":[LINES[0],"あ",LINES[2]]}),
         json!({"lines":[{"line_index":1,"text":LINES[1]}]}),
     ]);
-    let r = generate(&mut b, i).await.unwrap();
-    assert!(r.accepted);
-    assert_eq!(r.line_sources[1].atom_ids, vec![atoms()[1].atom_id.clone()]);
+    assert!(generate(&mut b, i).await.unwrap().accepted);
+    for r in &b.requests {
+        let pool = &r.details["available_poem_materials"];
+        assert_eq!(pool.as_array().unwrap().len(), 3);
+        assert_eq!(pool[0]["facts"].as_array().unwrap().len(), 2);
+        assert!(!pool.to_string().contains("混ぜない文章"));
+    }
 }
 #[tokio::test]
 async fn repeated_output_is_not_a_semantic_or_duplication_veto() {
@@ -291,7 +297,7 @@ async fn no_model_call_without_enabled_generation_strategy_and_materials() {
         match case {
             0 => i.llm_enabled = false,
             1 => i.generation_strategy = "wrong".into(),
-            _ => i.source_atoms.truncate(2),
+            _ => i.source_atoms.clear(),
         }
         let mut b = Scripted::new(vec![]);
         assert!(!generate(&mut b, i).await.unwrap().accepted);

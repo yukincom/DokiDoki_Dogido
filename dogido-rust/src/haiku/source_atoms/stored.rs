@@ -129,6 +129,8 @@ pub fn line_source_ids_from_materials(
         .filter(|a| a.kind == "poetic_interpretation")
         .map(|a| a.atom_id)
         .collect::<HashSet<_>>();
+    // 提示資料の記録は各行で共通になり得る。旧来の実使用根拠の記録とは区別する。
+    let provided = materials["source_attribution"] == "provided_materials_unverified";
     let mut result = BTreeMap::new();
     let mut used = HashSet::new();
     for row in rows {
@@ -165,7 +167,7 @@ pub fn line_source_ids_from_materials(
             .iter()
             .any(|id| id.is_empty() || !allowed_atom_ids.contains(id))
             || !unique(&ids)
-            || !used.is_disjoint(&reserved)
+            || (!provided && !used.is_disjoint(&reserved))
         {
             continue;
         }

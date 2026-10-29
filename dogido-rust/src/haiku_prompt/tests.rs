@@ -7,7 +7,7 @@ fn unchanged_prepare_kinds_match_canonical_helper_messages() {
         let request: StructuredRequest = serde_json::from_value(row["request"].clone()).unwrap();
         if matches!(
             request.kind.as_str(),
-            "haiku_line_grounding" | "haiku_draft" | "haiku_line_regeneration"
+            "haiku_line_grounding" | "haiku_draft" | "haiku_line_regeneration" | "haiku_scene"
         ) {
             continue;
         }
@@ -34,13 +34,17 @@ fn unknown_kind_is_rejected_without_io() {
     assert!(messages(&request).is_err());
 }
 
+// 見込み: 元材料と前置きを別欄に置けば、前置きや未選択の観測を材料へ混ぜずに渡せる。
+// 合格: 初案と再生成の両方で選択材料だけが出て、方針は一度だけ別欄に出る。モデルは呼ばない。
 #[test]
-fn available_materials_reach_generation_without_internal_ids_or_frozen_materials() {
+fn selected_material_pool_and_preface_have_separate_prompt_sections() {
     for kind in ["haiku_draft", "haiku_line_regeneration"] {
         let request=StructuredRequest {kind:kind.into(), details:json!({
-            "source_atoms":[{"atom_id":"SECRET-FROZEN-ID","text":"固定済みの古い材料"}],
-            "nearby_blocks":["固定済みの古い材料"],"feature_candidates":["固定済みの古い材料"],
-            "available_line_materials":[{"line_index":1,"materials":[{"text":"今使える雨粒","claim_class":"factual","claim_scopes":["observed_state"]}]}],
+            "source_atoms":[{"atom_id":"SECRET-ID","text":"未選択の材料"}],
+            "nearby_blocks":["未選択の材料"],"feature_candidates":["未選択の材料"],
+            "background_companions":[{"label":"未選択の材料"}],
+            "available_poem_materials":[{"facts":[{"text":"選んだ雨粒","claim_class":"factual","claim_scopes":["observed_state"]}]}],
+            "preface_direction":"雨粒を銀の粒に見立てた前置き",
             "failed_line_indices":[1],"current_lines":[{"line_index":0,"text":"くさちのひ","frozen":true}]
         }).as_object().unwrap().clone(),route:"haiku".into(),temperature:0.6,max_tokens:Some(192),fallback_value:json!({})};
         let text = messages(&request)
@@ -49,11 +53,54 @@ fn available_materials_reach_generation_without_internal_ids_or_frozen_materials
             .map(|m| m.content.as_str())
             .collect::<Vec<_>>()
             .join("\n");
-        assert!(text.contains("中七で今使える材料"));
-        assert!(text.contains("今使える雨粒"));
-        assert!(!text.contains("SECRET-FROZEN-ID"));
-        assert!(!text.contains("固定済みの古い材料"));
-        assert!(!text.contains("atom_id"));
+        let (ingredients, direction) = text.split_once("【材料の調理方針となる前置き】").unwrap();
+        assert!(ingredients.contains("選んだ雨粒"));
+        assert!(!ingredients.contains("雨粒を銀の粒に見立てた前置き"));
+        assert!(direction.contains("雨粒を銀の粒に見立てた前置き"));
+        assert_eq!(text.matches("雨粒を銀の粒に見立てた前置き").count(), 1);
+        assert!(text.contains("全部"));
+        for excluded in [
+            "SECRET-ID",
+            "未選択の材料",
+            "atom_id",
+            "固定行へ渡した材料は除いてある",
+        ] {
+            assert!(!text.contains(excluded), "{excluded}");
+        }
+    }
+}
+
+// 見込み: 既存の次段呼出しで、前置き使用材料と句用の部分集合を一度で選べる。
+// 合格: 1〜3個は全件、4個以上は部分集合という契約と元資料だけを示す。意味理解は未検査。
+#[test]
+fn scene_request_selects_original_materials_without_a_three_material_minimum() {
+    let request = StructuredRequest {
+        kind: "haiku_scene".into(),
+        details: json!({
+            "irony":{"description":"雨粒と石の取り合わせ","elements":["雨粒","石"],"focus":["光"]},
+            "preface_material_candidates":[{"material_id":"m01","facts":[{"text":"雨粒"}]}]
+        })
+        .as_object()
+        .unwrap()
+        .clone(),
+        route: "chat".into(),
+        temperature: 0.2,
+        max_tokens: Some(192),
+        fallback_value: json!({}),
+    };
+    let text = messages(&request).unwrap()[1].content.clone();
+    for expected in [
+        "preface_material_ids",
+        "poem_material_ids",
+        "1〜3個なら全部",
+        "4個以上",
+        "必ず3個に揃える必要はない",
+        "m01",
+    ] {
+        assert!(text.contains(expected), "{expected}");
+    }
+    for obsolete in ["basis_atom_ids", "clauses", "最上位には必ず found"] {
+        assert!(!text.contains(obsolete), "{obsolete}");
     }
 }
 #[test]

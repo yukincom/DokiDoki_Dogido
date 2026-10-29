@@ -46,7 +46,7 @@
       "role": "system",
       "segments": [
         {
-          "literal": "__DOGIDO_SHARED_BASE__\n材料から、一句の種になる短い場面を描く。返答は JSON のみ。"
+          "literal": "__DOGIDO_SHARED_BASE__\n前置きで取り上げた元の材料から、句へ渡す組み合わせを選ぶ。返答は JSON のみ。"
         }
       ]
     },
@@ -54,43 +54,19 @@
       "role": "user",
       "segments": [
         {
-          "literal": "ドギドがすでに声に出した見どころを、川柳の根拠へ結び直してほしい。\n"
+          "literal": "先に出した前置きと、元の材料の一覧を見てな。\nまず、前置きで取り上げた元材料を preface_material_ids に全部挙げる。前置きの本文や、その言い換えは材料に数えへん。\n同じ material_id にある名称と説明は一つの材料や。前置きに名前をそのまま書いていなくても、意味として取り上げた材料を選んでな。\n次に、その中から句に使う組み合わせを poem_material_ids に選ぶ。前置きの材料が1〜3個なら全部を使う。4個以上なら、句にまとめたい組み合わせを選んでな。必ず3個に揃える必要はないで。\nここでは句や新しい前置きを作らず、一覧にある material_id だけを返す。前置きに対応する元材料がなければ空配列にする。\n\n【前置きと、そこで挙げた要素・焦点】\n"
         },
         {
-          "slot": "place_nudge"
+          "slot": "preface_selection_context"
         },
         {
-          "literal": "\n【さきに感じた芯】の良さと中心となる像を変えず、根拠atomを対応させる。\n材料の意味を変えず、あとで五七五に落としやすい具体的なことばで。\nすでに声へ出した関西弁の意味を保ち、ひとまとまりの主張ごとに節を分ける。各節に根拠となる [atom_id] を付ける。語尾だけを不自然に置き換えず、『〜やな』『〜に見えるわ』『〜しとるな』など場面に合う話し方にする。\n最上位には必ず found と clauses を置く。text や basis_atom_ids を最上位へ置かない。\nbasis_atom_ids は一覧の角括弧の内側だけを正確にコピーし、ID文字列に [ ] を含めない。\nfactual は根拠atomが明示する事実の言い換えだけ。interpretive は根拠同士の印象・取り合わせだけで、新しい事実を断言しない。\n『プレイヤー』『Y座標』『確率』などのメタ語は節に書かない。\n読点で細切れにせず、一節を一つの主張にする。\n\n【いまの材料】\n"
+          "literal": "\n\n【元の材料】\n"
         },
         {
-          "slot": "materials"
+          "slot": "preface_material_candidates"
         },
         {
-          "literal": "\n\n【眺めのヒント】\n"
-        },
-        {
-          "slot": "candidates"
-        },
-        {
-          "literal": "\n\n【ちょっとした取り合わせ】\n"
-        },
-        {
-          "slot": "tensions"
-        },
-        {
-          "literal": "\n\n【さきに感じた芯】\n"
-        },
-        {
-          "slot": "irony_block"
-        },
-        {
-          "literal": "\n\n【節の根拠に使えるatom】\n"
-        },
-        {
-          "slot": "source_atoms"
-        },
-        {
-          "literal": "\n\n返事は JSON オブジェクト1つだけ。\n形: {\"found\": true/false, \"clauses\": [{\"text\": \"...\", \"basis_atom_ids\": [\"...\"], \"claim_class\": \"factual|interpretive\"}], \"motifs\": [\"...\"], \"focus\": [\"...\"], \"confidence\": 0.0}"
+          "literal": "\n\n返事は JSON オブジェクト1つだけ。\n形: {\"preface_material_ids\": [\"m01\", \"m02\"], \"poem_material_ids\": [\"m01\", \"m02\"]}"
         }
       ]
     }
@@ -111,49 +87,25 @@
           "slot": "spirit"
         },
         {
-          "literal": "\n\n【いまの材料】\n"
+          "literal": "\n\n【句に使う元材料】\n"
         },
         {
-          "slot": "materials"
+          "slot": "poem_materials"
         },
         {
-          "literal": "\n\n【眺めのヒント】\n"
+          "literal": "\n\n【材料の調理方針となる前置き】\n"
         },
         {
-          "slot": "candidates"
+          "slot": "preface_direction"
         },
         {
-          "literal": "\n\n【ちょっとした取り合わせ】\n"
-        },
-        {
-          "slot": "tensions"
-        },
-        {
-          "literal": "\n\n【先に感じた場面】\n"
-        },
-        {
-          "slot": "scene_block"
-        },
-        {
-          "literal": "\n"
-        },
-        {
-          "slot": "irony_block"
-        },
-        {
-          "literal": "\n"
+          "literal": "\n\nここには句に使うと決めた元材料だけを示してある。完成した三行で全部を使い、取り合わせを一つの句へつなげてな。\n材料が1個や2個でも、三行あるからといって別の材料を足す必要はない。材料の数と行数は別や。一行に複数の材料を取り合わせてもええで。\n材料名をそのまま写す必要はない。同じ対象や性質の言い直しだけで一行を埋めず、次の行へ情景や関係を進めてな。\n前置きは元材料をどう料理するかの指針や。前置き本文を一個の材料として数えたり、前置きに出るだけの対象を元材料に足したりはせんといてな。\n"
         },
         {
           "slot": "constraint_section"
         },
         {
-          "literal": "\n【行の出典に使える材料】\n"
-        },
-        {
-          "slot": "source_atoms"
-        },
-        {
-          "literal": "\n三行それぞれに示された材料から詠んでな。返答は句の三行だけで、材料の管理番号は要らへんで。\n【今回の生成単位】\n"
+          "literal": "\n【今回の生成単位】\n"
         },
         {
           "slot": "generation_strategy"
@@ -183,13 +135,13 @@
       "role": "user",
       "segments": [
         {
-          "literal": "固定行は書き換えず、再生成対象の行だけを作り直す。\n今回使える材料は行ごとに示す。固定行へ渡した材料は除いてある。\n各行にコード検査の失敗理由がある。今使える材料で理由を解消してな。\n各行は材料の意味を保ち、自然な現代日本語にする。\n\n【今回の生成単位】\n\n対象行に示された材料から詠み直してな。材料の管理番号は要らへんで。\n"
+          "literal": "固定行は書き換えず、再生成対象の行だけを作り直す。\n初案で選んだ元材料と、調理方針の前置きは変わってへん。固定済みの行も含めた完成三行で、ここに示す元材料を全部使ってな。\n材料名の写経や同じ意味の言い直しで埋めず、三行の流れと意味を保って、示された形式・音数の失敗を直してな。\n前置き本文は元材料に数えへん。材料数を三つに揃える必要もないで。\n\n【今回の生成単位】\n"
         },
         {
           "slot": "generation_strategy"
         },
         {
-          "literal": "\n再生成対象に同じスロットの複数行が含まれる場合は、その全行を一つの流れとして作り直す。\n【現在の三行】\n"
+          "literal": "\n【現在の三行】\n"
         },
         {
           "slot": "current"
@@ -201,22 +153,16 @@
           "slot": "targets"
         },
         {
-          "literal": "\n【今回使える行ごとの材料】\n"
+          "literal": "\n【句に使う元材料】\n"
         },
         {
-          "slot": "atoms"
+          "slot": "poem_materials"
         },
         {
-          "literal": "\n【見どころの詩的解釈】\n"
+          "literal": "\n\n【材料の調理方針となる前置き】\n"
         },
         {
-          "slot": "grounding_scene"
-        },
-        {
-          "literal": "\n"
-        },
-        {
-          "slot": "workshop_context"
+          "slot": "preface_direction"
         },
         {
           "slot": "constraints"
@@ -284,7 +230,7 @@
   "form": "かたち:\n- 3行（改行で区切る）。五・七・五（各行±1音までゆるく）\n- ひらがなとカタカナだけ。漢字は一文字も使わない（土→つち、夜→よる、闇→やみ、森→もり、灯→ひ）\n- 場面メモが漢字でも、句にするときは全部かな\n- 句以外の前置きや説明は入れない",
   "strategy": {
     "whole_poem": "一句全体方式: 三行を一つの完成形として組み立てる。上から順に独立採用せず、三行全体の流れと着地を優先する。",
-    "three_slot": "三点スロット方式: 上五・中七・下五をそれぞれ独立した観察点として組み立てる。",
+    "three_slot": "三点スロット方式: 三行の表現と音数を行ごとに整える。材料の数を三つに揃える必要はない。",
     "one_plus_two": "前1＋後2方式: 上五に入口や印象を置き、中七と下五を一続きの展開として組み立てる。",
     "two_plus_one": "前2＋後1方式: 上五と中七で場面を作り、下五を独立した着地や印象として組み立てる。"
   },
@@ -323,7 +269,7 @@
     ],
     "haiku_scene": [
       {
-        "literal": "前回の返答は、内容の採否以前に現行JSON契約へ一致しなかった。\n契約不一致: "
+        "literal": "前回の返答を材料選択のJSONとして読み取れなかった。\n契約不一致: "
       },
       {
         "slot": "errors"
@@ -335,13 +281,7 @@
         "slot": "previous"
       },
       {
-        "literal": "\n現行JSON Schema:\n{\"$defs\":{\"_SceneClause\":{\"additionalProperties\":false,\"properties\":{\"text\":{\"minLength\":1,\"title\":\"Text\",\"type\":\"string\"},\"basis_atom_ids\":{\"items\":{\"minLength\":1,\"type\":\"string\"},\"minItems\":1,\"title\":\"Basis Atom Ids\",\"type\":\"array\"},\"claim_class\":{\"enum\":[\"factual\",\"interpretive\"],\"title\":\"Claim Class\",\"type\":\"string\"}},\"required\":[\"text\",\"basis_atom_ids\",\"claim_class\"],\"title\":\"_SceneClause\",\"type\":\"object\"}},\"additionalProperties\":false,\"properties\":{\"found\":{\"title\":\"Found\",\"type\":\"boolean\"},\"clauses\":{\"items\":{\"$ref\":\"#/$defs/_SceneClause\"},\"maxItems\":3,\"title\":\"Clauses\",\"type\":\"array\"},\"motifs\":{\"items\":{\"type\":\"string\"},\"title\":\"Motifs\",\"type\":\"array\"},\"focus\":{\"items\":{\"type\":\"string\"},\"title\":\"Focus\",\"type\":\"array\"},\"confidence\":{\"anyOf\":[{\"type\":\"number\"},{\"type\":\"integer\"}],\"ge\":0.0,\"le\":1.0,\"title\":\"Confidence\"}},\"required\":[\"found\",\"clauses\",\"motifs\",\"focus\",\"confidence\"],\"title\":\"_Scene\",\"type\":\"object\"}\nリクエスト固有制約:\natom IDは次の文字列から意味に合うものだけを正確にコピーする: "
-      },
-      {
-        "slot": "ids"
-      },
-      {
-        "literal": "\n最初に示した同じ入力をもう一度判定し、プロンプトに記載された現行の形で、JSONオブジェクトを1つだけ返す。旧形式、説明文、コードフェンスは禁止。候補にないIDや値を補作しない。"
+        "literal": "\n同じ候補から、前置きで取り上げた material_id と句に使う部分集合を返してな。前置きの材料が1〜3個なら全件を残す。\n形: {\"preface_material_ids\": [\"m01\", \"m02\"], \"poem_material_ids\": [\"m01\", \"m02\"]}"
       }
     ],
     "haiku_draft": [

@@ -1,4 +1,4 @@
-//! 観測由来の材料を割り当てて三行の川柳を生成し、形式・音数を確認する。
+//! 前置きで選んだ元材料と調理方針から三行の川柳を生成し、形式・音数を確認する。
 //! 不合格行の再生成回数と材料の使い分けはRustが管理し、Backendへ生成と読み整形を依頼する。
 //! ここで返すのは採否と行ごとに渡した材料。発句時刻、現在句の更新、保存、音声配送はdialogue側が担当する。
 pub mod companions;
@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::future::Future;
 
-pub const PROMPT_VARIANT: &str = "assigned_materials_v3_no_judge";
+pub const PROMPT_VARIANT: &str = "preface_materials_v4_shared_pool";
 /// 一つの材料とその出典。IDと参照先で材料の割当・派生元・保存した資料を追跡する。
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SourceAtom {

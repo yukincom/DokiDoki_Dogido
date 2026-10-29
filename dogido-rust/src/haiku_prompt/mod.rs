@@ -68,9 +68,7 @@ pub fn messages(request: &StructuredRequest) -> Result<Vec<ChatMessage>> {
     let d = Value::Object(request.details.clone());
     let mut slots = BTreeMap::new();
     let structure = structure(&d);
-    let poetic = array(&d["source_atoms"])
-        .iter()
-        .any(|a| a["kind"] == "poetic_interpretation");
+    let poetic = !clean(&d["preface_direction"]).is_empty();
     slots.insert(
         "spirit".into(),
         ASSETS["spirit"][format!("{}{}", u8::from(structure), u8::from(poetic))]
@@ -201,29 +199,22 @@ pub fn messages(request: &StructuredRequest) -> Result<Vec<ChatMessage>> {
             )
         }),
     );
-    if d["available_line_materials"].is_array() {
-        // 初案・再生成で使える材料は呼出元が絞ったものだけ。元の全材料を別欄で再提示しない。
-        let available = available_materials(&d);
-        for key in ["materials", "source_atoms", "atoms"] {
-            slots.insert(key.into(), available.clone());
-        }
-        for key in [
-            "candidates",
-            "tensions",
-            "scene_block",
-            "irony_block",
-            "grounding_scene",
-            "workshop_context",
-        ] {
-            slots.insert(key.into(), String::new());
-        }
-        let shared = join(&d["shared_poetic_context"], "\n");
-        if !shared.is_empty() {
-            let shared = format!("一句全体の雰囲気の参考（実測事実ではない）: {shared}");
-            slots.insert("scene_block".into(), shared.clone());
-            slots.insert("grounding_scene".into(), shared);
-        }
-    }
+    slots.insert(
+        "preface_selection_context".into(),
+        spaced_json(&json!({
+            "description":d["irony"]["description"], "elements":d["irony"]["elements"],
+            "focus":d["irony"]["focus"]
+        })),
+    );
+    slots.insert(
+        "preface_material_candidates".into(),
+        spaced_json(&d["preface_material_candidates"]),
+    );
+    slots.insert("poem_materials".into(), poem_materials(&d));
+    slots.insert(
+        "preface_direction".into(),
+        or_none(clean(&d["preface_direction"])),
+    );
     let mut result: Vec<ChatMessage> = ASSETS[kind]
         .as_array()
         .context("missing haiku template")?
@@ -276,13 +267,6 @@ pub fn messages(request: &StructuredRequest) -> Result<Vec<ChatMessage>> {
             .unwrap()
             .content
             .push_str(asset("revision_suffix"));
-    }
-    if matches!(kind, "haiku_draft" | "haiku_line_regeneration")
-        && truth(&d["background_companions"])
-    {
-        result.last_mut().unwrap().content.push_str(&format!(
-            "\n同行ペットの補助材料: {}\n主題は今回選んだ情景を優先。この個体は必要なら添景に使える。名前と種名は同じ個体の別表現。\n",
-            spaced_json(&d["background_companions"])));
     }
     Ok(result)
 }

@@ -241,34 +241,30 @@ pub(super) fn constraint_section(d: &Value) -> String {
         format!("\n読みのメモ:\n{text}\n")
     }
 }
-/// 自動発句の対象行へ渡す材料の本文。管理用IDを返答契約へ持ち込まない。
-/// 話された内容・観測・一般的性質の区別は残し、材料と完成行の意味一致は認定しない。
-pub(super) fn available_materials(d: &Value) -> String {
-    array(&d["available_line_materials"])
-        .iter()
-        .map(|r| {
-            let label = match r["line_index"].as_u64() {
-                Some(0) => "上五",
-                Some(1) => "中七",
-                Some(2) => "下五",
-                _ => "対象行",
-            };
-            let material = array(&r["materials"])
-                .iter()
-                .map(|a| {
-                    format!(
-                        "  - {}（種類: {}、使える範囲: {}）",
-                        clean(&a["text"]),
-                        clean(&a["claim_class"]),
-                        join(&a["claim_scopes"], "、")
-                    )
-                })
-                .collect::<Vec<_>>()
-                .join("\n");
-            format!("{label}で今使える材料:\n{material}")
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
+/// 三行共通の元材料を出典ごとに提示する。前置き・管理IDを材料本文に混ぜない。
+pub(super) fn poem_materials(d: &Value) -> String {
+    or_none(
+        array(&d["available_poem_materials"])
+            .iter()
+            .enumerate()
+            .map(|(i, group)| {
+                let facts = array(&group["facts"])
+                    .iter()
+                    .map(|a| {
+                        format!(
+                            "  - {}（種類: {}、使える範囲: {}）",
+                            clean(&a["text"]),
+                            clean(&a["claim_class"]),
+                            join(&a["claim_scopes"], "、")
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                format!("材料{}（名称と説明を合わせて一つ）:\n{facts}", i + 1)
+            })
+            .collect::<Vec<_>>()
+            .join("\n"),
+    )
 }
 /// 出典atomを、本文・主張種別・許容範囲・基底出典が追える一覧へ変える。
 /// grounding_atom_numbersがある場合はatom_idとbasisを同じ番号表へ置換し、照合応答の参照先を揃える。

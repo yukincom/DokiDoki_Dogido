@@ -1,10 +1,10 @@
 //! 一回の発句について、受け取った観測と読み・会話材料を固定し、生成前後の段階をつなぐ。
-//! 通常はcaptureで見どころ抽出要求を作り、inspirationで前置きとscene要求、materialsで三行生成入力を返す。
+//! 通常はcaptureで見どころ抽出要求を作り、inspirationで前置きと材料選択要求、materialsで三行生成入力を返す。
 //! 生成器の採用結果をemissionで表記・読み・行出典を持つ発句記録へ変換する。LLM無効時は固定句の経路を使う。
 //! モデル呼出し、前置きの配送完了、発句時刻と保存は呼出側が担当し、この値はその一件分の準備状態を持つ。
 use super::{
     GroundedHaikuResult, Input, SourceAtom, StructuredRequest,
-    context::{Context as HaikuContext, Irony, Scene, scene_for_spoken_irony},
+    context::{Context as HaikuContext, Irony, Scene},
     materials::{self as selection, ReadingCorrection, ReadingSnapshot, RuntimeRead},
     source_atoms::*,
 };
@@ -20,6 +20,8 @@ use serde_json::{Map, Value, json};
 use std::future::Future;
 pub mod fallback;
 mod materials;
+#[path = "preparation/selection.rs"]
+mod preface_selection;
 pub use materials::dialogue_material;
 /// 観測イベントだけでは復元できない呼出側の文脈。所持品の順序は受信JSONの順序を保持する。
 /// 現在構造物とプレイヤー名も同じ発句の準備へ渡し、途中のsession更新を直接読みに行かない。
@@ -109,7 +111,6 @@ pub struct Preparation {
     atoms: Vec<SourceAtom>,
     materials: Map<String, Value>,
     fixed_text: Option<String>,
-    background_companions: Vec<CatalogSourceSnapshot>,
 }
 fn take(s: &str, n: usize) -> String {
     s.chars().take(n).collect()
@@ -229,8 +230,6 @@ impl Preparation {
             );
         }
         let primary_event = super::companions::primary_event(&start.event, &topics);
-        let background_companions =
-            super::companions::background(&start.event, &primary_event, &readings);
         let world = crate::world_catalog::catalog();
         let context = selection::capture(
             &primary_event,
@@ -257,7 +256,6 @@ impl Preparation {
             atoms: vec![],
             materials: Map::new(),
             fixed_text: None,
-            background_companions,
         };
         let request = if job.settings.llm_enabled {
             Some(job.request("haiku_irony", job.context.irony_details()))
@@ -315,7 +313,7 @@ impl Preparation {
                 .insert("haiku_constraints".into(), constraints);
         }
     }
-    /// Context段階の見どころ応答を読み、前置きと次のhaiku_scene要求を返す。
+    /// Context段階の見どころ応答を読み、前置きと次の材料選択用haiku_scene要求を返す。
     /// 応答を解釈できなければ見どころなしで続ける。返したspoken_textの配送は呼出側の仕事になる。
     pub fn inspiration(&mut self, payload: &Value) -> Result<InspirationOutput> {
         ensure!(
@@ -326,6 +324,13 @@ impl Preparation {
         let spoken = compose_inspiration_speech(irony.found, &irony.description);
         self.seed(irony, Some(&spoken));
         self.stage = Stage::Inspiration;
+        let mut details = self.context.scene_details(Some(&self.irony));
+        details.insert(
+            "preface_material_candidates".into(),
+            preface_selection::prompt_rows(&preface_selection::candidates(
+                &self.context.source_atoms,
+            )),
+        );
         Ok(InspirationOutput {
             text: if self.irony.found {
                 strip(&self.irony.description).into()
@@ -333,46 +338,33 @@ impl Preparation {
                 String::new()
             },
             spoken_text: spoken,
-            request: self.request("haiku_scene", self.context.scene_details(Some(&self.irony))),
+            request: self.request("haiku_scene", details),
         })
     }
-    /// 前置きの後のscene応答を、生成器用Inputと保存用materialsへまとめる。
-    /// sceneが不成立でも一次観測の出典は残し、会話・前置き由来・背景同行者の出典を区別して併合する。
-    /// 前置きを配送してから呼ぶ順序は呼出側が守る。この関数は保存した前置き文との対応を確認する。
+    /// 前置きに使った元材料の選択結果を、生成器用Inputと保存用snapshotへまとめる。
+    /// 前置き本文は調理方針だけに保持し、生成用の一次資料や行別資料へ追加しない。
     pub fn materials(&mut self, payload: &Value) -> Result<MaterialsOutput> {
         ensure!(
             self.stage == Stage::Inspiration,
             "invalid haiku preparation stage"
         );
-        let mut scene =
-            Scene::from_mapping(payload, &self.context.source_atoms).unwrap_or_default();
+        let selected =
+            preface_selection::Selection::from_payload(payload, &self.context.source_atoms);
+        self.atoms = selected.as_ref().map(|s| s.atoms()).unwrap_or_default();
         let spoken = value_text(self.materials.get("preface_spoken"));
-        let spoken = strip(&spoken);
         let core = strip(&self.irony.description);
         let was_spoken = self.irony.found
             && !core.is_empty()
             && spoken
                 .trim_end_matches(['。', '！', '？', '!', '?'])
                 .contains(core.trim_end_matches(['。', '！', '？', '!', '?']));
-        if was_spoken {
-            scene = scene_for_spoken_irony(&self.irony, &scene, &self.context.source_atoms);
-        }
-        // 説明が実際の前置き文に含まれる場合だけ、その説明に由来する節を出典候補へ加える。
-        // 対応しないsceneの説明を「既に共有した見どころ」として三行の根拠へ混ぜないため。
-        let clauses = if was_spoken {
-            scene.clauses.as_slice()
-        } else {
-            &[]
+        // 読みの既存制約に渡すmotifだけを保持する。生成した前置きの節は材料にしない。
+        let scene = Scene {
+            found: self.irony.found,
+            motifs: self.irony.elements.clone(),
+            focus: self.irony.focus.clone(),
+            ..Scene::default()
         };
-        self.atoms = merge_source_atoms(&[
-            self.context.source_atoms.clone(),
-            atoms_from_preface_clauses(clauses),
-            atom_from_poetic_interpretation(clauses)
-                .into_iter()
-                .collect(),
-            materials::conversation_atoms(&self.dialogue),
-            atoms_from_catalog_sources(&self.background_companions, 0, 1),
-        ]);
         self.materials = materials::seed(
             &self.event,
             &self.context,
@@ -380,7 +372,7 @@ impl Preparation {
             &scene,
             self.interpretation.as_deref(),
             &self.atoms,
-            (!spoken.is_empty()).then_some(spoken),
+            (!spoken.is_empty()).then_some(spoken.as_str()),
         );
         let origin = if was_spoken {
             "spoken_preface"
@@ -400,22 +392,32 @@ impl Preparation {
         if let Some(c) = &constraints {
             self.materials.insert("haiku_constraints".into(), c.clone());
         }
-        let mut details = self.context.prompt_details(Some(&self.irony), Some(&scene));
-        if !self.background_companions.is_empty() {
-            let companions = json!(
-                self.background_companions
-                    .iter()
-                    .map(CatalogSourceSnapshot::to_dict)
-                    .collect::<Vec<_>>()
-            );
-            details.insert("background_companions".into(), companions.clone());
-            self.materials
-                .insert("background_companions".into(), companions);
-        }
-        if truth(&self.dialogue) {
-            details.insert("player_dialogue_material".into(), self.dialogue.clone());
-        }
+        // 句へ渡す情報をここで閉じる。未選択の全観測や背景ペットを別欄から追加しない。
+        let mut details = Map::new();
+        details.insert(
+            "has_structure".into(),
+            json!(
+                !self.context.structure_label.is_empty() || !self.context.structure_id.is_empty()
+            ),
+        );
         details.insert("haiku_constraints".into(), constraints.into());
+        details.insert(
+            "preface_direction".into(),
+            self.interpretation.clone().unwrap_or_default().into(),
+        );
+        match selected {
+            Ok(selected) => {
+                let count = selected.preface_materials.len();
+                details.insert("preface_material_count".into(), json!(count));
+                self.materials
+                    .insert("preface_material_selection".into(), json!(selected));
+            }
+            Err(error) => {
+                details.insert("material_selection_error".into(), error.to_string().into());
+                self.materials
+                    .insert("material_selection_error".into(), error.to_string().into());
+            }
+        }
         self.stage = Stage::Materials;
         Ok(MaterialsOutput {
             input: Input {
