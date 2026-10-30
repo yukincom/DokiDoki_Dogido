@@ -9,6 +9,8 @@
 追加収集：[2026-10-28の実機フィードバック7件と上下2分類の追加案](curation/2026-10-28-live-feedback/README.md)（学習・本体反映前）。
 続き：[2026-10-30の実機4件と音チェックの検討案](curation/2026-10-30-live-feedback/README.md)（学習・本体反映前）。
 
+CSVで追加して無料T4用のNotebook・ZIPを作る：[教材作成の使い方](教材作成/使い方.md)。
+
 ## v1.7の記録
 
 ModernBERT-Jaの日本語依頼5分類を試すデータと学習・評価補助です。以下はv1.7のデータ・評価記録です。後に採用されたv1.9 seed43の本体接続と現在発話だけの入力契約は[接続記録](../../docs/2026-10-15-modernbert-integration-preparation.md)を参照してください。

@@ -11,6 +11,8 @@ __pycache__/
 .dogido_training/
 .dogido_reference/
 .dogido_tools/
+/dev_tools/request_classifier/教材作成/出力/
+/apps/ドギド 学習教材.app/
 # ローカル実行ログとPythonのビルド生成物は保存用ブランチにも含めない
 /logs/
 /build/
