@@ -2,15 +2,16 @@
   "schema": "user_runtime_feedback.v1",
   "date": "2026-10-30",
   "status": "collected_not_integrated",
-  "feedback_count": 2,
-  "candidate_count": 2,
+  "feedback_count": 3,
+  "candidate_count": 3,
   "pending_count": 0,
   "mode_counts": {
-    "senryu": 1,
+    "senryu": 2,
     "normal": 1
   },
   "label_counts": {
-    "not_target": 2
+    "not_target": 2,
+    "senryu_line_upper": 1
   },
   "split": null,
   "new_synthetic_examples": 0,
@@ -19,7 +20,7 @@
   "training_performed": false,
   "runtime_modified": false,
   "previous_collection": "../2026-10-28-live-feedback",
-  "combined_feedback_count": 9,
+  "combined_feedback_count": 10,
   "label_suggestions": [
     {
       "display_name": "音チェック",
@@ -30,8 +31,9 @@
     }
   ],
   "sha256": {
-    "README.md": "7e9f4074efc2a24c5ed30e7a8d142b23a76301fd2ac2b51675934b80d1f6f104",
-    "candidates.jsonl": "c61e8d04ca29ea77abb8c6ddceed4288251ebd01bc6cb795930bc31d8091119e",
-    "evidence.jsonl": "3a006cf787f88fcfedcc0479e7c1cc20da534111a33f41d6c1a4448813e00bf3"
-  }
+    "README.md": "efc73870b8ef0d410042c577fe8b9d5b55b0001ee452c7bafac10d20c3ed41d0",
+    "candidates.jsonl": "10c0c73fc5d867c2370c82e371b166791e4f0e49c938c279da7e85568cabecf4",
+    "evidence.jsonl": "535a6fd6ec00fef0da0447008eb27177a261492b3399fe0e91777687d2f8d349"
+  },
+  "confirmed_positive_count": 1
 }
