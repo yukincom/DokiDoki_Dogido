@@ -22,6 +22,7 @@ def prepare_assets(project, target):
         folder.mkdir(parents=True)
         for name in ("labels.json", "train.jsonl", "dev.jsonl", "test.jsonl"):
             shutil.copyfile(classifier / "releases" / release / name, folder / name)
+    (target / "baseline-sources.json").write_text(json.dumps(releases, indent=2) + "\n", encoding="utf-8")
     (target / "shared").mkdir()
     for name in ("dataset.py", "evaluation.py", "train.py", "labels.json"):
         shutil.copyfile(classifier / name, target / "shared" / name)
@@ -30,6 +31,7 @@ def prepare_assets(project, target):
         shutil.copyfile(classifier / "curation" / (day + "-live-feedback") / "evidence.jsonl",
                         target / "evidence" / (day + ".jsonl"))
     shutil.copyfile(SOURCE / "train_colab.py", target / "train_colab.py")
+    shutil.copyfile(SOURCE / "notebook_controls.py", target / "notebook_controls.py")
     hashes = {str(p.relative_to(target)): hashlib.sha256(p.read_bytes()).hexdigest()
               for p in sorted(target.rglob("*")) if p.is_file()}
     (target / "baseline-sha256.json").write_text(json.dumps(hashes, indent=2) + "\n", encoding="utf-8")
@@ -78,7 +80,7 @@ try bitmap.representation(using: .png, properties: [:])!.write(to: URL(fileURLWi
         subprocess.run(["iconutil", "-c", "icns", str(iconset), "-o", str(resources / "Training.icns")], check=True)
         info = {"CFBundleName": "ドギド 学習教材", "CFBundleDisplayName": "ドギド 学習教材",
                 "CFBundleIdentifier": "local.dogido.training-builder", "CFBundleExecutable": executable.name,
-                "CFBundlePackageType": "APPL", "CFBundleShortVersionString": "0.1.0", "CFBundleVersion": "1",
+                "CFBundlePackageType": "APPL", "CFBundleShortVersionString": "0.2.0", "CFBundleVersion": "2",
                 "CFBundleIconFile": "Training.icns", "LSMinimumSystemVersion": "13.0", "NSHighResolutionCapable": True,
                 "DogidoTrainingWorkspace": str(project / "dev_tools/request_classifier/教材作成"),
                 "CFBundleDocumentTypes": [{"CFBundleTypeName": "学習用CSV", "CFBundleTypeRole": "Viewer",

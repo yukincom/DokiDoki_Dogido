@@ -15,7 +15,8 @@ import uuid
 import zipfile
 
 HERE = Path(__file__).resolve().parent
-HEADERS = ["使う", "モード", "発話", "正解分類", "メモ", "グループ"]
+HEADERS = ["使う", "モード", "発話", "正解分類", "メモ", "グループ", "用途"]
+SPLIT_NAMES = {"": "train", "学習": "train", "train": "train", "調整": "dev", "dev": "dev", "テスト": "test", "test": "test"}
 MODE_NAMES = {"通常": "normal", "通常対話": "normal", "normal": "normal", "川柳": "senryu", "senryu": "senryu"}
 LABEL_NAMES = {
     "対象外": "not_target", "対象外・その他": "not_target", "モブ情報": "enemy_information",
@@ -89,8 +90,13 @@ def read_csv(paths):
                 raise ValueError(f"{where}: 発話が空です。")
             label = row["正解分類"].strip()
             label = LABEL_NAMES.get(label, label)
+            split = SPLIT_NAMES.get(row.get("用途", "").strip())
+            if split is None:
+                raise ValueError(f"{where}: 用途は「学習」「調整」「テスト」にしてください。空欄は学習です。")
             identity = (mode, normalized(text))
             if identity in seen:
+                if seen[identity]["split"] != split:
+                    raise ValueError(f"{where}: 同じ発話が異なる用途にあります（{seen[identity]['where']}）。")
                 if seen[identity]["label"] != label:
                     raise ValueError(f"{where}: 同じ発話に異なる正解分類があります（{seen[identity]['where']}）。")
                 skipped.append({"where": where, "reason": "CSV内の同じ発話・同じ分類", "text": text})
@@ -99,11 +105,11 @@ def read_csv(paths):
                       "group_id": row.get("グループ", "").strip() or "csv_" + sha((mode + normalized(text)).encode())[:20],
                       "text": text, "context": [], "label": label, "needs_clarification": False,
                       "tags": ["csv_addition"], "source": "user_example", "rationale": row.get("メモ", ""),
-                      "where": where, "mode": mode}
+                      "where": where, "mode": mode, "split": split}
             seen[identity] = result
             rows.append(result)
     if not rows:
-        raise ValueError("学習に使う行がありません。CSVの「使う」列も確認してください。")
+        raise ValueError("使う行がありません。CSVの「使う」列も確認してください。")
     return rows, skipped, sources
 
 
@@ -114,38 +120,59 @@ def prepare_profile(mode, additions, assets):
         labels.update(look_relative_up=16, look_relative_down=17)
     splits = {s: [json.loads(line) for line in (base / f"{s}.jsonl").read_text(encoding="utf-8").splitlines()]
               for s in ("train", "dev", "test")}
+    baseline_counts = {s: len(rows) for s, rows in splits.items()}
+    validate_splits(splits, labels)
     index = {normalized(r["text"]): (s, r) for s, rows in splits.items() for r in rows}
     groups = {r["group_id"]: s for s, rows in splits.items() for r in rows}
     changes = []
     for addition in additions:
         label, where = addition["label"], addition["where"]
+        target_split = addition["split"]
         if label not in labels:
             raise ValueError(f"{where}: {mode}で使えない分類「{label}」です。分類一覧.csvを確認してください。")
         key = normalized(addition["text"])
         if key in index:
             split, original = index[key]
-            if split != "train":
+            if split != target_split:
                 raise ValueError(f"{where}: 既存の{split}評価用データと同じ発話です。学習へは追加できません。")
             old = original["label"]
             if old != label:
+                if split != "train":
+                    raise ValueError(f"{where}: 固定の{split}の正解分類は変更できません。")
                 original["label"] = label
                 changes.append({"where": where, "action": "train_label_corrected", "id": original["id"], "old_label": old, "label": label})
             else:
-                changes.append({"where": where, "action": "already_in_train", "id": original["id"], "label": label})
+                changes.append({"where": where, "action": "already_in_" + split, "id": original["id"], "label": label})
             continue
-        if groups.get(addition["group_id"]) in ("dev", "test"):
+        if addition["group_id"] in groups and groups[addition["group_id"]] != target_split:
             raise ValueError(f"{where}: 評価用データと同じグループです。学習へは追加できません。")
-        row = {k: v for k, v in addition.items() if k not in ("where", "mode")}
-        splits["train"].append(row)
-        index[key] = ("train", row)
-        groups[row["group_id"]] = "train"
-        changes.append({"where": where, "action": "added_to_train", "id": row["id"], "label": label})
+        row = {k: v for k, v in addition.items() if k not in ("where", "mode", "split")}
+        splits[target_split].append(row)
+        index[key] = (target_split, row)
+        groups[row["group_id"]] = target_split
+        changes.append({"where": where, "action": "added_to_" + target_split, "id": row["id"], "label": label})
     missing = set(labels) - {r["label"] for r in splits["train"]}
     if missing:
         names = "、".join(next((n for n, value in LABEL_NAMES.items() if value == label), label) for label in sorted(missing))
         raise ValueError(f"{mode}: 学習例が0件の分類があります: {names}。上下を使う場合は両方の例を追加してください。")
-    # 元の評価集合は変えず、新ラベルの評価例の不足は成績の範囲へ明記する。
-    return labels, splits, changes
+    validate_splits(splits, labels)
+    return labels, splits, changes, baseline_counts
+
+
+def validate_splits(splits, labels):
+    """固定教材とCSVを合わせた後も、原文・グループ・IDの分割混入を検査する。"""
+    seen = {name: {} for name in ("発話", "グループ", "ID")}
+    for split, rows in splits.items():
+        if not rows:
+            raise ValueError(f"{split}: 教材が空です。")
+        for row in rows:
+            if row["context"] or row["label"] not in labels:
+                raise ValueError(f"{split}: 履歴付き教材または不明な分類です。")
+            for name, value in (("発話", normalized(row["text"])), ("グループ", row["group_id"]), ("ID", row["id"])):
+                previous = seen[name].get(value)
+                if previous is not None and previous != split:
+                    raise ValueError(f"同じ{name}が{previous}と{split}に混入しています: {value}")
+                seen[name][value] = split
 
 
 def cell(kind, source):
@@ -155,19 +182,23 @@ def cell(kind, source):
     return result
 
 
-def make_notebook(zip_name, digest, bundle_id, counts):
-    description = "\n".join(f"- {mode}: train {v['train']} / dev {v['dev']} / test {v['test']}" for mode, v in counts.items())
+def make_notebook(zip_name, digest, bundle_id, profiles):
+    description = "\n".join(
+        f"- {mode}: 元教材 {sum(v['baseline_counts'].values())}件 ＋ CSV新規 {sum(v['added_counts'].values())}件 → "
+        f"学習 {v['counts']['train']} / 調整 {v['counts']['dev']} / テスト {v['counts']['test']}件"
+        for mode, v in profiles.items())
     cells = [cell("markdown", f"""# ドギド：無料T4で分類器を学習
 
 1. **ランタイム → ランタイムのタイプを変更 → T4 GPU** にします。無料T4の割り当て・利用時間は保証されません。
-2. 上から順番にセルを実行し、同時に作られた `{zip_name}` をアップロードします。
-3. 通常対話と川柳は別々のモデルとして、seed 42で順番に学習します。モデルは公開ベースのModernBERT-Ja 30Mから学習します。
-4. 中断に備え、下の「Google Driveに途中保存する」をオンにすることを推奨します。
-5. 終わったら結果ZIPをダウンロードします。本体への採用は別途行います。
+2. 上から順番にセルを実行し、同時に作られた `{zip_name}` をアップロードします。最後に操作ボタンが表示されます。
+3. **「学習する」→「テストする」→「結果ZIPを保存」** の順に押します。テストだけやり直しても再学習しません。
+4. 通常対話と川柳は別々のモデルとして、seed 42で順番に学習します。公開ベースのModernBERT-Ja 30Mから、前の教材とCSVの追加分を合わせて学習し直します。採用済みモデルへの追加学習ではありません。
+5. 中断に備え、下の「Google Driveに途中保存する」をオンにすることを推奨します。本体への採用は別途行います。
 
 {description}
 
-既存dev/testは学習に使いません。既知の診断集合であり、未知の実機精度の保証にはなりません。
+調整devは最良epochの選択だけに使い、テストtestは学習にも選択にも使いません。
+既存dev/testは既知の診断集合です。新しいテストはCSVの用途を「テスト」にして追加できます。
 学習は無料枠を想定した1シードです。以前の複数シード・4専門モデルの比較実験とは条件が異なります。
 """), cell("code", """import torch
 if not torch.cuda.is_available() or "T4" not in torch.cuda.get_device_name(0):
@@ -196,7 +227,10 @@ for name, expected in checksums.items():
     if hashlib.sha256((ROOT / name).read_bytes()).hexdigest() != expected:
         raise ValueError("教材が変更されています: " + name)
 print("教材を確認しました:", ROOT)
-"""), cell("code", """#@title 学習と途中保存
+protocol = json.loads((ROOT / 'training-protocol.json').read_text())
+for mode, profile in protocol['profiles'].items():
+    print(mode, '元教材:', profile['baseline_counts'], 'CSV新規:', profile['added_counts'], '合計:', profile['counts'])
+"""), cell("code", """#@title 途中保存と操作ボタン
 Google_Driveに途中保存する = True #@param {type:"boolean"}
 if Google_Driveに途中保存する:
     from google.colab import drive
@@ -204,13 +238,10 @@ if Google_Driveに途中保存する:
     OUTPUT = Path('/content/drive/MyDrive/ドギド学習') / ROOT.name
 else:
     OUTPUT = ROOT / 'results'
-import sys, subprocess
-subprocess.run([sys.executable, '-u', str(ROOT / 'train_colab.py'), '--root', str(ROOT), '--output', str(OUTPUT)], check=True)
-"""), cell("code", """#@title 結果をダウンロード
-result_zip = OUTPUT / 'dogido-training-results.zip'
-if not result_zip.is_file():
-    raise RuntimeError("学習完了後にこのセルを実行してください。")
-files.download(str(result_zip))
+import sys
+sys.path.insert(0, str(ROOT))
+from notebook_controls import show_controls
+controls = show_controls(ROOT, OUTPUT)
 """)]
     return encoded({"nbformat": 4, "nbformat_minor": 5, "metadata": {
         "colab": {"name": "ドギド_T4学習.ipynb", "provenance": []}, "accelerator": "GPU", "gpuClass": "standard",
@@ -230,24 +261,31 @@ def build(paths, assets=None, output_parent=None):
         additions = [row for row in rows if row["mode"] == mode]
         if not additions:
             continue
-        labels, splits, changes = prepare_profile(mode, additions, assets)
+        labels, splits, changes, baseline_counts = prepare_profile(mode, additions, assets)
         for split, values in splits.items():
             files[f"data/{mode}/{split}.jsonl"] = (
-                (assets / "baseline" / mode / f"{split}.jsonl").read_bytes() if split in ("dev", "test") else
+                (assets / "baseline" / mode / f"{split}.jsonl").read_bytes() if split in ("dev", "test") and len(values) == baseline_counts[split] else
                 "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in values).encode())
         files[f"data/{mode}/labels.json"] = encoded(labels)
         profiles[mode] = {"labels": labels, "counts": {s: len(v) for s, v in splits.items()}, "changes": changes,
+                          "baseline_counts": baseline_counts,
+                          "added_counts": {s: sum(c['action'] == 'added_to_' + s for c in changes) for s in splits},
+                          "label_counts": {s: dict(Counter(r['label'] for r in values)) for s, values in splits.items()},
+                          "split_integrity": {"normalized_text_overlap": 0, "group_overlap": 0, "id_overlap": 0},
                           "train_label_counts": dict(Counter(r["label"] for r in splits["train"])),
                           "labels_without_test_examples": sorted(set(labels) - {r["label"] for r in splits["test"]})}
     for name in ("dataset.py", "evaluation.py", "train.py", "labels.json"):
         files["shared/" + name] = (assets / "shared" / name).read_bytes()
     files["train_colab.py"] = (assets / "train_colab.py").read_bytes()
+    files["notebook_controls.py"] = (assets / "notebook_controls.py").read_bytes()
     for path in sorted((assets / "evidence").glob("*.jsonl")):
         files["evidence/" + path.name] = path.read_bytes()
     for archive_name, raw, original_name in sources:
         files[archive_name] = raw
     bundle_id = datetime.now().strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:8]
-    protocol = {"schema": "dogido_csv_colab.v1", "bundle_id": bundle_id, "profiles": profiles,
+    protocol = {"schema": "dogido_csv_colab.v2", "bundle_id": bundle_id, "profiles": profiles,
+                "training_method": "公開ベースモデルから、前の教材とCSV追加分を合わせて再学習（採用モデルへの追加学習ではない）",
+                "baseline_sources": json.loads((assets / "baseline-sources.json").read_text(encoding="utf-8")),
                 "training": {"model": "sbintuitions/modernbert-ja-30m", "revision": "8cb03f54cb9e30e72459e5f1cedc6d89c7d8dcb5",
                              "seed": 42, "epochs": 10, "learning_rate": 5e-5, "batch_size": 16, "max_length": 128,
                              "dtype": "float32", "attention": "sdpa", "selection": "dev macro_f1, then dev loss, then earlier epoch"},
@@ -264,14 +302,29 @@ def build(paths, assets=None, output_parent=None):
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as archive:
             for name, raw in sorted(files.items()):
                 archive.writestr(name, raw)
-        counts = {mode: value["counts"] for mode, value in profiles.items()}
-        (stage / "ドギド_T4学習.ipynb").write_bytes(make_notebook(zip_path.name, sha(zip_path.read_bytes()), bundle_id, counts))
+        (stage / "ドギド_T4学習.ipynb").write_bytes(make_notebook(zip_path.name, sha(zip_path.read_bytes()), bundle_id, profiles))
         (stage / "生成結果.json").write_bytes(encoded(protocol))
-        report = ["# 教材を作成しました", "", "ドギド_T4学習.ipynbをColabで開き、T4 GPUを選んで教材.zipをアップロードしてください。", ""]
+        report = ["# 教材を作成しました", "", protocol['training_method'], "",
+                  "ドギド_T4学習.ipynbをColabで開き、T4 GPUを選んで教材.zipをアップロードしてください。",
+                  "最後のセルで「学習する」→「テストする」→「結果ZIPを保存」を押します。", "",
+                  "| モード | 元教材 | CSV新規 | 学習train | 調整dev | テストtest |", "|---|---:|---:|---:|---:|---:|"]
         for mode, profile in profiles.items():
-            report += [f"- {mode}: {len(profile['labels'])}分類、{profile['counts']}"]
+            c = profile['counts']
+            report += [f"| {mode} | {sum(profile['baseline_counts'].values())} | {sum(profile['added_counts'].values())} | {c['train']} | {c['dev']} | {c['test']} |"]
+        report += ["", "元の教材は全件を引き継ぎます。trainだけを学習し、devで選び、testはテストボタンで評価します。",
+                   "教材の中身/に用途別CSVを出力しました。同じ発話・グループ・IDの用途間混入は0件です。", ""]
+        for mode, profile in profiles.items():
             if profile["labels_without_test_examples"]:
                 report += ["  評価例がない分類: " + ", ".join(profile["labels_without_test_examples"]) + "。この分類の未知データへの精度は測定できません。"]
+            folder = stage / "教材の中身" / mode
+            folder.mkdir(parents=True)
+            for split, title in (("train", "学習"), ("dev", "調整"), ("test", "テスト")):
+                with (folder / (title + ".csv")).open("w", encoding="utf-8-sig", newline="") as stream:
+                    writer = csv.writer(stream)
+                    writer.writerow(["ID", "グループ", "発話", "正解分類"])
+                    for line in files[f"data/{mode}/{split}.jsonl"].decode().splitlines():
+                        row = json.loads(line)
+                        writer.writerow([row['id'], row['group_id'], row['text'], row['label']])
         report += [f"- 保留・重複で追加しなかったCSV行: {len(skipped)}件", "", "詳しい追加・訂正・重複の内訳は生成結果.jsonに保存しています。", "無料T4の利用可能時間は保証されません。Google Driveへの途中保存はNotebook上で選べます。", ""]
         (stage / "最初に読む.md").write_text("\n".join(report), encoding="utf-8")
         stage.rename(destination)
