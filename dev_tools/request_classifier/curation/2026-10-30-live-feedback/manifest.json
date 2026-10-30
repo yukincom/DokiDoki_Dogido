@@ -2,15 +2,15 @@
   "schema": "user_runtime_feedback.v1",
   "date": "2026-10-30",
   "status": "collected_not_integrated",
-  "feedback_count": 3,
-  "candidate_count": 3,
+  "feedback_count": 4,
+  "candidate_count": 4,
   "pending_count": 0,
   "mode_counts": {
     "senryu": 2,
-    "normal": 1
+    "normal": 2
   },
   "label_counts": {
-    "not_target": 2,
+    "not_target": 3,
     "senryu_line_upper": 1
   },
   "split": null,
@@ -20,20 +20,24 @@
   "training_performed": false,
   "runtime_modified": false,
   "previous_collection": "../2026-10-28-live-feedback",
-  "combined_feedback_count": 10,
+  "combined_feedback_count": 11,
   "label_suggestions": [
     {
       "display_name": "音チェック",
-      "scope": "今聞こえる音についての質問",
+      "scope": "モブに限定しない、現在聞こえる音全般についての質問",
       "status": "idea_not_adopted",
       "label": null,
-      "evidence_id": "live_20261030_report_02"
+      "evidence_id": "live_20261030_report_02",
+      "evidence_ids": [
+        "live_20261030_report_02",
+        "live_20261030_report_04"
+      ]
     }
   ],
   "sha256": {
-    "README.md": "efc73870b8ef0d410042c577fe8b9d5b55b0001ee452c7bafac10d20c3ed41d0",
-    "candidates.jsonl": "10c0c73fc5d867c2370c82e371b166791e4f0e49c938c279da7e85568cabecf4",
-    "evidence.jsonl": "535a6fd6ec00fef0da0447008eb27177a261492b3399fe0e91777687d2f8d349"
+    "README.md": "65c2789a7cf47afd45700e1a0f9bc1c8835429f91147e73443dc643c64d93e43",
+    "candidates.jsonl": "7e13cb17b0d21c85ad7d13e454bf67fdf97345eabaeaea36b393a57060e9b17f",
+    "evidence.jsonl": "2892447e91b75762f3c5b7a873ddb7bc759c4edc57bb5baac3fed45b68031307"
   },
   "confirmed_positive_count": 1
 }
