@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """見込み: 本体Javaの比較結果を通信JSONへ渡せばRustと同じ三状態を保てる。合格: fixtureが未比較・無変化・変化と4枚前参照を検査してeventを返す。範囲: 合成・保存画像と本体Java。GPU、HTTP、モデルは未確認。"""
+import argparse
+import json
 import os
 from pathlib import Path
 import shutil
@@ -34,20 +36,32 @@ def java_tools():
     return java, javac, gson
 
 
-def run_fixture(name, production_sources, *, input_bytes=b"", args=(), extra_sources=(), extra_classpath=()):
-    """本体ソースを読取り、専用一時ディレクトリでコンパイルする。依存不足やJava失敗を成功・skipへ変換しない。"""
+def compile_fixture(output, name, production_sources, *, extra_sources=(), extra_classpath=()):
+    """本体ソースからfixtureをコンパイルし、生成したクラスを起動する引数を返す。"""
     java, javac, gson = java_tools()
     source = REPO / "adapter/minecraft-fabric/src/main/java/dogido/fabric"
     files = [source / path for path in production_sources]
     files += [SUITE / f"java/dogido/fabric/screenshot/{name}.java", *extra_sources]
     classpath = os.pathsep.join([gson, *map(str, extra_classpath)])
+    subprocess.run([javac, "--release", "21", "-encoding", "UTF-8", "-cp", classpath, "-d", output, *map(str, files)], check=True)
+    return [java, "-Djava.awt.headless=true", "-cp", str(output) + os.pathsep + classpath,
+        "dogido.fabric.screenshot." + name]
+
+
+def run_fixture(name, production_sources, *, input_bytes=b"", args=(), extra_sources=(), extra_classpath=()):
     with tempfile.TemporaryDirectory(prefix="dogido-image-test-") as output:
-        subprocess.run([javac, "--release", "21", "-encoding", "UTF-8", "-cp", classpath, "-d", output, *map(str, files)], check=True)
-        return subprocess.run([java, "-Djava.awt.headless=true", "-cp", output + os.pathsep + classpath,
-            "dogido.fabric.screenshot." + name, *map(str, args)], input=input_bytes, capture_output=True)
+        command = compile_fixture(output, name, production_sources,
+            extra_sources=extra_sources, extra_classpath=extra_classpath)
+        return subprocess.run([*command, *map(str, args)], input=input_bytes, capture_output=True)
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--compile-to", type=Path, help="テスト所有のディレクトリで事前ビルドし、起動引数をJSONで返す")
+    args = parser.parse_args()
+    if args.compile_to is not None:
+        print(json.dumps(compile_fixture(args.compile_to, "BodyViewWireFixture", WIRE_PRODUCTION)))
+        return 0
     result = run_fixture("BodyViewWireFixture", WIRE_PRODUCTION,
         input_bytes=sys.stdin.buffer.read())
     sys.stdout.buffer.write(result.stdout)

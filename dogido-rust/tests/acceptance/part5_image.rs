@@ -229,6 +229,7 @@ async fn acceptance_image_explicit_capture_survives_changed_pose_and_missing_bod
 // 見込み: Javaの比較結果をそのまま受ければ、通信境界で未比較と変化を取り違えない。合格: 3状態で画像を保持、referenceとcellsが受信前後で一致し、changedだけ機会1回。確認範囲: 合成画素の実比較・符号化・JSON・Rust受信。
 #[tokio::test]
 async fn acceptance_image_java_protocol_to_rust_receipt_preserves_three_states() {
+    let wire_fixture = JavaWireFixture::compile();
     for (scenario, expected_change) in [("unchanged", false), ("changed", true), ("unknown", false)]
     {
         let (dialogue, source) = server();
@@ -238,7 +239,7 @@ async fn acceptance_image_java_protocol_to_rust_receipt_preserves_three_states()
             let session = &data.sessions["s"];
             json!({"commands":session.visual.commands(now),"event":session.latest,"captured_at":now,"scenario":scenario})
         };
-        let event = java_event(&input);
+        let event = wire_fixture.event(&input);
         assert_eq!(event.command_results.len(), 1);
         let wire = &event.command_results[0].body_view.as_ref().unwrap().0["scene_comparison"];
         assert_eq!(
@@ -302,32 +303,59 @@ async fn acceptance_image_java_protocol_to_rust_receipt_preserves_three_states()
     }
 }
 
-fn java_event(input: &Value) -> crate::events::GameEvent {
-    use std::io::Write;
-    use std::process::{Command, Stdio};
-    let mut child = Command::new("python3")
-        .arg(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/acceptance/java_wire.py"
-        ))
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(input.to_string().as_bytes())
-        .unwrap();
-    let output = child.wait_with_output().unwrap();
-    assert!(
-        output.status.success(),
-        "Java境界: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    crate::events::GameEvent::parse(serde_json::from_slice(&output.stdout).unwrap()).unwrap()
+// Javaの準備は模擬の身体観測・撮影命令より先に済ませる。各試験の三場面で同じクラスを使う。
+struct JavaWireFixture {
+    classes: std::path::PathBuf,
+    launch: Vec<String>,
+}
+
+impl JavaWireFixture {
+    fn compile() -> Self {
+        let classes = std::env::temp_dir().join(format!("dogido-image-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&classes).expect("画像試験用のクラス置き場を作成");
+        let mut fixture = Self { classes, launch: Vec::new() };
+        let output = std::process::Command::new("python3")
+            .arg(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/acceptance/java_wire.py"))
+            .arg("--compile-to")
+            .arg(&fixture.classes)
+            .output()
+            .expect("Java境界のコンパイラを起動");
+        assert!(output.status.success(), "Java境界の事前ビルド: {}", String::from_utf8_lossy(&output.stderr));
+        fixture.launch = serde_json::from_slice(&output.stdout).expect("Java fixtureの起動引数");
+        fixture
+    }
+
+    fn event(&self, input: &Value) -> crate::events::GameEvent {
+        use std::io::Write;
+        use std::process::{Command, Stdio};
+        let (java, args) = self.launch.split_first().expect("Java fixtureの実行ファイル");
+        let mut child = Command::new(java)
+            .args(args)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(input.to_string().as_bytes())
+            .unwrap();
+        let output = child.wait_with_output().unwrap();
+        assert!(
+            output.status.success(),
+            "Java境界: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        crate::events::GameEvent::parse(serde_json::from_slice(&output.stdout).unwrap()).unwrap()
+    }
+}
+
+impl Drop for JavaWireFixture {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.classes);
+    }
 }
 
 // 見込み: 矛盾した比較情報を拒否すれば、誤った参照やマスで変化を説明しない。合格: 参照・時刻・ID・hash・状態・範囲・重複・無判定マスの各不正で画像保持なし。確認範囲: 実Rust受信、Javaの計測精度はgolden照合で別確認。
@@ -427,6 +455,7 @@ fn acceptance_image_location_description_keeps_exact_cells_and_both_brightness_s
 // 見込み: 本体の一画像経路を通せば、比較の説明を重ねず同じ画像を通常・環境で使える。合格: 三状態各2要求に現在PNG1枚と説明1回、比較元は内部に保持。確認範囲: 実画像→Java→Rust→模擬HTTP。無変化時の環境契機と全応答は固定、意味理解は未判定。
 #[tokio::test]
 async fn acceptance_image_both_model_routes_send_one_current_image_and_one_comparison() {
+    let wire_fixture = JavaWireFixture::compile();
     let sent = Arc::new(std::sync::Mutex::new(Vec::<Value>::new()));
     let recorded = sent.clone();
     let app = axum::Router::new().route("/v1/chat/completions", axum::routing::post(move |axum::Json(v): axum::Json<Value>| {
@@ -462,7 +491,7 @@ async fn acceptance_image_both_model_routes_send_one_current_image_and_one_compa
                 "before_path":base.join(if scenario == "unchanged" {"after-native.png"} else {"before-native.png"}),
                 "after_path":base.join("after-native.png")})
         };
-        let received = java_event(&input);
+        let received = wire_fixture.event(&input);
         let (normal, action) = {
             let mut data = d.data.lock().unwrap();
             let s = data.sessions.get_mut("s").unwrap();
