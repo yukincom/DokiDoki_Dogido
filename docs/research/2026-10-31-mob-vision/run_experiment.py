@@ -28,9 +28,10 @@ def write(path, data):
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
 
 
-def run():
+def run(condition_set):
     """凍結済み条件とhashを照合し一件ずつ送る。自動再試行や履歴の持越しはない。"""
-    condition = json.loads((HERE / "conditions.json").read_text())
+    suffix = "" if condition_set == "baseline" else "-focused"
+    condition = json.loads((HERE / ("conditions" + suffix + ".json")).read_text())
     assert condition["endpoint"] == ENDPOINT
     assert sha(LEGACY) == condition["sender_sha256"]
     spec = importlib.util.spec_from_file_location("existing_vision_probe", LEGACY)
@@ -40,8 +41,8 @@ def run():
     with urllib.request.urlopen("http://127.0.0.1:8080/v1/models", timeout=10) as response:
         models = json.load(response)
     assert any(row["id"] == "default_model" for row in models["data"])
-    write(HERE / "models-at-run.json", models)
-    results = HERE / "results.jsonl"
+    write(HERE / ("models-at-run" + suffix + ".json"), models)
+    results = HERE / ("results" + suffix + ".jsonl")
     done = {json.loads(line)["request_id"] for line in results.read_text().splitlines()} if results.exists() else set()
     for req in condition["requests"]:
         if req["request_id"] in done:
@@ -58,7 +59,7 @@ def run():
         ]
         started = datetime.now(timezone.utc).isoformat()
         response, seconds = module.send_payload(ENDPOINT, payload)
-        row = {"request_id": req["request_id"], "started_at": started,
+        row = {"request_id": req["request_id"], "condition_set": condition_set, "started_at": started,
                "completed_at": datetime.now(timezone.utc).isoformat(),
                "elapsed_seconds": seconds, "image_sha256": req["image_sha256"],
                "response": response}
@@ -71,5 +72,6 @@ def run():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=["run"])
-    parser.parse_args()
-    run()
+    parser.add_argument("--condition-set", choices=["baseline", "focused"], default="baseline")
+    args = parser.parse_args()
+    run(args.condition_set)

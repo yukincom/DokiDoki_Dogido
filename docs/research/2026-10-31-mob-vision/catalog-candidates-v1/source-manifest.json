@@ -1,0 +1,77 @@
+{
+  "excluded_fields": [
+    "label",
+    "japanese",
+    "reading",
+    "section",
+    "group_path",
+    "source",
+    "refs",
+    "priority",
+    "threat_class",
+    "observed_speech_aliases",
+    "observed_speech_rewrite_from_ids",
+    "professions",
+    "baby",
+    "dogido_tactics",
+    "temperature",
+    "downfall",
+    "snow_starts_at_y"
+  ],
+  "projection_owner": "dogido-rust/src/catalog_knowledge.rs",
+  "projection_owner_sha256": "e558c4e70b0c2ee2f332afbdf9d4829b75b5c8e6f98065a2fe88db3fad6b2adc",
+  "delivery_owner": "dogido-rust/src/chat_prompt.rs",
+  "candidate_sources": {
+    "skeleton": {
+      "path": "data/catalogs/entries/mobs/hostile.json",
+      "json_pointer": "/items/skeleton",
+      "file_sha256": "6b28abf2cba40faf70d8d57921193c24e1581b6815b09839d8c3a1388482b77c"
+    },
+    "turtle": {
+      "path": "data/catalogs/entries/mobs/passive.json",
+      "json_pointer": "/items/turtle",
+      "file_sha256": "7b541f81f310bf7ac52c2e2cff88975402f79ea2b2f106edf0f540c30f71390c"
+    },
+    "enderman": {
+      "path": "data/catalogs/entries/mobs/neutral.json",
+      "json_pointer": "/items/enderman",
+      "file_sha256": "f41f8fcc93c5b5726639412f1b94656f37be519c79bb2e6201e3504da18a441b"
+    },
+    "villager": {
+      "path": "data/catalogs/entries/mobs/passive.json",
+      "json_pointer": "/items/villager",
+      "file_sha256": "7b541f81f310bf7ac52c2e2cff88975402f79ea2b2f106edf0f540c30f71390c"
+    },
+    "creeper": {
+      "path": "data/catalogs/entries/mobs/hostile.json",
+      "json_pointer": "/items/creeper",
+      "file_sha256": "6b28abf2cba40faf70d8d57921193c24e1581b6815b09839d8c3a1388482b77c"
+    },
+    "parrot": {
+      "path": "data/catalogs/entries/mobs/passive.json",
+      "json_pointer": "/items/parrot",
+      "file_sha256": "7b541f81f310bf7ac52c2e2cff88975402f79ea2b2f106edf0f540c30f71390c"
+    },
+    "zombie": {
+      "path": "data/catalogs/entries/mobs/hostile.json",
+      "json_pointer": "/items/zombie",
+      "file_sha256": "6b28abf2cba40faf70d8d57921193c24e1581b6815b09839d8c3a1388482b77c"
+    },
+    "iron_golem": {
+      "path": "data/catalogs/entries/mobs/neutral.json",
+      "json_pointer": "/items/iron_golem",
+      "file_sha256": "f41f8fcc93c5b5726639412f1b94656f37be519c79bb2e6201e3504da18a441b"
+    }
+  },
+  "native_base_equivalence": "Same frozen base as earlier 24 requests.",
+  "runtime_preflight": {
+    "pid": 52443,
+    "process_elapsed": "21:53:34",
+    "model_file": "gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf",
+    "projector": "mmproj-F16.gguf",
+    "host": "127.0.0.1",
+    "port": 8080,
+    "alias": "default_model",
+    "service_actions": "none"
+  }
+}

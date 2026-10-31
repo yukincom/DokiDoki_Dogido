@@ -1,0 +1,41 @@
+{
+  "date_jst": "2026-10-31",
+  "workspace_branch": "main",
+  "starting_head": "c2378dbc492f8168f3bedf491f1f89e25b38cfb8",
+  "preexisting_worktree": "many unrelated modified/deleted/untracked files; untouched by this task",
+  "preflight_process_evidence": {
+    "pid": 52443,
+    "elapsed_observed": "20:24:14",
+    "executable_home_relative": "mlx-server/gguf/runtime-capture-20261025-41c05ee/bin/llama-server",
+    "model_home_relative": ".cache/gguf/models/gemma4-26b-qat-ud-q4-k-xl/gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf",
+    "projector": "mmproj-F16.gguf",
+    "draft_model": "mtp-gemma-4-26B-A4B-it.gguf",
+    "spec_type": "draft-mtp",
+    "spec_draft_n_max": 2,
+    "context": 65536,
+    "parallel": 1,
+    "reasoning": "off",
+    "host": "127.0.0.1",
+    "port": 8080,
+    "alias": "default_model"
+  },
+  "identity_boundary": "ps process arguments and /v1/models confirmed; weight files not fully rehashed; API meta ftype differs from filename so quantization label is from filename, not independently decoded",
+  "production_runtime_observation": "filtered ps showed llama-server but no launch_dialogue/dogido-rust process at preflight; full Minecraft operation not tested",
+  "execution": "24 sequential local API requests; no downloads, external model calls, TTS, world changes, service restart or model switch",
+  "baseline_jst": "2026-10-31 12:01:50–12:02:12",
+  "focused_jst": "2026-10-31 12:03:44–12:04:12",
+  "inventory": {
+    "screenshots_png": 43,
+    "available_body_frame_png": 107,
+    "body_player192_png": 107,
+    "docs_research_png": 217,
+    "docs_research_image_family": "2026-10-29-image-change-handoff; mostly duplicates/annotated versions of 13 scene pairs"
+  },
+  "limits": "six selected scenes; one response per condition; no statistical accuracy estimate; initial reference images were visually inspected before requests",
+  "git_during_run": {
+    "head_observed_at_final_review": "b73d64a247affc3eb88f2c0821a44704dd5338ea",
+    "commit_subject": "戦闘仕様変更前のmain全体をチェックポイント保存",
+    "observation": "HEAD advanced during this experiment; initial cases, baseline conditions, images and initial runner were included in that checkpoint. This chat did not invoke git add/commit/push or modify that commit."
+  },
+  "scope_note": "本体・設定を変更していない、は本検証の操作範囲を指す。他の並行作業が変更していないという保証ではない。"
+}

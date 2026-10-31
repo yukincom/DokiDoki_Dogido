@@ -1,0 +1,61 @@
+{
+  "usage": "対象の一般的な特徴と、会話で使える表現のヒントやで。説明文や特徴タグ、役割は自然な会話の参考にしてな。今見えとる姿や聞こえた音、実際の動き、おるかおらんかはちゃんと観測データに従ってな。音しか聞こえてへんのに目で姿を見たことにしたらあかんで。場面・感情・比喩のタグは演技の命令やないから、無理に合わせんでええよ。",
+  "entries": [
+    {
+      "kind": "mob",
+      "id": "skeleton",
+      "label": "スケルトン",
+      "basis": [],
+      "general": {}
+    },
+    {
+      "kind": "mob",
+      "id": "turtle",
+      "label": "カメ",
+      "basis": [],
+      "general": {}
+    },
+    {
+      "kind": "mob",
+      "id": "enderman",
+      "label": "エンダーマン",
+      "basis": [],
+      "general": {}
+    },
+    {
+      "kind": "mob",
+      "id": "villager",
+      "label": "村人",
+      "basis": [],
+      "general": {}
+    },
+    {
+      "kind": "mob",
+      "id": "creeper",
+      "label": "クリーパー",
+      "basis": [],
+      "general": {}
+    },
+    {
+      "kind": "mob",
+      "id": "parrot",
+      "label": "オウム",
+      "basis": [],
+      "general": {}
+    },
+    {
+      "kind": "mob",
+      "id": "zombie",
+      "label": "ゾンビ",
+      "basis": [],
+      "general": {}
+    },
+    {
+      "kind": "mob",
+      "id": "iron_golem",
+      "label": "アイアンゴーレム",
+      "basis": [],
+      "general": {}
+    }
+  ]
+}
