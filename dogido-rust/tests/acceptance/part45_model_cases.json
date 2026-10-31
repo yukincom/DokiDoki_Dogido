@@ -1,0 +1,45 @@
+{
+  "purpose": "実入力に基づく返答品質の別評価。自動試験は入力到達まで、以下は実モデル未実行。返答例との完全一致は求めない。",
+  "cases": [
+    {
+      "id": "part4_truncated_spontaneous",
+      "input": "payloads/part4-truncated-spontaneous.json",
+      "expectation": "調査打切りの音を由来未確定として渡せば、他に新しい契機のない場面で自発話題にせずに済む見込み。",
+      "acceptance": "自発的にこの音へ反応せずsilentを選ぶ。プレイヤーの足音だと断定する、音について自発的に話す場合は不合格。",
+      "scope": "採取済みの環境生成要求を使う。自動試験は音の到達・unknown・low・truncatedまで。モデルの選択と本文は別途確認し、実音採取・再生は対象外。",
+      "status": "not_run"
+    },
+    {
+      "id": "part4_truncated_question",
+      "input": "payloads/part4-truncated-question.json",
+      "expectation": "同じ未確定音でも本人から尋ねられたときは、観測に沿って推測だと分かる返答ができる見込み。",
+      "acceptance": "聞いた足音と由来の未確定さを踏まえ、推測なら推測と分かる形で質問へ答える。例「足音みたいやけど、誰のかまでは分からへん」。本人由来の断定や無関係な補作は不合格。",
+      "scope": "通常生成の実要求を使う。自動試験は質問と音の到達まで。音の確度lowと発音者unknownを区別して返答できるかを別途読む。文言完全一致や全場面での推測禁止は要求しない。",
+      "status": "not_run"
+    },
+    {
+      "id": "part5_not_compared",
+      "input": "payloads/part5-not_compared-normal.json",
+      "expectation": "現在画像と未比較の説明を一緒に渡せば、今見える景色を説明しながら過去からの変化は断定せずに済む見込み。",
+      "acceptance": "現在の画像に基づき質問へ答え、比較できていないのに設置・成長・移動などの時間的変化を断定しない。未比較を画像なしと扱う場合も不合格。",
+      "scope": "本体経路で採取した現在画像1枚の通常要求を使う。自動試験は画像保持・未比較説明・発話機会なしまで。景色の意味理解と実撮影は別確認。",
+      "status": "not_run"
+    },
+    {
+      "id": "part5_unchanged",
+      "input": "payloads/part5-unchanged-normal.json",
+      "expectation": "無変化でも現在画像を渡せば、景色への質問に使いながら新しい変化の説明を作らずに済む見込み。",
+      "acceptance": "画像に基づく質問への返答ができ、比較で検出していない新しい変化を断定しない。無変化を理由に画像の利用自体を拒む場合は不合格。",
+      "scope": "同じ実画像を比較した通常要求を使う。自動試験は現在PNG1枚・無変化説明・発話機会なしまで。返答の意味とMinecraft実動作は別確認。",
+      "status": "not_run"
+    },
+    {
+      "id": "part5_changed",
+      "input": "payloads/part5-changed-environment.json",
+      "expectation": "現在画像と検出マスの説明を渡せば、検出範囲に注目しつつ意味を画像から判断する材料になる見込み。",
+      "acceptance": "話す場合は現在画像と検出範囲に沿い、数値差だけを成長・設置等の証明にしない。比較元を見たような断定、存在しない対象の補作は不合格。材料に応じたsilentも許す。",
+      "scope": "固定実画像pair_06をJavaで比較し、本体から採取した環境要求を使う。自動試験は通知1回・現在PNG1枚・位置説明1回まで。意味判断・実発話は未確認。",
+      "status": "not_run"
+    }
+  ]
+}

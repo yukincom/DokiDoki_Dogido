@@ -1,0 +1,163 @@
+{
+  "endpoint": "http://127.0.0.1:8080/v1/chat/completions",
+  "system": "あんたは Minecraftの相棒『ドギド』や。一人称は『オレ』。プレイヤーと対等な相棒として、自然で元気な関西弁（語尾は『〜やな』『〜やで』『〜やん』）で話してな。お母さんや保護者みたいな口調（『あら』『〜ね』）は禁止！関西弁は語尾中心で、単語自体はふつうの自然な日本語を使ってな。動物や穏やかなモブには、怖がらんと基本やさしく愛嬌よく接してな。\n冒険中はちょっぴり怖がりやけど、プレイヤーのせいにしたらあかんで。一緒にビビって、一緒にホッとする側に立ってな。怖がるのはモンスターや暗闇、危険な場所だけやで。中立の生き物にも、刺激せんと優しく接してな。",
+  "question": "これはマインクラフトのスクリーンショットや。この画像で何が見える？ 見えるものと位置関係を短く教えて。分からんところは分からんと言ってな。",
+  "parameters": {
+    "model": "default_model",
+    "temperature": 0,
+    "seed": 42,
+    "max_tokens": 400,
+    "stream": false,
+    "cache_prompt": false,
+    "chat_template_kwargs": {
+      "enable_thinking": false
+    }
+  },
+  "sender_source": "docs/research/2026-10-20-vision-resolution/run_experiment.py",
+  "sender_sha256": "2e589fc115fb7aef68ea37668afbee287a869f7ac5187130ae4291dd0733e537",
+  "prompt_source": "dogido_server/llm/companion_prompts.json / base",
+  "prompt_file_sha256": "5d939dd11ae158b0ec4858aa35f27d88151d7129362b90dad9932260ca8baba5",
+  "resampling": "Pillow 12.2.0 RGB PNG LANCZOS; long edge 192; aspect ratio kept; no crop/upscale/brightness changes",
+  "notes": [
+    "Existing 2026-10-20 independent generic question; existing current base.",
+    "No mob names, labels, IDs, source paths, positions, capture metadata or structured observations in model requests.",
+    "Images themselves may contain HUD context; case_02 contains biome text, no mob name text seen.",
+    "Native and 192 are independent single-image requests; no history.",
+    "Raw unannotated baseline; not the full production prompt or actual annotated Mod path.",
+    "Original files and original retention metadata untouched; selected research copies preserved for this requested audit."
+  ],
+  "requests": [
+    {
+      "request_id": "case_01_192",
+      "case_id": "case_01",
+      "condition": "192",
+      "image": "images/case_01_192.png",
+      "image_sha256": "b6c7acd7b0dd696142783ea4a4bcb66c233083d13cb328492a8f029be750b8f8",
+      "size": [
+        192,
+        115
+      ]
+    },
+    {
+      "request_id": "case_02_192",
+      "case_id": "case_02",
+      "condition": "192",
+      "image": "images/case_02_192.png",
+      "image_sha256": "fd8a630f9445a6511b2f4a486bc9ffb6e8f476b2755e014133256b366ce980d7",
+      "size": [
+        192,
+        108
+      ]
+    },
+    {
+      "request_id": "case_03_192",
+      "case_id": "case_03",
+      "condition": "192",
+      "image": "images/case_03_192.png",
+      "image_sha256": "35fe157b85283e4733d0fd22247dcbb9047274c5b095ca88bae8e11ad3686dd1",
+      "size": [
+        192,
+        108
+      ]
+    },
+    {
+      "request_id": "case_04_192",
+      "case_id": "case_04",
+      "condition": "192",
+      "image": "images/case_04_192.png",
+      "image_sha256": "210c42bab3759c2d0e1f39771007eaa23025547b99cdc419c679e6b0d49a05bc",
+      "size": [
+        192,
+        115
+      ]
+    },
+    {
+      "request_id": "case_05_192",
+      "case_id": "case_05",
+      "condition": "192",
+      "image": "images/case_05_192.png",
+      "image_sha256": "7d8bc7b3f8cf7c8aacc3bab300c0fb44ac60919d99cf72b51a8b4c30fa2a873b",
+      "size": [
+        192,
+        115
+      ]
+    },
+    {
+      "request_id": "case_06_192",
+      "case_id": "case_06",
+      "condition": "192",
+      "image": "images/case_06_192.png",
+      "image_sha256": "e87195588d5e64d94a6855fe50072aa99f4c33e2c0312792a9cae3a515e9d3fd",
+      "size": [
+        192,
+        108
+      ]
+    },
+    {
+      "request_id": "case_01_native",
+      "case_id": "case_01",
+      "condition": "native",
+      "image": "images/case_01_native.png",
+      "image_sha256": "45ad68b5f6b42851e026b2989713722c479f35c49e28ce94745d4474345cc3ac",
+      "size": [
+        1134,
+        682
+      ]
+    },
+    {
+      "request_id": "case_02_native",
+      "case_id": "case_02",
+      "condition": "native",
+      "image": "images/case_02_native.png",
+      "image_sha256": "8ba3b185f17fe12c5230897697e79d8fe765c9cc72414d9596b02fe08bef18a3",
+      "size": [
+        854,
+        480
+      ]
+    },
+    {
+      "request_id": "case_03_native",
+      "case_id": "case_03",
+      "condition": "native",
+      "image": "images/case_03_native.png",
+      "image_sha256": "95c8ad9814ec8738bf1d34f8bb8e4a1cd2f7c0ac81fe5d4e0e8d09e6548e1023",
+      "size": [
+        854,
+        480
+      ]
+    },
+    {
+      "request_id": "case_04_native",
+      "case_id": "case_04",
+      "condition": "native",
+      "image": "images/case_04_native.png",
+      "image_sha256": "b10b9fc3caa391b033f5d0073d06af11d9f0234396562aa517d02387e1abb13a",
+      "size": [
+        1134,
+        682
+      ]
+    },
+    {
+      "request_id": "case_05_native",
+      "case_id": "case_05",
+      "condition": "native",
+      "image": "images/case_05_native.png",
+      "image_sha256": "ad0205db780211d003643bcc97d2da30e0ff68b06dce87e70b8fcbe7b8c2329b",
+      "size": [
+        1134,
+        682
+      ]
+    },
+    {
+      "request_id": "case_06_native",
+      "case_id": "case_06",
+      "condition": "native",
+      "image": "images/case_06_native.png",
+      "image_sha256": "8e7bec1b5e643f1d532f02915b9ce555bcc1727645ec0da0aa6b726d033f795a",
+      "size": [
+        854,
+        480
+      ]
+    }
+  ]
+}

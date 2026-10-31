@@ -1,0 +1,15 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running unittests src/lib.rs (/private/tmp/dogido-part45-20261029/target/debug/deps/dogido_rust-3b05f0013177c941)
+
+running 8 tests
+test dialogue::chat_context::tests::actual_labels_match_canonical_complete_dictionary ... ok
+test dialogue::chat_context::tests::admission_partial_memory_and_haiku_state_have_separate_update_boundaries ... ok
+test dialogue::chat_context::tests::capture_freezes_history_and_digest_and_survives_epoch_changes_without_writes ... ok
+test dialogue::chat_context::tests::engine_confirmed_outcome_is_consumed_once_without_replay_ttl_extension ... ok
+test dialogue::chat_context::tests::non_status_structure_player_name_and_time_domain_boundaries_are_explicit ... ok
+test dialogue::chat_context::tests::original_inventory_order_is_private_validated_and_clone_stable ... ok
+test dialogue::chat_context::tests::workshop_projection_does_not_restore_missing_emission_materials ... ok
+test dialogue::chat_context::tests::workshop_speech_fields_match_canonical_projection_and_pending_reading ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 945 filtered out; finished in 0.10s
+

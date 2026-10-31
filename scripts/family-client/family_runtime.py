@@ -9,6 +9,7 @@ import sys
 
 
 RUST_BINARY = "dogido-rust/target/release/dogido-rust"
+WHISPER_WORKER = "dogido-rust/target/release/dogido-whisper-worker"
 # 本体が状態に応じて片方だけを使う、採用済みの二モデル。
 CLASSIFIER_ROOTS = {
     "senryu": "models/dogido-senryu424-seed42",
@@ -36,7 +37,7 @@ LEGACY_RUNTIME = ("dogido_server/app.py", "dogido_server/service.py", "dogido_se
 
 
 def runtime_files():
-    return (RUST_BINARY, *("dogido-rust/scripts/" + name for name in RUNTIME_SCRIPTS), *RUNTIME_DATA, *CLASSIFIER_FILES)
+    return (RUST_BINARY, WHISPER_WORKER, *("dogido-rust/scripts/" + name for name in RUNTIME_SCRIPTS), *RUNTIME_DATA, *CLASSIFIER_FILES)
 
 
 def reject_runtime_link(root: Path, path: Path) -> None:

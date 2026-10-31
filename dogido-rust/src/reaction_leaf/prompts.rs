@@ -214,7 +214,7 @@ pub(super) fn messages(kind: &str, d: &Value) -> Result<Vec<ChatMessage>> {
     {
         *conversation = crate::dialogue::history::History::lines_for(rows).into();
     }
-    let mut system = crate::companion_prompt::dialogue(
+    let system = crate::companion_prompt::dialogue_with_body(
         mode(kind, d),
         if kind == "body_recall" {
             crate::companion_prompt::DialoguePurpose::Reply
@@ -222,11 +222,10 @@ pub(super) fn messages(kind: &str, d: &Value) -> Result<Vec<ChatMessage>> {
             crate::companion_prompt::DialoguePurpose::Ambient
         },
         context["world_context"]["observations"]["smell"]["status"] == "present",
+        context["world_context"]["observations"]["body_observation"]
+            .is_object()
+            .then_some("プレイヤー"),
     );
-    if context["world_context"]["observations"]["body_observation"].is_object() {
-        system.push('\n');
-        system.push_str(&crate::companion_prompt::body_observation("プレイヤー"));
-    }
     Ok(vec![
         ChatMessage {
             role: Role::System,

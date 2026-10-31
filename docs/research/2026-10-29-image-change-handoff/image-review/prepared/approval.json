@@ -1,0 +1,15 @@
+{
+  "approved_at": "2026-10-29T00:29:47.675073+00:00",
+  "user_response": "この指示で実行する",
+  "scope": "13 actual image pairs x 3 conditions x 3 seeds = 117 model responses",
+  "pair_instruction": "1枚目は前、2枚目は後の実撮影や。後の画像を今見えたものとして、話すか黙るかを決めてな。差分情報がある場合、それは画面上の色の差で、物体や出来事の重要度ではないで。視点移動による見え方の差と、場面の変化を区別してな。",
+  "system_sha256": "6e7cf28ee782bdb0d363fb804567000012ff73f4934d14bddaf9f6c5131645dc",
+  "process_pid_observed": 1549,
+  "process_cwd": "/Users/yukin_co/mlx-server/gguf",
+  "model": "gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf",
+  "mmproj": "mmproj-F16.gguf",
+  "runtime": "/Users/yukin_co/mlx-server/gguf/runtime-capture-20261025-41c05ee/bin/llama-server",
+  "mtp": "draft-mtp n-max 2",
+  "ctx": 65536,
+  "parallel": 1
+}

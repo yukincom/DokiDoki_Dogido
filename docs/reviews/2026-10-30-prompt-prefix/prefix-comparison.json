@@ -1,0 +1,20 @@
+{
+  "unit": "Unicode characters, not tokens or elapsed time",
+  "comparisons": [
+    {
+      "comparison": "身体観測あり・通常から緊張へ",
+      "before_common_chars": 283,
+      "after_common_chars": 2370
+    },
+    {
+      "comparison": "身体観測あり・匂いなしからありへ",
+      "before_common_chars": 863,
+      "after_common_chars": 2417
+    },
+    {
+      "comparison": "身体観測なし・通常から緊張へ",
+      "before_common_chars": 283,
+      "after_common_chars": 1243
+    }
+  ]
+}

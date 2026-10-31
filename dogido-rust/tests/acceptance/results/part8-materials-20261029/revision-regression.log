@@ -1,0 +1,13 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running unittests src/lib.rs (/private/tmp/dogido-part45-20261029/target/debug/deps/dogido_rust-3b05f0013177c941)
+
+running 6 tests
+test haiku::revision::tests::generated_expression_can_reuse_materials_from_other_lines ... ok
+test haiku::revision::tests::hard_terms_do_not_veto_model_revision ... ok
+test haiku::revision::tests::invalid_cas_indices_and_empty_changes_keep_original_without_retry ... ok
+test haiku::revision::tests::missing_or_reused_materials_never_block_revision_generation ... ok
+test haiku::revision::tests::one_candidate_preserves_frozen_lines_and_generator_source_ids ... ok
+test haiku::revision::tests::optional_cas_fields_are_completed_and_surface_is_preserved ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 951 filtered out; finished in 0.00s
+

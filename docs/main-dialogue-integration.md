@@ -66,7 +66,7 @@ player accepted
 - `failed`、実際に `cancelled` となった音声、キュー置換、未配送の古いworker結果はassistant履歴や川柳材料へ入れない。
 - workerの生成epochと、dispatcherへ渡した音声の事実を分ける。戦闘開始後でも、すでに再生開始して実際に正常終了した通常返答は `completed` のまま残す。実プロセスを止めた返答だけを `cancelled` にする。
 - dispatcherが一つのbatchを取得した後に割り込まれても、現在actionと未開始の末尾actionすべてへ一度ずつterminal通知を返す。末尾を台帳上の `queued` のまま残さない。
-- **2026-10-18: 音声出力が始まったら極力切らない。** 相槌・くしゃみ等の新入力は、既存の有界FIFOで現在の台詞の完了を待ち、同じ受付へ一度だけ戻す。生成中・再生前は新入力を優先する。純叫声の診断記録だけで開始済み音声を止めない。
+- **2026-10-30: 新入力は音声の完了を待たない。** 相槌・くしゃみを含む音声認識結果・文字入力は、通常返答・川柳・環境コメントの再生中も共通受付へ進める。元の出力は止めず、生成・状態適用の枠と音声配送の枠を分ける。前の生成が確定した後は、その音声中に次の返答を生成できる。音声は既存の直列枠で順番に再生し、それぞれの配送完了を一度だけ履歴へ残す。純叫声は従来どおり診断だけに記録する。
 - 通常会話・相談・環境コメント・警告・川柳の前置き／本文へ共通の実再生開始判定を使う。通常の観測変化や観測更新の途切れ、期限到達だけで話の途中を切らない。川柳は完走した行の履歴を確定し、次の生成・保存・読み上げ開始には引き続き現在性と安全の検査を行う。
 - 緊急警告、明示的な停止、voice off、セッション終了・ワールド切替・サーバー終了による取消は維持する。「静かにして」等の既存停止形はBERT待ちや観測失効で保留しない。実際の再生失敗・取消を完了扱いにはしない。
 - audio callbackはsession状態を直接変更せず、上限付きのイベント列へ結果を積むだけにする。
@@ -102,7 +102,7 @@ player accepted
 
 音声認識結果が全文で反復叫声だけの場合、通常player input・workshop・学習worker・LLM会話履歴へ入れない。原文は上限付きの非永続診断だけに残し、LLMへは、同時点のコード観測から作った「敵対モブを視認」「爆発を観測」「原因不明の驚き」等の短い状況メモだけを渡す。叫び声の字面から敵・落下・爆発を推測しない。現行event契約には生存中の落下を確定する接地・落下距離がないため、落下は未観測時に断定しない。
 
-川柳workshopの戦闘中断は `dogido-rust/src/workshop_combat.rs` と `src/dialogue/workshop_combat_runtime.rs` が所有し、通常質問の保留・自動復帰へ置き換えない。
+川柳workshopの戦闘中断は `dogido-rust/src/workshop_combat.rs` と `src/dialogue/workshop_combat_runtime.rs` が所有し、通常質問の保留・自動復帰へ置き換えない。 2026-10-28から、受付済みの川柳返答は `src/dialogue/workshop_reply.rs` で同じworker・結果を保持し、安全後に生成の続きまたは未完了文から配送する。再中断でも原文を再投入せず、編集・保存・履歴確定は一度だけ行う。[詳細](2026-10-28-workshop-reply-resume.md)。
 
 ## 4. 雷と夕方
 
@@ -168,7 +168,7 @@ player accepted
 
 ## 7. 自動確認
 
-Rustの各ドメインテストと、`dogido-rust/scripts/check_combat_dialogue.py`・`check_foreground_runtime.py`・`check_knowledge_handoff.py`・`check_warning_observations.py`・`check_history_retention.py`・`check_language_runtime.py`・`check_address_runtime.py`・`check_web_runtime.py` で確認する。次を正負の対で固定する。
+Rustの各ドメインテストと、`dogido-rust/tests/python/check_combat_dialogue.py`・`check_foreground_runtime.py`・`check_knowledge_handoff.py`・`check_warning_observations.py`・`check_history_retention.py`・`check_language_runtime.py`・`check_address_runtime.py`・`check_web_runtime.py` で確認する。次を正負の対で固定する。
 
 - casualでは発句可／learningでは発句時計を凍結
 - casualの非敵対ambientは最後の入力から30秒で再開し、再入力で数え直す。学習・Web・川柳集中中の抑止／敵対警告は維持

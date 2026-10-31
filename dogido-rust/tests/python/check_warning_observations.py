@@ -1,0 +1,172 @@
+#!/usr/bin/env python3
+"""部分通知を視認消失と誤解しないことを実HTTPで確認。LLM/TTS/playerは模擬。"""
+from datetime import datetime, timezone, timedelta
+import json
+from pathlib import Path
+import sys
+import tempfile
+import threading
+import time
+
+from check_dialogue import dependencies, running, register, request, snapshot, wait_for, row, submit
+from test_support import event
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def main():
+    passed = []
+    with tempfile.TemporaryDirectory(prefix="dogido-observations-") as temp, dependencies() as (dep, control, seen):
+        folder = Path(temp)
+        cues = folder / "cues"
+        for name in ["mob/zombie.mp3", "common/counts/2.mp3", "common/phrases/orude.mp3",
+                     "panic/freesound_community-male-gasp-1-7183.mp3"]:
+            p = cues / name
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_bytes(b"fixture")
+        player = folder / "player"
+        player.write_text(f'''#!{sys.executable}
+from pathlib import Path
+import sys,time
+root=Path(__file__).parent
+with (root/'played').open('a') as f:f.write(sys.argv[1]+'\\n')
+delay=float((root/'delay').read_text())
+time.sleep(.04 if '/panic/' in sys.argv[1] else delay)
+''')
+        player.chmod(0o700)
+        (folder / "delay").write_text(".5")
+        with running(ROOT / "target/debug/dogido-rust", folder, dep, player=player,
+                     warning_settings={"cue_dir": str(cues)}) as (base, process, log):
+            seq = 0
+
+            def send(sid, *, name="status_snapshot", empty=False, count=1, stale=False, audio_only=False, **kw):
+                nonlocal seq
+                seq += 1
+                e = event(0, **kw)
+                e["sequence"] = seq
+                e["observed_at"] = (datetime.now(timezone.utc) - timedelta(seconds=30 if stale else 0)).isoformat()
+                e["event"]["name"] = name
+                if count > 1:
+                    e["visual_threats"] = [dict(e["visual_threats"][0], entity_id=f"z{i}") for i in range(count)]
+                audio_only = audio_only or name == "hostile_audio_detected"
+                if empty or audio_only or name == "ambient_mob_detected":
+                    e["visual_threats"] = []
+                if audio_only:
+                    # Fabricは視認敵の音を除く。別の未視認個体の音を同時に受ける。
+                    e["event"]["source_kind"] = "auditory"
+                    e["auditory_threats"] = [{"label": "zombie", "source_id": "unseen-zombie"}]
+                return request(base, "/api/v1/game-events", e, sid=sid)
+
+            def warnings(sid):
+                return [r for r in snapshot(base)["utterances"]
+                        if r["session_id"] == sid and r["category"] == "callout" and r.get("warning") is not None]
+
+            def played():
+                return (folder / "played").read_text().splitlines() if (folder / "played").exists() else []
+
+            def close(sid):
+                request(base, "/api/v1/adapter-sessions/" + sid, method="DELETE")
+
+            def reject_chat(sid):
+                # 録音世代を発行できない未取得状態でも、文字入力で観測期限の拒否を確認する。
+                got = request(base, "/api/v1/player-input", {"session_id": sid, "source": "text", "text": "こんにちは"})
+                if got.get("reason") == "reply_input_routing":
+                    routing_turn = got["turn_id"]
+                    def forwarded():
+                        item = next((r for r in snapshot(base)["utterances"]
+                                     if r["turn_id"] == routing_turn), None)
+                        return item.get("forwarded_input") if item else None
+                    got = wait_for(forwarded)
+                assert not got["accepted"] and got["reason"] == "fresh_safe_snapshot_required", got
+
+            # cueの開始だけではなく、本文playerまで到達してから部分通知を割り込ませる。
+            for label, kw in [("single_body", {}), ("group_fragment", {"count": 2}),
+                              ("fuse_body", {"kind": "creeper", "fuse": True})]:
+                sid = register(base, preview=False)
+                before = len(played())
+                send(sid, **kw)
+                wt = wait_for(lambda: warnings(sid))[-1]["turn_id"]
+                wait_for(lambda: any("/panic/" not in p for p in played()[before:]))
+                send(sid, name="hostile_audio_detected")
+                current = row(base, wt, {"started", "cancelled"})
+                assert current and current["playback_status"] == "started", current
+                send(sid, name="ambient_mob_detected")
+                send(sid, name="hostile_audio_detected", audio_only=True)
+                send(sid, name="hostile_audio_detected", stale=True)
+                send(sid, **kw)
+                wait_for(lambda: row(base, wt, {"completed"}))
+                assert len(warnings(sid)) == 1, warnings(sid)
+                # 完了後にも部分通知で導火edgeや増加済みIDを解除しない。
+                send(sid, name="hostile_audio_detected")
+                send(sid, **kw)
+                assert len(warnings(sid)) == 1, warnings(sid)
+                passed.append(label + "_survives_partial_notifications_without_replay")
+                close(sid)
+
+            sid = register(base, preview=False)
+            (folder / "delay").write_text(".5")
+            send(sid)
+            wt = wait_for(lambda: warnings(sid))[-1]["turn_id"]
+            wait_for(lambda: row(base, wt, {"started"}))
+            send(sid, name="hostile_audio_detected")
+            send(sid, empty=True)
+            wait_for(lambda: row(base, wt, {"completed"}))
+            passed.append("complete_empty_snapshot_allows_started_warning_to_finish")
+            close(sid)
+
+            # 新しい部分通知だけが来続けても、未開始の視認警告の10秒期限は延長しない。
+            # 開始後は最後まで配送する契約なので、未キャッシュの右方向本文を合成中で止める。
+            gate, requested = threading.Event(), threading.Event()
+            def block_warning(text):
+                requested.set()
+                return gate
+            control["tts_gate_selector"] = block_warning
+            sid = register(base, preview=False)
+            try:
+                send(sid, direction="right")
+                wt = wait_for(lambda: warnings(sid))[-1]["turn_id"]
+                wait_for(requested.is_set)
+                assert not row(base, wt, {"started", "completed"})
+                deadline = time.monotonic() + 12
+                while time.monotonic() < deadline and not row(base, wt, {"cancelled"}):
+                    send(sid, name="hostile_audio_detected")
+                    time.sleep(.15)
+                cancelled = row(base, wt, {"cancelled"})
+                assert cancelled and cancelled["cancel_reason"] == "stale_observation", cancelled
+                passed.append("partial_notifications_do_not_renew_unstarted_visual_lifetime")
+            finally:
+                gate.set()
+                control.pop("tts_gate_selector", None)
+                close(sid)
+
+            sid = register(base, preview=False)
+            send(sid, name="ambient_mob_detected")
+            reject_chat(sid)
+            send(sid, empty=True)
+            (folder / "delay").write_text(".6")
+            turn = submit(base, sid)
+            wait_for(lambda: row(base, turn, {"started"}))
+            (folder / "delay").write_text(".5")
+            send(sid, name="hostile_audio_detected")
+            assert row(base, turn, {"started", "completed"})
+            send(sid, name="ambient_mob_detected")
+            wait_for(lambda: any(r["session_id"] == sid and r["category"] == "callout"
+                                and r["playback_status"] == "completed" for r in snapshot(base)["utterances"]))
+            wait_for(lambda: row(base, turn, {"completed"}))
+            assert row(base, turn, {"completed"}).get("resolution") != "reply_resumed"
+            (folder / "delay").write_text(".05")
+            send(sid, empty=True)
+            turn = submit(base, sid, "もう大丈夫かな")
+            wait_for(lambda: row(base, turn, {"completed"}))
+            passed.append("fresh_observation_required_and_nonurgent_audio_keeps_player_reply")
+            close(sid)
+        assert "dialogue_stopped" in log.read_text()
+    report = ROOT / "reports/warning-observation-check.json"
+    report.parent.mkdir(exist_ok=True)
+    report.write_text(json.dumps({"passed": passed, "llm": "mock", "tts": "mock", "playback": "mock",
+                                 "all_owned_processes_stopped": True}, ensure_ascii=False, indent=2) + "\n")
+    print(f"PASS {len(passed)} observation-scope checks; all owned processes stopped")
+
+
+if __name__ == "__main__":
+    main()

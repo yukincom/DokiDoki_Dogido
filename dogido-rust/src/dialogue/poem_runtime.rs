@@ -15,9 +15,17 @@ impl Dialogue {
         epoch: u64,
         input: &Value,
         cancel: &mut watch::Receiver<bool>,
+        permit: &super::workshop_reply::Permit,
     ) -> Result<Value> {
+        let continuation = super::workshop_reply::Source::new(self, input, cancel);
         let request: Input = serde_json::from_value(input["poem_input"].clone())?;
-        self.memory_live(sid, epoch, input, false)?;
+        if let Some(source) = &continuation {
+            source
+                .check(permit, || self.memory_live(sid, epoch, input, false))
+                .await?;
+        } else {
+            self.memory_live(sid, epoch, input, false)?;
+        }
         let action = match request {
             Input::Revision { .. } => "haiku_revision",
             Input::SaveLast => "haiku_save_last",
@@ -60,9 +68,9 @@ impl Dialogue {
         } else {
             vec![]
         };
-        // Recheck after the helper wait, before authorizing any persistent write.
-        self.memory_live(sid, epoch, input, false)?;
-        let (name, original) = {
+        // 辞書取得の結果を保持したまま、保存開始前の照合だけを安全後へ待つ。
+        let authorize = || -> Result<_> {
+            self.memory_live(sid, epoch, input, false)?;
             let d = self.data.lock().unwrap();
             let s = d.sessions.get(sid).context("session_closed")?;
             ensure!(
@@ -73,20 +81,18 @@ impl Dialogue {
                 "cancelled_poem_input"
             );
             let w = s.haiku.workshop.as_ref();
-            if matches!(request, Input::Revision { .. } | Input::SaveLast)
-                && !w.is_some_and(|w| {
-                    input["poem_reference"]["id"] == w.hud_id
-                        && input["poem_reference"]["version"] == w.version
-                        && input["poem_reference"]["open"] == w.open
-                        && !w.combat_paused()
-                })
-            {
-                return Ok(reply(
-                    "stale_original",
-                    "元の句が変わったから、もう一度確認してな。",
-                ));
+            if matches!(request, Input::Revision { .. } | Input::SaveLast) {
+                ensure!(
+                    w.is_some_and(|w| {
+                        input["poem_reference"]["id"] == w.hud_id
+                            && input["poem_reference"]["version"] == w.version
+                            && input["poem_reference"]["open"] == w.open
+                            && !w.combat_paused()
+                    }),
+                    "stale_original"
+                );
             }
-            (
+            Ok((
                 s.name.clone(),
                 w.map(|w| {
                     (
@@ -95,7 +101,21 @@ impl Dialogue {
                         w.revision_id.clone(),
                     )
                 }),
-            )
+            ))
+        };
+        let authorized = if let Some(source) = &continuation {
+            source.check(permit, authorize).await
+        } else {
+            authorize()
+        };
+        let (name, original) = match authorized {
+            Err(error) if error.to_string() == "stale_original" => {
+                return Ok(reply(
+                    "stale_original",
+                    "元の句が変わったから、もう一度確認してな。",
+                ));
+            }
+            result => result?,
         };
         let root = self.config.haiku.memory_dir.join("sessions").join(sid);
         let write_sid = sid.to_owned();
@@ -122,7 +142,7 @@ impl Dialogue {
         let write_revision = revision.clone();
         tracing::info!(event = "poem_input_save_started", session_id = sid, action);
         // Like pending adoption, an authorized write is awaited through speech
-        // cancellation. The serial permit remains held until it has been reaped.
+        // cancellation. The caller yields the serial permit to combat while waiting.
         let saved = tokio::task::spawn_blocking(move || -> Result<bool> {
             let store = MemoryStore::new(root);
             match request {

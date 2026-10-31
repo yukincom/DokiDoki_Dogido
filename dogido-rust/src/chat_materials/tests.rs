@@ -344,6 +344,7 @@ fn current_companion_name_survives_the_retained_name_table_limit() {
     );
 }
 
+// 見込み: 聴覚を共通観測へ集約しても、雑談と音の質問で3種の音を使える。合格: 足音・破壊音・設置音が各1回、由来unknown、旧音メモ欄なし。確認範囲: 模擬eventから実要求。実際の発音者採取と返答は別。
 #[test]
 fn block_sound_actions_reach_both_ordinary_chat_and_sound_question_requests() {
     let event = individual_event(
@@ -355,6 +356,10 @@ fn block_sound_actions_reach_both_ordinary_chat_and_sound_question_requests() {
         ]}),
     );
     let snapshot = individual_snapshot(&event);
+    let context = Context {
+        world_context: Some(crate::conversation_observation::project(&event, None, 10.0, 3.0, 5000).unwrap()),
+        ..Default::default()
+    };
     for asks_about_sound in [false, true] {
         let text = if asks_about_sound {
             "今の音は何？"
@@ -371,7 +376,7 @@ fn block_sound_actions_reach_both_ordinary_chat_and_sound_question_requests() {
             &event,
             &Settings::default(),
             &input,
-            &Context::default(),
+            &context,
             &snapshot,
             &labels(),
         )
@@ -385,9 +390,11 @@ fn block_sound_actions_reach_both_ordinary_chat_and_sound_question_requests() {
             "石系の足音",
             "石系ブロックの破壊音",
             "石系ブロックの設置音",
-            "発音者未確定",
         ] {
-            assert!(facts.contains(text), "missing {text} in {facts}");
+            assert_eq!(facts.matches(text).count(), 1, "{text}");
         }
+        assert_eq!(facts.matches("\"emitter_attribution\": \"unknown\"").count(), 3);
+        assert!(reply.details.get("hearing_block").is_none());
+        assert!(!facts.contains(&snapshot.hearing.summary));
     }
 }

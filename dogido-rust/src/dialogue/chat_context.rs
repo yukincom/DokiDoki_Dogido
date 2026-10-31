@@ -2,52 +2,13 @@
 use super::Session;
 use crate::{
     chat_materials::{CompletedHistory, Context, Settings},
-    chat_observation::{self, ChatObservationMemory, Labels, Snapshot},
+    chat_observation::{self, ChatObservationMemory, Snapshot},
     events::GameEvent,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-pub(super) struct CatalogLabels;
-impl Labels for CatalogLabels {
-    fn mob_label(&self, id: &str) -> Option<&str> {
-        crate::chat_catalog::catalog()
-            .mob_entry(id)
-            .and_then(|entry| entry.get("label"))
-            .and_then(Value::as_str)
-    }
-    fn mob_fallback_label(&self, id: &str) -> Option<&str> {
-        // MOB_VOICE_LABELS: passive, then hostile, then neutral; exact raw ID.
-        [
-            &*crate::entry_catalog::NEUTRAL,
-            &*crate::entry_catalog::HOSTILE,
-            &*crate::entry_catalog::PASSIVE,
-        ]
-        .into_iter()
-        .find_map(|doc| {
-            doc["items"]
-                .get(id)
-                .and_then(|entry| entry.get("label"))
-                .and_then(Value::as_str)
-        })
-    }
-    fn hostile_label(&self, id: &str) -> String {
-        // HOSTILE_LABELS.get(raw, raw), unlike combat::model::label's namespace stripping.
-        crate::combat::catalog::labels()
-            .get(id)
-            .and_then(Value::as_str)
-            .unwrap_or(id)
-            .into()
-    }
-    fn block_label(&self, id: &str) -> Option<&str> {
-        let entry = crate::world_catalog::catalog().block_entry(id)?;
-        entry
-            .get("label")
-            .and_then(Value::as_str)
-            .filter(|s| !s.is_empty())
-            .or_else(|| entry.get("japanese").and_then(Value::as_str))
-    }
-}
+pub(super) use crate::chat_observation::CatalogLabels;
 
 pub(super) fn memory(settings: &crate::combat::model::Settings) -> ChatObservationMemory {
     ChatObservationMemory::new(chat_observation::Settings {

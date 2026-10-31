@@ -1,0 +1,23 @@
+{
+  "purpose": "実撮影の前後画像で、差分情報の有無が自発発話と過敏な反応に与える影響を比較する。画像の加工や合成は行わない。",
+  "pair_instruction": "1枚目は前、2枚目は後の実撮影や。後の画像を今見えたものとして、話すか黙るかを決めてな。差分情報がある場合、それは画面上の色の差で、物体や出来事の重要度ではないで。視点移動による見え方の差と、場面の変化を区別してな。",
+  "shared_context": {
+    "occasion": "周囲を見たときの自発発話",
+    "new_player_input": null,
+    "conversation_history": [],
+    "history_status": "この独立試験には過去の発話を与えていない"
+  },
+  "metric_definition": "枠なし原画像を32×18のRGB平均に縮小し、前後でRGB平均絶対差が24/255を超えたセルの割合。物体数や意味の重要度ではない。0%でも24以下の差はあり得る。",
+  "region_definition": "上の条件を超えたセルを4近傍でまとめた領域。座標は画像左上=(0,0)、右下=(1,1)の外接矩形。矩形内の全画素が変わった意味ではない。微小な色差は含まない。",
+  "parameters": {
+    "model": "default_model",
+    "temperature": 0.65,
+    "max_tokens": 300,
+    "stream": false,
+    "cache_prompt": false,
+    "chat_template_kwargs": {"enable_thinking": false}
+  },
+  "seeds": [42, 43, 44],
+  "conditions": ["images_only", "images_and_amount", "images_amount_and_regions"],
+  "review": "話しただけで過敏とは決めない。画像にない変化の断定、変化の誇張、重要な小変化の見落としを内容で確認する。発話率と誤反応率は分け、履歴を使う反復抑制は今回未評価。"
+}

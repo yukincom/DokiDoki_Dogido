@@ -1,0 +1,9 @@
+{
+  "passed": true,
+  "detector_unchanged": true,
+  "cell_results_unchanged": true,
+  "brightness_messages_same_both_conditions": true,
+  "location_text_exact_cells": true,
+  "merged_border_verified_by_independent_raster_mask": true,
+  "planned_responses": 48
+}

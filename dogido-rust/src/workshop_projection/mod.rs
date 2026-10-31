@@ -192,12 +192,16 @@ fn dialogue_from_view(pairs: &[Value]) -> Result<String> {
         .join("\n"))
 }
 
-/// 表示用の行名を本文へ対応付ける。保存行・音数・材料・生成処理には触れない。
-fn labelled_verse(lines: &[HaikuLine], fallback: String) -> String {
-    if lines.len() != 3 { return fallback; }
-    ["上の句", "中の句", "下の句"].into_iter().zip(lines)
-        .map(|(label, line)| format!("{label}: {}", line.surface_text))
-        .collect::<Vec<_>>().join("\n")
+/// 相談用の行名と本文を別項目で渡す。保存行・生成用の共有投影は変更しない。
+fn labelled_verse(lines: &[HaikuLine], fallback: String) -> Value {
+    if lines.len() != 3 {
+        return fallback.into();
+    }
+    ["上の句", "中の句", "下の句"]
+        .into_iter()
+        .zip(lines)
+        .map(|(label, line)| json!({"line_name": label, "text": line.surface_text}))
+        .collect()
 }
 
 pub fn workshop_context_details(workshop: &Snapshot) -> Value {

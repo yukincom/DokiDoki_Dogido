@@ -1,0 +1,8 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running unittests src/lib.rs (/private/tmp/dogido-part45-20261029/target/debug/deps/dogido_rust-3b05f0013177c941)
+
+running 1 test
+test reaction_leaf::tests::prompts_match_fixture_for_all_kinds_and_branches ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 952 filtered out; finished in 0.38s
+

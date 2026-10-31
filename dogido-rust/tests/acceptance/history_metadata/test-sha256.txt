@@ -1,0 +1,4 @@
+75871f5158ce52fe332939788083a6f6ace02757b8e21d49e46e5f1f01c83f9f  dogido-rust/tests/acceptance/history_metadata.rs
+08a05ddcba73f44f92b6cf06e2846dddba10bd6c41e0300f11d5d6e4846bebb1  dogido-rust/tests/acceptance/history_metadata/support.rs
+369c023aaa7763f284b500c6e36537ee31cd533d47235a3a70d24b486bf94393  dogido-rust/tests/acceptance/history_metadata/run.sh
+7aef4aaf68a04ffebb9e3bfaba8b50722703d52cc45879edc6fb7cab293539ed  dogido-rust/tests/python/fixtures/workshop_meaning_cases.json

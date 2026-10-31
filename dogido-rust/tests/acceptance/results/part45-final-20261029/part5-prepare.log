@@ -1,0 +1,33 @@
+
+Test run finished after 67 ms
+[         2 containers found      ]
+[         0 containers skipped    ]
+[         2 containers started    ]
+[         0 containers aborted    ]
+[         2 containers successful ]
+[         0 containers failed     ]
+[         6 tests found           ]
+[         0 tests skipped         ]
+[         6 tests started         ]
+[         0 tests aborted         ]
+[         6 tests successful      ]
+[         0 tests failed          ]
+
+{"case_id":"pair_01","status":"passed","cells":48,"changed_cells":0,"local_cells":0,"brightness_cells":0}
+{"case_id":"pair_02","status":"passed","cells":48,"changed_cells":0,"local_cells":0,"brightness_cells":0}
+{"case_id":"pair_03","status":"passed","cells":48,"changed_cells":0,"local_cells":0,"brightness_cells":0}
+{"case_id":"pair_04","status":"passed","cells":48,"changed_cells":0,"local_cells":0,"brightness_cells":0}
+{"case_id":"pair_05","status":"passed","cells":48,"changed_cells":0,"local_cells":0,"brightness_cells":0}
+{"case_id":"pair_06","status":"passed","cells":48,"changed_cells":3,"local_cells":3,"brightness_cells":0}
+{"case_id":"pair_07","status":"passed","cells":48,"changed_cells":1,"local_cells":0,"brightness_cells":1}
+{"case_id":"pair_08","status":"passed","cells":48,"changed_cells":1,"local_cells":1,"brightness_cells":0}
+{"case_id":"pair_09","status":"passed","cells":48,"changed_cells":22,"local_cells":0,"brightness_cells":22}
+{"case_id":"pair_10","status":"passed","cells":48,"changed_cells":13,"local_cells":8,"brightness_cells":8}
+{"case_id":"pair_11","status":"passed","cells":48,"changed_cells":20,"local_cells":0,"brightness_cells":20}
+{"case_id":"pair_12","status":"passed","cells":48,"changed_cells":1,"local_cells":0,"brightness_cells":1}
+{"case_id":"pair_13","status":"passed","cells":48,"changed_cells":44,"local_cells":5,"brightness_cells":44}
+PASS: 13 pairs, 624 cells, 26 resized RGB hashes; golden unchanged
+PASS: wire unknown synthetic
+PASS: wire unchanged synthetic
+PASS: wire changed synthetic
+PASS: wire changed pair_06 actual images

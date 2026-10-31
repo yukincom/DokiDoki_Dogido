@@ -1,0 +1,13 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.14s
+     Running unittests src/lib.rs (/private/tmp/dogido-part45-20261029/target/debug/deps/dogido_rust-3b05f0013177c941)
+dialogue::workshop_runtime::acceptance_part8::acceptance_part8_ask_for_missing_words_keeps_verse_version_and_files: test
+dialogue::workshop_runtime::acceptance_part8::acceptance_part8_classified_change_receives_current_candidate_without_new_words: test
+dialogue::workshop_runtime::acceptance_part8::acceptance_part8_current_lines_have_upper_middle_lower_labels_in_model_input: test
+dialogue::workshop_runtime::acceptance_part8::acceptance_part8_extra_changed_line_cannot_cross_save_boundary: test
+dialogue::workshop_runtime::acceptance_part8::acceptance_part8_inspection_preserves_provided_materials_without_mutation: test
+dialogue::workshop_runtime::acceptance_part8::acceptance_part8_interpreted_player_words_save_only_selected_line: test
+dialogue::workshop_runtime::acceptance_part8::acceptance_part8_saved_shared_materials_reach_consultation_and_revision_inputs: test
+dialogue::workshop_runtime::acceptance_part8::acceptance_part8_selected_candidate_is_saved_without_reinventing_words: test
+dialogue::workshop_runtime::acceptance_part8::acceptance_part8_stale_base_version_or_cancel_cannot_write_revision: test
+
+9 tests, 0 benchmarks

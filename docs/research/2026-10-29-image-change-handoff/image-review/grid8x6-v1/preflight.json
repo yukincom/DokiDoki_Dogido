@@ -1,0 +1,7 @@
+{
+  "checks": "52 source hashes; only orange border pixels changed; no numbers or rates in treatment; paired controls identical to previous trial; quiet/turtle/dawn calibration checks",
+  "passed": true,
+  "calls_planned": 78,
+  "thresholds_frozen_before_model_responses": true,
+  "calibration_caveat": "閾値は同じ13画像対で校正。未知場面への一般化は未検証。"
+}

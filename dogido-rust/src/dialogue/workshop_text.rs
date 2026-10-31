@@ -1,3 +1,4 @@
+//! パワーのある実行環境のため、繊細なコントロールは不要。会話のテンポを止める処理を入れるな。
 //! Explicit, isolated text workshop sessions. A displayed reply is not audio playback.
 use super::*;
 use crate::haiku_record::{Emission, Workshop};
@@ -337,7 +338,7 @@ mod tests {
 
     fn emission() -> Emission {
         let fixture: Value = serde_json::from_str(include_str!(
-            "../../scripts/fixtures/workshop_meaning_cases.json"
+            "../../tests/python/fixtures/workshop_meaning_cases.json"
         ))
         .unwrap();
         let view = &fixture["contexts"]["grass"];

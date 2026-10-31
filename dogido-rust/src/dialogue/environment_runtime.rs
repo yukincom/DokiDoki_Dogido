@@ -1,3 +1,4 @@
+//! パワーのある実行環境のため、繊細なコントロールは不要。会話のテンポを止める処理を入れるな。
 //! 環境判断と既存の戦闘・会話音声の優先順位を結ぶ。
 use super::{Data, Dialogue, Session, bridge, observation_fresh};
 use crate::{
@@ -227,7 +228,7 @@ pub(super) fn refresh_dialogue_context(s: &Session, actions: &mut [Speech]) -> b
                     .changes
                     .push(crate::conversation_observation::Change {
                         kind: "body_view".into(),
-                        before: json!({"sha256":capture["previous_sha256"]}),
+                        before: json!(image.scene_comparison.as_ref().and_then(|c| c.reference.as_ref())),
                         now: json!({"sha256":image.sha256,"captured_at":image.captured_at,
                         "motion_sequence":capture["motion_sequence"]}),
                         observed_at: image.captured_at.clone(),
@@ -235,7 +236,7 @@ pub(super) fn refresh_dialogue_context(s: &Session, actions: &mut [Speech]) -> b
                     });
                 leaf.details[key]["visual_capture"] = capture;
             }
-            leaf.details[key]["world_context"] = json!(context.for_reaction(kind, &leaf.details));
+            leaf.details[key]["world_context"] = json!(context.for_model().for_reaction(kind, &leaf.details));
         }
         if periodic_notice {
             // 比較した差分とrevisionは固定し、観測本文だけを生成直前へ揃える。
@@ -438,6 +439,7 @@ impl Dialogue {
                 d.sessions.get_mut(sid).unwrap().deferred_input = Some(input);
             }
             Self::cancel_haiku(d, sid, "urgent_environment");
+            super::reply_output::cancel(d, sid, "urgent_environment", false);
             Self::cancel_chat(d, sid, "urgent_environment");
             let combat = d.sessions[sid]
                 .warning
@@ -655,7 +657,7 @@ impl Dialogue {
         mut cancel: watch::Receiver<bool>,
     ) {
         let input = json!({"op":"light_plan","model":self.config.model,"details":request.details,"fallback_payload":request.fallback_payload});
-        let result = bridge::render(&self.config, &self.llm, input, &mut cancel).await;
+        let result = bridge::render(&self.config, &self.reading_dictionary, &self.llm, input, &mut cancel).await;
         let mut jobs = self.jobs.lock().unwrap();
         jobs.retain(|j| !j.is_finished());
         let mut d = self.data.lock().unwrap();

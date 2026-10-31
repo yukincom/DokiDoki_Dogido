@@ -24,6 +24,9 @@ pub fn image_move_notice() -> &'static str {
 pub fn image_body_contract() -> &'static str {
     TEXT["image_body_contract"].as_str().unwrap()
 }
+pub fn look_player_contract() -> &'static str {
+    TEXT["look_player_contract"].as_str().unwrap()
+}
 pub fn chat_image() -> &'static str {
     TEXT["chat_image"].as_str().unwrap()
 }
@@ -79,22 +82,46 @@ pub fn ambient_request() -> &'static str {
 
 /// Smell guidance is attached only for a current, code-resolved smell observation.
 pub fn dialogue(mode_name: &str, purpose: DialoguePurpose, smell_observed: bool) -> String {
+    dialogue_with_body(mode_name, purpose, smell_observed, None)
+}
+
+/// 固定の身体説明も可変のmode・匂いより前へ置く。説明の有無と呼び名は呼出元の観測を使う。
+pub fn dialogue_with_body(
+    mode_name: &str,
+    purpose: DialoguePurpose,
+    smell_observed: bool,
+    body_player: Option<&str>,
+) -> String {
+    compose_dialogue(mode_name, purpose, smell_observed, choice_contract(), body_player)
+}
+
+fn compose_dialogue(
+    mode_name: &str,
+    purpose: DialoguePurpose,
+    smell_observed: bool,
+    contract: &str,
+    body_player: Option<&str>,
+) -> String {
     let purpose_key = match purpose {
         DialoguePurpose::Reply => "reply",
         DialoguePurpose::Ambient => "ambient",
     };
+    let body = body_player.map(body_observation).unwrap_or_default();
+    // 文面・適用条件・system/userの役割を変えず、再利用できる接頭部を長くする。
+    // 完成したpromptは保存しない。現在観測・履歴は呼出元で毎回組み立てる。
     [
         base(),
-        mode(mode_name),
         grounding(),
+        contract,
+        TEXT["dialogue"][purpose_key].as_str().unwrap(),
+        if matches!(purpose, DialoguePurpose::Ambient) { ambient_request() } else { "" },
+        &body,
+        mode(mode_name),
         if smell_observed {
             TEXT["observed_smell"].as_str().unwrap()
         } else {
             ""
         },
-        if matches!(purpose, DialoguePurpose::Ambient) { ambient_request() } else { "" },
-        TEXT["dialogue"][purpose_key].as_str().unwrap(),
-        choice_contract(),
     ]
     .into_iter()
     .filter(|s| !s.is_empty())
@@ -104,13 +131,23 @@ pub fn dialogue(mode_name: &str, purpose: DialoguePurpose, smell_observed: bool)
 
 /// 身体候補がある環境判断だけ、共有の発話契約を発話＋行動の閉じた契約へ差し替える。
 pub fn environment(smell_observed: bool, body_actions: bool) -> String {
-    let prompt = dialogue("normal", DialoguePurpose::Ambient, smell_observed);
-    if body_actions {
-        prompt.strip_suffix(choice_contract()).unwrap().to_owned()
-            + TEXT["environment_body_contract"].as_str().unwrap()
+    environment_with_body(smell_observed, body_actions, false)
+}
+
+pub fn environment_with_body(smell_observed: bool, body_actions: bool, body_observed: bool) -> String {
+    // 契約の位置に依存した末尾置換をせず、従来と同じ条件で一つだけ選んで組む。
+    let contract = if body_actions {
+        TEXT["environment_body_contract"].as_str().unwrap()
     } else {
-        prompt
-    }
+        choice_contract()
+    };
+    compose_dialogue(
+        "normal",
+        DialoguePurpose::Ambient,
+        smell_observed,
+        contract,
+        body_observed.then_some("プレイヤー"),
+    )
 }
 
 /// 当回に許可された行動だけの完成例。inspectの一時IDも当回の候補から埋める。
@@ -138,3 +175,6 @@ pub fn expand(text: &str) -> String {
         )
         .replace("__DOGIDO_WORKSHOP_MODE__", mode("workshop"))
 }
+
+#[cfg(test)]
+mod tests;

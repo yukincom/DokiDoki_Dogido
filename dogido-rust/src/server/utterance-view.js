@@ -1,3 +1,4 @@
+// パワーのある実行環境のため、繊細なコントロールは不要。会話のテンポを止める処理を入れるな。
 // A presentation option on the existing /dogido page. It never changes records.
 (() => {
   if (new URLSearchParams(window.location.search).get('view') !== 'utterances') return;

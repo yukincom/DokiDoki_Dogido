@@ -1,0 +1,23 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s
+     Running unittests src/lib.rs (/private/tmp/dogido-part45-20261029/target/debug/deps/dogido_rust-3b05f0013177c941)
+
+running 16 tests
+test dialogue::visual_runtime::tests::changed_image_creates_one_existing_notice_with_frozen_image_and_unchanged_image_does_not ... ok
+test dialogue::visual_runtime::tests::equivalent_fourth_image_updates_cache_but_creates_no_change_and_context_loss_clears_it ... ok
+test dialogue::visual_runtime::tests::existing_environment_model_gets_one_image_request_and_can_select_silence ... ok
+test dialogue::visual_runtime::tests::image_body_never_appears_in_serialized_events_debug_or_speech ... ok
+test dialogue::visual_runtime::tests::image_movement_uses_one_reply_and_only_available_image_guidance ... ok
+test dialogue::visual_runtime::tests::image_notice_refreshes_all_current_facts_and_history_in_the_common_context ... ok
+test dialogue::visual_runtime::tests::invalid_images_cannot_become_model_material_and_expired_requests_cannot_renew_their_results ... ok
+test dialogue::visual_runtime::tests::look_tests::image_missing_ack_checks_input_identity_without_requiring_a_current_body ... ok
+test dialogue::visual_runtime::tests::look_tests::look_capture_excludes_old_images_and_is_bound_to_capture_body_input_and_session ... ok
+test dialogue::visual_runtime::tests::look_tests::look_reply_survives_body_changes_after_capture_and_only_new_input_cancels ... ok
+test dialogue::visual_runtime::tests::look_tests::look_success_continues_once_with_a_new_image_or_only_acknowledges_on_timeout ... ok
+test dialogue::visual_runtime::tests::old_image_cannot_claim_the_current_scene_is_unchanged ... ok
+test dialogue::visual_runtime::tests::ordinary_reply_uses_latest_image_without_starting_another_capture_and_can_cancel_empty_wait ... ok
+test dialogue::visual_runtime::tests::refresh_rechecks_the_body_in_the_same_snapshot ... ok
+test dialogue::visual_runtime::tests::stop_request_reuses_sequence_and_acknowledges_accepted_image_exactly_once ... ok
+test dialogue::visual_runtime::tests::unchanged_image_is_attached_to_periodic_and_ordinary_decisions_without_a_fake_change ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 937 filtered out; finished in 2.16s
+

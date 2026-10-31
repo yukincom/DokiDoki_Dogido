@@ -20,17 +20,34 @@ impl Dialogue {
     ) -> bool {
         let mut d = self.data.lock().unwrap();
         let row = d.rows.iter().find(|r| r["turn_id"] == turn);
-        let current = !d.stopped
+        let focused = !d.stopped
             && d.sessions.get(sid).is_some_and(|s| {
                 s.epoch == epoch
+                    && !super::reply_output::current(s, turn, epoch)
                     && row.is_none_or(|r| {
                         r["session_instance"].is_null() || r["session_instance"] == s.instance_id
                     })
             });
+        let delivering = !d.stopped
+            && d.sessions
+                .get(sid)
+                .is_some_and(|s| super::reply_output::current(s, turn, epoch));
+        let current = focused || delivering;
+        // 元配送が終端した後の遅い通知で、完了済みの行を取消へ書き換えない。
+        if !current
+            && row.is_some_and(|r| {
+                matches!(
+                    r["playback_status"].as_str(),
+                    Some("completed" | "cancelled" | "failed" | "audio_disabled")
+                )
+            })
+        {
+            return false;
+        }
         if row.is_some_and(|r| r["epoch"].as_u64().is_some_and(|owner| owner != epoch)) {
             return false;
         }
-        if current
+        if focused
             && row.is_some_and(|r| !super::visual_runtime::look_input_current(&d.sessions[sid], r))
         {
             Self::cancel_chat(&mut d, sid, "look_input_changed");
@@ -45,7 +62,16 @@ impl Dialogue {
             .and_then(|r| r["player_input_text"].as_str())
             .unwrap_or("")
             .to_owned();
-        if current
+        // 戦闘直前との競合ではworkerの結果を保持する。再開後に同じQueuedを一度だけ適用する。
+        if focused
+            && status == PlaybackStatus::Queued
+            && d.sessions
+                .get(sid)
+                .is_some_and(super::workshop_reply::paused)
+        {
+            return false;
+        }
+        if focused
             && status == PlaybackStatus::Queued
             && let Some(wid) = workshop_id.as_ref()
         {
@@ -90,8 +116,13 @@ impl Dialogue {
                 .iter()
                 .find(|r| r["turn_id"] == turn)
                 .is_some_and(|r| r["playback_status"] == "started");
+        let held = d.sessions.get(sid).is_some_and(|s| {
+            focused && super::workshop_reply::paused(s)
+                || super::reply_output::workshop(s, turn, epoch)
+                    .is_some_and(super::workshop_reply::State::paused)
+        });
         if let Some(row) = d.rows.iter_mut().find(|r| r["turn_id"] == turn) {
-            if !preserve_started {
+            if !preserve_started && !(held && status == PlaybackStatus::Started) {
                 row["playback_status"] = status.into();
             }
             row[format!("{status}_at")] = chrono::Utc::now().to_rfc3339().into();
@@ -167,7 +198,7 @@ impl Dialogue {
             row["unspoken_text"] = text.into();
         }
         self.retain_workshop_story(&mut d, sid, turn);
-        if current {
+        if focused {
             let row = d.rows.iter().find(|r| r["turn_id"] == turn);
             let route = row
                 .and_then(|r| {
@@ -186,6 +217,7 @@ impl Dialogue {
             }
             s.haiku.last_activity = Instant::now();
             if status.is_terminal() {
+                s.workshop_reply = None;
                 s.cancel = None;
             }
             if let Some(result) = result {
@@ -308,6 +340,12 @@ impl Dialogue {
                     result: result.clone(),
                 },
             );
+        }
+        if status.is_terminal()
+            && let Some(s) = d.sessions.get_mut(sid)
+        {
+            s.reply_outputs
+                .retain(|output| output.turn != turn || output.epoch != epoch);
         }
         d.revision += 1;
         let record = if status == PlaybackStatus::Queued {

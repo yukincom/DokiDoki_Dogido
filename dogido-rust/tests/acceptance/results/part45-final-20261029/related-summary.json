@@ -1,0 +1,58 @@
+[
+  {
+    "filter": "chat_observation::tests::",
+    "exit_code": 0,
+    "log": "related-1.log",
+    "passed": 9,
+    "failed": 0,
+    "ignored": 0
+  },
+  {
+    "filter": "chat_materials::tests::",
+    "exit_code": 0,
+    "log": "related-2.log",
+    "passed": 8,
+    "failed": 0,
+    "ignored": 0
+  },
+  {
+    "filter": "dialogue::chat_context::tests::",
+    "exit_code": 0,
+    "log": "related-3.log",
+    "passed": 8,
+    "failed": 0,
+    "ignored": 0
+  },
+  {
+    "filter": "chat_prompt::tests::initial_messages_match_fixture",
+    "exit_code": 0,
+    "log": "related-4.log",
+    "passed": 1,
+    "failed": 0,
+    "ignored": 0
+  },
+  {
+    "filter": "reaction_leaf::tests::prompts_match_fixture_for_all_kinds_and_branches",
+    "exit_code": 0,
+    "log": "related-5.log",
+    "passed": 1,
+    "failed": 0,
+    "ignored": 0
+  },
+  {
+    "filter": "dialogue::visual_runtime::tests::",
+    "exit_code": 0,
+    "log": "related-6.log",
+    "passed": 16,
+    "failed": 0,
+    "ignored": 0
+  },
+  {
+    "filter": "dialogue::body_interest_runtime::tests::model_can_silently_look_at_owner_with_unchanged_image_and_covered_rain",
+    "exit_code": 0,
+    "log": "related-7.log",
+    "passed": 1,
+    "failed": 0,
+    "ignored": 0
+  }
+]

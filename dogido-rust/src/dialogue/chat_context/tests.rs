@@ -1,4 +1,6 @@
+//! 見込み: 受付時の観測とラベル・短期記憶を別々に保持できる。合格: 各ケースの更新境界と辞書値が一致する。確認範囲: 模擬sessionと固定資料。聴取や実モデルの返答は検査しない。
 use super::*;
+use crate::chat_observation::Labels;
 use crate::dialogue::{Dialogue, DialogueConfig};
 use crate::playback::Status as PlaybackStatus;
 use serde_json::json;
@@ -57,6 +59,7 @@ fn original_inventory_order_is_private_validated_and_clone_stable() {
     v["inventory"]["a:item"] = json!([]);
     assert!(GameEvent::parse(v).is_err());
 }
+// 見込み: 共通聴覚も既存の正本ラベルを使える。合格: モブ・別称・敵・ブロック全fixtureと完全一致し、未知語やnamespaceの既存規則を保つ。確認範囲: Labels辞書照合。聴取やモデルの種判定は別。
 #[test]
 fn actual_labels_match_canonical_complete_dictionary() {
     let fixture: Value = serde_json::from_str(include_str!(

@@ -111,3 +111,34 @@ fn workshop_model_reads_the_latest_twenty_pairs() {
     assert!(text.starts_with("プレイヤー: 入力05\nドギド: 返答05"));
     assert!(text.ends_with("ドギド: 返答24"));
 }
+
+// 見込み: 行名と本文を別項目にすれば、編集する本文を見出し込みの一行として渡さずに済む。
+// 合格: 現在句・未採用案の各行で名前と本文が分離し、元snapshotは不変。モデル入力投影のみを確認。
+#[test]
+fn consultation_line_names_are_separate_from_current_and_pending_text() {
+    let fixture: Value = serde_json::from_str(include_str!("fixtures.json")).unwrap();
+    let input = fixture["projection"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["op"] == "details" && row["input"]["workshop"]["pending"].is_object())
+        .unwrap()["input"]
+        .clone();
+    let before = input.clone();
+    let snapshot = Snapshot::from_view(&input["workshop"]).unwrap();
+    let details = details_for(&input).unwrap();
+    for (key, lines) in [
+        ("current_verse", &snapshot.current_lines),
+        ("pending_verse", &snapshot.pending_revision_lines),
+    ] {
+        let rows = details["workshop_context"][key].as_array().unwrap();
+        assert_eq!(rows.len(), 3);
+        for (i, label) in ["上の句", "中の句", "下の句"].iter().enumerate() {
+            assert_eq!(
+                rows[i],
+                json!({"line_name":label,"text":lines[i].surface_text})
+            );
+        }
+    }
+    assert_eq!(input, before);
+}

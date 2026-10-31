@@ -1,4 +1,6 @@
-//! 模擬分類workerで共通受付・取消・既存FIFOへの接続を検査する。モデル精度の試験ではない。
+//! 見込み: 入力取消とworker停止を分ければ、旧結果を使わずモデルを使い回せる。
+//! 合格: 同じPID・一回のロードで次入力へ進み、全体終了時は子が残らない。
+//! 範囲: 模擬workerとRust共通受付・既存FIFO。実BERT精度・Minecraft実操作は含まない。
 use super::*;
 use std::{fs, path::Path};
 
@@ -25,7 +27,7 @@ impl Fixture {
         )
         .unwrap();
         let script = r#"
-import fcntl, json, sys, time
+import fcntl, json, os, sys, time
 from pathlib import Path
 base = Path(__file__).parent
 for line in sys.stdin:
@@ -33,19 +35,27 @@ for line in sys.stdin:
     r = {k:f[k] for k in ('schema_version','request_id','manifest_sha256','mode')}
     labels = domains[f['mode']]
     if f['op'] == 'load':
+        with base.joinpath('loads.jsonl').open('a') as out: out.write(json.dumps({'pid':os.getpid(),'mode':f['mode']})+'\n')
+        while base.joinpath('block-load').exists(): time.sleep(0.005)
         r.update(ready=True, labels=labels, limits={'max_history_utterances':0,'max_length':128,'truncation':False})
     else:
         lock = base.joinpath('inference.lock').open('a')
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        blocked = base.joinpath('block-inference').exists()
-        with base.joinpath('inputs.jsonl').open('a') as out: out.write(json.dumps(f,ensure_ascii=False)+'\n')
-        if blocked: time.sleep(60)
+        with base.joinpath('inputs.jsonl').open('a') as out: out.write(json.dumps({**f,'pid':os.getpid()},ensure_ascii=False)+'\n')
+        while base.joinpath('block-inference').exists(): time.sleep(0.005)
         time.sleep(DELAY)
-        if FAIL: r['error'] = 'deliberate test failure'
+        if FAIL or base.joinpath('fail-inference').exists(): r['error'] = 'deliberate test failure'
         else: r['prediction'] = {'label':labels[LABEL], 'probabilities':[int(i==LABEL) for i in range(len(labels))],'token_count':30,'inference_ms':1}
         fcntl.flock(lock, fcntl.LOCK_UN)
         lock.close()
-    print(json.dumps(r),flush=True)
+    encoded = json.dumps(r)
+    if f['op'] == 'classify' and base.joinpath('block-response').exists():
+        mid = len(encoded)//2
+        print(encoded[:mid],end='',flush=True)
+        base.joinpath('response-started').write_text('yes\n')
+        while base.joinpath('block-response').exists(): time.sleep(0.005)
+        print(encoded[mid:],flush=True)
+    else: print(encoded,flush=True)
 "#;
         let labels = serde_json::to_string(
             &json!({"normal":Mode::Normal.labels(),"senryu":Mode::Senryu.labels()}),
@@ -85,7 +95,10 @@ for line in sys.stdin:
         Self { dir, d }
     }
     fn inputs(&self) -> Vec<Value> {
-        fs::read_to_string(self.dir.join("inputs.jsonl"))
+        self.records("inputs.jsonl")
+    }
+    fn records(&self, name: &str) -> Vec<Value> {
+        fs::read_to_string(self.dir.join(name))
             .unwrap_or_default()
             .lines()
             .map(|l| serde_json::from_str(l).unwrap())
@@ -119,6 +132,14 @@ for line in sys.stdin:
     }
     async fn finish(self) {
         self.d.shutdown().await;
+        for row in self.records("loads.jsonl") {
+            let pid = row["pid"].as_i64().unwrap() as i32;
+            assert_eq!(unsafe { libc::kill(pid, 0) }, -1, "worker remains: {pid}");
+            assert_eq!(
+                std::io::Error::last_os_error().raw_os_error(),
+                Some(libc::ESRCH)
+            );
+        }
         fs::remove_dir_all(self.dir).unwrap();
     }
 }
@@ -175,6 +196,9 @@ async fn classified_labels_use_existing_routes_without_legacy_sword_override() {
     }
 }
 
+// 見込み: 新入力は受付済み旧入力だけを取り消し、開始済み推論の完了後に同じworkerを使う。
+// 合格: 旧行は取消・転送なし、次の行だけ支援へ進み、両入力のPIDが同じでロードは1回。
+// 範囲: 模擬推論と実共通受付・支援コマンド作成。実モデルやMinecraftは含まない。
 #[tokio::test]
 async fn newer_input_cancels_pending_work_without_inheriting_preceding_request() {
     let f = Fixture::new(2, 0.2, false);
@@ -182,8 +206,9 @@ async fn newer_input_cancels_pending_work_without_inheriting_preceding_request()
     let first = format!("  {}\n持ち替えて\t", "全文".repeat(90));
     let a = f.d.submit(Some("s"), &first, "text");
     wait_for_file(&f.dir.join("inputs.jsonl")).await;
-    fs::remove_file(f.dir.join("block-inference")).unwrap();
     let b = f.d.submit(Some("s"), "それに替えて", "text");
+    assert_eq!(b["accepted"], true);
+    fs::remove_file(f.dir.join("block-inference")).unwrap();
     f.idle().await;
     assert_eq!(f.row(&a["turn_id"])["playback_status"], "cancelled");
     assert_eq!(
@@ -192,6 +217,9 @@ async fn newer_input_cancels_pending_work_without_inheriting_preceding_request()
     );
     let inputs = f.inputs();
     assert_eq!(inputs.len(), 2);
+    assert_eq!(inputs[0]["pid"], inputs[1]["pid"]);
+    assert_eq!(f.records("loads.jsonl").len(), 1);
+    assert!(f.row(&a["turn_id"])["forwarded_input"].is_null());
     assert_eq!(
         inputs[0]["text"],
         format!("履歴:\n（なし）\n現在のユーザー発話:\n{first}")
@@ -201,6 +229,148 @@ async fn newer_input_cancels_pending_work_without_inheriting_preceding_request()
         "履歴:\n（なし）\n現在のユーザー発話:\nそれに替えて"
     );
     f.finish().await;
+}
+
+// 見込み: 取消は応答の読取futureを破棄しないので、JSONの途中でもworkerを再利用できる。
+// 合格: 前半受信後に取り消した旧入力は転送なし、次入力は同じPID・1ロードで分類成功。
+// 範囲: 分割JSONを返す模擬workerと共通受付。実モデル推論は含まない。
+#[tokio::test]
+async fn cancellation_during_partial_response_keeps_worker_and_stream() {
+    let f = Fixture::new(2, 0.0, false);
+    fs::write(f.dir.join("block-response"), "").unwrap();
+    let a = f.d.submit(Some("s"), "先の依頼", "text");
+    wait_for_file(&f.dir.join("response-started")).await;
+    let b = f.d.submit(Some("s"), "次の依頼", "text");
+    assert_eq!(b["accepted"], true);
+    fs::remove_file(f.dir.join("block-response")).unwrap();
+    f.idle().await;
+    assert_eq!(f.row(&a["turn_id"])["playback_status"], "cancelled");
+    assert!(f.row(&a["turn_id"])["forwarded_input"].is_null());
+    assert_eq!(
+        f.row(&b["turn_id"])["forwarded_input"]["reason"],
+        "assist_input"
+    );
+    let inputs = f.inputs();
+    assert_eq!(inputs.len(), 2);
+    assert_eq!(inputs[0]["pid"], inputs[1]["pid"]);
+    assert_eq!(f.records("loads.jsonl").len(), 1);
+    f.finish().await;
+}
+
+// 見込み: 再ロード中の入力取消はモデルを捨てず、完了後は最新入力だけを分類する。
+// 合格: 旧入力は転送なし、ロードは1回で、workerへ届く分類入力は次の依頼の1件だけ。
+// 範囲: 模擬ロード待ちと共通受付。実モデルのロード時間は含まない。
+#[tokio::test]
+async fn cancellation_during_load_retains_model_without_classifying_old_input() {
+    let f = Fixture::new(2, 0.0, false);
+    fs::write(f.dir.join("block-load"), "").unwrap();
+    let a = f.d.submit(Some("s"), "先の依頼", "text");
+    wait_for_file(&f.dir.join("loads.jsonl")).await;
+    let b = f.d.submit(Some("s"), "次の依頼", "text");
+    assert_eq!(b["accepted"], true);
+    fs::remove_file(f.dir.join("block-load")).unwrap();
+    f.idle().await;
+    assert!(f.row(&a["turn_id"])["forwarded_input"].is_null());
+    assert_eq!(
+        f.row(&b["turn_id"])["forwarded_input"]["reason"],
+        "assist_input"
+    );
+    assert_eq!(f.records("loads.jsonl").len(), 1);
+    let inputs = f.inputs();
+    assert_eq!(inputs.len(), 1);
+    assert_eq!(
+        inputs[0]["text"],
+        "履歴:\n（なし）\n現在のユーザー発話:\n次の依頼"
+    );
+    f.finish().await;
+}
+
+// 見込み: 推論順番待ち中の取消はworkerへ送らず、進行中の推論と最新入力だけを完了する。
+// 合格: 3入力中の前2件は転送なし、実分類は先頭と最新の2件、ロード1回で最後だけ支援へ。
+// 範囲: 模擬worker・共通排他・入力世代。実モデルやゲームの実操作は含まない。
+#[tokio::test]
+async fn cancelled_lock_waiter_never_reaches_resident_worker() {
+    let f = Fixture::new(2, 0.0, false);
+    fs::write(f.dir.join("block-inference"), "").unwrap();
+    let a = f.d.submit(Some("s"), "先の依頼", "text");
+    wait_for_file(&f.dir.join("inputs.jsonl")).await;
+    let b = f.d.submit(Some("s"), "順番待ちの依頼", "text");
+    tokio::task::yield_now().await;
+    let c = f.d.submit(Some("s"), "最新の依頼", "text");
+    fs::remove_file(f.dir.join("block-inference")).unwrap();
+    f.idle().await;
+    for turn in [&a["turn_id"], &b["turn_id"]] {
+        assert_eq!(f.row(turn)["playback_status"], "cancelled");
+        assert!(f.row(turn)["forwarded_input"].is_null());
+    }
+    assert_eq!(
+        f.row(&c["turn_id"])["forwarded_input"]["reason"],
+        "assist_input"
+    );
+    let inputs = f.inputs();
+    assert_eq!(inputs.len(), 2);
+    assert_eq!(
+        inputs[1]["text"],
+        "履歴:\n（なし）\n現在のユーザー発話:\n最新の依頼"
+    );
+    assert_eq!(inputs[0]["pid"], inputs[1]["pid"]);
+    assert_eq!(f.records("loads.jsonl").len(), 1);
+    f.finish().await;
+}
+
+// 見込み: 入力取消後でも全体終了は別の停止信号としてworkerへ届く。
+// 合格: ロード中/推論中の双方で2秒以内にshutdownが完了し、全PIDが消える。
+// 範囲: 停止するまで待ち続ける模擬workerと本体shutdown。実BERT・OS終了は含まない。
+#[tokio::test]
+async fn shutdown_reaps_workers_even_after_input_cancellation() {
+    for (block, started) in [
+        ("block-load", "loads.jsonl"),
+        ("block-inference", "inputs.jsonl"),
+    ] {
+        let f = Fixture::new(2, 0.0, false);
+        fs::write(f.dir.join(block), "").unwrap();
+        let a = f.d.submit(Some("s"), "先の依頼", "text");
+        wait_for_file(&f.dir.join(started)).await;
+        f.d.interrupt("s");
+        tokio::time::timeout(Duration::from_secs(2), f.d.shutdown())
+            .await
+            .unwrap();
+        assert!(f.row(&a["turn_id"])["forwarded_input"].is_null());
+        f.finish().await;
+    }
+}
+
+// 見込み: 通常取消と異常は分け、既存の推論失敗/timeoutではworkerを回収して次回再作成する。
+// 合格: 失敗行は転送なし、原因解除後は別PID・2回目のロードで分類成功する。
+// 範囲: 模擬異常・Rustの既存timeoutと復旧。実BERTの障害原因は含まない。
+#[tokio::test]
+async fn worker_failure_or_timeout_still_restarts_on_next_input() {
+    for marker in ["fail-inference", "block-inference"] {
+        let mut f = Fixture::new(2, 0.0, false);
+        Arc::get_mut(&mut f.d)
+            .unwrap()
+            .config
+            .request_classifier
+            .timeout_ms = 200;
+        f.d.prepare_request_classifier().await.unwrap();
+        fs::write(f.dir.join(marker), "").unwrap();
+        let a = f.d.submit(Some("s"), "失敗する依頼", "text");
+        f.idle().await;
+        assert_eq!(f.row(&a["turn_id"])["playback_status"], "failed");
+        assert!(f.row(&a["turn_id"])["forwarded_input"].is_null());
+        fs::remove_file(f.dir.join(marker)).unwrap();
+        let b = f.d.submit(Some("s"), "次の依頼", "text");
+        f.idle().await;
+        assert_eq!(
+            f.row(&b["turn_id"])["forwarded_input"]["reason"],
+            "assist_input"
+        );
+        let inputs = f.inputs();
+        assert_eq!(inputs.len(), 2);
+        assert_ne!(inputs[0]["pid"], inputs[1]["pid"]);
+        assert_eq!(f.records("loads.jsonl").len(), 2);
+        f.finish().await;
+    }
 }
 
 #[tokio::test]
@@ -280,6 +450,9 @@ async fn obsolete_action_from_danger_queue_never_dispatches() {
     f.finish().await;
 }
 
+// 見込み: 取消後のworker失敗でも、既存の受付保留・支援へ古い入力を戻さない。
+// 合格: 通常失敗はfailed、取消済みはcancelledで、FIFOと支援コマンドが空。
+// 範囲: 模擬推論失敗と共通受付。モデル精度は対象外。
 #[tokio::test]
 async fn failure_and_interrupt_release_reservations_without_legacy_dispatch() {
     for interrupt in [false, true] {
@@ -298,6 +471,7 @@ async fn failure_and_interrupt_release_reservations_without_legacy_dispatch() {
         wait_for_file(&f.dir.join("inputs.jsonl")).await;
         if interrupt {
             f.d.interrupt("s");
+            fs::remove_file(f.dir.join("block-inference")).unwrap();
         }
         f.idle().await;
         assert!(
@@ -566,6 +740,9 @@ async fn two_sessions_and_two_models_share_one_inference_lock() {
     f.finish().await;
 }
 
+// 見込み: 受付境界が変わってもモデルは残し、旧結果を別の句・版へ移さない。
+// 合格: 5種の境界で旧結果の転送なし、次入力は分類成功、通常/川柳のロードは各1回。
+// 範囲: 模擬workerと共通受付・workshop境界。実モデル・発話は含まない。
 #[tokio::test]
 async fn delayed_results_never_cross_workshop_start_end_pause_aba_or_revision() {
     for boundary in ["start", "end", "pause_aba", "revision", "replace"] {
@@ -573,6 +750,8 @@ async fn delayed_results_never_cross_workshop_start_end_pause_aba_or_revision() 
         if boundary != "start" {
             open_workshop(&f.d, "s");
         }
+        f.d.prepare_request_classifier().await.unwrap();
+        let loads = f.records("loads.jsonl");
         fs::write(f.dir.join("block-inference"), "").unwrap();
         let a = f.d.submit(Some("s"), "同じ原文", "text");
         wait_for_file(&f.dir.join("inputs.jsonl")).await;
@@ -598,9 +777,14 @@ async fn delayed_results_never_cross_workshop_start_end_pause_aba_or_revision() 
                 _ => unreachable!(),
             }
         }
+        fs::remove_file(f.dir.join("block-inference")).unwrap();
         f.idle().await;
         assert!(f.row(&a["turn_id"])["forwarded_input"].is_null());
         assert_eq!(f.inputs().len(), 1);
+        let b = f.d.submit(Some("s"), "次の話", "text");
+        f.idle().await;
+        assert!(f.row(&b["turn_id"])["request_classification"].is_object());
+        assert_eq!(f.records("loads.jsonl"), loads);
         f.finish().await;
     }
 }

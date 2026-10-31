@@ -302,10 +302,16 @@ impl Dialogue {
         for report in body_reports {
             if let Some(row) = d.rows.iter_mut().find(|row| {
                 row["session_id"] == session_id
-                    && row["body_request_command_id"] == report.command_id
+                    && (row["body_request_command_id"] == report.command_id
+                        || row["player_approach_command_id"] == report.command_id)
             }) {
-                row["body_request_status"] = report.value["status"].clone();
-                row["body_request_result"] = report.value.clone();
+                if row["player_approach_command_id"] == report.command_id {
+                    row["player_approach_status"] = report.value["status"].clone();
+                    row["player_approach_result"] = report.value.clone();
+                } else {
+                    row["body_request_status"] = report.value["status"].clone();
+                    row["body_request_result"] = report.value.clone();
+                }
             }
             tracing::info!(event="body_request_result",session_id,result=%report.value);
             let continued = self.continue_look_reply(&mut d, &mut jobs, session_id, &report);

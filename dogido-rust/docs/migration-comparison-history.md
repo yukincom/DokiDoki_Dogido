@@ -85,14 +85,14 @@ Core Audioの取得、WebRTC AEC3、Whisper、Sileroのエンジンは既存実�
 python dogido-rust/scripts/generate_voice_fixtures.py
 ./dogido-rust/cargo.sh test --locked voice::
 ./dogido-rust/cargo.sh build --release --locked
-python dogido-rust/scripts/check_voice_runtime.py --binary dogido-rust/target/release/dogido-rust
+python dogido-rust/tests/python/check_voice_runtime.py --binary dogido-rust/target/release/dogido-rust
 python dogido-rust/scripts/generate_vocalization_fixtures.py
 ./dogido-rust/cargo.sh test --locked vocalization
 ./dogido-rust/cargo.sh build --locked --bin dogido-rust
-python dogido-rust/scripts/check_vocalization_runtime.py
+python dogido-rust/tests/python/check_vocalization_runtime.py
 python dogido-rust/scripts/generate_contextual_asr_fixtures.py
 ./dogido-rust/cargo.sh test --locked contextual_asr
-python dogido-rust/scripts/check_contextual_asr_runtime.py
+python dogido-rust/tests/python/check_contextual_asr_runtime.py
 ```
 
 区切り27件・Whisper出力11件をPythonと照合します。模擬試験では一時ポートと合成PCMを使い、再試行、VAD、不正UTF-8、認識待ち、受付拒否、SIGINT／SIGTERM、録音途絶、子プロセス・一時WAVの回収を検証します。結果は`reports/voice-runtime.json`です。
@@ -100,13 +100,13 @@ python dogido-rust/scripts/check_contextual_asr_runtime.py
 模擬LLM／TTS／playerによる実HTTPの取消・失敗・履歴・終了確認:
 
 ```sh
-python dogido-rust/scripts/check_dialogue.py
-python dogido-rust/scripts/check_sentence_audio.py
-python dogido-rust/scripts/check_warnings.py
-python dogido-rust/scripts/check_group_warnings.py
-python dogido-rust/scripts/check_warning_observations.py
-python dogido-rust/scripts/check_combat_runtime.py
-python dogido-rust/scripts/check_environment_runtime.py
+python dogido-rust/tests/python/check_dialogue.py
+python dogido-rust/tests/python/check_sentence_audio.py
+python dogido-rust/tests/python/check_warnings.py
+python dogido-rust/tests/python/check_group_warnings.py
+python dogido-rust/tests/python/check_warning_observations.py
+python dogido-rust/tests/python/check_combat_runtime.py
+python dogido-rust/tests/python/check_environment_runtime.py
 ```
 
 #### 戦闘の移植範囲
@@ -127,7 +127,7 @@ python dogido-rust/scripts/check_environment_runtime.py
 ./dogido-rust/cargo.sh build --locked --offline --examples --bin dogido-rust
 python dogido-rust/scripts/compare_threats.py
 python dogido-rust/scripts/compare_combat.py
-python dogido-rust/scripts/check_combat_runtime.py
+python dogido-rust/tests/python/check_combat_runtime.py
 ```
 
 `compare_combat.py`はPython正本と同じ系列で状態・台詞・cue・断片列を比較します。269系列の等値と、部分観測・保留・優先順など5系列の意図的変更を別々に確認します。結果は`reports/combat-parity.json`、模擬LLM・TTS・playerによるHTTP確認は`reports/combat-runtime-check.json`です。実マイク・スピーカー・Minecraft上の聞こえ方は[実機チェック](../manual-dialogue-check.md)で確認します。
@@ -154,9 +154,9 @@ python dogido-rust/scripts/check_combat_runtime.py
 ./dogido-rust/cargo.sh build --locked --offline --examples --bin dogido-rust
 python scripts/compare_assist.py
 python scripts/compare_environment_danger.py
-python dogido-rust/scripts/check_environment_runtime.py
-python dogido-rust/scripts/check_environment_reactions.py
-python dogido-rust/scripts/check_shared_dialogue.py
+python dogido-rust/tests/python/check_environment_runtime.py
+python dogido-rust/tests/python/check_environment_reactions.py
+python dogido-rust/tests/python/check_shared_dialogue.py
 ```
 
 操作支援は同一入力1,572系列と意図的修正2系列、危険環境は91系列、ambientはPython由来202参照ケースで比較しています。地表の夕方警告を常に割込みにする差は危険環境比較器で明示的に正規化しています。命令期限切れの即時整理・成功未確認の断言抑止・未知結果への誤応答防止は等値比較とは分けています。統合試験は模擬LLM・TTS・playerによるものです。実ゲームの持ち替え、実モデルの表現、実スピーカーの間は実機確認が必要です。
@@ -164,7 +164,7 @@ python dogido-rust/scripts/check_shared_dialogue.py
 既存モデルとVOICEVOXを使う明示的な試聴（このMacで音声が流れます）:
 
 ```sh
-python dogido-rust/scripts/check_dialogue_live.py
+python dogido-rust/tests/python/check_dialogue_live.py
 ```
 
 この実試験はテキスト入力で行います。実マイク・Minecraftでの確認とは区別してください。試験結果は`reports/dialogue-check.json`、`reports/dialogue-live.json`に出力します。試験終了時に起動したサーバーと子プロセスを回収します。
@@ -226,7 +226,7 @@ dogido-rust/target/release/dogido-rust generate dogido-rust/fixtures/connection.
 ```sh
 ./dogido-rust/cargo.sh build --locked --offline --examples
 ./dogido-rust/cargo.sh test --offline --locked haiku --lib
-python dogido-rust/scripts/check_python_worker.py
+python dogido-rust/tests/python/check_python_worker.py
 ```
 
 Rustテストは生成結果・要求・prompt・検査票解析を保存済みfixtureと照合します。模擬HTTPではroute、512トークン、元行の再検査、不合格行だけの再生成、通信失敗、取消・期限切れ時のworker回収を確認します。旧Python本体との実行時比較は行いません。
@@ -274,17 +274,17 @@ workshopでは、会話モデルが現在句・未採用案・直近4往復か�
 ```bash
 python dogido-rust/scripts/compare_workshop_inspection.py
 python -m pytest dogido-rust/scripts/test_workshop_helper.py -q
-python dogido-rust/scripts/check_workshop_runtime.py
-python dogido-rust/scripts/check_workshop_conversation.py
-python dogido-rust/scripts/check_workshop_focus.py
-python dogido-rust/scripts/check_workshop_edits.py
-python dogido-rust/scripts/check_workshop_revision.py
-python dogido-rust/scripts/check_workshop_followup.py
-python dogido-rust/scripts/check_workshop_combat.py
-python dogido-rust/scripts/check_workshop_provisional.py
-python dogido-rust/scripts/check_reading_runtime.py
-python dogido-rust/scripts/check_memory_runtime.py
-python dogido-rust/scripts/check_poem_input.py
+python dogido-rust/tests/python/check_workshop_runtime.py
+python dogido-rust/tests/python/check_workshop_conversation.py
+python dogido-rust/tests/python/check_workshop_focus.py
+python dogido-rust/tests/python/check_workshop_edits.py
+python dogido-rust/tests/python/check_workshop_revision.py
+python dogido-rust/tests/python/check_workshop_followup.py
+python dogido-rust/tests/python/check_workshop_combat.py
+python dogido-rust/tests/python/check_workshop_provisional.py
+python dogido-rust/tests/python/check_reading_runtime.py
+python dogido-rust/tests/python/check_memory_runtime.py
+python dogido-rust/tests/python/check_poem_input.py
 python -m pytest dogido-rust/scripts/test_memory_query.py -q
 # 撤去済みの試験（再作成・実行しない）
 # python -m pytest dogido-rust/scripts/test_combat_input_helper.py -q
@@ -293,13 +293,13 @@ python -m pytest dogido-rust/scripts/test_memory_query.py -q
 実モデルの相談だけを試す場合は、起動済みの接続先を明示します。観測・句・音声は模擬で、実ゲームやスピーカーは使いません。このコマンド自体はMLXを起動・停止しません。
 
 ```bash
-python dogido-rust/scripts/check_workshop_revision_live.py --base-url http://127.0.0.1:8080/v1 --model mlx-community/Qwen3.6-35B-A3B-4bit-DWQ --output .dogido_tmp/workshop-revision-live.json
+python dogido-rust/tests/python/check_workshop_revision_live.py --base-url http://127.0.0.1:8080/v1 --model mlx-community/Qwen3.6-35B-A3B-4bit-DWQ --output .dogido_tmp/workshop-revision-live.json
 ```
 
 ```sh
 python dogido-rust/scripts/test_haiku_preparation.py
 python dogido-rust/scripts/compare_haiku_record.py
-python dogido-rust/scripts/check_haiku_runtime.py
+python dogido-rust/tests/python/check_haiku_runtime.py
 ```
 
 最後の検証は空きローカルポートの模擬モデル・TTSと無音playerを使い、終了時に所有プロセスを回収します。実モデルの品質・速度とMinecraft・音声実機の確認は別途必要です。
@@ -334,11 +334,11 @@ python dogido-rust/scripts/check_haiku_runtime.py
 ./dogido-rust/cargo.sh build --locked
 ./dogido-rust/cargo.sh test --offline address::
 python -m pytest tests/test_language_dialogue.py -q
-python dogido-rust/scripts/check_knowledge.py
+python dogido-rust/tests/python/check_knowledge.py
 python -m pytest dogido-rust/scripts/test_knowledge_handoff.py -q
-python dogido-rust/scripts/check_knowledge_handoff.py
-python dogido-rust/scripts/check_foreground_runtime.py
-python dogido-rust/scripts/check_history_retention.py
+python dogido-rust/tests/python/check_knowledge_handoff.py
+python dogido-rust/tests/python/check_foreground_runtime.py
+python dogido-rust/tests/python/check_history_retention.py
 python dogido-rust/scripts/check_language_runtime.py
 python dogido-rust/scripts/generate_language_validation_fixtures.py
 python dogido-rust/scripts/generate_language_preparation_fixtures.py
@@ -410,7 +410,7 @@ python dogido-rust/scripts/compare_provider.py
 接続サーバーの実HTTP・再起動・終了確認は、releaseビルド後に実行します。
 
 ```sh
-python dogido-rust/scripts/check_server.py
+python dogido-rust/tests/python/check_server.py
 ```
 
 一時ポートでRustサーバーを起動し、Pythonの型と閉鎖HUDの投影を照合します。再起動後の404／409と再登録、Ctrl+C／SIGTERMでの終了を確認し、結果を`reports/server-check.json`へ保存します。試験プロセスは終了時に回収し、実モデル・TTSは呼びません。

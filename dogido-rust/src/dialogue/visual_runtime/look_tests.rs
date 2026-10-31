@@ -1,4 +1,4 @@
-//! 明示の向き変更から一枚の撮影と通常返答への接続を、模擬HTTPで検査する。
+//! 見込み: 明示注視の撮影と元の入力を結び付ければ、移動を続けても一枚から返答できる。合格: identity照合・再送抑止・取消・画像欠落の案内が各ケースを満たす。確認範囲: 模擬画像・分類・HTTP。実機と実モデルは別確認。
 use super::*;
 
 fn completed_look(context: Context, generation: u64) -> crate::body::requests::CompletedLook {
@@ -9,6 +9,7 @@ fn completed_look(context: Context, generation: u64) -> crate::body::requests::C
         executed_at: Utc::now(),
     }
 }
+// 見込み: 明示注視は依頼に対応する新画像を使い、撮影後の移動で捨てない。合格: 正常・移動・観測欠落で取得可、ID・身体・入力・session不一致と取消で取得不可。確認範囲: 模擬受信。
 #[tokio::test]
 async fn look_capture_excludes_old_images_and_is_bound_to_capture_body_input_and_session() {
     for change in [
@@ -95,6 +96,7 @@ async fn look_capture_excludes_old_images_and_is_bound_to_capture_body_input_and
     }
 }
 
+// 見込み: 明示注視の成功は一回の返答へ続き、画像欠落なら向き変更だけ案内する。合格: 画像ありで固定HTTP返答一件、なしで呼出し0件と成功案内一件。確認範囲: 分類注入・模擬画像/HTTP。実モデル未使用。
 #[tokio::test]
 async fn look_success_continues_once_with_a_new_image_or_only_acknowledges_on_timeout() {
     for deliver_image in [true, false] {
@@ -295,6 +297,7 @@ async fn look_success_continues_once_with_a_new_image_or_only_acknowledges_on_ti
     }
 }
 
+// 見込み: 撮影後の返答は身体更新や一時停止を越えて続き、新入力で取消せる。合格: 身体変更・pauseはqueued、新入力だけcancelledで本文なし。確認範囲: updateと模擬配送状態。
 #[tokio::test]
 async fn look_reply_survives_body_changes_after_capture_and_only_new_input_cancels() {
     for changed in ["body", "input", "pause"] {
@@ -343,6 +346,7 @@ async fn look_reply_survives_body_changes_after_capture_and_only_new_input_cance
     }
 }
 
+// 見込み: 撮影欠落時の案内は身体の鮮度でなく元の入力に結び付く。合格: 身体欠落のみは有効、入力/epoch/turn/session変更・event欠落・削除は無効。確認範囲: Source.input_currentの状態照合。
 #[tokio::test]
 async fn image_missing_ack_checks_input_identity_without_requiring_a_current_body() {
     for changed in ["none", "body", "generation", "epoch", "turn", "session", "event", "removed"] {

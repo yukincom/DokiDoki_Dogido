@@ -264,7 +264,7 @@ mod tests {
         }
         fn workshop(&self, start: usize, end: usize) {
             let fixture: Value = serde_json::from_str(include_str!(
-                "../../scripts/fixtures/workshop_meaning_cases.json"
+                "../../tests/python/fixtures/workshop_meaning_cases.json"
             ))
             .unwrap();
             let view = &fixture["contexts"]["grass"];

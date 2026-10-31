@@ -23,7 +23,7 @@ async fn recall_reply_starts_before_arrival_and_uses_the_existing_reply_prompt()
                 gate.notified().await;
                 axum::Json(json!({"id":"recall-fixture","object":"chat.completion","created":0,"model":"fixture",
                     "choices":[{"index":0,"message":{"role":"assistant",
-                    "content":"{\"action\":\"speak\",\"speech\":\"はーい、今そっち行くで。\"}"},"finish_reason":"stop"}]}))
+                    "content":"{\"action\":\"speak\",\"speech\":\"来たで、どうしたん？\"}"},"finish_reason":"stop"}]}))
             }
         }));
     let socket = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -110,7 +110,7 @@ async fn recall_reply_starts_before_arrival_and_uses_the_existing_reply_prompt()
             serde_json::from_str(messages[1]["content"].as_str().unwrap()).unwrap();
         assert_eq!(context["event"], "body_recall");
         assert_eq!(context["player_input"], TEXT);
-        assert_eq!(context["situation"], "プレイヤーがドギドを呼んでいる。");
+        assert_eq!(context["situation"], "プレイヤーに呼ばれて、そばに到着したところや。到着後の返事として、自然に短く応えてな。");
         assert!(context.get("body_options").is_none());
         assert!(context.get("execution_result").is_none());
     }
@@ -126,7 +126,7 @@ async fn recall_reply_starts_before_arrival_and_uses_the_existing_reply_prompt()
         assert!(
             data.rows
                 .iter()
-                .any(|r| r["text"] == "はーい、今そっち行くで。")
+                .any(|r| r["text"] == "来たで、どうしたん？")
         );
         // 返答が出た後でも、到着の正本はまだ未確定。
         assert!(

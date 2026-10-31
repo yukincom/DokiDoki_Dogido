@@ -1,3 +1,4 @@
+//! パワーのある実行環境のため、繊細なコントロールは不要。会話のテンポを止める処理を入れるな。
 //! 共同編集の相談段階。BERT/LLMの解釈を受け取り、コードが呼出し上限・取消・状態反映を扱う。
 #[path = "../workshop_prompt/mod.rs"]
 pub(super) mod prompt;
@@ -60,7 +61,7 @@ impl ClassifiedWorkshop {
             Self::Line(index) => format!(
                 "今回の対象は分類済みの{}や。対象行を再判定せず、この行について自然に返答してな。行の指定だけを修正依頼とは扱わへん。意味の質問、感想、新案の依頼は今回の相談内容に沿って返す。新案を求められた場合だけpropose_revisionを選ぶ。", lines[index].line_id),
             Self::Change(index) => format!(
-                "今回の分類は{}の具体的な語句変更や。行と変更意思を再判定せず、stage_player_editには本人が指定した語、または今回選んだ同じ対象行のconversation_candidateの語を渡してな。認識原文・補正された言葉・会話から旧語と置換語を解釈してええけど、置換語を自分で補作せんといてな。行IDと元句はコードが補完する。指定語も選ばれた相談案もなく置換語が分からんときや、範囲が決められへんときはaskで不足を尋ねてな。", lines[index].line_id),
+                "今回の分類は{}の具体的な語句変更や。行と変更意思を再判定せず、本人の指定語か、今回選んだ同じ対象行のconversation_candidateを反映して、stage_player_editのreplacement_textへ変更後の一行全体を返してな。部分変更でも残す前後の言葉を含める。認識原文・補正された言葉・会話から解釈してええけど、指定のない表現を補作せんといてな。行ID・元句・同じか違うかの比較はコードが担当する。指定語も選ばれた相談案もなく変更内容が分からんときや、範囲が決められへんときはaskで不足を尋ねてな。", lines[index].line_id),
             Self::End => "今回の相談終了は分類済みや。終了意思は再判定せんでええ。未採用案について、今回の発話で採用か破棄が指定されていればaccept_pendingかreject_pendingを選び、その意思を会話の流れから受け取ってな。採否が不明ならaskで採用か破棄かだけ確認する。終了だけで案を採用・破棄せんといてな。".into(),
         }
     }
@@ -105,31 +106,38 @@ impl Dialogue {
         &self,
         input: &bridge::Input,
         cancel: &mut watch::Receiver<bool>,
-        permit: &mut Option<tokio::sync::SemaphorePermit<'_>>,
+        permit: &super::workshop_reply::Permit,
     ) -> Result<Value> {
         let script = self.config.helper.with_file_name("tts_tokens_worker.py");
         let mut helper = Helper::start(&self.config.python, &script)?;
         let reply = super::workshop_story::Reply::default();
+        let continuation = super::workshop_reply::Source::new(self, input, cancel);
         let mut result = {
-            let body = tokio::time::timeout(
-                Duration::from_secs(95),
-                self.workshop_body(input, &mut helper, &reply),
-            );
+            // 各モデル・辞書呼出しは既存の期限を持つ。戦闘保留の時間はturnの期限へ数えない。
+            let body =
+                self.workshop_body(input, &mut helper, &reply, continuation.as_ref(), permit);
+            let body = async {
+                if let Some(source) = &continuation {
+                    source.during(permit, body).await?
+                } else {
+                    body.await
+                }
+            };
             tokio::pin!(body);
             tokio::select! {
-                result = &mut body => result.unwrap_or_else(|_| Err(anyhow::anyhow!("workshop turn timed out"))),
+                result = &mut body => result,
                 _ = bridge::cancelled(cancel) => {
                     if self.workshop_combat_priority(input) {
                         // 音声・生成に共通の直列枠をすぐ戦闘へ譲る。元の会話は
                         // 送信済みの生成だけ受け取り、句操作・追加推論・音声配送は行わない。
-                        drop(permit.take());
+                        permit.release();
                         reply.interrupted.store(true, std::sync::atomic::Ordering::Relaxed);
                         if !reply.waiting_for_model.load(std::sync::atomic::Ordering::Relaxed) {
                             Ok(reply.result(input))
                         } else {
                         loop {
                             tokio::select! {
-                                result = &mut body => break result.unwrap_or_else(|_| Err(anyhow::anyhow!("workshop turn timed out"))),
+                                result = &mut body => break result,
                                 _ = tokio::time::sleep(Duration::from_millis(100)) => {
                                     if !self.workshop_input_session_exists(input) {
                                         break Err(anyhow::anyhow!("session_closed"));
@@ -164,6 +172,8 @@ impl Dialogue {
         input: &bridge::Input,
         helper: &mut Helper,
         reply: &super::workshop_story::Reply,
+        continuation: Option<&super::workshop_reply::Source<'_>>,
+        permit: &super::workshop_reply::Permit,
     ) -> Result<Value> {
         let mut editing = crate::workshop_editing::Engine::default();
         let text = input["text"].as_str().context("workshop input text")?;
@@ -319,7 +329,7 @@ impl Dialogue {
                                 .push_str("本人から尋ねられた読み方・保存材料の参照はinspect_verseや。編集の前提確認には使わへん。");
                         }
                         if allowed.contains(&"stage_player_edit") {
-                            instruction.push_str("stage_player_editの対象行と元句はコードが補完する。今回の指定語か、今回選ばれた同じ対象行のconversation_candidateを使い、target_fragmentへ旧語、replacement_textへ置換語を返してな。一行全体ならtarget_fragmentは空文字。音声認識の誤りや表記の違いは解釈してええで。置換語が分からんときは新しく作らずaskで尋ねてな。evidenceは解釈の記録で、原文との文字列一致は求めへん。");
+                            instruction.push_str("stage_player_editの対象行と元句はコードが補完する。今回の指定語か、今回選ばれた同じ対象行のconversation_candidateを反映し、replacement_textへ変更後の一行全体を返してな。部分変更でも残す言葉を含め、旧語や差分は返さへん。元の行と同じか違うかはコードが比較する。音声認識の誤りや表記の違いは解釈してええで。変更内容が分からんときは新しく作らずaskで尋ねてな。evidenceは解釈の記録で、原文との文字列一致は求めへん。");
                         }
                         instruction.push_str("本文JSONは会話の返答と、本文JSONで使えるaction一覧の処理に使う。tool呼出し時は本文の返事を付けず結果を待つ。コードが対象へ差分を適用し、保存結果を返すで。");
                         let system = prepared["messages"][0]["content"].as_str().unwrap_or("");
@@ -352,6 +362,9 @@ impl Dialogue {
                     };
                     if reply.interrupted() || self.workshop_combat_priority(input) {
                         return Ok(reply.result(input));
+                    }
+                    if let Some(source) = continuation {
+                        source.ready(permit).await?;
                     }
                     self.record_text_workshop_request(input, &request, phase);
                     reply
@@ -652,6 +665,9 @@ impl Dialogue {
                         reports: vec![],
                         capture: None,
                     };
+                    if let Some(source) = continuation {
+                        source.ready(permit).await?;
+                    }
                     let revision = crate::haiku::revision::generate(&mut backend, prepared).await?;
                     reports.extend(backend.reports);
                     observation = json!({"kind":"revision_validation","status":if revision.accepted {"proposed"}else{"rejected"},
@@ -706,7 +722,8 @@ impl Dialogue {
                         {
                             let target = result.target_line_index.context("missing edit target")?;
                             if pending.is_some()
-                                && workshop_edit::surface(&result.lines) == workshop_edit::surface(&current)
+                                && workshop_edit::surface(&result.lines)
+                                    == workshop_edit::surface(&current)
                             {
                                 // 案から元句へ戻す編集。既存の破棄処理が版・取消を再照合する。
                                 steps.last_mut().unwrap()["outcome"] = "restored_canonical".into();
@@ -1143,3 +1160,7 @@ mod bert_tests {
         assert_eq!(end, vec!["ask", "accept_pending", "reject_pending"]);
     }
 }
+
+#[cfg(test)]
+#[path = "../../tests/acceptance/part8_workshop.rs"]
+mod acceptance_part8;

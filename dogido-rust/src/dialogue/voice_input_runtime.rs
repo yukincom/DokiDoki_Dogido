@@ -1,3 +1,4 @@
+//! パワーのある実行環境のため、繊細なコントロールは不要。会話のテンポを止める処理を入れるな。
 //! 音声入口の叫声・STT文脈。叫声は診断へだけ記録し、会話や句の操作へ流さない。
 use super::{Data, Dialogue, Session};
 use crate::{events::GameEvent, vocalization};

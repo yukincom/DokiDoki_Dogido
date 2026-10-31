@@ -1,0 +1,8 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running unittests src/lib.rs (/private/tmp/dogido-part45-20261029/target/debug/deps/dogido_rust-3b05f0013177c941)
+
+running 1 test
+test chat_prompt::tests::initial_messages_match_fixture ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 952 filtered out; finished in 0.01s
+

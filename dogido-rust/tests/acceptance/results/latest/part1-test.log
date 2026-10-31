@@ -1,0 +1,19 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running unittests src/lib.rs (/private/tmp/dogido-tests-final-20261029/target-combined/debug/deps/dogido_rust-3b05f0013177c941)
+
+running 12 tests
+test dialogue::acceptance_position::changing_visibility_preserves_known_position ... ok
+test dialogue::acceptance_position::common_observation_distinguishes_subject_reference_and_invisible_position ... ok
+test dialogue::acceptance_position::distance_0_99_is_0_not_1_block ... ok
+test dialogue::acceptance_position::distance_10_01_is_10_blocks_without_decimal_suffix ... ok
+test dialogue::acceptance_position::distance_9_38_is_9_blocks ... ok
+test dialogue::acceptance_position::distance_9_99_is_9_not_10_blocks ... ok
+test dialogue::acceptance_position::environment_receives_the_same_subject_facts ... ok
+test dialogue::acceptance_position::ordinary_reply_receives_subject_facts ... ok
+test dialogue::acceptance_position::position_changes_use_subject_facts_and_internal_comparison_keeps_numeric_data ... ok
+test dialogue::acceptance_position::rotating_only_dogido_changes_only_dogido_reference ... ok
+test dialogue::acceptance_position::rotating_only_player_changes_only_player_reference ... ok
+test dialogue::acceptance_position::unavailable_observation_clears_previous_position_in_both_model_routes ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 928 filtered out; finished in 0.12s
+

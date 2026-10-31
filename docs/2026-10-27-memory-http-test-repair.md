@@ -49,9 +49,9 @@
 
 ### 4. 再発検出と最終確認
 
-- 既存CIが収集する `dogido-rust/scripts/test_*.py` に、3本を別Pythonプロセスでimportする軽量テストを追加する。HTTP・モデル・音声は起動せず、timeout付きで欠けたimportを検出する。
+- 既存CIが収集する `dogido-rust/tests/python/test_*.py` に、3本を別Pythonプロセスでimportする軽量テストを追加する。HTTP・モデル・音声は起動せず、timeout付きで欠けたimportを検出する。
 - 3本を最終状態で完走させ、各ケース数・失敗0・所有プロセスの終了を確認する。既に最終状態で単独完走している試験は、以降の変更が依存先に及ばない限り重ねて実行しない。
-- `dogido-llm/bin/python -m pytest -q tests dogido-rust/scripts/test_*.py` を実行する。既存skip・対象外の失敗があれば成功と分ける。
+- `dogido-llm/bin/python -m pytest -q tests dogido-rust/tests/python/test_*.py` を実行する。既存skip・対象外の失敗があれば成功と分ける。
 - 本体コードを変更しない場合は既存debug buildを確認し、試験修復のためだけのrelease更新やFabricビルドは行わない。本体変更が生じた場合は関連Rust試験と全targetを実行する。
 - `dogido-rust/README.md` に3本の目的と確認入口を簡潔に反映し、前の重複整理計画に修復先を追記する。本書を完了状態へ更新してコミットする。
 
@@ -77,7 +77,7 @@
 - `meaning_ack` を直接importし、共通のBERT分類fixtureへ統一した。削除済みの補助関数は追加していない。
 - 肯定的講評を保存する会話と、モデルを呼ばず終了する入力を分離した。前者は既存lessonを保持し、後者は講評を追加しないことを確認した。
 - 「今日」「句」を含む終了もBERTで閉じ、想起へ流れず追加推論しない。AI案は相談1回・編集生成1回、採用後の終了は追加推論0回という現行回数を確認した。
-- 元の11ケースの記憶・保存・取消境界を維持した。`./dogido-rust/cargo.sh build --locked` と `dogido-llm/bin/python -B dogido-rust/scripts/check_memory_runtime.py` が成功。本体コードは変更していない。
+- 元の11ケースの記憶・保存・取消境界を維持した。`./dogido-rust/cargo.sh build --locked` と `dogido-llm/bin/python -B dogido-rust/tests/python/check_memory_runtime.py` が成功。本体コードは変更していない。
 
 ### 単位2の実施結果
 
@@ -85,19 +85,19 @@
 - 川柳再開時は通常分類の待機質問を `superseded_classifier_mode` で取消し、元分類・未採用案を保持する。通常モードのままなら同じvoice入力の重複を抑え、元turn IDでFIFO配送し、正本知識の参照と履歴の一度だけの確定を確認する。
 - 分類モードは待機行で、参照・推論不使用は回答行で、取消は取消行で確認する。戦闘後の安堵leafは質問と別用途なので、相談モデルの追加呼出しと混同しない。
 - 上限試験の旧国語専用質問を詩・Minecraftの対応入力へ置換した。死亡・次元変更・切断は、分類済みの警告待ち状態から取消する試験として表記を正した。
-- `dogido-llm/bin/python -B dogido-rust/scripts/check_knowledge_handoff.py` は8ケース成功、試験所有プロセス終了。本体コードは変更していない。
+- `dogido-llm/bin/python -B dogido-rust/tests/python/check_knowledge_handoff.py` は8ケース成功、試験所有プロセス終了。本体コードは変更していない。
 
 ### 単位3の実施結果
 
 - 間接importの不備は単位1で解消。BERT終了の生成0回、pendingがある場合の採否確認1回、重複受信、生成・音声・ディスク待ち中の戦闘、接続終了後の遅延結果、保存無効・失敗を維持した。
 - 到達しないBERT終了用feedbackの3反復を1ケースへ整理し、通常の `respond` でfeedbackの欠落・数値evidence・原文にないevidenceを検証した。意味説明用メタデータを混ぜず、本文1回・保存なし・句とlesson不変を確認する。
 - 会話出力の契約補完2回と、編集生成0回を別に確認した。撤去済みの編集案再生成や `followup` は追加していない。
-- `dogido-llm/bin/python -B dogido-rust/scripts/check_workshop_praise.py` は12ケース成功、試験所有プロセス終了。本体コードは変更していない。
+- `dogido-llm/bin/python -B dogido-rust/tests/python/check_workshop_praise.py` は12ケース成功、試験所有プロセス終了。本体コードは変更していない。
 
 ### 単位4と最終確認
 
 - `test_http_check_imports.py` は3本をそれぞれ独立したPythonプロセスでimportする。timeout 10秒、隔離モードを使い、先行テストのmodule cacheに依存しない。HTTP・モデル・音声を起動しない軽量検査で、既存CIの `test_*.py` 収集対象に入る。
-- 単独のimport検査は3件成功。既存CIと同じ範囲の `dogido-llm/bin/python -B -m pytest -q tests dogido-rust/scripts/test_*.py` は **221 passed / 11 skipped / 32 subtests passed**、失敗0。skipは明示実行が必要なSSH連携等5件と、ローカルMinecraft DBがない場合の6件。
+- 単独のimport検査は3件成功。既存CIと同じ範囲の `dogido-llm/bin/python -B -m pytest -q tests dogido-rust/tests/python/test_*.py` は **221 passed / 11 skipped / 32 subtests passed**、失敗0。skipは明示実行が必要なSSH連携等5件と、ローカルMinecraft DBがない場合の6件。
 - HTTPは記憶11・知識引継ぎ8・肯定的講評12、計31ケース成功。各スクリプトが最終コードで完走し、試験所有プロセスを終了した。その後の変更は独立したimport検査とdocsだけで、3本と依存fixtureは変更していない。
 - `followup` の定義・import・別名を追加していないことを検索確認した。既存の `workshop_followup` 状態名や `meaning_ack` は現役の会話段階を表すため維持する。
 - READMEに試験の責務と入口を追記し、前の重複整理計画の未修復記録へ本書を接続した。変更は試験とdocsに限定。本体・プロンプト・CI設定は変更していない。

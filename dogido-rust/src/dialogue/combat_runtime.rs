@@ -228,7 +228,13 @@ impl Dialogue {
             || decision.stop_audio
             || decision.dimension_changed
         {
-            if combat_priority && !decision.dimension_changed {
+            let hold_workshop = (combat_priority
+                || super::workshop_reply::paused(&d.sessions[sid]))
+                && !decision.dimension_changed
+                && !decision.actions.iter().any(|a| a.kind == "death")
+                && input.is_none()
+                && self.pause_workshop_reply(d, sid);
+            if combat_priority && !decision.dimension_changed && !hold_workshop {
                 self.mark_workshop_combat_priority(d, sid);
             }
             Self::cancel_haiku(d, sid, reason.unwrap_or("combat_priority"));
@@ -243,11 +249,16 @@ impl Dialogue {
                 decision.dimension_changed || decision.actions.iter().any(|a| a.kind == "death");
             // 通常会話の割込みは、既存警告が持つ緊急性で決める。
             // 敵が居続けるフレームや撃破後の安堵だけでは質問を取り消さない。
+            if urgent || reset {
+                super::reply_output::cancel(d, sid, reason.unwrap_or("combat_priority"), !reset);
+            }
             if !ordinary || urgent || reset || input.is_some() {
                 if ordinary && urgent && !reset && input.is_none() {
                     self.retain_interrupted_reply(d, sid);
                 }
-                Self::cancel_chat(d, sid, reason.unwrap_or("combat_priority"));
+                if !hold_workshop {
+                    Self::cancel_chat(d, sid, reason.unwrap_or("combat_priority"));
+                }
             }
         }
         if decision.dimension_changed || (decision.stop_audio && !defer_relief) {
@@ -289,6 +300,7 @@ impl Dialogue {
             return;
         }
         if s.cancel.is_some()
+            && !super::workshop_reply::paused(s)
             && s.pending_warning.as_ref().is_some_and(|actions| {
                 actions.iter().all(|a| {
                     a.delivery == crate::combat::model::Delivery::Combat && !interrupts_reply(a)
@@ -297,11 +309,25 @@ impl Dialogue {
         {
             return;
         }
-        let Some(actions) = s.pending_warning.take() else {
+        let (actions, input, admission) = if let Some(actions) = s.pending_warning.take() {
+            (actions, s.pending_input.take(), None)
+        } else if let Some(reply) = s.pending_replies.pop_front() {
+            (
+                vec![reply.speech],
+                reply.input,
+                Some((reply.source, reply.binding)),
+            )
+        } else {
             return;
         };
-        let input = s.pending_input.take();
         self.spawn_actions(d, jobs, sid, actions, input.as_deref());
+        if let Some((source, binding)) = admission {
+            let turn = &d.sessions[sid].warning.as_ref().unwrap().turn;
+            if let Some(row) = d.rows.iter_mut().find(|row| row["turn_id"] == *turn) {
+                row["request_source"] = serde_json::json!(source);
+                row["classifier_binding"] = serde_json::json!(binding);
+            }
+        }
     }
     pub(super) fn spawn_actions(
         self: &Arc<Self>,

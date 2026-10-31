@@ -1,0 +1,87 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running unittests src/lib.rs (/private/tmp/dogido-tests-final-20261029/target-combined/debug/deps/dogido_rust-3b05f0013177c941)
+
+running 11 tests
+test dialogue::acceptance_hearing::common_sound_retains_event_and_original_heard_time ... FAILED
+test dialogue::acceptance_hearing::control_catalog_sound_tags_remain_general_without_heard_evidence ... ok
+test dialogue::acceptance_hearing::control_player_side_sound_is_not_substituted_for_dogido_hearing ... ok
+test dialogue::acceptance_hearing::duplicate_sound_is_collapsed_but_distinct_sound_event_survives ... FAILED
+test dialogue::acceptance_hearing::empty_truncated_and_unavailable_hearing_are_distinct ... FAILED
+test dialogue::acceptance_hearing::environment_request_receives_same_sound_fact_exactly_once ... FAILED
+test dialogue::acceptance_hearing::hostile_sound_preserves_adapter_uncertainty ... FAILED
+test dialogue::acceptance_hearing::ordinary_request_does_not_repeat_the_same_hearing_memo ... FAILED
+test dialogue::acceptance_hearing::ordinary_request_receives_sound_fact_exactly_once ... FAILED
+test dialogue::acceptance_hearing::player_emitter_requires_actual_owner_source_match ... FAILED
+test dialogue::acceptance_hearing::unknown_sound_keeps_uncertainty_without_inventing_a_source ... FAILED
+
+failures:
+
+---- dialogue::acceptance_hearing::common_sound_retains_event_and_original_heard_time stdout ----
+
+thread 'dialogue::acceptance_hearing::common_sound_retains_event_and_original_heard_time' (21358147) panicked at src/dialogue/../../tests/acceptance/hearing.rs:164:5:
+assertion `left == right` failed
+  left: Null
+ right: "observed"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- dialogue::acceptance_hearing::duplicate_sound_is_collapsed_but_distinct_sound_event_survives stdout ----
+
+thread 'dialogue::acceptance_hearing::duplicate_sound_is_collapsed_but_distinct_sound_event_survives' (21358153) panicked at src/dialogue/../../tests/acceptance/hearing.rs:124:10:
+共通観測のhearing.soundsに実際に届いた音を載せる
+
+---- dialogue::acceptance_hearing::empty_truncated_and_unavailable_hearing_are_distinct stdout ----
+
+thread 'dialogue::acceptance_hearing::empty_truncated_and_unavailable_hearing_are_distinct' (21358154) panicked at src/dialogue/../../tests/acceptance/hearing.rs:350:9:
+assertion `left == right` failed
+  left: Null
+ right: "observed"
+
+---- dialogue::acceptance_hearing::environment_request_receives_same_sound_fact_exactly_once stdout ----
+
+thread 'dialogue::acceptance_hearing::environment_request_receives_same_sound_fact_exactly_once' (21358155) panicked at src/dialogue/../../tests/acceptance/hearing.rs:201:5:
+assertion `left == right` failed: 環境生成にも実音の事実が必要
+  left: 0
+ right: 1
+
+---- dialogue::acceptance_hearing::hostile_sound_preserves_adapter_uncertainty stdout ----
+
+thread 'dialogue::acceptance_hearing::hostile_sound_preserves_adapter_uncertainty' (21358156) panicked at src/dialogue/../../tests/acceptance/hearing.rs:124:10:
+共通観測のhearing.soundsに実際に届いた音を載せる
+
+---- dialogue::acceptance_hearing::ordinary_request_does_not_repeat_the_same_hearing_memo stdout ----
+
+thread 'dialogue::acceptance_hearing::ordinary_request_does_not_repeat_the_same_hearing_memo' (21358157) panicked at src/dialogue/../../tests/acceptance/hearing.rs:220:5:
+同じ音メモが通常会話の複数欄へ重複している
+
+---- dialogue::acceptance_hearing::ordinary_request_receives_sound_fact_exactly_once stdout ----
+
+thread 'dialogue::acceptance_hearing::ordinary_request_receives_sound_fact_exactly_once' (21358158) panicked at src/dialogue/../../tests/acceptance/hearing.rs:188:5:
+assertion `left == right` failed: 通常生成へ共通の音事実を一度だけ渡す
+  left: 0
+ right: 1
+
+---- dialogue::acceptance_hearing::player_emitter_requires_actual_owner_source_match stdout ----
+
+thread 'dialogue::acceptance_hearing::player_emitter_requires_actual_owner_source_match' (21358159) panicked at src/dialogue/../../tests/acceptance/hearing.rs:124:10:
+共通観測のhearing.soundsに実際に届いた音を載せる
+
+---- dialogue::acceptance_hearing::unknown_sound_keeps_uncertainty_without_inventing_a_source stdout ----
+
+thread 'dialogue::acceptance_hearing::unknown_sound_keeps_uncertainty_without_inventing_a_source' (21358160) panicked at src/dialogue/../../tests/acceptance/hearing.rs:124:10:
+共通観測のhearing.soundsに実際に届いた音を載せる
+
+
+failures:
+    dialogue::acceptance_hearing::common_sound_retains_event_and_original_heard_time
+    dialogue::acceptance_hearing::duplicate_sound_is_collapsed_but_distinct_sound_event_survives
+    dialogue::acceptance_hearing::empty_truncated_and_unavailable_hearing_are_distinct
+    dialogue::acceptance_hearing::environment_request_receives_same_sound_fact_exactly_once
+    dialogue::acceptance_hearing::hostile_sound_preserves_adapter_uncertainty
+    dialogue::acceptance_hearing::ordinary_request_does_not_repeat_the_same_hearing_memo
+    dialogue::acceptance_hearing::ordinary_request_receives_sound_fact_exactly_once
+    dialogue::acceptance_hearing::player_emitter_requires_actual_owner_source_match
+    dialogue::acceptance_hearing::unknown_sound_keeps_uncertainty_without_inventing_a_source
+
+test result: FAILED. 2 passed; 9 failed; 0 ignored; 0 measured; 929 filtered out; finished in 0.11s
+
+error: test failed, to rerun pass `--lib`

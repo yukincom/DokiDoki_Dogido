@@ -23,12 +23,8 @@ pub struct Attachment {
     pub scene_comparison: Option<SceneComparison>,
 }
 
-/// Fabricが同じ身体世代・地点の4枚前と比較した結果。未比較を「変化なし」へ補完しない。
-#[derive(Clone, Debug, serde::Serialize)]
-pub struct SceneComparison {
-    pub visual_change: bool,
-    pub compared_to_four_before: bool,
-}
+mod comparison;
+pub use comparison::{SceneComparison, ComparisonStatus, ComparisonReference, CellChange, Brightness};
 
 impl fmt::Debug for Attachment {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -99,8 +95,7 @@ impl Attachment {
             ),
             "chat_image_invalid_annotation_status"
         );
-        ensure!(self.scene_comparison.as_ref().is_none_or(|c| c.visual_change || c.compared_to_four_before),
-            "chat_image_unverified_no_change");
+        if let Some(comparison) = &self.scene_comparison { comparison.validate(&self.captured_at)?; }
         Ok(())
     }
 
@@ -112,10 +107,7 @@ impl Attachment {
                 "viewpoint":"dogido_client_render_eye", "media_type":"image/png",
                 "captured_at":self.captured_at, "width":self.width, "height":self.height,
                 "sha256":self.sha256, "annotation_status":self.annotation_status,
-                "scene_comparison":self.scene_comparison,
-                "scene_change":self.scene_comparison.as_ref().map(|c| if !c.compared_to_four_before {
-                    "not_compared"
-                } else if c.visual_change { "changed" } else { "unchanged" }),
+                "scene_comparison":self.scene_comparison.as_ref().map(SceneComparison::description),
             })
         )
     }

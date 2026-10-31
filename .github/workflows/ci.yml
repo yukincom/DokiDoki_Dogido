@@ -42,7 +42,7 @@ jobs:
           .venv/bin/python -m dogido_server.tls_security --bootstrap
           .venv/bin/python -m pip --disable-pip-version-check install -e '.[dev]' numpy==2.2.6
       - name: Test Python helpers
-        run: .venv/bin/python -m pytest -q tests dogido-rust/scripts/test_*.py
+        run: .venv/bin/python -m pytest -q tests dogido-rust/tests/python/test_*.py
       - name: Test library models
         run: node --test tools/dogido-library/*.test.cjs
       - name: Check shell syntax

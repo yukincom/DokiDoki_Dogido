@@ -173,6 +173,7 @@ public final class EventJsonBuilder {
             entry.addProperty("source_id", threat.sourceId());
             entry.addProperty("sound_event", threat.soundEvent());
             entry.addProperty("heard_ago_ms", threat.heardAgoMs());
+            if (threat.sourceContext() != null) entry.add("source_context",threat.sourceContext().deepCopy());
 
             JsonObject direction = new JsonObject();
             direction.addProperty("horizontal", threat.horizontalDirection());
@@ -198,6 +199,7 @@ public final class EventJsonBuilder {
             entry.addProperty("source_id", sound.sourceId());
             entry.addProperty("sound_event", sound.soundEvent());
             entry.addProperty("heard_ago_ms", sound.heardAgoMs());
+            if (sound.sourceContext() != null) entry.add("source_context",sound.sourceContext().deepCopy());
 
             JsonObject direction = new JsonObject();
             direction.addProperty("horizontal", sound.horizontalDirection());

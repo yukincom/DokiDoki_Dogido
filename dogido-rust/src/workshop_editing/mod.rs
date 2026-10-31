@@ -306,3 +306,7 @@ fn editing_lines(s: &Snapshot) -> Vec<String> {
             .unwrap_or(&s.surface_text),
     )
 }
+
+#[cfg(test)]
+#[path = "../../tests/acceptance/part8_edit_engine.rs"]
+pub(crate) mod acceptance_part8_engine;

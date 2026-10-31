@@ -1,0 +1,8 @@
+{
+  "user_instruction": "8×6程度のマス内で大きな変化だけを検出し、枠と説明、または変化がないで試す。明るさも閾値を設ける。",
+  "changed_message": "変化領域をオレンジ色の枠で表示しています。",
+  "unchanged_message": "変化がない",
+  "system_sha256": "6e7cf28ee782bdb0d363fb804567000012ff73f4934d14bddaf9f6c5131645dc",
+  "scope": "13 actual pairs x2 conditions x3 seeds =78 responses",
+  "model_runtime_reference": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/approval.json"
+}

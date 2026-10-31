@@ -1,3 +1,4 @@
+//! 見込み: 保持の時刻・件数を保ったまま共通聴覚の記録を追加できる。合格: 旧fixtureの全既存項目は不変、新フィールドもJSON往復で不変。確認範囲: 模擬観測と保持。新しい音の意味・由来はacceptance/hearing.rsで照合。
 use super::*;
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -46,6 +47,7 @@ struct Step {
     outcome_updates: NameOutcomeUpdate,
     expected: Value,
 }
+// 見込み: 観測情報の追加で既存保持の振る舞いを変えない。合格: 全旧fixture項目を厳密比較し、observationを含むsnapshotはJSON往復で一致。確認範囲: 固定した旧形式と保持。新観測の内容の正解は受入試験で別検査。
 #[test]
 fn persistent_observation_traces_match_fixture() {
     let labels = labels();
@@ -59,8 +61,15 @@ fn persistent_observation_traces_match_fixture() {
                 memory
                     .observe(&row.event, &row.outcome_updates, &labels);
             }
-            let actual =
-                serde_json::to_value(memory.snapshot(&row.event, &labels)).unwrap();
+            let snapshot = memory.snapshot(&row.event, &labels);
+            let mut actual = serde_json::to_value(&snapshot).unwrap();
+            let restored: Snapshot = serde_json::from_value(actual.clone()).unwrap();
+            assert_eq!(restored, snapshot, "{} step {i}: 新観測情報もJSON往復で保持", trace.name);
+            // 移植時の正本fixtureは再生成しない。従来の全項目を厳密比較し、
+            // 追加observationの内容はacceptance/hearing.rsで入力から独立に照合する。
+            for memo in actual["recent"]["hearing_memos"].as_array_mut().unwrap() {
+                memo.as_object_mut().unwrap().remove("observation");
+            }
             assert_eq!(actual, row.expected, "{} step {i}", trace.name);
             assert!(memory.visual.len() <= 12);
             assert!(memory.hearing.len() <= 12);

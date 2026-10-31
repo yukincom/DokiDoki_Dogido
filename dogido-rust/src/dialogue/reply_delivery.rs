@@ -1,3 +1,4 @@
+//! パワーのある実行環境のため、繊細なコントロールは不要。会話のテンポを止める処理を入れるな。
 //! 会話の返答が届いたと確認できた時点の反映。文字と音声のどちらでも同じ確定処理を一度だけ行う。
 use super::{Data, Dialogue};
 use serde_json::{Value, json};
@@ -29,14 +30,20 @@ impl Dialogue {
         {
             return false;
         }
-        if s.epoch != epoch
+        if row["delivery_confirmed"] == true
+            && row["epoch"].as_u64().is_none_or(|owner| owner == epoch)
+        {
+            return true;
+        }
+        let delivering = super::reply_output::current(s, turn, epoch);
+        let focused = s.epoch == epoch && !delivering;
+        if (!focused && !delivering)
             || row["epoch"].as_u64().is_some_and(|owner| owner != epoch)
-            || text && (s.current_turn != turn || row["playback_status"] == "cancelled")
+            || text
+                && ((!delivering && s.current_turn != turn)
+                    || row["playback_status"] == "cancelled")
         {
             return false;
-        }
-        if row["delivery_confirmed"] == true {
-            return true;
         }
         let workshop_id = row["workshop_id"].as_str().map(str::to_owned);
         if text && let Some(wid) = workshop_id.as_ref() {
@@ -79,7 +86,8 @@ impl Dialogue {
                     .pending
                     .as_ref()
                     .map_or(w.current_lines.as_slice(), |p| &p.lines);
-                if w.open
+                if focused
+                    && w.open
                     && !w.combat_paused()
                     && let Some(target) = crate::workshop_target::Target::from_view(
                         &json!({"discussion_target":result["workshop_discussion_target"]}),
@@ -88,7 +96,8 @@ impl Dialogue {
                 {
                     w.discussion_target = Some(target);
                 }
-                if w.open
+                if focused
+                    && w.open
                     && !w.combat_paused()
                     && result["workshop_version"] == w.version
                     && w.pending.is_none()
@@ -96,7 +105,9 @@ impl Dialogue {
                     w.followup = serde_json::from_value(result["workshop_followup"].clone())
                         .unwrap_or_default();
                 }
-                w.drift_count = 0;
+                if focused {
+                    w.drift_count = 0;
+                }
                 w.record_activity(Instant::now());
                 if !w.dialogue.iter().any(|p| p["turn_id"] == turn) {
                     w.dialogue.push_back(json!({"turn_id":turn,"player_text":player_text,"dogido_text":result["text"]}));
@@ -104,7 +115,7 @@ impl Dialogue {
                         w.dialogue.pop_front();
                     }
                 }
-            } else {
+            } else if focused {
                 w.drift_count += 1;
                 if w.drift_count >= 2 {
                     w.close("drift");

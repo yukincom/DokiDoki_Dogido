@@ -1,3 +1,4 @@
+//! パワーのある実行環境のため、繊細なコントロールは不要。会話のテンポを止める処理を入れるな。
 //! 発句の開始・取消・文脈・再生・保存・表示の所有者。Pythonは既存UniDic tokenだけ。
 use super::*;
 use crate::{
@@ -180,7 +181,17 @@ fn current(d: &Data, sid: &str, job: &str, allow_scanned_hostiles: bool) -> bool
 impl Dialogue {
     pub(super) fn cancel_haiku(d: &mut Data, sid: &str, reason: &str) {
         // adapterの文字イベントはsubmitより先に届く。開始済み発句をここで切らない。
-        if reason == "new_player_input" && super::reply_queue::playback_started(d, sid) {
+        if reason == "new_player_input"
+            && d.sessions.get(sid).is_some_and(|s| {
+                s.haiku.active.as_ref().is_some_and(|active| {
+                    d.rows.iter().any(|row| {
+                        row["session_id"] == sid
+                            && row["haiku_job_id"] == active.id
+                            && row["playback_status"] == "started"
+                    })
+                })
+            })
+        {
             return;
         }
         let Some(s) = d.sessions.get_mut(sid) else {
@@ -430,7 +441,9 @@ impl Dialogue {
             d.rows.push_back(json!({"utterance_id":id("utt"),"turn_id":turn,"haiku_job_id":job,"session_id":sid,"session_instance":session_instance,"category":if part=="poem"{"haiku"}else{"speech"},"text":text,"created_at":chrono::Utc::now(),"reference_ids":[],"output_mode":"both","source":"automatic_haiku","playback_status":status}));
         }
         let s = d.sessions.get_mut(sid).unwrap();
-        s.status = status;
+        if s.cancel.is_none() {
+            s.status = status;
+        }
         s.haiku.last_activity = Instant::now();
         if part == "poem"
             && matches!(
@@ -818,7 +831,7 @@ impl Dialogue {
                 tokio::select! {_=bridge::cancelled(&mut monitor_cancel)=>break,_=tokio::time::sleep(Duration::from_millis(100))=>{
                     let mut d=owner.data.lock().unwrap();
                     if (!current(&d,&monitor_sid,&monitor_job,super::workshop_focus::TEMPORARY_ALLOW_SCANNED_HOSTILES_FOR_SENRYU_COLLECTION) || began.elapsed()>=Duration::from_millis(owner.config.haiku.job_timeout_ms))
-                        && !super::reply_queue::playback_started(&d,&monitor_sid) {
+                        && !d.rows.iter().any(|r| r["session_id"] == monitor_sid && r["haiku_job_id"] == monitor_job && r["playback_status"] == "started") {
                         if d.sessions.get(&monitor_sid).is_some_and(|s|s.haiku.active.as_ref().is_some_and(|a|a.id==monitor_job)) { Self::cancel_haiku(&mut d,&monitor_sid,"stale_or_expired"); } break;
                     }
                 }}
@@ -848,7 +861,7 @@ impl Dialogue {
                         .reset(self.clock.elapsed().as_millis() as u64);
                 }
                 s.haiku.last_activity = Instant::now();
-                if !was_cancelled {
+                if !was_cancelled && s.cancel.is_none() {
                     s.status = if outcome.is_ok() {
                         PlaybackStatus::Completed
                     } else {
@@ -889,6 +902,47 @@ impl Dialogue {
 #[cfg(test)]
 mod completion_tests {
     use super::*;
+
+    // 見込み: 自動川柳の読み上げは続けたまま、新入力を受付・生成へ進められる。
+    // 合格: 新入力はFIFOなし、発句取消なし。元行の完了が新turnの生成状態を上書きしない。模擬通知のみ。
+    #[tokio::test]
+    async fn new_input_proceeds_while_haiku_playback_continues() {
+        for part in ["preface", "poem"] {
+            let mut config = DialogueConfig::default();
+            config.haiku.memory_enabled = false;
+            let d = Dialogue::new(config).unwrap();
+            d.register("s", "試験", true);
+            let (tx, rx) = watch::channel(false);
+            {
+                let mut data = d.data.lock().unwrap();
+                data.sessions.get_mut("s").unwrap().haiku.active = Some(Active {
+                    id: "job".into(),
+                    cancel: tx,
+                });
+                data.rows.push_back(
+                    json!({"session_id":"s","haiku_job_id":"job","turn_id":format!("job:{part}"),
+                    "playback_status":"started","text":"一句できたで。"}),
+                );
+            }
+            let result = d.submit(Some("s"), "別の話をしよう", "voice");
+            assert_eq!(result["accepted"], true, "{result}");
+            assert_ne!(result["queued"], true, "{result}");
+            assert!(!*rx.borrow());
+            assert!(d.data.lock().unwrap().sessions["s"].reply_queue.is_empty());
+            assert!(d.haiku_row(
+                "s",
+                "job",
+                part,
+                "一句できたで。",
+                PlaybackStatus::Completed
+            ));
+            assert_eq!(
+                d.data.lock().unwrap().sessions["s"].status,
+                PlaybackStatus::Generating
+            );
+            d.shutdown().await;
+        }
+    }
     #[tokio::test]
     async fn completed_audio_survives_stale_observation_but_next_part_does_not() {
         let mut config = super::super::DialogueConfig::default();

@@ -1,3 +1,4 @@
+//! パワーのある実行環境のため、繊細なコントロールは不要。会話のテンポを止める処理を入れるな。
 //! 画面へ実際に挿入した返答の確認。音声の再生状態とは独立して、一度だけ履歴へ反映する。
 //! 入力・生成・句の操作は既存経路を使い、ここは配送先と表示済みの証拠だけを所有する。
 use super::{Data, Dialogue, DialogueConfig, bridge, id};
@@ -35,6 +36,17 @@ impl State {
     /// 同じturnを新しいepochで回答し直す前に、旧回答の表示ACK宛先を取り除く。
     pub(super) fn forget_reply(&mut self, turn: &str) {
         self.pending.retain(|p| p.turn != turn);
+    }
+
+    /// 保留中の旧ACKを失効させ、再開時の再公開に必要な配送内容だけを返す。
+    pub(super) fn suspend_reply(&mut self, turn: &str) -> Option<Kind> {
+        let kind = self
+            .pending
+            .iter()
+            .find(|p| p.turn == turn)
+            .map(|p| p.kind.clone());
+        self.forget_reply(turn);
+        kind
     }
 
     pub fn new(voice_enabled: bool) -> Self {
@@ -287,7 +299,8 @@ impl Dialogue {
         turn: &str,
         cancel: &mut watch::Receiver<bool>,
     ) -> bool {
-        let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+        let mut deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+        let mut display = Value::Null;
         loop {
             {
                 let d = self.data.lock().unwrap();
@@ -307,13 +320,18 @@ impl Dialogue {
                 if row["text_displayed"] == true {
                     return true;
                 }
+                if super::workshop_reply::paused(s) || row["display_id"] != display {
+                    deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+                    display = row["display_id"].clone();
+                } else if tokio::time::Instant::now() >= deadline {
+                    return false;
+                }
                 if row["playback_status"] == "cancelled" || d.stopped {
                     return false;
                 }
             }
             tokio::select! { biased;
                 _ = bridge::cancelled(cancel) => return false,
-                _ = tokio::time::sleep_until(deadline) => return false,
                 _ = tokio::time::sleep(Duration::from_millis(25)) => {},
             }
         }

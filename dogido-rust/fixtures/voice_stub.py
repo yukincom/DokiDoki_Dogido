@@ -59,27 +59,71 @@ elif role == "vad":
         raise SystemExit(2)
     print(f"Detected {config.get('vad_count', 1)} speech segments")
 elif role == "whisper":
-    args = sys.argv
-    path = Path(args[args.index("-f") + 1])
-    with wave.open(str(path), "rb") as wav:
-        assert wav.getnchannels() == 1 and wav.getsampwidth() == 2 and wav.getframerate() == 16000
-        pcm = wav.readframes(wav.getnframes())
-    sample = next((s[0] for s in struct.iter_unpack("<h", pcm) if s[0]), 0)
-    log(event="wav", path=str(path), sample=sample)
-    first = not (folder / "whisper-started").exists()
-    (folder / "whisper-started").touch()
-    if config.get("hang_whisper"):
+    # 見込み: 同じモデル所有プロセスが複数要求と取消を受ける。
+    # 合格: 取消は当該要求だけに働き、次の要求が同じPIDで完了する。Whisper自体は模擬。
+    import threading
+    cancelled = threading.Event()
+    output_lock = threading.Lock()
+    active = None
+    active_id = None
+    if config.get("hang_load"):
         signal.signal(signal.SIGTERM, signal.SIG_IGN)
         time.sleep(120)
-    time.sleep(config.get("first_delay", 0) if first else 0)
-    prompt = args[args.index("--prompt") + 1]
-    if config.get("empty_first") and prompt:
-        print("no speech", file=sys.stderr)
-    else:
-        output = config.get("output", f"[00 --> 01] ドギド {sample}\n").encode()
-        if config.get("bad_log"): output = b"log \xff\n" + output
-        if config.get("bad_text"): output = b"[00 --> 01] \xff\n"
-        sys.stdout.buffer.write(output)
-    raise SystemExit(config.get("whisper_exit", 0))
+    def response(value):
+        with output_lock:
+            line = json.dumps(value) + "\n"
+            if config.get("split_first_response") and value.get("id") == 1:
+                midpoint = len(line) // 2
+                sys.stdout.write(line[:midpoint]); sys.stdout.flush()
+                (folder / "partial-frame").touch()
+                cancelled.wait(5)
+                sys.stdout.write(line[midpoint:]); sys.stdout.flush()
+            else:
+                sys.stdout.write(line); sys.stdout.flush()
+    def transcribe(request):
+        current = json.loads(Path(os.environ["DOGIDO_VOICE_TEST_CONFIG"]).read_text())
+        path = Path(request["wav"])
+        with wave.open(str(path), "rb") as wav:
+            assert wav.getnchannels() == 1 and wav.getsampwidth() == 2 and wav.getframerate() == 16000
+            pcm = wav.readframes(wav.getnframes())
+        sample = next((s[0] for s in struct.iter_unpack("<h", pcm) if s[0]), 0)
+        # 既存試験のprompt・閾値・入力PCMの観測を保つ。
+        args = ["--prompt", request["prompt"], "--no-speech-thold", str(request["no_speech_threshold"])]
+        log(event="transcribe", args=args, request_id=request["id"])
+        log(event="wav", path=str(path), sample=sample)
+        first = not (folder / "whisper-started").exists()
+        (folder / "whisper-started").touch()
+        if current.get("hang_whisper"):
+            cancelled.wait(120)
+        else:
+            cancelled.wait(current.get("first_delay", 0) if first else 0)
+        if cancelled.is_set():
+            log(event="cancelled", request_id=request["id"])
+            response(dict(id=request["id"], success=False, stdout="", stderr="cancelled"))
+            return
+        if current.get("empty_first") and request["prompt"]:
+            output = ""
+        else:
+            output = current.get("output", f"[00 --> 01] ドギド {sample}\n")
+            if current.get("bad_log"): output = "log \ufffd\n" + output
+            if current.get("bad_text"): output = "[00 --> 01] \ufffd\n"
+        response(dict(id=request["id"], success=not current.get("whisper_exit", 0),
+                      stdout=output, stderr="no speech" if not output else ""))
+    response({"ready": True})
+    for line in sys.stdin:
+        request = json.loads(line)
+        if request["op"] == "cancel":
+            if request["id"] == active_id: cancelled.set()
+        elif request["op"] == "transcribe":
+            if active: active.join()
+            cancelled.clear()
+            active_id = request["id"]
+            active = threading.Thread(target=transcribe, args=(request,))
+            active.start()
+        elif request["op"] == "shutdown":
+            break
+    cancelled.set()
+    if active: active.join()
+
 else:
     raise RuntimeError(role)

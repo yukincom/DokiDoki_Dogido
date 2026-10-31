@@ -1,0 +1,7 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running unittests src/lib.rs (/private/tmp/dogido-tests-final-20261029/target-combined/debug/deps/dogido_rust-3b05f0013177c941)
+body::autonomy::state::acceptance_body_schema::acceptance_body_schema_control_object_target_accepts_and_string_target_rejects: test
+body::autonomy::state::acceptance_body_schema::acceptance_body_schema_image_prompt_example_passes_real_receivers: test
+body::autonomy::state::acceptance_body_schema::acceptance_body_schema_normal_prompt_examples_pass_real_receivers: test
+
+3 tests, 0 benchmarks

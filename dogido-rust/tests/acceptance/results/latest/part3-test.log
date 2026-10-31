@@ -1,0 +1,57 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running unittests src/lib.rs (/private/tmp/dogido-tests-final-20261029/target-combined/debug/deps/dogido_rust-3b05f0013177c941)
+
+running 7 tests
+test dialogue::acceptance_history_display::acceptance_history_display_control_keeps_all_retained_rows_in_both_requests ... ok
+test dialogue::acceptance_history_display::acceptance_history_display_current_question_follows_history_and_surrounding_material ... FAILED
+test dialogue::acceptance_history_display::acceptance_history_display_environment_declares_no_new_player_input ... FAILED
+test dialogue::acceptance_history_display::acceptance_history_display_environment_uses_same_readable_history_without_uuid ... FAILED
+test dialogue::acceptance_history_display::acceptance_history_display_missing_metadata_stays_unknown ... FAILED
+test dialogue::acceptance_history_display::acceptance_history_display_missing_reply_target_stays_unknown ... FAILED
+test dialogue::acceptance_history_display::acceptance_history_display_normal_identifies_time_kind_and_reply_target_per_row ... FAILED
+
+failures:
+
+---- dialogue::acceptance_history_display::acceptance_history_display_current_question_follows_history_and_surrounding_material stdout ----
+
+thread 'dialogue::acceptance_history_display::acceptance_history_display_current_question_follows_history_and_surrounding_material' (21358087) panicked at src/dialogue/../../tests/acceptance/history_display.rs:151:5:
+今回の問いを大量の観測資料の前に埋めず、資料の後の独立した用件に置く
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- dialogue::acceptance_history_display::acceptance_history_display_environment_declares_no_new_player_input stdout ----
+
+thread 'dialogue::acceptance_history_display::acceptance_history_display_environment_declares_no_new_player_input' (21358088) panicked at src/dialogue/../../tests/acceptance/history_display.rs:168:5:
+環境反応の今回の用件には新しい本人入力が無いことを明記する
+
+---- dialogue::acceptance_history_display::acceptance_history_display_environment_uses_same_readable_history_without_uuid stdout ----
+
+thread 'dialogue::acceptance_history_display::acceptance_history_display_environment_uses_same_readable_history_without_uuid' (21358089) panicked at src/dialogue/../../tests/acceptance/history_display.rs:111:9:
+環境反応のモデル入力へ保存用UUIDを露出しない: 63c9853b-d8ba-4f2c-804d-30a54ef54023
+
+---- dialogue::acceptance_history_display::acceptance_history_display_missing_metadata_stays_unknown stdout ----
+
+thread 'dialogue::acceptance_history_display::acceptance_history_display_missing_metadata_stays_unknown' (21358090) panicked at src/dialogue/../../tests/acceptance/history_display.rs:185:5:
+旧行に表示時点の時刻を割り当てない
+
+---- dialogue::acceptance_history_display::acceptance_history_display_missing_reply_target_stays_unknown stdout ----
+
+thread 'dialogue::acceptance_history_display::acceptance_history_display_missing_reply_target_stays_unknown' (21358091) panicked at src/dialogue/../../tests/acceptance/history_display.rs:205:5:
+対象のない過去の返答を今回の問いへ付け替えない
+
+---- dialogue::acceptance_history_display::acceptance_history_display_normal_identifies_time_kind_and_reply_target_per_row stdout ----
+
+thread 'dialogue::acceptance_history_display::acceptance_history_display_normal_identifies_time_kind_and_reply_target_per_row' (21358092) panicked at src/dialogue/../../tests/acceptance/history_display.rs:76:5:
+返答行に確定時刻を表示する（fixtureはUTC 00:00:02 / JST 09:00:02）: ドギド: 右前やで。
+
+
+failures:
+    dialogue::acceptance_history_display::acceptance_history_display_current_question_follows_history_and_surrounding_material
+    dialogue::acceptance_history_display::acceptance_history_display_environment_declares_no_new_player_input
+    dialogue::acceptance_history_display::acceptance_history_display_environment_uses_same_readable_history_without_uuid
+    dialogue::acceptance_history_display::acceptance_history_display_missing_metadata_stays_unknown
+    dialogue::acceptance_history_display::acceptance_history_display_missing_reply_target_stays_unknown
+    dialogue::acceptance_history_display::acceptance_history_display_normal_identifies_time_kind_and_reply_target_per_row
+
+test result: FAILED. 1 passed; 6 failed; 0 ignored; 0 measured; 933 filtered out; finished in 0.08s
+
+error: test failed, to rerun pass `--lib`

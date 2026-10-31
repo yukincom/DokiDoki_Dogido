@@ -29,10 +29,19 @@ pub struct OwnedChild {
 impl OwnedChild {
     /// Unixのprocess_group(0)で子を新グループの先頭にする。標準入力を閉じ、出力2本を呼出元が読める形にする。
     pub fn spawn(mut command: Command) -> Result<Self> {
+        Self::spawn_with_stdin(&mut command, Stdio::null())
+    }
+
+    /// 常駐する認識補助だけは、同じ所有プロセスへ要求と取消を送るstdinを残す。
+    pub fn interactive(mut command: Command) -> Result<Self> {
+        Self::spawn_with_stdin(&mut command, Stdio::piped())
+    }
+
+    fn spawn_with_stdin(command: &mut Command, stdin: Stdio) -> Result<Self> {
         use std::os::unix::process::CommandExt;
         command.as_std_mut().process_group(0);
         command
-            .stdin(Stdio::null())
+            .stdin(stdin)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true);

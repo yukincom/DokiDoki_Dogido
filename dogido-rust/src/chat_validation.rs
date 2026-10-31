@@ -10,6 +10,8 @@ pub struct Outcome {
     pub action: &'static str,
     pub status: &'static str,
     pub reason: Option<&'static str>,
+    // 実行はlook_playerの所有者だけ。本文の補完から操作を推測しない。
+    pub body_action: Option<Value>,
 }
 
 /// 一回の生成結果を受け取る。Noneは通信等で本文を受け取れなかった場合。
@@ -26,12 +28,10 @@ pub fn finish(raw: Option<&str>) -> Outcome {
             Some("generation_error"),
         ),
     };
-    Outcome {
-        text,
-        action,
-        status,
-        reason,
-    }
+    let body_action = raw.filter(|_| matches!(status, "accepted" | "silent"))
+        .and_then(|raw| serde_json::from_str::<Value>(&crate::text_format::strip_code_fence(raw)).ok())
+        .and_then(|payload| payload.get("body_action").cloned());
+    Outcome { text, action, status, reason, body_action }
 }
 
 fn normal_choice(raw: &str) -> Result<crate::speech_choice::Choice, &'static str> {
@@ -132,6 +132,19 @@ pub(crate) fn mentioned(text: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    // 見込み: 発話の形式補完を移動の補作に使わない。合格: 完全JSONだけbody_actionを保持し、末尾欠損・不成立本文・通信失敗は保持しない。確認範囲: 受信形式。選択の意味と実行は別検査。
+    #[test]
+    fn body_action_requires_complete_json_and_accepted_dialogue() {
+        let complete = r#"{"body_action":{"action":"recall"},"action":"speak","speech":"そっち行くで。"}"#;
+        assert_eq!(finish(Some(complete)).body_action.unwrap()["action"], "recall");
+        let truncated = complete.trim_end_matches('}');
+        let output = finish(Some(truncated));
+        assert_eq!(output.text, "そっち行くで。");
+        assert!(output.body_action.is_none());
+        assert!(finish(Some(r#"{"body_action":{"action":"recall"},"action":"speak","speech":""}"#)).body_action.is_none());
+        assert!(finish(None).body_action.is_none());
+        assert_eq!(finish(Some(r#"{"action":"silent","speech":"","body_action":{"action":"stay"}}"#)).body_action.unwrap()["action"], "stay");
+    }
     use serde_json::json;
 
     #[test]

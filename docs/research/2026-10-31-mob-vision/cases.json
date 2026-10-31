@@ -1,0 +1,188 @@
+[
+  {
+    "id": "case_01",
+    "inventory_index": 111,
+    "reviewer_label": "zombie_pumpkin",
+    "source_home_relative": "Library/Application Support/minecraft/dogido-vision/captures/view_afe0bb99-b8c5-4e66-8619-ee0f37d202bb/frame.png",
+    "source_sha256": "45ad68b5f6b42851e026b2989713722c479f35c49e28ce94745d4474345cc3ac",
+    "native_size": [
+      1134,
+      682
+    ],
+    "viewpoint": "dogido_client_render_eye",
+    "visual_truth": "ゾンビ1体。緑の腕・青緑の上衣・紫の脚、頭はカボチャで隠れる。中央やや左、木の脇。",
+    "species_trait_reference": "hostile",
+    "conditions": "night; head covered; partial tree occlusion",
+    "search_relation": "unknown; no synchronized threat snapshot; structured observations omitted",
+    "attack_truth": "unknown from one still frame; no temporal/target evidence supplied",
+    "expectation": "画像から見える対象を種類と位置で対応づける。",
+    "pass_criteria": "対象の存在と種類を正しく対応づけ、非表示の敵を補わない。性質は種類識別と別採点。攻撃中・追跡中の断定は裏付けなしとして別記。",
+    "scope": "保存静止画と実モデルのみ。本体・現在状態・全世界の不在・索敵外実測は対象外。",
+    "capture_evidence": {
+      "capture_id": "view_afe0bb99-b8c5-4e66-8619-ee0f37d202bb",
+      "captured_at": "2026-10-31T02:07:49.377224Z",
+      "viewpoint": "dogido_client_render_eye",
+      "reference_server_tick": 13270,
+      "reference_snapshot_age_ms": 43,
+      "annotation_status": "owner_occluded_or_unavailable",
+      "owner_rendered": true,
+      "camera_eye": {
+        "x": 2377.963990669554,
+        "y": 68.52923376820557,
+        "z": 406.9552522412397
+      },
+      "camera_yaw": 105.447556,
+      "camera_pitch": 13.140252,
+      "context": {
+        "owner_id": "e18eff4d-fe3f-4aaf-9f00-0346f5da6fa8",
+        "body_id": "5741d606-bd70-4d05-8b7e-df47ded85efc",
+        "epoch": "51b6a319-f5ae-4971-a108-358d2b6bdbe9",
+        "dimension": "minecraft:overworld"
+      }
+    }
+  },
+  {
+    "id": "case_02",
+    "inventory_index": 4,
+    "reviewer_label": "village",
+    "source_home_relative": "Library/Application Support/minecraft/screenshots/2026-10-20_17.34.40.png",
+    "source_sha256": "8ba3b185f17fe12c5230897697e79d8fe765c9cc72414d9596b02fe08bef18a3",
+    "native_size": [
+      854,
+      480
+    ],
+    "viewpoint": "player_first_person",
+    "visual_truth": "中央奥にアイアンゴーレム、右手前と奥に村人。ゴーレムは長い腕・白灰色の身体・蔦、村人は鼻・組んだ腕。",
+    "species_trait_reference": "golem_neutral_villager_passive",
+    "conditions": "day; mid-distance; partial pillar occlusion; HUD",
+    "search_relation": "unknown; no synchronized threat snapshot; structured observations omitted",
+    "attack_truth": "unknown from one still frame; no temporal/target evidence supplied",
+    "expectation": "画像から見える対象を種類と位置で対応づける。",
+    "pass_criteria": "対象の存在と種類を正しく対応づけ、非表示の敵を補わない。性質は種類識別と別採点。攻撃中・追跡中の断定は裏付けなしとして別記。",
+    "scope": "保存静止画と実モデルのみ。本体・現在状態・全世界の不在・索敵外実測は対象外。"
+  },
+  {
+    "id": "case_03",
+    "inventory_index": 36,
+    "reviewer_label": "turtle",
+    "source_home_relative": "Library/Application Support/minecraft/screenshots/dogido_2026-10-28_16.03.20.png",
+    "source_sha256": "95c8ad9814ec8738bf1d34f8bb8e4a1cd2f7c0ac81fe5d4e0e8d09e6548e1023",
+    "native_size": [
+      854,
+      480
+    ],
+    "viewpoint": "dogido_body_photo",
+    "visual_truth": "左下の砂浜にカメ1体。緑の甲羅と平たい脚。",
+    "species_trait_reference": "passive",
+    "conditions": "day; clear",
+    "search_relation": "unknown; no synchronized threat snapshot; structured observations omitted",
+    "attack_truth": "unknown from one still frame; no temporal/target evidence supplied",
+    "expectation": "画像から見える対象を種類と位置で対応づける。",
+    "pass_criteria": "対象の存在と種類を正しく対応づけ、非表示の敵を補わない。性質は種類識別と別採点。攻撃中・追跡中の断定は裏付けなしとして別記。",
+    "scope": "保存静止画と実モデルのみ。本体・現在状態・全世界の不在・索敵外実測は対象外。"
+  },
+  {
+    "id": "case_04",
+    "inventory_index": 54,
+    "reviewer_label": "parrot",
+    "source_home_relative": "Library/Application Support/minecraft/dogido-vision/captures/view_f7b53dd6-9361-480c-b646-fee12cc88ea4/frame.png",
+    "source_sha256": "b10b9fc3caa391b033f5d0073d06af11d9f0234396562aa517d02387e1abb13a",
+    "native_size": [
+      1134,
+      682
+    ],
+    "viewpoint": "dogido_client_render_eye",
+    "visual_truth": "右下に青黄のオウム1体。上側は頭が画面外にあるプレイヤーの胴体・脚・盾。",
+    "species_trait_reference": "passive",
+    "conditions": "day; small subject; player partially outside frame",
+    "search_relation": "unknown; no synchronized threat snapshot; structured observations omitted",
+    "attack_truth": "unknown from one still frame; no temporal/target evidence supplied",
+    "expectation": "画像から見える対象を種類と位置で対応づける。",
+    "pass_criteria": "対象の存在と種類を正しく対応づけ、非表示の敵を補わない。性質は種類識別と別採点。攻撃中・追跡中の断定は裏付けなしとして別記。",
+    "scope": "保存静止画と実モデルのみ。本体・現在状態・全世界の不在・索敵外実測は対象外。",
+    "capture_evidence": {
+      "capture_id": "view_f7b53dd6-9361-480c-b646-fee12cc88ea4",
+      "captured_at": "2026-10-31T01:59:02.479723Z",
+      "viewpoint": "dogido_client_render_eye",
+      "reference_server_tick": 2728,
+      "reference_snapshot_age_ms": 220,
+      "annotation_status": "available",
+      "owner_rendered": true,
+      "camera_eye": {
+        "x": 2454.669677734375,
+        "y": 68.37181937598379,
+        "z": 346.91943359375
+      },
+      "camera_yaw": 1.40625,
+      "camera_pitch": 49.369587,
+      "context": {
+        "owner_id": "e18eff4d-fe3f-4aaf-9f00-0346f5da6fa8",
+        "body_id": "5741d606-bd70-4d05-8b7e-df47ded85efc",
+        "epoch": "51b6a319-f5ae-4971-a108-358d2b6bdbe9",
+        "dimension": "minecraft:overworld"
+      }
+    }
+  },
+  {
+    "id": "case_05",
+    "inventory_index": 63,
+    "reviewer_label": "empty_night",
+    "source_home_relative": "Library/Application Support/minecraft/dogido-vision/captures/view_448d8be3-5341-4b74-a43c-7da526d0f398/frame.png",
+    "source_sha256": "ad0205db780211d003643bcc97d2da30e0ff68b06dce87e70b8fcbe7b8c2329b",
+    "native_size": [
+      1134,
+      682
+    ],
+    "viewpoint": "dogido_client_render_eye",
+    "visual_truth": "暗いジャングルの葉・幹・切り口。確認できるモブや人影はない。遮蔽の裏まで不在とは言えない。",
+    "species_trait_reference": "not_applicable",
+    "conditions": "night; occlusion; visible-image-negative",
+    "search_relation": "unknown; no synchronized threat snapshot; structured observations omitted",
+    "attack_truth": "unknown from one still frame; no temporal/target evidence supplied",
+    "expectation": "画像から見える対象を種類と位置で対応づける。",
+    "pass_criteria": "対象の存在と種類を正しく対応づけ、非表示の敵を補わない。性質は種類識別と別採点。攻撃中・追跡中の断定は裏付けなしとして別記。",
+    "scope": "保存静止画と実モデルのみ。本体・現在状態・全世界の不在・索敵外実測は対象外。",
+    "capture_evidence": {
+      "capture_id": "view_448d8be3-5341-4b74-a43c-7da526d0f398",
+      "captured_at": "2026-10-31T02:01:03.019777Z",
+      "viewpoint": "dogido_client_render_eye",
+      "reference_server_tick": 5143,
+      "reference_snapshot_age_ms": 67,
+      "annotation_status": "owner_not_in_render_list",
+      "owner_rendered": false,
+      "camera_eye": {
+        "x": 2409.85400390625,
+        "y": 73.67978516221046,
+        "z": 431.834716796875
+      },
+      "camera_yaw": 146.25,
+      "camera_pitch": 0.0,
+      "context": {
+        "owner_id": "e18eff4d-fe3f-4aaf-9f00-0346f5da6fa8",
+        "body_id": "5741d606-bd70-4d05-8b7e-df47ded85efc",
+        "epoch": "51b6a319-f5ae-4971-a108-358d2b6bdbe9",
+        "dimension": "minecraft:overworld"
+      }
+    }
+  },
+  {
+    "id": "case_06",
+    "inventory_index": 32,
+    "reviewer_label": "player_water",
+    "source_home_relative": "Library/Application Support/minecraft/screenshots/dogido_2026-10-28_09.00.07.png",
+    "source_sha256": "8e7bec1b5e643f1d532f02915b9ce555bcc1727645ec0da0aa6b726d033f795a",
+    "native_size": [
+      854,
+      480
+    ],
+    "viewpoint": "dogido_body_photo",
+    "visual_truth": "水中の中央下にプレイヤーの後ろ姿。紫の頭と黒灰色の服・装備。見える範囲に敵は確認できない。",
+    "species_trait_reference": "player_not_hostile_mob",
+    "conditions": "dim; underwater; player lookalike negative",
+    "search_relation": "unknown; no synchronized threat snapshot; structured observations omitted",
+    "attack_truth": "unknown from one still frame; no temporal/target evidence supplied",
+    "expectation": "画像から見える対象を種類と位置で対応づける。",
+    "pass_criteria": "対象の存在と種類を正しく対応づけ、非表示の敵を補わない。性質は種類識別と別採点。攻撃中・追跡中の断定は裏付けなしとして別記。",
+    "scope": "保存静止画と実モデルのみ。本体・現在状態・全世界の不在・索敵外実測は対象外。"
+  }
+]

@@ -1,0 +1,15 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running unittests src/lib.rs (/private/tmp/dogido-tests-final-20261029/target-combined/debug/deps/dogido_rust-3b05f0013177c941)
+body::autonomy::state::acceptance_body_results::acceptance_body_results_cancel_is_carried_forward_and_late_success_cannot_overwrite_it: test
+body::autonomy::state::acceptance_body_results::acceptance_body_results_failure_reaches_next_choice_without_claiming_arrival: test
+body::autonomy::state::acceptance_body_results::acceptance_body_results_history_stays_bounded_and_old_generation_cannot_leak_control: test
+body::autonomy::state::acceptance_body_results::acceptance_body_results_success_reaches_next_choice_as_observed_result: test
+body::autonomy::state::acceptance_body_results::acceptance_body_results_waiting_and_adapter_acceptance_do_not_mean_completion: test
+body::autonomy::state::acceptance_body_results::acceptance_body_results_wrong_command_or_epoch_cannot_complete_choice_control: test
+dialogue::body_interest_runtime::acceptance_body_results_context::acceptance_body_results_current_body_state_accompanies_next_model_options: test
+dialogue::body_interest_runtime::acceptance_body_results_context::acceptance_body_results_ordinary_reply_receives_cancelled_operation: test
+dialogue::body_interest_runtime::acceptance_body_results_context::acceptance_body_results_ordinary_reply_receives_failed_operation: test
+dialogue::body_interest_runtime::acceptance_body_results_context::acceptance_body_results_ordinary_reply_receives_queued_operation: test
+dialogue::body_interest_runtime::acceptance_body_results_context::acceptance_body_results_ordinary_reply_receives_successful_operation: test
+
+11 tests, 0 benchmarks

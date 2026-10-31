@@ -1,0 +1,17 @@
+   Compiling dogido-rust v0.1.0 (/Users/yukin_co/Documents/DokiDoki-Dogido/dogido-rust)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 24.74s
+     Running unittests src/lib.rs (/private/tmp/dogido-part45-20261029/target/debug/deps/dogido_rust-3b05f0013177c941)
+
+running 9 tests
+test chat_observation::tests::actual_mob_steps_are_not_voices_and_block_noise_is_not_an_interaction ... ok
+test chat_observation::tests::explicit_empty_outcome_update_does_not_manufacture_a_death ... ok
+test chat_observation::tests::named_individual_memory_keeps_presence_rename_and_sound_age_separate ... ok
+test chat_observation::tests::persistent_observation_traces_match_fixture ... ok
+test chat_observation::tests::repeated_sound_snapshots_preserve_actual_hearing_time_and_current_source_identity ... ok
+test chat_observation::tests::retained_old_audio_never_reverts_a_newer_name_or_name_removal ... ok
+test chat_observation::tests::same_source_block_actions_survive_current_and_recent_hearing_without_claiming_an_actor ... ok
+test chat_observation::tests::snapshot_is_read_only_and_current_never_contains_recent_or_death_names ... ok
+test chat_observation::tests::verified_owner_sound_names_emitter_separately_and_unresolved_sound_stays_unresolved ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 944 filtered out; finished in 0.40s
+

@@ -211,19 +211,23 @@ async fn check_route(scope: &str) {
     d.shutdown().await;
 }
 
+// P01: 既知の位置で、誰が誰の向きを基準にどちらにいるかを主語付きで渡す。位置が分かっても、姿は見えない状態を区別する。
 #[tokio::test]
 async fn common_observation_distinguishes_subject_reference_and_invisible_position() {
     check_route("common").await;
 }
+// P02: 「ドギドどこ？」の通常返答に、プレイヤー基準の位置を含む正しい事実が届くことを確認する。
 #[tokio::test]
 async fn ordinary_reply_receives_subject_facts() {
     check_route("reply").await;
 }
+// P03: 環境から自発的に話す場合にも、通常返答と同じ主語付きの位置・視認情報が届くことを確認する。
 #[tokio::test]
 async fn environment_receives_the_same_subject_facts() {
     check_route("environment").await;
 }
 
+// P04: プレイヤーだけが半回転したとき、プレイヤー基準の方向だけが変わり、ドギド基準の方向・上下・距離は保たれる。
 #[tokio::test]
 async fn rotating_only_player_changes_only_player_reference() {
     let d = server();
@@ -247,6 +251,7 @@ async fn rotating_only_player_changes_only_player_reference() {
     d.shutdown().await;
 }
 
+// P05: ドギドだけが半回転したとき、ドギド基準の方向だけが変わり、プレイヤー基準の方向・上下・距離は保たれる。
 #[tokio::test]
 async fn rotating_only_dogido_changes_only_dogido_reference() {
     let d = server();
@@ -301,23 +306,28 @@ async fn check_distance(distance: f64, expected: u64) {
     drop(permit);
     d.shutdown().await;
 }
+// P06: 9.38ブロックの距離は、小数点以下を切り捨てて9ブロックと渡す。
 #[tokio::test]
 async fn distance_9_38_is_9_blocks() {
     check_distance(9.38, 9).await;
 }
+// P07: 9.99ブロックを先に四捨五入して10にせず、9ブロックと渡す。
 #[tokio::test]
 async fn distance_9_99_is_9_not_10_blocks() {
     check_distance(9.99, 9).await;
 }
+// P08: 0.99ブロックの距離は1へ丸めず、0ブロックと渡す。
 #[tokio::test]
 async fn distance_0_99_is_0_not_1_block() {
     check_distance(0.99, 0).await;
 }
+// P09: 10.01ブロックの距離は10ブロックと渡し、小数表示を残さない。
 #[tokio::test]
 async fn distance_10_01_is_10_blocks_without_decimal_suffix() {
     check_distance(10.01, 10).await;
 }
 
+// P10: 観測が取得できなくなったら、通常返答・環境反応のどちらも過去の位置や視認情報で穴埋めしない。
 #[tokio::test]
 async fn unavailable_observation_clears_previous_position_in_both_model_routes() {
     let d = server();
@@ -359,6 +369,7 @@ async fn unavailable_observation_clears_previous_position_in_both_model_routes()
     d.shutdown().await;
 }
 
+// P11: 見える／見えないだけが変わったとき、既知の位置・上下・距離は変えない。
 #[tokio::test]
 async fn changing_visibility_preserves_known_position() {
     let d = server();
@@ -390,6 +401,7 @@ async fn changing_visibility_preserves_known_position() {
     d.shutdown().await;
 }
 
+// P12: 変化前後の表示は主語付きの事実に揃え、内部で変化を比べるための方向・距離データは保つ。
 #[tokio::test]
 async fn position_changes_use_subject_facts_and_internal_comparison_keeps_numeric_data() {
     let d = server();

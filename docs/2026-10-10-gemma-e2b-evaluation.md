@@ -82,7 +82,7 @@
 ```sh
 ./dogido-rust/cargo.sh test --locked workshop_editing::tool_call
 ./dogido-rust/cargo.sh build --locked --example check_workshop_tool_edit
-dogido-llm/bin/python dogido-rust/scripts/replay_workshop_tool_edits.py \
+dogido-llm/bin/python dogido-rust/tests/python/replay_workshop_tool_edits.py \
   --record .dogido_tools/experiments/2026-10-10-gemma-e2b/native-tools.json \
   --validator dogido-rust/target/debug/examples/check_workshop_tool_edit \
   --python dogido-llm/bin/python \
@@ -106,9 +106,9 @@ dogido-llm/bin/python dogido-rust/scripts/replay_workshop_tool_edits.py \
 ```sh
 ./dogido-rust/cargo.sh build --offline --locked --bin dogido-rust
 ./dogido-rust/cargo.sh test --offline --locked --lib llm::tests
-dogido-llm/bin/python dogido-rust/scripts/check_workshop_inspection_tool.py
+dogido-llm/bin/python dogido-rust/tests/python/check_workshop_inspection_tool.py
 # 任意の実モデル確認。起動・停止はせず、native toolが選ばれなければ失敗として報告する。
-dogido-llm/bin/python dogido-rust/scripts/check_workshop_inspection_tool.py \
+dogido-llm/bin/python dogido-rust/tests/python/check_workshop_inspection_tool.py \
   --base-url http://127.0.0.1:8080/v1
 ```
 

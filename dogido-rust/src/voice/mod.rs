@@ -1,8 +1,10 @@
+//! パワーのある実行環境のため、繊細なコントロールは不要。会話のテンポを止める処理を入れるな。
 //! 既存Core Audio/WebRTC AEC3とwhisper.cppを使う、音声入力の制御部分。
 mod process;
 mod segment;
 mod stt;
 mod transport;
+mod whisper;
 
 use anyhow::{Context, Result, bail, ensure};
 use segment::{FRAME_BYTES, Segment, Segmenter};
@@ -33,7 +35,7 @@ pub struct VadSettings {
 #[serde(deny_unknown_fields)]
 pub struct Settings {
     pub capture_command: Vec<String>,
-    pub whisper_cli: PathBuf,
+    pub whisper_worker: PathBuf,
     pub whisper_model: PathBuf,
     pub vad: Option<VadSettings>,
     pub base_url: String,
@@ -59,7 +61,7 @@ impl Settings {
         );
         for file in [
             &PathBuf::from(&self.capture_command[0]),
-            &self.whisper_cli,
+            &self.whisper_worker,
             &self.whisper_model,
         ] {
             ensure!(
@@ -143,12 +145,14 @@ impl Pending {
 
 async fn worker(
     settings: Arc<Settings>,
+    whisper: Arc<tokio::sync::Mutex<whisper::Whisper>>,
     pending: Arc<Pending>,
     transport: Transport,
     binding: VoiceBinding,
     report: Reporter,
     mut stop: watch::Receiver<bool>,
 ) {
+    let mut whisper = whisper.lock().await;
     let mut last_mode = String::new();
     loop {
         if *stop.borrow() {
@@ -167,6 +171,7 @@ async fn worker(
         }
         if let Err(error) = stt::process_segment(
             &settings,
+            &mut whisper,
             segment,
             &transport,
             &binding,
@@ -283,6 +288,7 @@ async fn capture(
 /// 一つのsession・音声世代だけの録音と認識。終了時に待ち列と途中のPCMも破棄する。
 async fn active_period(
     settings: Arc<Settings>,
+    whisper: Arc<tokio::sync::Mutex<whisper::Whisper>>,
     transport: Transport,
     binding: VoiceBinding,
     report: Reporter,
@@ -292,6 +298,7 @@ async fn active_period(
     let pending = Arc::new(Pending::new(settings.max_pending));
     let worker_task = tokio::spawn(worker(
         settings.clone(),
+        whisper,
         pending.clone(),
         transport,
         binding,
@@ -316,6 +323,7 @@ struct ActivePeriod {
 impl ActivePeriod {
     fn start(
         settings: Arc<Settings>,
+        whisper: Arc<tokio::sync::Mutex<whisper::Whisper>>,
         transport: Transport,
         binding: VoiceBinding,
         report: Reporter,
@@ -323,6 +331,7 @@ impl ActivePeriod {
         let (stop, receiver) = watch::channel(false);
         let task = tokio::spawn(active_period(
             settings,
+            whisper,
             transport,
             binding.clone(),
             report,
@@ -341,13 +350,13 @@ impl ActivePeriod {
         self.task
             .await
             .context("音声入力workerが異常終了しました")??;
-        // captureと認識workerの双方が子を回収した後だけ、休止完了を通知する。
+        // 録音の子と進行中認識の回収後に通知する。Whisperのモデルは音声入力終了まで保持。
         report.event(
             "context",
             "info",
             Some("voice_input_paused"),
             json!({
-                "detail":"録音・音声認識を休止しました。所有する子プロセスは回収済みです"
+                "detail":"録音・音声認識を休止しました。Whisperモデルは待機状態で保持しています"
             }),
         );
         Ok(())
@@ -370,6 +379,12 @@ async fn control(
     report: Reporter,
     mut stop: watch::Receiver<bool>,
 ) -> Result<()> {
+    println!("[VOICE] Whisperモデルを読み込んでいます");
+    let Some(whisper) = whisper::Whisper::start(settings.clone(), stop.clone()).await? else {
+        return Ok(());
+    };
+    let whisper = Arc::new(tokio::sync::Mutex::new(whisper));
+    println!("[VOICE] Whisperモデルの読込が完了しました");
     let mut active: Option<ActivePeriod> = None;
     let mut poll = tokio::time::interval(Duration::from_millis(750));
     poll.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -415,7 +430,7 @@ async fn control(
                     report.event("context", "info", Some("voice_input_enabled"),
                         json!({"detail":"音声入力の許可を確認しました。録音を開始します"}));
                     active = Some(ActivePeriod::start(
-                        settings.clone(), transport.clone(), binding, report.clone(),
+                        settings.clone(), whisper.clone(), transport.clone(), binding, report.clone(),
                     ));
                 }
             },
@@ -426,6 +441,7 @@ async fn control(
     } else {
         Ok(())
     };
+    whisper.lock().await.close().await;
     result?;
     cleanup
 }

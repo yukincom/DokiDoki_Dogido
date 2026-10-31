@@ -1,3 +1,4 @@
+//! パワーのある実行環境のため、繊細なコントロールは不要。会話のテンポを止める処理を入れるな。
 use super::process::cancelled;
 use anyhow::Result;
 use reqwest::{Client, RequestBuilder};

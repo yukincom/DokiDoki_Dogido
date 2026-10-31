@@ -15,7 +15,7 @@ fn view() -> Value {
 fn edit_message() -> Value {
     json!({"role":"assistant","content":null,"tool_calls":[{
         "id":"edit-1","type":"function","function":{"name":"stage_player_edit",
-        "arguments":json!({"target_fragment":"くろい","replacement_text":"しろい",
+        "arguments":json!({"replacement_text":"しろいおのへと",
             "evidence":RAW,"confidence":0.95}).to_string()}
     }]})
 }
@@ -36,7 +36,7 @@ fn native_edit_keeps_verified_target_and_returns_failure_to_same_call() {
     assert_eq!(step["analysis"]["line_proposal"]["line_index"], 1);
     assert_eq!(
         step["analysis"]["line_proposal"]["replacement_text"],
-        "しろい"
+        "しろいおのへと"
     );
     let observation = json!({"kind":"player_edit_validation","status":"rejected",
         "validation_codes":["expected_text_mismatch"],"canonical_unchanged":true});
@@ -141,6 +141,11 @@ fn bert_edit_contract_rejects_old_model_selected_line_fields_and_missing_classif
     assert!(Call::decode_for_target(edit_message(), &view(), RAW, None).is_err());
     let definition = definitions_for_target(&["stage_player_edit"], Some(1));
     let properties = &definition[0]["function"]["parameters"]["properties"];
+    assert!(properties.get("target_fragment").is_none());
+    assert_eq!(
+        definition[0]["function"]["parameters"]["required"],
+        json!(["replacement_text"])
+    );
     for (name, value) in [
         ("line_id", "line_1"),
         ("expected_text", "元句"),

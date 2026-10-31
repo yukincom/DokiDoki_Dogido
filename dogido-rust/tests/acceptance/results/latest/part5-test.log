@@ -1,0 +1,41 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running unittests src/lib.rs (/private/tmp/dogido-tests-final-20261029/target-combined/debug/deps/dogido_rust-3b05f0013177c941)
+
+running 5 tests
+test dialogue::visual_runtime::acceptance_image::acceptance_image_compared_change_emits_once_and_unchanged_still_updates_cache_control ... ok
+test dialogue::visual_runtime::acceptance_image::acceptance_image_explicit_capture_survives_changed_pose_and_missing_body_sample_control ... ok
+test dialogue::visual_runtime::acceptance_image::acceptance_image_java_protocol_to_rust_receipt_preserves_three_states ... FAILED
+test dialogue::visual_runtime::acceptance_image::acceptance_image_twelve_second_uncompared_refreshes_never_report_scene_change ... FAILED
+test dialogue::visual_runtime::acceptance_image::acceptance_image_uncompared_is_usable_in_ordinary_reply_without_change_opportunity ... FAILED
+
+failures:
+
+---- dialogue::visual_runtime::acceptance_image::acceptance_image_java_protocol_to_rust_receipt_preserves_three_states stdout ----
+
+thread 'dialogue::visual_runtime::acceptance_image::acceptance_image_java_protocol_to_rust_receipt_preserves_three_states' (21358223) panicked at src/dialogue/../../tests/acceptance/part5_image.rs:274:13:
+assertion `left == right` failed: unknown: 未比較は景色の変化ではない
+  left: true
+ right: false
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- dialogue::visual_runtime::acceptance_image::acceptance_image_twelve_second_uncompared_refreshes_never_report_scene_change stdout ----
+
+thread 'dialogue::visual_runtime::acceptance_image::acceptance_image_twelve_second_uncompared_refreshes_never_report_scene_change' (21358513) panicked at src/dialogue/../../tests/acceptance/part5_image.rs:114:9:
+assertion `left == right` failed: 新しい画像自体は更新する: 0
+  left: None
+ right: Some(1)
+
+---- dialogue::visual_runtime::acceptance_image::acceptance_image_uncompared_is_usable_in_ordinary_reply_without_change_opportunity stdout ----
+
+thread 'dialogue::visual_runtime::acceptance_image::acceptance_image_uncompared_is_usable_in_ordinary_reply_without_change_opportunity' (21358514) panicked at src/dialogue/../../tests/acceptance/part5_image.rs:68:9:
+未比較でも取得した画像は保持する
+
+
+failures:
+    dialogue::visual_runtime::acceptance_image::acceptance_image_java_protocol_to_rust_receipt_preserves_three_states
+    dialogue::visual_runtime::acceptance_image::acceptance_image_twelve_second_uncompared_refreshes_never_report_scene_change
+    dialogue::visual_runtime::acceptance_image::acceptance_image_uncompared_is_usable_in_ordinary_reply_without_change_opportunity
+
+test result: FAILED. 2 passed; 3 failed; 0 ignored; 0 measured; 935 filtered out; finished in 1.66s
+
+error: test failed, to rerun pass `--lib`

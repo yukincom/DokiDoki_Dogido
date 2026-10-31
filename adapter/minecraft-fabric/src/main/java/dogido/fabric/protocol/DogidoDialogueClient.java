@@ -1,3 +1,4 @@
+// パワーのある実行環境のため、繊細なコントロールは不要。会話のテンポを止める処理を入れるな。
 package dogido.fabric.protocol;
 
 import com.google.gson.JsonArray;

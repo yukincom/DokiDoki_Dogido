@@ -1,0 +1,12 @@
+{
+  "dogido-rust/tests/python/check_haiku_runtime.py": "1d641e0fba8456b4d1117d1ca247a31586bf1720ea12c4cc268e9f8853987570",
+  "dogido-rust/tests/acceptance/part8_model_cases.json": "b4ae5cbf72ce8f671d46c53209040825abf67e4e8d993cbdd6ce086e7b54857f",
+  "dogido-rust/tests/acceptance/part8_model.md": "02d58c7059b65b968a47814e01b490d19bb920c2c4ef4497a5bb6d48be9ab09a",
+  "dogido-rust/tests/acceptance/part8_workshop.rs": "2268a25dd6d85c2c76af76df2dbd973df06e745d69faf34b1c9f1749874d934b",
+  "dogido-rust/tests/acceptance/check_part8_model_transport.py": "769f45b0452031bd91e7bf7f04c2ffb7e71555f86b989af2c628d238511afda3",
+  "dogido-rust/tests/acceptance/README.md": "14447304fdc6cbe2d4e495081ab6ef7ebd075dc6d790f7639716f8989fb6f3d6",
+  "dogido-rust/tests/acceptance/part8_model.py": "16073feee2c5000d80c615ea9443d1a2fad18703fd155e65b755255d463d4068",
+  "dogido-rust/tests/acceptance/parts.json": "2ea1ac81041a69235d7a42c3632ce6011e2bc646ff1f6099a05076e8c4a50a4b",
+  "dogido-rust/tests/acceptance/part8_materials.md": "e352603243f76b14cf1658f2c952db3990f0da274b642a2a56b5d8a478e023ac",
+  "dogido-rust/tests/acceptance/check_explanations.py": "76bd1240d4a336c5ea1bd667ac20eb7cdfa0e13899967fa9240ce28dafcbfc59"
+}

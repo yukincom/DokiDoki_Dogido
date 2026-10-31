@@ -199,7 +199,8 @@ pub struct Classifier {
 }
 
 impl Classifier {
-    /// モデル保管先のルートと採用記録を明示して読み込む。一般起動設定は変更しない。
+    /// モデル保管先のルートと採用記録を明示して読み込む。
+    /// cancelはworker自体の停止用。個別入力の取消をここへ渡さず、runtimeで結果を捨てる。
     pub async fn start(
         python: &Path,
         script: &Path,
@@ -268,7 +269,8 @@ impl Classifier {
     }
 
     /// 一件を整形して推論し、要求ID・モデル・確率・token上限を照合して返す。
-    /// 取消や不正応答では子プロセスを回収し、遅れて届く旧応答を再利用しない。
+    /// cancelはサーバー終了などworker自体の停止用。不正応答・timeoutでも回収する。
+    /// 個別入力の取消は呼出元が応答完了後に扱い、モデルの再ロードを起こさない。
     pub async fn classify(
         &mut self,
         input: &Input,

@@ -21,6 +21,26 @@ struct Arguments {
     line_reference_evidence: String,
 }
 
+// 行名は本文とは別のメタデータ。モデルが見出し形式で返しても、
+// 既知の対象に対応する先頭のラベルだけを外す。本文中の語句は再解釈しない。
+fn replacement_body(text: &str, index: usize) -> &str {
+    let body = parse::unquote(text);
+    for label in [
+        ["上の句", "中の句", "下の句"][index],
+        ["line_1", "line_2", "line_3"][index],
+    ] {
+        if let Some(rest) = body.strip_prefix(label) {
+            if let Some(rest) = rest.trim_start().strip_prefix([':', '：', '=']) {
+                let rest = rest.trim();
+                if !rest.is_empty() {
+                    return rest;
+                }
+            }
+        }
+    }
+    text
+}
+
 fn matches_line(text: &str, line: &HaikuLine) -> bool {
     text == line.reading_text || text == line.surface_text
 }
@@ -96,7 +116,18 @@ pub fn normalize_player_edit_tool(
 
     // A full replacement verse must differ in exactly the declared line. Keep
     // only that line; never silently drop additional model changes.
-    let replacement = if args.replacement_text.trim().starts_with("line_") {
+    let single_body = replacement_body(&args.replacement_text, selected);
+    let labelled_whole = args
+        .replacement_text
+        .trim()
+        .starts_with("line_")
+        .then(|| tool_lines(&args.replacement_text).ok())
+        .flatten();
+    let replacement = if let Some(lines) = labelled_whole {
+        lines
+    } else if !single_body.contains(['\n', '\r']) && single_body != args.replacement_text {
+        vec![single_body.to_owned()]
+    } else if args.replacement_text.trim().starts_with("line_") {
         tool_lines(&args.replacement_text)?
     } else {
         args.replacement_text
@@ -107,6 +138,11 @@ pub fn normalize_player_edit_tool(
             .collect::<Vec<_>>()
     };
     if replacement.len() == 3 {
+        let replacement: Vec<_> = replacement
+            .iter()
+            .enumerate()
+            .map(|(i, text)| replacement_body(text, i).to_owned())
+            .collect();
         let changed: Vec<_> = replacement
             .iter()
             .zip(working)
@@ -131,6 +167,7 @@ pub fn normalize_player_edit_tool(
         args.target_fragment = working[selected].surface_text.clone();
     } else {
         ensure!(replacement.len() == 1, "invalid_replacement_verse");
+        args.replacement_text = replacement_body(&replacement[0], selected).to_owned();
     }
 
     // 発話原文は記録として保持する。語句とevidenceの解釈はモデルに任せ、
@@ -184,7 +221,8 @@ pub fn normalize_player_edit_tool(
     Ok(frame)
 }
 
-/// 対象と元句は共通分類と現在snapshotから補完する。解釈済みの語句は変更しない。
+/// 対象と元句は共通分類と現在snapshotから補完する。LLMの変更後の一行は変更しない。
+/// 具体変更は既存Engineの一行置換へ渡し、旧語の部分一致による置換を行わない。
 pub fn fill_classified_edit_target(workshop: &Value, index: usize, args: &mut Value) -> Result<()> {
     let snapshot = Snapshot::from_view(workshop)?;
     let lines = editing_records(&snapshot);
@@ -199,6 +237,8 @@ pub fn fill_classified_edit_target(workshop: &Value, index: usize, args: &mut Va
         lines[index].surface_text.clone().into(),
     );
     args.remove("line_reference_evidence");
+    // replacement_textは完成した一行。旧形式の旧語が付いていても部分置換へ戻さない。
+    args.insert("target_fragment".into(), String::new().into());
     Ok(())
 }
 

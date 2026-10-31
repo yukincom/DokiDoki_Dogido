@@ -39,6 +39,47 @@ pub trait Labels {
     /// label-or-japanese from the shared immutable block catalog.
     fn block_label(&self, id: &str) -> Option<&str>;
 }
+pub(crate) struct CatalogLabels;
+impl Labels for CatalogLabels {
+    fn mob_label(&self, id: &str) -> Option<&str> {
+        crate::chat_catalog::catalog()
+            .mob_entry(id)
+            .and_then(|entry| entry.get("label"))
+            .and_then(serde_json::Value::as_str)
+    }
+    fn mob_fallback_label(&self, id: &str) -> Option<&str> {
+        // MOB_VOICE_LABELS: passive, then hostile, then neutral; exact raw ID.
+        [
+            &*crate::entry_catalog::NEUTRAL,
+            &*crate::entry_catalog::HOSTILE,
+            &*crate::entry_catalog::PASSIVE,
+        ]
+        .into_iter()
+        .find_map(|doc| {
+            doc["items"]
+                .get(id)
+                .and_then(|entry| entry.get("label"))
+                .and_then(serde_json::Value::as_str)
+        })
+    }
+    fn hostile_label(&self, id: &str) -> String {
+        // HOSTILE_LABELS.get(raw, raw), unlike combat::model::label's namespace stripping.
+        crate::combat::catalog::labels()
+            .get(id)
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or(id)
+            .into()
+    }
+    fn block_label(&self, id: &str) -> Option<&str> {
+        let entry = crate::world_catalog::catalog().block_entry(id)?;
+        entry
+            .get("label")
+            .and_then(serde_json::Value::as_str)
+            .filter(|s| !s.is_empty())
+            .or_else(|| entry.get("japanese").and_then(serde_json::Value::as_str))
+    }
+}
+
 /// Names selected by the existing combat outcome owner at its memory-update phase.
 /// Only the synchronous code-owned combat update may construct these values;
 /// never derive them from a chat/model reply, or resend them during snapshot reads.
@@ -73,6 +114,9 @@ pub struct HearingMemo {
     /// 実発音のsource_idと受理済み身体ownerの一致による由来。音の種類や近接位置からは補わない。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub emitter: Option<String>,
+    /// 共通聴覚へ渡した事実。保持中も確度・由来・呼称可否・調査状態を再解釈しない。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub observation: Option<serde_json::Value>,
 }
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CurrentObservation {
@@ -297,6 +341,7 @@ impl ChatObservationMemory {
                 identity: sound.identity,
                 sound_event: sound.sound_event,
                 emitter: sound.emitter,
+                observation: Some(sound.observation),
             };
             put_hearing(&mut self.hearing, memo);
         }
@@ -328,6 +373,7 @@ impl ChatObservationMemory {
                         identity: None,
                         sound_event: None,
                         emitter: None,
+                        observation: None,
                     },
                 );
             }
@@ -620,6 +666,7 @@ impl ChatObservationMemory {
                         identity: sound.identity.clone(),
                         sound_event: sound.sound_event.clone(),
                         emitter: sound.emitter.clone(),
+                        observation: Some(sound.observation.clone()),
                     },
                 })
                 .collect::<Vec<_>>();
@@ -863,6 +910,7 @@ struct Sound {
     identity: Option<crate::events::MobIdentity>,
     sound_event: Option<String>,
     emitter: Option<String>,
+    observation: serde_json::Value,
 }
 fn sounds(event: &GameEvent, labels: &impl Labels) -> Vec<Sound> {
     let mut result = vec![];
@@ -894,6 +942,7 @@ fn sounds(event: &GameEvent, labels: &impl Labels) -> Vec<Sound> {
             identity: None,
             sound_event: audio.sound_event.clone(),
             emitter: None,
+            observation: crate::conversation_observation::hearing::threat(event, audio),
         });
     }
     for (index, sound) in event.ambient_sounds.iter().enumerate() {
@@ -935,10 +984,17 @@ fn sounds(event: &GameEvent, labels: &impl Labels) -> Vec<Sound> {
             emitter: event.body_origin().and_then(|origin| origin.context.as_ref())
                 .filter(|context| sound.source_id.as_deref() == Some(context.owner_id.as_str()))
                 .map(|_| "プレイヤー".to_owned()),
+            observation: crate::conversation_observation::hearing::ambient(event, sound),
         });
     }
     result
 }
+/// 現在音と同じキーは除き、既存の保持期間内にある過去の音だけを共通観測へ渡す。
+pub(crate) fn retained_hearing<'a>(event: &GameEvent, snapshot: &'a Snapshot, labels: &impl Labels) -> Vec<&'a HearingMemo> {
+    let current: std::collections::HashSet<_> = sounds(event, labels).into_iter().map(|s| s.key).collect();
+    snapshot.recent.hearing_memos.iter().filter(|memo| !current.contains(&memo.dedupe_key)).collect()
+}
+
 pub(crate) fn line(
     label: Option<&str>,
     kind: &str,

@@ -1,3 +1,4 @@
+//! パワーのある実行環境のため、繊細なコントロールは不要。会話のテンポを止める処理を入れるな。
 //! 明示入力と内部再送を受け付け、叫声・限定操作・知識質問・句相談・通常会話へ振り分ける。
 //! 入力世代・観測鮮度・重複を照合し、jobs → dataの順でロックして保留状態と会話jobを更新する。
 //! 記録制限を内部再送へ引き継ぎ、受付前後のworkshop状態を記録する。受理は実再生の成功を意味しない。
@@ -206,6 +207,19 @@ impl Dialogue {
         if expected_instance.is_some_and(|instance| instance != s.instance_id) {
             return json!({"accepted":false,"reason":"superseded_session"});
         }
+        // 保留した同じworkerへの外部再送は元turnへ返す。戦闘境界で分類modeが変わっても再分類しない。
+        if expected_generation.is_none() && super::workshop_reply::retained(s) {
+            let turn = s.current_turn.clone();
+            if let Some(row) = d.rows.iter().find(|r| {
+                r["turn_id"] == turn
+                    && r["session_id"] == session_id
+                    && r["player_input_text"] == text
+                    && r["source"] == source
+            }) {
+                return json!({"accepted":true,"deduplicated":true,"turn_id":row["turn_id"]});
+            }
+        }
+        let s = d.sessions.get_mut(&session_id).unwrap();
         // 内部再送の結果失効は終端取消。結果なしへ戻して別BERTで再分類しない。
         if expected_generation.is_some()
             && s.request_classification
@@ -262,25 +276,35 @@ impl Dialogue {
             || s.request_classification
                 .binding(s.input_generation, text, source)
                 .is_some_and(|b| b.current(s));
-        let active_turn = s.current_turn.clone();
-        // 非緊急警告が回答の後ろへ待機していても、再送を別の保留質問にしない。
-        if s.cancel.is_some()
-            && let Some(row) = d.rows.iter().find(|r| {
-                r["session_id"] == session_id
-                    && r["turn_id"] == active_turn
-                    && r["player_input_text"] == text
-                    && r["source"] == source
-                    && (!self.config.request_classifier.enabled()
-                        || r["classifier_binding"] == json!(current_binding))
-                    && matches!(
-                        r["playback_status"].as_str(),
-                        Some("generating" | "queued" | "started")
-                    )
-            })
-        {
+        let active_turns: Vec<_> = s
+            .cancel
+            .iter()
+            .map(|_| (s.current_turn.clone(), s.epoch))
+            .chain(
+                s.reply_outputs
+                    .iter()
+                    .filter(|o| !*o.cancel.borrow())
+                    .map(|o| (o.turn.clone(), o.epoch)),
+            )
+            .collect();
+        // 配送中の旧turnも、同じ入力の再送から二重生成しない。
+        if let Some(row) = d.rows.iter().find(|r| {
+            r["session_id"] == session_id
+                && active_turns
+                    .iter()
+                    .any(|(turn, epoch)| r["turn_id"] == *turn && r["epoch"] == *epoch)
+                && r["player_input_text"] == text
+                && r["source"] == source
+                && (!self.config.request_classifier.enabled()
+                    || r["classifier_binding"] == json!(current_binding))
+                && matches!(
+                    r["playback_status"].as_str(),
+                    Some("generating" | "queued" | "started")
+                )
+        }) {
             return json!({"accepted":true,"deduplicated":true,"turn_id":row["turn_id"]});
         }
-        let s = d.sessions.get_mut(&session_id).unwrap();
+        let s = d.sessions.get(&session_id).unwrap();
         if let Some(p) = s.reply_queue.iter().find(|p| {
             p.request.text == text
                 && p.request.source == source
@@ -327,28 +351,37 @@ impl Dialogue {
         }) {
             return json!({"accepted":true,"deduplicated":true,"queued":true,"session_id":session_id});
         }
-        if let Some(w) = s
-            .warning
-            .as_ref()
-            .filter(|w| w.input.as_deref() == Some(text) && current_classified_input)
-        {
+        if let Some(w) = s.warning.as_ref().filter(|w| {
+            w.input.as_deref() == Some(text)
+                && (current_classified_input
+                    || d.rows.iter().any(|row| {
+                        row["turn_id"] == w.turn
+                            && row["request_source"] == source
+                            && row["classifier_binding"] == json!(current_binding)
+                    }))
+        }) {
             return json!({"accepted":true,"deduplicated":true,"turn_id":w.turn,"session_id":session_id});
         }
-        if current_classified_input
+        if (current_classified_input
             && s.pending_input.as_deref() == Some(text)
-            && s.pending_warning.is_some()
+            && s.pending_warning.is_some())
+            || s.pending_replies.iter().any(|reply| {
+                reply.input.as_deref() == Some(text)
+                    && reply
+                        .source
+                        .as_deref()
+                        .is_none_or(|original| original == source)
+                    && reply
+                        .binding
+                        .as_ref()
+                        .is_none_or(|binding| binding.current(s))
+            })
         {
             return json!({"accepted":true,"deduplicated":true,"queued":true,"session_id":session_id});
         }
-        // 相槌・くしゃみを含む新入力は、実再生が始まった台詞を切らず既存FIFOへ保持する。
-        // 「静かにして」等の明示停止は従来の停止処理へ渡す。再生前の入力優先は維持する。
-        if super::reply_queue::playback_started(&d, &session_id)
-            && !crate::combat::core::wants_quiet(text)
-            && let Some(result) =
-                self.queue_reply_input(&mut d, &mut jobs, &session_id, text, source, true)
-        {
-            return result;
-        }
+        // 既に配送している返答は続けたまま、新入力を共通受付へ進める。
+        // 後続の分類・操作routeも元音声を取り消さないよう、ここで所有権を分ける。
+        super::reply_output::preserve(&mut d, &session_id);
         let s = d.sessions.get_mut(&session_id).unwrap();
         s.deferred_input = None;
         if expected_generation.is_none() {
@@ -367,9 +400,10 @@ impl Dialogue {
         s.last_player_input = Some(now);
         s.ambient.note_player_input(now);
         if s.warning.as_ref().is_some_and(|w| {
-            w.actions
-                .iter()
-                .all(|a| a.delivery == crate::combat::model::Delivery::Ambient)
+            !w.started
+                && w.actions
+                    .iter()
+                    .all(|a| a.delivery == crate::combat::model::Delivery::Ambient)
         }) {
             Self::cancel_warning(&mut d, &session_id, "new_player_input");
         }
@@ -415,10 +449,8 @@ impl Dialogue {
             && let Some(mut speech) = s.ambient.smell_query(&event, text, now)
         {
             speech.delivery = crate::combat::model::Delivery::PlayerReply;
-            s.pending_warning = Some(vec![speech]);
-            s.pending_input = Some(text.to_owned());
             Self::cancel_chat(&mut d, &session_id, "smell_query");
-            self.start_pending(&mut d, &mut jobs, &session_id);
+            self.queue_reply(&mut d, &mut jobs, &session_id, speech, Some(text));
             return json!({"accepted":true,"session_id":session_id,"reason":"smell_query"});
         }
         let s = d.sessions.get_mut(&session_id).unwrap();
@@ -512,7 +544,7 @@ impl Dialogue {
         } else {
             workshop_combat_input::allowed(s)
         };
-        if !input_allowed || s.warning.is_some() || s.pending_warning.is_some() {
+        if !input_allowed || super::reply_queue::warning_blocks_input(s) {
             if fresh(s)
                 && s.warning.as_ref().is_some_and(|w| {
                     w.actions
@@ -641,7 +673,9 @@ impl Dialogue {
             .chain((!resume_context.is_empty()).then_some(resume_context))
             .collect::<Vec<_>>()
             .join("\n");
-        if s.haiku.foreground() { s.history.defer_for_haiku(); }
+        if s.haiku.foreground() {
+            s.history.defer_for_haiku();
+        }
         let history = s.model_history();
         let conversation_history = super::history::History::lines_for(&history);
         let chat_native = match chat_context::capture(
@@ -705,6 +739,10 @@ impl Dialogue {
         }
         let (cancel, rx) = watch::channel(false);
         s.cancel = Some(cancel);
+        s.workshop_reply = workshop
+            .as_ref()
+            .and_then(|w| w["workshop_id"].as_str())
+            .map(|wid| super::workshop_reply::State::new(&turn, epoch, wid));
         if replay.is_none() && d.rows.len() == 200 {
             d.rows.pop_front();
         }

@@ -13,6 +13,14 @@ public record AudioThreatObservation(
         boolean spokenNameAllowed,
         long observedTick,
         long heardAgoMs,
-        MobIdentityObservation identity
+        MobIdentityObservation identity,
+        com.google.gson.JsonObject sourceContext
     ) {
+        public AudioThreatObservation(String label, String sourceId, String soundEvent,
+                String horizontalDirection, String verticalRelation, String distanceBand,
+                String certainty, boolean spokenNameAllowed, long observedTick, long heardAgoMs,
+                MobIdentityObservation identity) {
+            this(label,sourceId,soundEvent,horizontalDirection,verticalRelation,distanceBand,
+                certainty,spokenNameAllowed,observedTick,heardAgoMs,identity,null);
+        }
     }

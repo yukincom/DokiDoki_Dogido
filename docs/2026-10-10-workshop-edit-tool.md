@@ -35,14 +35,14 @@
 ./dogido-rust/cargo.sh test --locked workshop::tools
 ./dogido-rust/cargo.sh test --locked workshop_editing::tool_call
 ./dogido-rust/cargo.sh build --locked
-dogido-llm/bin/python dogido-rust/scripts/check_workshop_edit_tool.py
-dogido-llm/bin/python dogido-rust/scripts/check_workshop_inspection_tool.py
+dogido-llm/bin/python dogido-rust/tests/python/check_workshop_edit_tool.py
+dogido-llm/bin/python dogido-rust/tests/python/check_workshop_inspection_tool.py
 ```
 
 E4Bでの編集確認は、同じ模擬観測・初期句のまま、相談だけを稼働中の8080へ送れる。
 
 ```sh
-dogido-llm/bin/python dogido-rust/scripts/check_workshop_edit_tool.py \
+dogido-llm/bin/python dogido-rust/tests/python/check_workshop_edit_tool.py \
   --base-url http://127.0.0.1:8080/v1 \
   --output .dogido_tools/experiments/2026-10-10-gemma-e4b/edit-tool-result.json
 ```
@@ -118,7 +118,7 @@ dogido-llm/bin/python dogido-rust/scripts/check_workshop_edit_tool.py \
 公式推奨samplingで同じ一件を確認するコマンド:
 
 ```sh
-dogido-llm/bin/python dogido-rust/scripts/check_workshop_edit_tool.py \
+dogido-llm/bin/python dogido-rust/tests/python/check_workshop_edit_tool.py \
   --base-url http://127.0.0.1:8080/v1 --official-sampling \
   --output .dogido_tools/experiments/2026-10-10-gemma-e4b/new-result.json
 ```

@@ -135,7 +135,8 @@ def main():
         vad = resolve_vad_paths(settings, cli)
         voice_config = {
             "capture_command": capture_command,
-            "whisper_cli": str(cli.resolve()), "whisper_model": str(model.resolve()),
+            "whisper_worker": str(ROOT / "dogido-rust/target/release/dogido-whisper-worker"),
+            "whisper_model": str(model.resolve()),
             "vad": {"cli": str(vad[0].resolve()), "model": str(vad[1].resolve()),
                     "threshold": settings.voice_vad_threshold} if vad else None,
             "base_url": base_url,

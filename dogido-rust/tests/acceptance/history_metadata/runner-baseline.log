@@ -1,0 +1,85 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running unittests src/lib.rs (/private/tmp/dogido-acceptance-20261028/target-history/debug/deps/dogido_rust-3b05f0013177c941)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running unittests src/lib.rs (/private/tmp/dogido-acceptance-20261028/target-history/debug/deps/dogido_rust-3b05f0013177c941)
+
+running 13 tests
+test dialogue::acceptance_history_metadata::ambient_delivery_is_spontaneous_without_invented_reply_target ... FAILED
+test dialogue::acceptance_history_metadata::audio_completion_records_delivery_time_and_actual_reply_target ... FAILED
+test dialogue::acceptance_history_metadata::combat_delivery_is_warning_even_when_its_words_match_ambient ... FAILED
+test dialogue::acceptance_history_metadata::duplicate_ack_and_audio_completion_preserve_first_record_in_either_order ... ok
+test dialogue::acceptance_history_metadata::failed_cancelled_and_old_epoch_results_do_not_create_spoken_history ... ok
+test dialogue::acceptance_history_metadata::input_admission_records_time_and_player_input_kind ... FAILED
+test dialogue::acceptance_history_metadata::legacy_rows_keep_missing_time_kind_and_reply_target_unknown ... ok
+test dialogue::acceptance_history_metadata::retention_and_compaction_still_keep_twenty_turns_and_forty_auxiliary_rows ... ok
+test dialogue::acceptance_history_metadata::silence_remains_event_and_never_becomes_spoken_reply_or_haiku_material ... ok
+test dialogue::acceptance_history_metadata::snapshot_json_and_real_restore_preserve_time_kind_and_reply_target ... FAILED
+test dialogue::acceptance_history_metadata::text_ack_records_reply_metadata_without_faking_audio_completion ... FAILED
+test dialogue::acceptance_history_metadata::urgent_environment_delivery_is_warning_even_when_its_words_match_ambient ... FAILED
+test dialogue::acceptance_history_metadata::wrong_session_and_old_epoch_display_ack_cannot_confirm_history ... ok
+
+failures:
+
+---- dialogue::acceptance_history_metadata::ambient_delivery_is_spontaneous_without_invented_reply_target stdout ----
+
+thread 'dialogue::acceptance_history_metadata::ambient_delivery_is_spontaneous_without_invented_reply_target' (20043538) panicked at src/dialogue/../../tests/acceptance/history_metadata/support.rs:75:5:
+assertion `left == right` failed: 台詞やIDの見た目ではなく実際の発話契機を記録する
+  left: Null
+ right: "spontaneous"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- dialogue::acceptance_history_metadata::audio_completion_records_delivery_time_and_actual_reply_target stdout ----
+
+thread 'dialogue::acceptance_history_metadata::audio_completion_records_delivery_time_and_actual_reply_target' (20043539) panicked at src/dialogue/../../tests/acceptance/history_metadata/support.rs:75:5:
+assertion `left == right` failed: 台詞やIDの見た目ではなく実際の発話契機を記録する
+  left: Null
+ right: "reply"
+
+---- dialogue::acceptance_history_metadata::combat_delivery_is_warning_even_when_its_words_match_ambient stdout ----
+
+thread 'dialogue::acceptance_history_metadata::combat_delivery_is_warning_even_when_its_words_match_ambient' (20043564) panicked at src/dialogue/../../tests/acceptance/history_metadata/support.rs:75:5:
+assertion `left == right` failed: 台詞やIDの見た目ではなく実際の発話契機を記録する
+  left: Null
+ right: "warning"
+
+---- dialogue::acceptance_history_metadata::input_admission_records_time_and_player_input_kind stdout ----
+
+thread 'dialogue::acceptance_history_metadata::input_admission_records_time_and_player_input_kind' (20043624) panicked at src/dialogue/../../tests/acceptance/history_metadata/support.rs:75:5:
+assertion `left == right` failed: 台詞やIDの見た目ではなく実際の発話契機を記録する
+  left: Null
+ right: "player_input"
+
+---- dialogue::acceptance_history_metadata::snapshot_json_and_real_restore_preserve_time_kind_and_reply_target stdout ----
+
+thread 'dialogue::acceptance_history_metadata::snapshot_json_and_real_restore_preserve_time_kind_and_reply_target' (20043628) panicked at src/dialogue/../../tests/acceptance/history_metadata.rs:228:5:
+assertion `left == right` failed: 復元時刻への付替え・契機や返答先の脱落を認めない
+  left: [Object {"turn_id": String("63c9853b-d8ba-4f2c-804d-30a54ef54023"), "role": String("user"), "text": String("今日は石を集めたよ")}, Object {"turn_id": String("63c9853b-d8ba-4f2c-804d-30a54ef54023:reply"), "role": String("assistant"), "text": String("ようけ集めたな。")}, Object {"turn_id": String("ambient:reply"), "role": String("assistant"), "text": String("朝になったな。")}, Object {"turn_id": String("warning:reply"), "role": String("assistant"), "text": String("朝になったな。")}]
+ right: [Object {"turn_id": String("63c9853b-d8ba-4f2c-804d-30a54ef54023"), "role": String("user"), "text": String("今日は石を集めたよ"), "occurred_at": String("2020-01-01T00:00:00Z"), "utterance_kind": String("player_input"), "reply_to_turn_id": Null}, Object {"turn_id": String("63c9853b-d8ba-4f2c-804d-30a54ef54023:reply"), "role": String("assistant"), "text": String("ようけ集めたな。"), "occurred_at": String("2020-01-01T00:00:02Z"), "utterance_kind": String("reply"), "reply_to_turn_id": String("63c9853b-d8ba-4f2c-804d-30a54ef54023")}, Object {"turn_id": String("ambient:reply"), "role": String("assistant"), "text": String("朝になったな。"), "occurred_at": String("2020-01-01T00:00:10Z"), "utterance_kind": String("spontaneous"), "reply_to_turn_id": Null}, Object {"turn_id": String("warning:reply"), "role": String("assistant"), "text": String("朝になったな。"), "occurred_at": String("2020-01-01T00:00:12Z"), "utterance_kind": String("warning"), "reply_to_turn_id": Null}]
+
+---- dialogue::acceptance_history_metadata::text_ack_records_reply_metadata_without_faking_audio_completion stdout ----
+
+thread 'dialogue::acceptance_history_metadata::text_ack_records_reply_metadata_without_faking_audio_completion' (20043629) panicked at src/dialogue/../../tests/acceptance/history_metadata/support.rs:75:5:
+assertion `left == right` failed: 台詞やIDの見た目ではなく実際の発話契機を記録する
+  left: Null
+ right: "reply"
+
+---- dialogue::acceptance_history_metadata::urgent_environment_delivery_is_warning_even_when_its_words_match_ambient stdout ----
+
+thread 'dialogue::acceptance_history_metadata::urgent_environment_delivery_is_warning_even_when_its_words_match_ambient' (20043630) panicked at src/dialogue/../../tests/acceptance/history_metadata/support.rs:75:5:
+assertion `left == right` failed: 台詞やIDの見た目ではなく実際の発話契機を記録する
+  left: Null
+ right: "warning"
+
+
+failures:
+    dialogue::acceptance_history_metadata::ambient_delivery_is_spontaneous_without_invented_reply_target
+    dialogue::acceptance_history_metadata::audio_completion_records_delivery_time_and_actual_reply_target
+    dialogue::acceptance_history_metadata::combat_delivery_is_warning_even_when_its_words_match_ambient
+    dialogue::acceptance_history_metadata::input_admission_records_time_and_player_input_kind
+    dialogue::acceptance_history_metadata::snapshot_json_and_real_restore_preserve_time_kind_and_reply_target
+    dialogue::acceptance_history_metadata::text_ack_records_reply_metadata_without_faking_audio_completion
+    dialogue::acceptance_history_metadata::urgent_environment_delivery_is_warning_even_when_its_words_match_ambient
+
+test result: FAILED. 6 passed; 7 failed; 0 ignored; 0 measured; 883 filtered out; finished in 3.45s
+
+error: test failed, to rerun pass `--lib`

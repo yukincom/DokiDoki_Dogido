@@ -7,6 +7,7 @@ use serde_json::{Value, json};
 
 mod body_changes;
 mod body_facts;
+pub(crate) mod hearing;
 pub(crate) mod subjects;
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
@@ -43,6 +44,11 @@ impl Context {
                     "position_relation":body_facts::position(&body["current"]["position_relation"])}})
             } else { json!({"status":"unavailable","reason":body["reason"]}) };
         }
+        // 雨・雷のboolは内部の変化検出用。モデルの聴覚はhearingへ一本化する。
+        if let Some(observations) = self.observations.as_object_mut() {
+            observations.remove("rain_heard");
+            observations.remove("thunder_heard");
+        }
         for change in &mut self.changes {
             if matches!(change.kind.as_str(), "body_self_position" | "body_player_position" | "body_self_orientation" | "body_player_orientation") {
                 change.before = Value::Null;
@@ -50,11 +56,20 @@ impl Context {
             } else if change.kind == "body_position_relation" {
                 change.before = body_facts::position(&change.before);
                 change.now = body_facts::position(&change.now);
+            } else if change.kind == "body_view" {
+                // 比較元の撮影識別は内部だけで持つ。位置・明暗の本文はAttachmentが一度だけ添える。
+                change.before = Value::Null;
+                change.now = json!({"changed":true});
             } else if change.kind == "body_player_visibility" {
                 change.before = body_facts::vision(&change.before);
                 change.now = body_facts::vision(&change.now);
             }
         }
+        self
+    }
+    /// 同じ観測時刻の共通事実へ、既存の保持期間内の音だけを添える。
+    pub(crate) fn with_recent_hearing(mut self, event: &GameEvent, snapshot: &crate::chat_observation::Snapshot, labels: &impl crate::chat_observation::Labels) -> Self {
+        hearing::append_recent(&mut self.observations["hearing"], event, snapshot, labels);
         self
     }
     pub fn for_reaction(mut self, kind: &str, details: &Value) -> Self {
@@ -74,7 +89,7 @@ pub fn project(
 ) -> anyhow::Result<Context> {
     if event.body_origin().is_some_and(|o| !o.available) {
         return Ok(Context {
-            observations: json!({"observer":"dogido","sensory_status":"unavailable"}),
+            observations: json!({"observer":"dogido","sensory_status":"unavailable","hearing":hearing::project(event, thunder_age_ms)}),
             ..Context::default()
         });
     }
@@ -145,6 +160,7 @@ pub fn project(
         villager_routines: crate::villager_routines::project(event),
         observations: json!({
             "observed_at":event.observed_at,
+            "hearing":hearing::project(event, thunder_age_ms),
             "dimension":event.player.dimension,
             "subject_states":subjects::project(event, &precipitation)?,
             "place":place.place_line,

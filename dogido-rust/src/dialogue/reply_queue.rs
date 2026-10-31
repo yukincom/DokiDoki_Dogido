@@ -1,3 +1,4 @@
+//! パワーのある実行環境のため、繊細なコントロールは不要。会話のテンポを止める処理を入れるな。
 //! 警告中の質問と緊急警告で未回答になった通常入力を、有界FIFOへ保持する。
 //! 原文・分類・元turnを保持し、警告終了後に新しいepochと現在観測で同じ受付へ戻す。
 //! 操作・保存・workshopの再実行は所有者へ任せ、配送確認済みの回答は保持しない。
@@ -43,10 +44,28 @@ pub(super) fn playback_started(d: &Data, sid: &str) -> bool {
             r["session_id"] == sid
                 && r["playback_status"] == "started"
                 && (s.cancel.is_some() && r["turn_id"] == s.current_turn
+                    || s.reply_outputs
+                        .iter()
+                        .any(|output| output.turn == r["turn_id"] && !*output.cancel.borrow())
                     || s.haiku
                         .active
                         .as_ref()
                         .is_some_and(|a| r["haiku_job_id"] == a.id))
+        })
+}
+
+/// 環境コメントと固定返答の読み上げは、新しい入力の受付を妨げない。
+pub(super) fn warning_blocks_input(s: &Session) -> bool {
+    s.warning
+        .iter()
+        .flat_map(|w| &w.actions)
+        .chain(s.pending_warning.iter().flatten())
+        .any(|a| {
+            matches!(
+                a.delivery,
+                crate::combat::model::Delivery::Combat
+                    | crate::combat::model::Delivery::UrgentEnvironment
+            ) || a.kind == "workshop_resume"
         })
 }
 
@@ -165,6 +184,7 @@ impl Dialogue {
 
     pub(super) fn cancel_reply_queue(&self, d: &mut Data, sid: &str, reason: &str) {
         Self::cancel_request_classification(d, sid);
+        super::reply_output::cancel(d, sid, reason, false);
         let Some(s) = d.sessions.get_mut(sid) else {
             return;
         };
@@ -206,17 +226,17 @@ impl Dialogue {
         source: &str,
         allow_conversation: bool,
     ) -> Option<Value> {
-        let dispatch_input = playback_started(d, sid);
+        let dispatch_input = d
+            .sessions
+            .get(sid)
+            .is_some_and(super::workshop_reply::retained);
         let s = d.sessions.get_mut(sid)?;
         if !dispatch_input
             && (super::workshop_focus::quiet(s)
                 || s.reply_checked
                     .as_ref()
                     .is_some_and(|c| c.generation == s.input_generation)
-                || (ready(s)
-                    && s.warning.is_none()
-                    && s.pending_warning.is_none()
-                    && s.reply_queue.is_empty()))
+                || (ready(s) && !warning_blocks_input(s) && s.reply_queue.is_empty()))
         {
             return None;
         }
@@ -321,12 +341,12 @@ impl Dialogue {
         let result = if let Err(error) = classified {
             Err(error)
         } else if dispatch_input {
-            // 再生中の入力は行為も意味もまだ実行しない。分類だけ保持し、終了後に通常受付へ戻す。
+            // 戦闘で保持した川柳返答への追加入力は、同じ相談の再開境界へ戻す。
             Ok(json!({"knowledge_query":true}))
         } else {
             let mut input = bridge::Input::from(json!({"op":"assist_route","text":request.text}));
             input.request_classification = request.classification.clone();
-            let work = bridge::render(&self.config, &self.llm, input, &mut cancel);
+            let work = bridge::render(&self.config, &self.reading_dictionary, &self.llm, input, &mut cancel);
             tokio::pin!(work);
             tokio::select! {
                 result=&mut work=>result,
@@ -533,6 +553,7 @@ impl Dialogue {
     pub(super) fn resume_reply_input(self: &Arc<Self>, sid: &str) {
         let (pending, generation, instance) = {
             let mut d = self.data.lock().unwrap();
+            self.resume_workshop_reply(&mut d, sid);
             self.prune_classifier_inputs(&mut d, sid);
             if d.stopped || playback_started(&d, sid) {
                 return;
@@ -1026,6 +1047,8 @@ mod tests {
 
 #[cfg(test)]
 mod playback_completion_tests {
+    //! 次の入力受付と元音声の継続を、同じsessionの取消・配送・履歴で確認する。
+    //! モデル・マイク・スピーカーは起動せず、実時間のテンポはHTTP模擬試験と実機で分ける。
     use super::*;
 
     fn speaking(status: &str) -> (Arc<Dialogue>, watch::Receiver<bool>) {
@@ -1038,62 +1061,163 @@ mod playback_completion_tests {
             let mut d = dialogue.data.lock().unwrap();
             let s = d.sessions.get_mut("s").unwrap();
             s.current_turn = "speaking".into();
+            s.status = PlaybackStatus::Started;
             s.cancel = Some(tx);
-            d.rows.push_back(json!({"session_id":"s","turn_id":"speaking",
-                "playback_status":status,"text":"最後まで話すで。","player_input_text":"前の質問"}));
+            s.history
+                .push_input("speaking", "前の質問", json!(chrono::Utc::now()));
+            d.rows.push_back(json!({"session_id":"s","turn_id":"speaking","epoch":0,
+                "playback_status":status,"source":"text","text":"最後まで話すで。","player_input_text":"前の質問"}));
         }
         (dialogue, rx)
     }
 
+    // 見込み: 認識済み入力は再生終了を待たず共通受付へ進み、元音声は続く。
+    // 合格: 音声・文字入力ともFIFOなし、旧取消なし、旧行はstarted。モデルは起動しない。
     #[tokio::test]
-    async fn acknowledgement_and_sneeze_queue_without_cancelling_started_reply() {
-        let (dialogue, rx) = speaking("started");
-        let first = dialogue.submit(Some("s"), "うん", "voice");
-        let second = dialogue.submit(Some("s"), "へっくしょん", "voice");
-        assert_eq!(first["queued"], true);
-        assert_eq!(second["queued"], true);
-        assert_eq!(
-            dialogue.submit(Some("s"), "うん", "voice")["deduplicated"],
-            true
-        );
-        for _ in 0..8 {
-            tokio::task::yield_now().await;
-        }
-        {
-            let mut d = dialogue.data.lock().unwrap();
-            dialogue.accept_vocalization(&mut d, "s", "うおおお");
+    async fn new_voice_and_text_inputs_proceed_while_started_reply_continues() {
+        for (text, source) in [
+            ("うん", "voice"),
+            ("へっくしょん", "voice"),
+            ("おいで", "voice"),
+            ("別の話をしよう", "text"),
+        ] {
+            let (dialogue, rx) = speaking("started");
+            let result = dialogue.submit(Some("s"), text, source);
+            assert_eq!(result["accepted"], true, "{result}");
+            assert_ne!(result["queued"], true, "{result}");
             assert!(!*rx.borrow());
-            assert_eq!(d.rows[0]["playback_status"], "started");
-            assert_eq!(d.sessions["s"].reply_queue.len(), 2);
+            {
+                let d = dialogue.data.lock().unwrap();
+                assert!(d.sessions["s"].reply_queue.is_empty());
+                assert!(super::super::reply_output::current(
+                    &d.sessions["s"],
+                    "speaking",
+                    0
+                ));
+                assert_eq!(d.rows[0]["playback_status"], "started");
+            }
+            dialogue.shutdown().await;
+            assert!(*rx.borrow(), "shutdown must still own the old audio");
+        }
+    }
+
+    // 見込み: 配送中の旧入力が再送されても、次の入力を取消・再生成しない。
+    // 合格: 元turnへdeduplicatedを返し、新turn・新旧取消権を保つ。同期受付だけを検査。
+    #[tokio::test]
+    async fn retry_of_preserved_output_keeps_newer_generation() {
+        let (dialogue, rx) = speaking("started");
+        let next = dialogue.submit(Some("s"), "別の話をしよう", "text");
+        let retry = dialogue.submit(Some("s"), "前の質問", "text");
+        assert_eq!(retry["deduplicated"], true, "{retry}");
+        assert_eq!(retry["turn_id"], "speaking");
+        assert!(!*rx.borrow());
+        {
+            let d = dialogue.data.lock().unwrap();
+            assert_eq!(
+                d.sessions["s"].current_turn,
+                next["turn_id"].as_str().unwrap()
+            );
             assert!(
                 d.sessions["s"]
-                    .reply_queue
-                    .iter()
-                    .all(|p| p.ready && p.dispatch_input)
+                    .cancel
+                    .as_ref()
+                    .is_some_and(|c| !*c.borrow())
             );
         }
-        dialogue.resume_reply_input("s");
-        assert_eq!(
-            dialogue.data.lock().unwrap().sessions["s"]
-                .reply_queue
-                .len(),
-            2
-        );
-        dialogue.interrupt("s");
-        assert!(*rx.borrow());
-        assert!(
-            dialogue.data.lock().unwrap().sessions["s"]
-                .reply_queue
-                .is_empty()
-        );
         dialogue.shutdown().await;
     }
 
+    // 見込み: 読み上げ中の固定返答2件を入力別に保ち、後から順に配送する。
+    // 合格: 入力FIFOなし、元音声は継続、固定返答と入力が受付順に残り、明示停止で消える。
     #[tokio::test]
-    async fn new_input_still_replaces_a_reply_before_playback_begins() {
-        let (dialogue, rx) = speaking("queued");
+    async fn fixed_outputs_keep_each_input_while_previous_audio_continues() {
+        use crate::combat::model::{Delivery, Speech};
+        let (dialogue, _) = speaking("started");
+        let (tx, rx) = watch::channel(false);
+        let mut jobs = Vec::new();
+        {
+            let mut d = dialogue.data.lock().unwrap();
+            let s = d.sessions.get_mut("s").unwrap();
+            s.cancel = None;
+            let mut action = Speech::new("smell", "花の香りや。");
+            action.delivery = Delivery::Ambient;
+            s.warning = Some(super::super::warnings::Active {
+                turn: "speaking".into(),
+                actions: vec![action],
+                cancel: tx,
+                started: true,
+                input: None,
+                protected_until: None,
+            });
+            for (input, reply) in [("一件目", "一件目の返答"), ("二件目", "二件目の返答")]
+            {
+                dialogue.queue_fixed_reply(&mut d, &mut jobs, "s", reply.into(), Some(input));
+            }
+            let s = &d.sessions["s"];
+            assert!(s.reply_queue.is_empty());
+            assert_eq!(s.pending_replies.len(), 2);
+            assert_eq!(s.pending_replies[0].input.as_deref(), Some("一件目"));
+            assert_eq!(s.pending_replies[1].input.as_deref(), Some("二件目"));
+            assert!(!*rx.borrow());
+            d.sessions.get_mut("s").unwrap().warning = None;
+            dialogue.start_pending(&mut d, &mut jobs, "s");
+            let s = &d.sessions["s"];
+            assert_eq!(s.warning.as_ref().unwrap().input.as_deref(), Some("一件目"));
+            assert_eq!(s.pending_replies.len(), 1);
+            assert_eq!(s.pending_replies[0].input.as_deref(), Some("二件目"));
+        }
+        dialogue.interrupt("s");
+        assert!(
+            dialogue.data.lock().unwrap().sessions["s"]
+                .pending_replies
+                .is_empty()
+        );
+        dialogue.shutdown().await;
+        for job in jobs {
+            job.await.unwrap();
+        }
+    }
+
+    // 見込み: 新入力後に元音声が終わっても、新しい処理の状態を変更しない。
+    // 合格: 元配送は完了・履歴1件、新turnは生成中と取消権を維持。重複通知・ACKも二重記録しない。
+    #[tokio::test]
+    async fn old_delivery_finishes_once_without_overwriting_new_turn() {
+        let (dialogue, rx) = speaking("started");
+        let next = dialogue.submit(Some("s"), "別の話をしよう", "text");
+        let result =
+            json!({"text":"最後まで話すで。","audio_streamed":true,"dialogue_action":"speak"});
+        assert!(dialogue.update("s", "speaking", 0, PlaybackStatus::Queued, Some(&result)));
+        assert!(dialogue.update("s", "speaking", 0, PlaybackStatus::Completed, Some(&result)));
+        assert!(!dialogue.update("s", "speaking", 0, PlaybackStatus::Completed, Some(&result)));
+        {
+            let mut d = dialogue.data.lock().unwrap();
+            assert!(dialogue.confirm_reply_delivery(&mut d, "s", "speaking", 0, &result, true));
+            let s = &d.sessions["s"];
+            assert_eq!(s.current_turn, next["turn_id"].as_str().unwrap());
+            assert_eq!(s.status, PlaybackStatus::Generating);
+            assert!(s.cancel.as_ref().is_some_and(|c| !*c.borrow()));
+            assert!(s.reply_outputs.is_empty());
+            assert_eq!(
+                s.history
+                    .model_rows()
+                    .iter()
+                    .filter(|r| r["role"] == "assistant" && r["reply_to_turn_id"] == "speaking")
+                    .count(),
+                1
+            );
+            assert_eq!(d.rows[0]["playback_status"], "completed");
+        }
+        assert!(!*rx.borrow());
+        dialogue.shutdown().await;
+    }
+
+    // 見込み: 生成待ちの既存挙動は維持し、まだ出力していない返答を新入力へ置き換える。
+    // 合格: generatingの旧取消あり、FIFOなし。音声のない模擬状態で確認する。
+    #[tokio::test]
+    async fn new_input_still_replaces_generation_before_output_is_ready() {
+        let (dialogue, rx) = speaking("generating");
         assert_eq!(
-            dialogue.submit(Some("s"), "ドギド、別の話やで", "text")["accepted"],
+            dialogue.submit(Some("s"), "別の話をしよう", "text")["accepted"],
             true
         );
         assert!(*rx.borrow());
@@ -1105,9 +1229,63 @@ mod playback_completion_tests {
         dialogue.shutdown().await;
     }
 
+    // 見込み: 環境コメント・固定返答の音声中でも入力が進む。
+    // 合格: 旧配送を取消さず新入力受理、FIFO空、warning所有者を維持。実音声は別確認。
     #[tokio::test]
-    async fn explicit_quiet_bypasses_stale_observation_and_keeps_manual_stop() {
+    async fn input_proceeds_during_ambient_and_fixed_player_output() {
+        use crate::combat::model::{Delivery, Speech};
+        for delivery in [Delivery::Ambient, Delivery::PlayerReply] {
+            let (dialogue, _) = speaking("started");
+            let (tx, rx) = watch::channel(false);
+            {
+                let mut d = dialogue.data.lock().unwrap();
+                let s = d.sessions.get_mut("s").unwrap();
+                s.cancel = None;
+                let mut action = Speech::new("smell", "花の香りや。");
+                action.delivery = delivery;
+                s.warning = Some(super::super::warnings::Active {
+                    turn: "speaking".into(),
+                    actions: vec![action],
+                    cancel: tx,
+                    started: true,
+                    input: None,
+                    protected_until: None,
+                });
+            }
+            let result = dialogue.submit(Some("s"), "別の話をしよう", "voice");
+            assert_eq!(result["accepted"], true, "{result}");
+            assert_ne!(result["queued"], true, "{result}");
+            assert!(!*rx.borrow());
+            let d = dialogue.data.lock().unwrap();
+            assert!(d.sessions["s"].reply_queue.is_empty());
+            assert_eq!(d.sessions["s"].warning.as_ref().unwrap().turn, "speaking");
+            drop(d);
+            dialogue.shutdown().await;
+        }
+    }
+
+    // 見込み: 診断だけに残す純叫声は会話の割込みにも入力保留にもならない。
+    // 合格: 音声継続・FIFO空。純叫声の既存受付を模擬状態で確認する。
+    #[tokio::test]
+    async fn diagnostic_vocalization_does_not_interrupt_or_queue_a_reply() {
         let (dialogue, rx) = speaking("started");
+        let result = dialogue.submit(Some("s"), "うおおお", "voice");
+        assert_eq!(result["reason"], "situation_vocalization");
+        assert!(!*rx.borrow());
+        assert!(
+            dialogue.data.lock().unwrap().sessions["s"]
+                .reply_queue
+                .is_empty()
+        );
+        dialogue.shutdown().await;
+    }
+
+    // 見込み: 明示停止は新旧すべての配送を止める。通常入力では元音声を止めない。
+    // 合格: 古い観測でも静粛依頼を受理し、保持した音声へ取消。実音声は模擬。
+    #[tokio::test]
+    async fn explicit_quiet_stops_preserved_output_even_with_stale_observation() {
+        let (dialogue, rx) = speaking("started");
+        dialogue.submit(Some("s"), "別の話をしよう", "text");
         dialogue
             .data
             .lock()
@@ -1116,19 +1294,23 @@ mod playback_completion_tests {
             .get_mut("s")
             .unwrap()
             .preview = false;
-        let result = dialogue.submit(Some("s"), "静かにして", "voice");
-        assert_eq!(result["accepted"], true);
+        assert_eq!(
+            dialogue.submit(Some("s"), "静かにして", "voice")["accepted"],
+            true
+        );
         assert!(*rx.borrow());
         assert!(
             dialogue.data.lock().unwrap().sessions["s"]
-                .reply_queue
+                .reply_outputs
                 .is_empty()
         );
         dialogue.shutdown().await;
     }
 
+    // 見込み: 川柳説明中も新入力が進み、元音声と現在句はそのまま保つ。
+    // 合格: 同期受付で旧取消なし・FIFO空・元句不変。モデル解釈と保存は別試験。
     #[tokio::test]
-    async fn workshop_input_waits_without_changing_the_poem_or_pending() {
+    async fn workshop_input_proceeds_without_cancelling_explanation() {
         let f = super::super::workshop_record::tests::fixture();
         let before = f.d.workshop_record_state("s");
         let (tx, rx) = watch::channel(false);
@@ -1141,14 +1323,16 @@ mod playback_completion_tests {
                 json!({"session_id":"s","turn_id":"explanation","playback_status":"started"}),
             );
         }
-        let response = f.d.submit(Some("s"), "上五をあさひかるにして", "voice");
-        assert_eq!(response["queued"], true);
-        for _ in 0..8 {
-            tokio::task::yield_now().await;
-        }
+        let result = f.d.submit(Some("s"), "上五をあさひかるにして", "voice");
+        assert_eq!(result["accepted"], true, "{result}");
+        assert_ne!(result["queued"], true, "{result}");
         assert!(!*rx.borrow());
         assert_eq!(f.d.workshop_record_state("s"), before);
-        assert_eq!(f.d.data.lock().unwrap().sessions["s"].reply_queue.len(), 1);
+        assert!(
+            f.d.data.lock().unwrap().sessions["s"]
+                .reply_queue
+                .is_empty()
+        );
         f.finish().await;
     }
 }

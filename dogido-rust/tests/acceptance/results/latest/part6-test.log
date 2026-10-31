@@ -1,0 +1,29 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running unittests src/lib.rs (/private/tmp/dogido-tests-final-20261029/target-combined/debug/deps/dogido_rust-3b05f0013177c941)
+
+running 3 tests
+test body::autonomy::state::acceptance_body_schema::acceptance_body_schema_control_object_target_accepts_and_string_target_rejects ... ok
+test body::autonomy::state::acceptance_body_schema::acceptance_body_schema_image_prompt_example_passes_real_receivers ... FAILED
+test body::autonomy::state::acceptance_body_schema::acceptance_body_schema_normal_prompt_examples_pass_real_receivers ... FAILED
+
+failures:
+
+---- body::autonomy::state::acceptance_body_schema::acceptance_body_schema_image_prompt_example_passes_real_receivers stdout ----
+
+thread 'body::autonomy::state::acceptance_body_schema::acceptance_body_schema_image_prompt_example_passes_real_receivers' (21358605) panicked at src/body/autonomy/../../../tests/acceptance/part6_body_schema.rs:35:13:
+本体プロンプトにinspect_imageの完成JSON例がない。試験側で補作しない。
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- body::autonomy::state::acceptance_body_schema::acceptance_body_schema_normal_prompt_examples_pass_real_receivers stdout ----
+
+thread 'body::autonomy::state::acceptance_body_schema::acceptance_body_schema_normal_prompt_examples_pass_real_receivers' (21358606) panicked at src/body/autonomy/../../../tests/acceptance/part6_body_schema.rs:35:13:
+本体プロンプトにstayの完成JSON例がない。試験側で補作しない。
+
+
+failures:
+    body::autonomy::state::acceptance_body_schema::acceptance_body_schema_image_prompt_example_passes_real_receivers
+    body::autonomy::state::acceptance_body_schema::acceptance_body_schema_normal_prompt_examples_pass_real_receivers
+
+test result: FAILED. 1 passed; 2 failed; 0 ignored; 0 measured; 937 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--lib`

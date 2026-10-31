@@ -1,3 +1,4 @@
+//! パワーのある実行環境のため、繊細なコントロールは不要。会話のテンポを止める処理を入れるな。
 //! 共通受付の依頼分類を既存Helperで直列実行し、原入力・接続・世代へ結果を戻す。
 //! 通常の分類待ちは新入力で取消。危険中の入力は既存reply_queueが寿命を所有する。
 //! モデルは依頼の種類だけを返し、操作・候補選択・履歴確定は既存runtimeへ渡す。
@@ -11,6 +12,11 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
 use tokio::{sync::watch, task::JoinHandle};
 
 /// 二領域とも未指定なら分類なし。片側未準備・失敗でも別領域や旧判定へ戻さない。
+/// モデル差し替え: 新しいモデル一式とadopted-model.jsonを別フォルダへ置き、
+/// .envのDOGIDO_REQUEST_CLASSIFIER_NORMAL_MODEL_ROOT / DOGIDO_REQUEST_CLASSIFIER_SENRYU_MODEL_ROOTを
+/// そのルートへ変更して本体を再起動する。相対パスは--settings-dir基準。
+/// 重み・tokenizer・採用記録の対応や、ラベル変更時の修正先は
+/// scripts/request_classifier_worker.pyの冒頭を参照。常駐中のモデルは上書きしない。
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Settings {
@@ -215,7 +221,7 @@ impl Dialogue {
         Ok(())
     }
 
-    /// 受付時の領域へ一度だけ送る。共有排他の待機中も対象を照合し、取消後は回収まで待つ。
+    /// 受付時の領域へ一度だけ送る。取消後も開始済みの通信を完了させ、モデルを保持する。
     pub(super) async fn classify_request(
         &self,
         sid: &str,
@@ -239,42 +245,44 @@ impl Dialogue {
         );
         let result = {
             let slot = models.slot(binding.mode);
-            // ロード中の取消にも既存Helperの回収を使い、終了前に次の領域を動かさない。
-            let (stop, mut local_cancel) = watch::channel(false);
+            // 入力の寿命とworkerの寿命を分離する。入力取消・受付境界の変更では
+            // このチャネルを送らず、同じfutureで応答を最後まで読み取る。
+            // 排他は完了まで保持し、通常・川柳を合わせた同時1推論を維持する。
+            let (stop, mut worker_stop) = watch::channel(false);
             let operation = async {
                 if slot.is_none() {
-                    *slot = Some(start(&self.config, binding.mode, &mut local_cancel).await?);
+                    *slot = Some(start(&self.config, binding.mode, &mut worker_stop).await?);
                 }
-                ensure!(
-                    self.classifier_binding_current(sid, binding),
-                    "classifier binding changed"
-                );
+                // 再ロード中に入力だけ取り消された場合は、読み込んだモデルを残し、
+                // 不要になった入力の推論は始めない。既存の取消・対象照合だけを使う。
+                if *cancel.borrow()
+                    || cancel.has_changed().is_err()
+                    || !self.classifier_binding_current(sid, binding)
+                {
+                    return Ok(None);
+                }
                 let classifier = slot.as_mut().unwrap();
                 let manifest_sha256 = classifier.manifest_sha256().to_owned();
                 let prediction = classifier
                     .classify(
                         &input,
                         Duration::from_millis(self.config.request_classifier.timeout_ms),
-                        &mut local_cancel,
+                        &mut worker_stop,
                     )
                     .await?;
-                Ok(Classification {
+                Ok(Some(Classification {
                     mode: binding.mode,
                     text: input.text.clone(),
                     source: source.into(),
                     manifest_sha256,
                     prediction,
-                })
+                }))
             };
             tokio::pin!(operation);
             tokio::select! { biased;
-                _ = bridge::cancelled(cancel) => {
+                _ = self.wait_classifier_shutdown() => {
                     let _ = stop.send(true); let _ = operation.await;
-                    Err(anyhow::anyhow!("request classifier cancelled"))
-                },
-                _ = self.wait_classifier_binding_change(sid, binding) => {
-                    let _ = stop.send(true); let _ = operation.await;
-                    Err(anyhow::anyhow!("classifier binding changed"))
+                    Err(anyhow::anyhow!("request classifier stopped"))
                 },
                 result = &mut operation => result,
             }
@@ -284,7 +292,17 @@ impl Dialogue {
         {
             classifier.abort().await;
         }
-        result
+        // 通信異常・既存timeoutでは上で回収する。通常の取消はその後で結果だけ捨てる。
+        let classification = result?;
+        ensure!(
+            !*cancel.borrow() && cancel.has_changed().is_ok(),
+            "request classifier cancelled"
+        );
+        ensure!(
+            self.classifier_binding_current(sid, binding),
+            "classifier binding changed"
+        );
+        classification.context("request classifier cancelled")
     }
 
     fn classifier_binding_current(&self, sid: &str, binding: &Binding) -> bool {
@@ -295,6 +313,16 @@ impl Dialogue {
         // 分類待ちの間だけ既存の短いdataロックで確認する。常駐の別ルーターは作らない。
         loop {
             if !self.classifier_binding_current(sid, binding) {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    }
+
+    async fn wait_classifier_shutdown(&self) {
+        // 入力取消後も推論を回収する間、全体終了だけは既存Helperの停止へ伝える。
+        loop {
+            if self.data.lock().unwrap().stopped {
                 return;
             }
             tokio::time::sleep(Duration::from_millis(20)).await;

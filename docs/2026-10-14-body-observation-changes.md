@@ -33,7 +33,7 @@
 | 身体関連のRustテスト | 24件成功 |
 | `cargo test --all-targets --locked` | 成功。ライブラリ572件成功・既存の1件除外、ほかのtargetも成功 |
 | `cargo clippy --all-targets --locked -- -D warnings` | 成功 |
-| `scripts/check_body_senses.py` | 模擬LLMを使うHTTP経路6項目成功 |
+| `tests/python/check_body_senses.py` | 模擬LLMを使うHTTP経路6項目成功 |
 | 今回のRustファイルの整形・差分の空白検査 | 成功 |
 
 単体・Dialogue経路では、種類ごとの件数上限、静止後の保持、視認未取得、理由だけの変化、観測喪失／再取得、生成中の変更、旧世代の完了通知、通常返答への差分注入、周期発話の非誘発を確認した。HTTP検査では、一時サーバーに身体観測を送り、通常返答の実送信内容に視認・向きの差分が含まれることと、未取得時に差分を持ち越さないことを確認した。

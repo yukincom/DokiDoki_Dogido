@@ -1,0 +1,97 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running unittests src/lib.rs (/private/tmp/dogido-tests-final-20261029/target-combined/debug/deps/dogido_rust-3b05f0013177c941)
+
+running 11 tests
+test body::autonomy::state::acceptance_body_results::acceptance_body_results_cancel_is_carried_forward_and_late_success_cannot_overwrite_it ... FAILED
+test body::autonomy::state::acceptance_body_results::acceptance_body_results_failure_reaches_next_choice_without_claiming_arrival ... FAILED
+test body::autonomy::state::acceptance_body_results::acceptance_body_results_history_stays_bounded_and_old_generation_cannot_leak_control ... ok
+test body::autonomy::state::acceptance_body_results::acceptance_body_results_success_reaches_next_choice_as_observed_result ... FAILED
+test body::autonomy::state::acceptance_body_results::acceptance_body_results_waiting_and_adapter_acceptance_do_not_mean_completion ... FAILED
+test body::autonomy::state::acceptance_body_results::acceptance_body_results_wrong_command_or_epoch_cannot_complete_choice_control ... ok
+test dialogue::body_interest_runtime::acceptance_body_results_context::acceptance_body_results_current_body_state_accompanies_next_model_options ... FAILED
+test dialogue::body_interest_runtime::acceptance_body_results_context::acceptance_body_results_ordinary_reply_receives_cancelled_operation ... FAILED
+test dialogue::body_interest_runtime::acceptance_body_results_context::acceptance_body_results_ordinary_reply_receives_failed_operation ... FAILED
+test dialogue::body_interest_runtime::acceptance_body_results_context::acceptance_body_results_ordinary_reply_receives_queued_operation ... FAILED
+test dialogue::body_interest_runtime::acceptance_body_results_context::acceptance_body_results_ordinary_reply_receives_successful_operation ... FAILED
+
+failures:
+
+---- body::autonomy::state::acceptance_body_results::acceptance_body_results_cancel_is_carried_forward_and_late_success_cannot_overwrite_it stdout ----
+
+thread 'body::autonomy::state::acceptance_body_results::acceptance_body_results_cancel_is_carried_forward_and_late_success_cannot_overwrite_it' (21358666) panicked at src/body/autonomy/../../../tests/acceptance/part7_body_results.rs:190:5:
+assertion `left == right` failed: 取消した選択を単なる選択済みで残さない
+  left: Null
+ right: "cancelled"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- body::autonomy::state::acceptance_body_results::acceptance_body_results_failure_reaches_next_choice_without_claiming_arrival stdout ----
+
+thread 'body::autonomy::state::acceptance_body_results::acceptance_body_results_failure_reaches_next_choice_without_claiming_arrival' (21358667) panicked at src/body/autonomy/../../../tests/acceptance/part7_body_results.rs:158:5:
+assertion `left == right` failed: 次の判断で到着失敗を参照できる
+  left: Null
+ right: "failed"
+
+---- body::autonomy::state::acceptance_body_results::acceptance_body_results_success_reaches_next_choice_as_observed_result stdout ----
+
+thread 'body::autonomy::state::acceptance_body_results::acceptance_body_results_success_reaches_next_choice_as_observed_result' (21358669) panicked at src/body/autonomy/../../../tests/acceptance/part7_body_results.rs:126:5:
+assertion `left == right` failed: 選んだ事実に実到着の結果を結び付ける
+  left: Null
+ right: "succeeded"
+
+---- body::autonomy::state::acceptance_body_results::acceptance_body_results_waiting_and_adapter_acceptance_do_not_mean_completion stdout ----
+
+thread 'body::autonomy::state::acceptance_body_results::acceptance_body_results_waiting_and_adapter_acceptance_do_not_mean_completion' (21358670) panicked at src/body/autonomy/../../../tests/acceptance/part7_body_results.rs:229:5:
+assertion `left == right` failed: 次の判断へ渡す選択記録でも未完了を明示する
+  left: Null
+ right: "pending"
+
+---- dialogue::body_interest_runtime::acceptance_body_results_context::acceptance_body_results_current_body_state_accompanies_next_model_options stdout ----
+
+thread 'dialogue::body_interest_runtime::acceptance_body_results_context::acceptance_body_results_current_body_state_accompanies_next_model_options' (21358672) panicked at src/dialogue/../../tests/acceptance/part7_body_context.rs:114:5:
+assertion `left == right` failed: 現在の制御modeを選択と別に渡す
+  left: Null
+ right: "follow"
+
+---- dialogue::body_interest_runtime::acceptance_body_results_context::acceptance_body_results_ordinary_reply_receives_cancelled_operation stdout ----
+
+thread 'dialogue::body_interest_runtime::acceptance_body_results_context::acceptance_body_results_ordinary_reply_receives_cancelled_operation' (21358681) panicked at src/dialogue/../../tests/acceptance/part7_body_context.rs:244:5:
+assertion `left == right` failed: 通常返答へ今回の操作の受付・実行状態を渡す
+  left: Null
+ right: "cancelled"
+
+---- dialogue::body_interest_runtime::acceptance_body_results_context::acceptance_body_results_ordinary_reply_receives_failed_operation stdout ----
+
+thread 'dialogue::body_interest_runtime::acceptance_body_results_context::acceptance_body_results_ordinary_reply_receives_failed_operation' (21358682) panicked at src/dialogue/../../tests/acceptance/part7_body_context.rs:244:5:
+assertion `left == right` failed: 通常返答へ今回の操作の受付・実行状態を渡す
+  left: Null
+ right: "failed"
+
+---- dialogue::body_interest_runtime::acceptance_body_results_context::acceptance_body_results_ordinary_reply_receives_queued_operation stdout ----
+
+thread 'dialogue::body_interest_runtime::acceptance_body_results_context::acceptance_body_results_ordinary_reply_receives_queued_operation' (21358683) panicked at src/dialogue/../../tests/acceptance/part7_body_context.rs:244:5:
+assertion `left == right` failed: 通常返答へ今回の操作の受付・実行状態を渡す
+  left: Null
+ right: "queued"
+
+---- dialogue::body_interest_runtime::acceptance_body_results_context::acceptance_body_results_ordinary_reply_receives_successful_operation stdout ----
+
+thread 'dialogue::body_interest_runtime::acceptance_body_results_context::acceptance_body_results_ordinary_reply_receives_successful_operation' (21358684) panicked at src/dialogue/../../tests/acceptance/part7_body_context.rs:244:5:
+assertion `left == right` failed: 通常返答へ今回の操作の受付・実行状態を渡す
+  left: Null
+ right: "succeeded"
+
+
+failures:
+    body::autonomy::state::acceptance_body_results::acceptance_body_results_cancel_is_carried_forward_and_late_success_cannot_overwrite_it
+    body::autonomy::state::acceptance_body_results::acceptance_body_results_failure_reaches_next_choice_without_claiming_arrival
+    body::autonomy::state::acceptance_body_results::acceptance_body_results_success_reaches_next_choice_as_observed_result
+    body::autonomy::state::acceptance_body_results::acceptance_body_results_waiting_and_adapter_acceptance_do_not_mean_completion
+    dialogue::body_interest_runtime::acceptance_body_results_context::acceptance_body_results_current_body_state_accompanies_next_model_options
+    dialogue::body_interest_runtime::acceptance_body_results_context::acceptance_body_results_ordinary_reply_receives_cancelled_operation
+    dialogue::body_interest_runtime::acceptance_body_results_context::acceptance_body_results_ordinary_reply_receives_failed_operation
+    dialogue::body_interest_runtime::acceptance_body_results_context::acceptance_body_results_ordinary_reply_receives_queued_operation
+    dialogue::body_interest_runtime::acceptance_body_results_context::acceptance_body_results_ordinary_reply_receives_successful_operation
+
+test result: FAILED. 2 passed; 9 failed; 0 ignored; 0 measured; 929 filtered out; finished in 0.09s
+
+error: test failed, to rerun pass `--lib`

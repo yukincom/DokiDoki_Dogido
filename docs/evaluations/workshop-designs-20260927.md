@@ -93,7 +93,7 @@
 3. 編集指示そのものへの訂正を独立に扱う。差分出力が良くなると決めつけず、現行の明示部分置換と比較する。
 
 実行器: `dogido-rust/scripts/compare_workshop_designs.py`。
-入力例: `dogido-rust/scripts/workshop_design_cases.py`。
+入力例: `dogido-rust/tests/python/workshop_design_cases.py`。
 状態・差分・既存検査・診断の自動テストは`test_workshop_designs.py`の11件が成功。
 
 ```bash

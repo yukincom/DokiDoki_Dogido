@@ -1,0 +1,171 @@
+{
+  "reviewed_at": "2026-10-29T00:41:29.125139+00:00",
+  "status": "reviewed_diagnostic_not_production_acceptance",
+  "source_results_sha256": "0be91041e230956dce8428c9981649942c43fb3334437ce52658e0e10108f8cc",
+  "response_count": 117,
+  "excluded_preliminary_responses": 30,
+  "method": "担当アシスタントが前後の実画像と全117本文を照合。追加の採点モデル呼出しなし。発話率を誤反応率へ換算しない。",
+  "conditions": {
+    "images_only": {
+      "responses": 39,
+      "speak": 33,
+      "silent": 6,
+      "speak_percent": 84.61538461538461,
+      "output_formats": {
+        "json": 39
+      }
+    },
+    "images_and_amount": {
+      "responses": 39,
+      "speak": 33,
+      "silent": 6,
+      "speak_percent": 84.61538461538461,
+      "output_formats": {
+        "json": 7,
+        "fenced_json": 32
+      }
+    },
+    "images_amount_and_regions": {
+      "responses": 39,
+      "speak": 30,
+      "silent": 9,
+      "speak_percent": 76.92307692307692,
+      "output_formats": {
+        "json": 8,
+        "fenced_json": 31
+      }
+    }
+  },
+  "cases": [
+    {
+      "case_id": "pair_01",
+      "observation": "完全に同じ金鉱石の画像",
+      "assessment": "全条件3/3で金への発話。差分0という情報だけでは沈黙しない。履歴がない初回の感想も含むため、9件を誤反応とは採点しない。",
+      "speak_counts_by_condition": {
+        "images_only": 3,
+        "images_and_amount": 3,
+        "images_amount_and_regions": 3
+      }
+    },
+    {
+      "case_id": "pair_02",
+      "observation": "海岸。太陽・雲などの弱い差",
+      "assessment": "領域条件だけ0/3。ほかは景色への感想が各1件。物体の新規出現を主張していない。",
+      "speak_counts_by_condition": {
+        "images_only": 1,
+        "images_and_amount": 1,
+        "images_amount_and_regions": 0
+      }
+    },
+    {
+      "case_id": "pair_03",
+      "observation": "水中の微小な差",
+      "assessment": "変化率条件だけ2/3で景色への感想。数値を添えることで発話が増える例。",
+      "speak_counts_by_condition": {
+        "images_only": 0,
+        "images_and_amount": 2,
+        "images_amount_and_regions": 0
+      }
+    },
+    {
+      "case_id": "pair_04",
+      "observation": "水中の泡や描画の小さな差",
+      "assessment": "全条件3/3で景色への感想。過去発話の反復はこの独立試験では判定できない。",
+      "speak_counts_by_condition": {
+        "images_only": 3,
+        "images_and_amount": 3,
+        "images_amount_and_regions": 3
+      }
+    },
+    {
+      "case_id": "pair_05",
+      "observation": "水中。プレイヤーの向きと色・光の差",
+      "assessment": "数値条件は明るさ・海の色の差に言及。画像のみでは既にあった珊瑚を「見えてきた」と述べる例がある。",
+      "speak_counts_by_condition": {
+        "images_only": 3,
+        "images_and_amount": 3,
+        "images_amount_and_regions": 3
+      }
+    },
+    {
+      "case_id": "pair_06",
+      "observation": "砂浜の左下にカメが現れる",
+      "assessment": "全条件3/3でカメを認識。画像だけでも成功。2%以下を除外する仮定ではこの画像対を落とす。",
+      "speak_counts_by_condition": {
+        "images_only": 3,
+        "images_and_amount": 3,
+        "images_amount_and_regions": 3
+      }
+    },
+    {
+      "case_id": "pair_07",
+      "observation": "金鉱石の壁。右上の見え方に差",
+      "assessment": "全条件3/3で金への発話。「金の発光」のように画像だけでは性質を確定できない表現もある。採掘や新発見の実イベントは画像だけから確定しない。",
+      "speak_counts_by_condition": {
+        "images_only": 3,
+        "images_and_amount": 3,
+        "images_amount_and_regions": 3
+      }
+    },
+    {
+      "case_id": "pair_08",
+      "observation": "洞窟のプレイヤーが画面中央から上端へ移る",
+      "assessment": "全条件で急な暗さの表現。平均輝度の差は小さい。数値・領域条件のseed44は、上端に残るプレイヤーを「消えた」と表現している。",
+      "speak_counts_by_condition": {
+        "images_only": 3,
+        "images_and_amount": 3,
+        "images_amount_and_regions": 3
+      }
+    },
+    {
+      "case_id": "pair_09",
+      "observation": "海岸の夜明け。空・地面が明るくなる",
+      "assessment": "変化率条件だけ全て沈黙。領域を追加すると全て景色への発話に戻り、情報を足すほど静かになる関係ではない。",
+      "speak_counts_by_condition": {
+        "images_only": 3,
+        "images_and_amount": 0,
+        "images_amount_and_regions": 3
+      }
+    },
+    {
+      "case_id": "pair_10",
+      "observation": "同姿勢で右の空白が地形表示に置き換わる",
+      "assessment": "画像上は描画更新に見える。木の実際の成長・増加は確認できないが、数値条件は全て「増えた」、領域条件にも「生えてきたんちゃう」との推測がある。",
+      "speak_counts_by_condition": {
+        "images_only": 3,
+        "images_and_amount": 3,
+        "images_amount_and_regions": 3
+      }
+    },
+    {
+      "case_id": "pair_11",
+      "observation": "水中洞窟の床が明るくなる",
+      "assessment": "逆向きの「暗くなった」は画像のみ1/3、数値2/3、領域1/3。領域条件は2回沈黙するが、比較内容の正しさは改善していない。",
+      "speak_counts_by_condition": {
+        "images_only": 2,
+        "images_and_amount": 3,
+        "images_amount_and_regions": 1
+      }
+    },
+    {
+      "case_id": "pair_12",
+      "observation": "大きな視点変更。下向きからプレイヤーが見える向きへ",
+      "assessment": "0%でも見え方は変わる。各セルの差が24以下なので変化セルは0だが、平均差は8.026。暗さへの反応が中心で、視点変更の理解は安定しない。",
+      "speak_counts_by_condition": {
+        "images_only": 3,
+        "images_and_amount": 3,
+        "images_amount_and_regions": 2
+      }
+    },
+    {
+      "case_id": "pair_13",
+      "observation": "水中から夜の砂浜。移動と旋回を含む",
+      "assessment": "全条件3/3で発話。数値・領域条件は地上へ出たことに言及。全条件が同じカメラ移動量を受け取っている。",
+      "speak_counts_by_condition": {
+        "images_only": 3,
+        "images_and_amount": 3,
+        "images_amount_and_regions": 3
+      }
+    }
+  ]
+}

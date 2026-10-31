@@ -1,4 +1,5 @@
-//! セグメント分割済みの発話PCM音声データを、一時WAVファイル → （有効時）Silero VAD → whisper.cpp → 対話本体へのHTTP入力配送パイプラインへと引き渡す。
+//! パワーのある実行環境のため、繊細なコントロールは不要。会話のテンポを止める処理を入れるな。
+//! セグメント分割済みの発話PCM音声データを、一時WAVファイル → （有効時）Silero VAD → 常駐whisper.cpp → 対話本体へのHTTP入力配送パイプラインへと引き渡す。
 //! 入力形式は 16kHz / モノラル / 16bit 符号付きリトルエンディアン PCM。発話区間の検出およびRMS閾値判定は `segment` モジュール側で行う。
 //! 認識されたテキスト本文を検査し、設定された呼びかけ語（ウェイクワード等）を満たす場合のみ `Transport` を通じてサーバーへ配送する。進捗状況や棄却理由は `Reporter` へ通知する。
 //! 録音バッファや発話キューの管理は `voice` モジュールが所有し、本モジュールは1発話あたりの推論処理および一時WAVファイルのライフサイクル管理を担当する。
@@ -210,33 +211,16 @@ enum Recognition {
 }
 
 /// 日本語指定でWhisperを一度実行し、本文・棄却理由・取消のいずれかを返す。1試行の期限は60秒。
-/// GPUの利用、文脈prompt、no-speech閾値は受け取った設定をCLI引数へ渡す。再試行の判断は呼出元が行う。
+/// GPU設定は常駐補助の起動時、文脈promptとno-speech閾値は各要求へ渡す。再試行の判断は呼出元が行う。
 async fn recognize(
-    settings: &Settings,
+    whisper: &mut super::whisper::Whisper,
     wav: &Path,
     prompt: &str,
     threshold: f64,
     report: &Reporter,
     stop: &mut watch::Receiver<bool>,
 ) -> Recognition {
-    let mut command = Command::new(&settings.whisper_cli);
-    command
-        .arg("-m")
-        .arg(&settings.whisper_model)
-        .arg("-f")
-        .arg(wav)
-        .args([
-            "-l",
-            "ja",
-            "--prompt",
-            prompt,
-            "--no-speech-thold",
-            &threshold.to_string(),
-        ]);
-    if !settings.use_gpu {
-        command.arg("--no-gpu");
-    }
-    let result = process::run(command, Duration::from_secs(60), stop).await;
+    let result = whisper.recognize(wav, prompt, threshold, stop).await;
     match result {
         Ok(Output::Cancelled) => Recognition::Stopped,
         Ok(Output::Timeout) => {
@@ -290,6 +274,7 @@ async fn recognize(
 /// last_modeはprompt切替診断の重複を避けるため更新する。本文の採否と会話処理は配送先が担当する。
 pub async fn process_segment(
     settings: &Settings,
+    whisper: &mut super::whisper::Whisper,
     segment: Segment,
     transport: &Transport,
     binding: &VoiceBinding,
@@ -344,7 +329,7 @@ pub async fn process_segment(
         "detail":format!("attempt=primary voiced_ms={}", segment.voiced_ms)}),
     );
     let mut result = recognize(
-        settings,
+        whisper,
         &wav.0,
         prompt,
         settings.no_speech_threshold,
@@ -365,7 +350,7 @@ pub async fn process_segment(
             Some("empty_transcript_retry"),
             json!({"detail":format!("attempt=retry prompt=none no_speech_thold={retry}")}),
         );
-        result = recognize(settings, &wav.0, "", retry, report, stop).await;
+        result = recognize(whisper, &wav.0, "", retry, report, stop).await;
     }
     if *stop.borrow() || matches!(result, Recognition::Stopped) {
         return Ok(());

@@ -1,6 +1,6 @@
 use super::*;
-use crate::chat_observation::{self, Labels, PassiveSighting};
-use crate::events::{HorizontalDirection, TimePhase, Weather};
+use crate::chat_observation::PassiveSighting;
+use crate::events::{TimePhase, Weather};
 use crate::text_format::{self, ContainerFormat::QuotedRepr};
 use crate::world_catalog;
 use serde_json::json;
@@ -100,43 +100,9 @@ pub(super) fn observed(
         })
         .collect()
 }
-fn direction(horizontal: Option<HorizontalDirection>) -> &'static str {
-    match horizontal {
-        Some(HorizontalDirection::Front) => "前",
-        Some(HorizontalDirection::FrontRight) => "右前",
-        Some(HorizontalDirection::Right) => "右",
-        Some(HorizontalDirection::BackRight) => "右後ろ",
-        Some(HorizontalDirection::Back) => "後ろ",
-        Some(HorizontalDirection::BackLeft) => "左後ろ",
-        Some(HorizontalDirection::Left) => "左",
-        Some(HorizontalDirection::FrontLeft) => "左前",
-        None => "近く",
-    }
-}
-pub(super) fn audio_fallback(event: &GameEvent, labels: &impl Labels) -> Option<String> {
-    let audio = event.auditory_threats.first()?;
-    let id = chat_observation::resolve_mob(&audio.label, audio.sound_event.as_deref(), labels);
-    let label = chat_observation::mob_label(id.as_deref(), labels);
-    let band = serde_json::to_value(audio.distance_band)
-        .ok()?
-        .as_str()
-        .unwrap_or("")
-        .to_owned();
-    let dir = direction(audio.direction.horizontal);
-    Some(
-        match label {
-            Some(name) => format!("音 {name} {dir} {band}"),
-            None => format!("音（種別未確定） {dir} {band}"),
-        }
-        .trim()
-        .into(),
-    )
-}
 pub(super) fn threat(
     event: &GameEvent,
     snapshot: &Snapshot,
-    audio_fallback: Option<&str>,
-    hearing: Option<&str>,
 ) -> String {
     let mut parts = vec![];
     if let Some(nearest) = event.visual_threats.iter().reduce(|a, b| {
@@ -166,13 +132,6 @@ pub(super) fn threat(
         .filter(|v| !v.is_empty())
     {
         parts.push(recent.into())
-    } else if hearing.is_none()
-        && let Some(audio) = audio_fallback
-    {
-        parts.push(audio.into());
-    }
-    if let Some(hearing) = hearing.map(chat_catalog::strip).filter(|v| !v.is_empty()) {
-        parts.push(format!("音メモ: {hearing}"))
     }
     if event.combat.combat_active_hint == Some(true) && !parts.is_empty() {
         parts.push("プレイヤーは交戦中っぽい".into())
@@ -182,7 +141,6 @@ pub(super) fn threat(
 pub(super) fn observation(
     event: &GameEvent,
     threat: &str,
-    hearing: &str,
     passive: &[String],
     look: &str,
     recent: &[PassiveSighting],
@@ -223,10 +181,6 @@ pub(super) fn observation(
                 .collect::<Vec<_>>()
                 .join("、")
         ))
-    }
-    let hearing = chat_catalog::strip(hearing);
-    if !hearing.is_empty() {
-        lines.push(format!("音: {hearing}"))
     }
     let look = chat_catalog::strip(look);
     if !look.is_empty() {

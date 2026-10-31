@@ -55,15 +55,16 @@ async fn generate_once<F: Future<Output = Result<GenerationReport>>>(
 }
 pub(super) async fn render(
     config: &DialogueConfig,
+    dictionary: &super::tts_runtime::Dictionary,
     llm: &RigLlm,
     input: &Value,
     cancel: &mut watch::Receiver<bool>,
 ) -> Result<Value> {
-    render_image(config,llm,input,cancel,None).await
+    render_image(config,dictionary,llm,input,cancel,None).await
 }
 /// 通常の環境判断と同じ一回生成へ静止画像を添える。画像だけの前段モデルや再生成は作らない。
 pub(super) async fn render_image(
-    config: &DialogueConfig,llm: &RigLlm,input: &Value,cancel: &mut watch::Receiver<bool>,
+    config: &DialogueConfig,dictionary: &super::tts_runtime::Dictionary,llm: &RigLlm,input: &Value,cancel: &mut watch::Receiver<bool>,
     image: Option<&crate::chat_image::Attachment>,
 ) -> Result<Value> {
     // Keep the former bridge's whole-turn budget even though wording is now native.
@@ -95,7 +96,7 @@ pub(super) async fn render_image(
         if result["environment_reaction_outcome"] == "silent" {
             return Ok(result);
         }
-        return read_speech(config, result, cancel, deadline).await;
+        return read_speech(config, dictionary, result, cancel, deadline).await;
     }
     let mut leaf = Leaf::prepare(input, &config.model, config.max_tokens)?;
     if image.is_some() {
@@ -115,7 +116,7 @@ pub(super) async fn render_image(
     if result["reaction_leaf_outcome"] == "silent" {
         return Ok(result);
     }
-    read_speech(config, result, cancel, deadline).await
+    read_speech(config, dictionary, result, cancel, deadline).await
 }
 
 async fn generate_environment_once<F: Future<Output = Result<GenerationReport>>>(
@@ -149,6 +150,7 @@ async fn generate_environment_once<F: Future<Output = Result<GenerationReport>>>
 }
 async fn read_speech(
     config: &DialogueConfig,
+    dictionary: &super::tts_runtime::Dictionary,
     mut result: Value,
     cancel: &mut watch::Receiver<bool>,
     deadline: tokio::time::Instant,
@@ -161,6 +163,7 @@ async fn read_speech(
     let reading_deadline = deadline.min(tokio::time::Instant::now() + Duration::from_secs(35));
     result["spoken_text"] = super::tts_runtime::read(
         config,
+        dictionary,
         result["text"].as_str().context("reaction text")?,
         cancel,
         reading_deadline,
@@ -258,6 +261,7 @@ mod tests {
         let (_owner, mut cancel) = watch::channel(false);
         let result = read_speech(
             &config,
+            &super::super::tts_runtime::Dictionary::default(),
             json!({"text":" 今朝は元気や。 ","llm_reports":[{"kind":"aftermath"}]}),
             &mut cancel,
             tokio::time::Instant::now() + Duration::from_secs(1),

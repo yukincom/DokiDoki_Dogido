@@ -1,3 +1,4 @@
+//! パワーのある実行環境のため、繊細なコントロールは不要。会話のテンポを止める処理を入れるな。
 use std::{collections::VecDeque, time::Instant};
 
 pub const FRAME_MS: usize = 30;

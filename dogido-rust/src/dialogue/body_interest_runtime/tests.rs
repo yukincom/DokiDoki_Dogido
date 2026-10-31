@@ -624,6 +624,7 @@ async fn a_queued_return_checks_work_and_departure_again_before_generation() {
     }
 }
 
+// 見込み: 無変化画像と遮蔽下の雨を受けても、無言の振向き選択を実行へ渡せる。合格: 固定HTTP選択からlook_owner一件、入力に無変化・雨・遮蔽を保持し、完了で命令を除く。確認範囲: 模擬応答/結果。
 #[tokio::test]
 async fn model_can_silently_look_at_owner_with_unchanged_image_and_covered_rain() {
     let mock=Mock::new(Duration::ZERO,r#"{"action":"silent","speech":"","body_action":{"action":"look_owner","target_id":null}}"#).await;
@@ -637,14 +638,21 @@ async fn model_can_silently_look_at_owner_with_unchanged_image_and_covered_rain(
     frame["body_observation"]["sample"]["senses"]["world"]["overhead_cover_type"]=json!("foliage");
     frame["body_autonomy"]["reassurance"]["owner_working"]=json!(true);
     let mut image=crate::chat_image::tests::image(); image.captured_at=chrono::Utc::now().to_rfc3339();
-    image.scene_comparison=Some(crate::chat_image::SceneComparison{visual_change:false,compared_to_four_before:true});
+    image.scene_comparison=Some(crate::chat_image::SceneComparison {
+        status:crate::chat_image::ComparisonStatus::Unchanged,
+        reference:Some(crate::chat_image::ComparisonReference {
+            capture_id:"view_22222222-2222-4222-8222-222222222222".into(),
+            captured_at:(chrono::Utc::now()-chrono::Duration::seconds(4)).to_rfc3339(),
+            sha256:"a".repeat(64),
+        }),cells:vec![],
+    });
     environment_decision_with_image(&d,frame,Some(image));completed(&d,&mock).await;
     let command=d.data.lock().unwrap().sessions["s"].body_autonomy.commands(Instant::now(),chrono::Utc::now())[0].clone();
     assert_eq!(command["purpose"],"look_owner"); assert!(command["target"].is_null());
     {
         let requests=mock.seen.lock().unwrap();assert_eq!(requests.len(),1);
         let content=&requests[0]["messages"].as_array().unwrap().last().unwrap()["content"];
-        let text=content[0]["text"].as_str().unwrap();assert!(text.contains("unchanged"));
+        let text=content[0]["text"].as_str().unwrap();assert!(text.contains("変化がない"));
         let context:Value=serde_json::from_str(text.split_once("\n\nimage_observation: ").unwrap().0).unwrap();
         assert_eq!(context["body_options"]["available_actions"]["look_owner"],"その場でプレイヤーを見る");
         assert_eq!(context["world_context"]["observations"]["weather"]["label"],"雨");

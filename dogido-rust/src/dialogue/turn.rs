@@ -1,3 +1,4 @@
+//! パワーのある実行環境のため、繊細なコントロールは不要。会話のテンポを止める処理を入れるな。
 //! 受理済み入力を直列枠で実行し、観測と句の再取得から応答生成・保存・音声配送へ進める。
 //! 待機中と実行中の取消・観測鮮度を監視し、状態反映は同じturnとepochを検証するupdateへ渡す。
 //! 実再生結果の反映後に通常会話からの発句再開を判定し、受付時の情報と実行結果をworkshop記録へ結ぶ。
@@ -80,12 +81,38 @@ impl Dialogue {
         mut cancel: watch::Receiver<bool>,
     ) {
         let started = Instant::now();
-        let mut permit = Some(
-            tokio::select! { _=bridge::cancelled(&mut cancel)=>{self.update(&sid,&turn,epoch,PlaybackStatus::Cancelled,None);return;}, p=self.serial.acquire()=>p.unwrap() },
-        );
+        // 生成・保存の順は保つ。読み上げの完了は次の入力処理の条件にしない。
+        let permit = Arc::new(super::workshop_reply::Permit::generation(&self.turn_serial));
+        let continuation = super::workshop_reply::Source::new(&self, &input, &cancel);
+        let acquired = if let Some(source) = &continuation {
+            source.ready(&permit).await
+        } else {
+            tokio::select! {
+                _ = bridge::cancelled(&mut cancel) => Err(anyhow::anyhow!("cancelled")),
+                _ = permit.acquire() => Ok(()),
+            }
+        };
+        if acquired.is_err() {
+            self.update(&sid, &turn, epoch, PlaybackStatus::Cancelled, None);
+            return;
+        }
         // 同じ直列枠で要約を一度だけ行い、その後で観測と履歴を取り直す。
         // 新入力・緊急取消・切断が来た要約は反映せず、元の履歴を保持する。
-        self.compact_history(&sid, &turn, epoch, &mut cancel).await;
+        if let Some(source) = &continuation {
+            if source
+                .during(
+                    &permit,
+                    self.compact_history(&sid, &turn, epoch, &mut cancel),
+                )
+                .await
+                .is_err()
+            {
+                self.update(&sid, &turn, epoch, PlaybackStatus::Cancelled, None);
+                return;
+            }
+        } else {
+            self.compact_history(&sid, &turn, epoch, &mut cancel).await;
+        }
         if *cancel.borrow() || cancel.has_changed().is_err() {
             self.update(&sid, &turn, epoch, PlaybackStatus::Cancelled, None);
             return;
@@ -131,6 +158,7 @@ impl Dialogue {
         // 観測失効は生成・再生前に検出する。開始後は台詞を完走し、危険・終了の取消は各所有者に任せる。
         let owner = self.clone();
         let monitor_sid = sid.clone();
+        let monitor_turn = turn.clone();
         let mut monitor_cancel = cancel.clone();
         let workshop_id = input["workshop"]["workshop_id"].as_str().map(str::to_owned);
         let ordinary_reply = self
@@ -148,6 +176,9 @@ impl Dialogue {
                     _=bridge::cancelled(&mut monitor_cancel)=>break,
                     _=tokio::time::sleep(Duration::from_millis(200))=>{
                         let mut d=owner.data.lock().unwrap();
+                        // 配送所有権を移した旧turnは、新入力の状態を取消さない。
+                        // 明示停止・危険・終了はreply_outputの取消所有者へ直接届く。
+                        if d.sessions.get(&monitor_sid).is_some_and(|s| super::reply_output::current(s, &monitor_turn, epoch)) { break; }
                         owner.tick_workshop(&mut d, &monitor_sid);
                         let stale_look = d.sessions.get(&monitor_sid).is_some_and(|s| s.epoch==epoch
                             && d.rows.iter().find(|r| r["turn_id"]==s.current_turn)
@@ -156,13 +187,13 @@ impl Dialogue {
                         let stale = d.sessions.get(&monitor_sid).is_some_and(|s| {
                             let workshop_allowed = workshop_id.is_some()
                                 && workshop_focus::quiet_observation(s);
-                            s.epoch == epoch && !super::reply_queue::playback_started(&d, &monitor_sid)
+                            s.epoch == epoch && !super::workshop_reply::paused(s) && !d.rows.iter().any(|r| r["session_id"] == monitor_sid && r["turn_id"] == monitor_turn && r["epoch"] == epoch && r["playback_status"] == "started")
                                 && !(fresh(s) || workshop_allowed
                                 || ordinary_reply && observation_fresh(s)
                                 || look_capture.as_ref().is_some_and(|request| super::visual_runtime::captured_look(s,request)))
                         });
                         if stale {Self::cancel_chat(&mut d,&monitor_sid,"stale_observation");break;}
-                        let expired = !super::reply_queue::playback_started(&d, &monitor_sid) && workshop_id.as_ref().is_some_and(|wid| d.sessions.get(&monitor_sid)
+                        let expired = !d.rows.iter().any(|r| r["session_id"] == monitor_sid && r["turn_id"] == monitor_turn && r["epoch"] == epoch && r["playback_status"] == "started") && workshop_id.as_ref().is_some_and(|wid| d.sessions.get(&monitor_sid)
                             .filter(|s| s.epoch==epoch).is_some_and(|s| s.haiku.workshop.as_ref()
                                 .is_none_or(|w| w.hud_id != *wid || (!w.is_open() && w.close_reason.as_deref()!=Some("explicit_close")))));
                         if expired {Self::cancel_chat(&mut d,&monitor_sid,"workshop_changed");break;}
@@ -171,19 +202,26 @@ impl Dialogue {
             }
         });
         let mut completed = false;
-        if input["workshop"].is_null() {
+        // 移動選択は受付結果を確定してから発話する。同じ一回生成で追加の返答は作らない。
+        if input["workshop"].is_null() && input.player_approach.is_none() {
             input.speech_stream =
-                super::speech_stream_runtime::Source::new(&self, &sid, &turn, epoch);
+                super::speech_stream_runtime::Source::new(&self, &sid, &turn, epoch)
+                    .map(|source| source.with_generation_permit(permit.clone()));
         }
         let result = if input["poem_input"].is_object() {
-            self.save_poem_input(&sid, epoch, &input, &mut cancel).await
-        } else if input.after_look.is_none()
+            let save = self.save_poem_input(&sid, epoch, &input, &mut cancel, &permit);
+            if let Some(source) = &continuation {
+                source.transaction(&permit, save).await
+            } else {
+                save.await
+            }
+        } else if input.after_look.is_none() && input.player_approach.is_none()
             && input["workshop"].is_null()
             && crate::haiku_memory::clear_requested(input["text"].as_str().unwrap_or(""))
         {
             self.clear_lessons(&sid, epoch, &input).await
         } else if input["workshop"].is_object() {
-            match self.render_workshop(&input, &mut cancel, &mut permit).await {
+            match self.render_workshop(&input, &mut cancel, &permit).await {
                 Ok(workshop) if workshop["workshop_action"] == "unrelated" => {
                     let safe = self
                         .data
@@ -199,7 +237,19 @@ impl Dialogue {
                         // 対話plannerには過去の通常会話と現在入力だけを渡す。
                         ordinary["workshop"] = Value::Null;
                         ordinary["workshop_fallback"] = true.into();
-                        match bridge::render(&self.config, &self.llm, ordinary, &mut cancel).await {
+                        let render = Box::pin(bridge::render(
+                            &self.config,
+                            &self.reading_dictionary,
+                            &self.llm,
+                            ordinary,
+                            &mut cancel,
+                        ));
+                        let rendered = if let Some(source) = &continuation {
+                            source.during(&permit, render).await.and_then(|r| r)
+                        } else {
+                            render.await
+                        };
+                        match rendered {
                             Ok(mut result) => {
                                 let mut reports = workshop["llm_reports"]
                                     .as_array()
@@ -231,6 +281,7 @@ impl Dialogue {
         } else {
             bridge::render_with_route(
                 &self.config,
+                &self.reading_dictionary,
                 &self.llm,
                 input.clone(),
                 &mut cancel,
@@ -243,7 +294,31 @@ impl Dialogue {
                 if input["workshop"].is_object() && r["workshop_action"] == "clear_lessons" =>
             {
                 // 会話モデルの解釈を既存の保存処理へ渡す。語句で意図を再分類しない。
-                self.clear_lessons(&sid, epoch, &input).await.map(|saved| {
+                let saved = loop {
+                    if let Some(source) = &continuation
+                        && let Err(error) = source.ready(&permit).await
+                    {
+                        break Err(error);
+                    }
+                    let clear = self.clear_lessons(&sid, epoch, &input);
+                    let saved = if let Some(source) = &continuation {
+                        source.transaction(&permit, clear).await
+                    } else {
+                        clear.await
+                    };
+                    // この2種は保存開始前の照合だけが返す。保存済みの解除は再実行しない。
+                    if saved.as_ref().is_err_and(|error| {
+                        matches!(
+                            error.to_string().as_str(),
+                            "cancelled_memory_input" | "stale_workshop"
+                        )
+                    }) && continuation.as_ref().is_some_and(|source| source.paused())
+                    {
+                        continue;
+                    }
+                    break saved;
+                };
+                saved.map(|saved| {
                     for key in ["text", "spoken_text", "memory_action", "memory_outcome"] {
                         r[key] = saved[key].clone();
                     }
@@ -258,6 +333,19 @@ impl Dialogue {
         };
         match result {
             Ok(mut result) => {
+                if let Some(source) = &continuation
+                    && source.ready(&permit).await.is_err()
+                {
+                    self.update(&sid, &turn, epoch, PlaybackStatus::Cancelled, None);
+                    monitor.finish().await;
+                    return;
+                }
+                let approach = self.apply_player_approach(&sid, &turn, epoch, &input, &mut result, *cancel.borrow());
+                if approach.is_err() {
+                    self.update(&sid, &turn, epoch, PlaybackStatus::Cancelled, None);
+                    monitor.finish().await;
+                    return;
+                }
                 if result["horse_recall_requested"] == true || result["horse_choice"].is_object() {
                     // ここで操作入力と確定した返答を、警告後の通常質問として再実行しない。
                     // 発行直後との競合はretain側でも同じdataロックの命令IDを照合する。
@@ -288,38 +376,81 @@ impl Dialogue {
                 }
                 if result["output_suppressed"] == true || self.workshop_combat_priority(&input) {
                     // 発言への評価と返答予定は残すが、古い句操作や音声は実行しない。
-                    drop(permit.take());
+                    permit.release();
                     if result["workshop_feedback"]["action"] == "praise" {
-                        self.record_feedback(&sid, epoch, &input, &mut result).await;
+                        self.record_feedback(
+                            &sid,
+                            epoch,
+                            &input,
+                            &mut result,
+                            continuation.as_ref(),
+                            &permit,
+                        )
+                        .await;
                     }
                     self.update(&sid, &turn, epoch, PlaybackStatus::Cancelled, Some(&result));
                     monitor.finish().await;
-                    drop(permit);
+                    permit.release();
                     return;
                 }
                 {
                     // ディスクへの記録待ちも、戦闘音声の直列枠を占有し続けない。
-                    let feedback = self.record_feedback(&sid, epoch, &input, &mut result);
+                    let feedback = self.record_feedback(
+                        &sid,
+                        epoch,
+                        &input,
+                        &mut result,
+                        continuation.as_ref(),
+                        &permit,
+                    );
                     tokio::pin!(feedback);
-                    tokio::select! {
-                        _ = &mut feedback => {},
-                        _ = bridge::cancelled(&mut cancel) => {
-                            drop(permit.take());
-                            feedback.await;
-                        },
+                    if let Some(source) = &continuation {
+                        source.transaction(&permit, &mut feedback).await;
+                    } else {
+                        tokio::select! {
+                            _ = &mut feedback => {},
+                            _ = bridge::cancelled(&mut cancel) => {
+                                permit.release();
+                                feedback.await;
+                            },
+                        }
                     }
                 }
                 if self.workshop_combat_priority(&input) {
                     self.update(&sid, &turn, epoch, PlaybackStatus::Cancelled, Some(&result));
                     monitor.finish().await;
-                    drop(permit);
+                    permit.release();
                     return;
                 }
-                if let Err(error) = self.apply_workshop_edit(&sid, epoch, &mut result).await {
+                let applied = loop {
+                    if let Some(source) = &continuation
+                        && let Err(error) = source.ready(&permit).await
+                    {
+                        break Err(error);
+                    }
+                    let apply = self.apply_workshop_edit(&sid, epoch, &mut result);
+                    let applied = if let Some(source) = &continuation {
+                        source.transaction(&permit, apply).await
+                    } else {
+                        apply.await
+                    };
+                    // CASへ入る直前の戦闘だけは未実行。開始済みの保存や適用は再び呼ばない。
+                    if applied.as_ref().is_err_and(|error| {
+                        matches!(
+                            error.to_string().as_str(),
+                            "cancelled_edit" | "stale_workshop"
+                        )
+                    }) && continuation.as_ref().is_some_and(|source| source.paused())
+                    {
+                        continue;
+                    }
+                    break applied;
+                };
+                if let Err(error) = applied {
                     if self.workshop_combat_priority(&input) {
                         self.update(&sid, &turn, epoch, PlaybackStatus::Cancelled, Some(&result));
                         monitor.finish().await;
-                        drop(permit);
+                        permit.release();
                         return;
                     }
                     result["text"] =
@@ -352,7 +483,11 @@ impl Dialogue {
                 } else if result["text"].as_str().is_none_or(|s| s.is_empty()) {
                     self.update(&sid, &turn, epoch, PlaybackStatus::Quiet, Some(&result));
                 } else if audio_streamed
-                    || self.update(&sid, &turn, epoch, PlaybackStatus::Queued, Some(&result))
+                    || if let Some(source) = &continuation {
+                        source.queue(&permit, &result).await
+                    } else {
+                        self.update(&sid, &turn, epoch, PlaybackStatus::Queued, Some(&result))
+                    }
                 {
                     tracing::info!(
                         event = "dialogue_reply",
@@ -361,16 +496,42 @@ impl Dialogue {
                         text = result["text"].as_str().unwrap_or(""),
                         generation_ms = started.elapsed().as_millis() as u64
                     );
+                    permit.release();
+                    let output_permit = super::workshop_reply::Permit::new(&self.serial);
                     let output_config = self.output_config(&sid);
                     let text_displayed = if !output_config.audio_enabled {
-                        self.wait_for_text(&sid, &turn, &mut cancel).await
+                        if let Some(source) = &continuation {
+                            source
+                                .during(
+                                    &output_permit,
+                                    self.wait_for_text(&sid, &turn, &mut cancel),
+                                )
+                                .await
+                                .unwrap_or(false)
+                        } else {
+                            self.wait_for_text(&sid, &turn, &mut cancel).await
+                        }
                     } else {
                         false
                     };
                     let playback = if audio_streamed {
                         // 同じturnで全生成・全音声が完了済み。全文を再び読み上げない。
                         Ok(())
+                    } else if output_config.audio_enabled && continuation.is_some() {
+                        continuation
+                            .as_ref()
+                            .unwrap()
+                            .speak(
+                                &output_permit,
+                                &output_config,
+                                result["spoken_text"].as_str().unwrap_or(""),
+                            )
+                            .await
                     } else if output_config.audio_enabled {
+                        tokio::select! { biased;
+                            _ = bridge::cancelled(&mut cancel) => {},
+                            _ = output_permit.acquire() => {},
+                        }
                         self.audio
                             .speak(
                                 &output_config,
@@ -420,7 +581,7 @@ impl Dialogue {
             }
         }
         monitor.finish().await;
-        drop(permit);
+        permit.release();
         {
             let mut jobs = self.jobs.lock().unwrap();
             jobs.retain(|j| !j.is_finished());

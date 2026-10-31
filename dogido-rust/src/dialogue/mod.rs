@@ -34,6 +34,7 @@ mod poem_runtime;
 mod reaction_runtime;
 mod reading_runtime;
 mod reply_delivery;
+mod reply_output;
 mod reply_queue;
 mod story;
 mod submit;
@@ -54,6 +55,7 @@ mod workshop_combat_runtime;
 mod workshop_edits;
 mod workshop_focus;
 mod workshop_record;
+mod workshop_reply;
 mod workshop_runtime;
 mod workshop_story;
 mod workshop_text;
@@ -205,6 +207,10 @@ struct Session {
     status: PlaybackStatus,
     /// 通常turnへの取消通知口。待機・生成・再生が同じ通知を監視する。
     cancel: Option<watch::Sender<bool>>,
+    reply_outputs: Vec<reply_output::Active>,
+    pending_replies: VecDeque<reply_output::Pending>,
+    /// 同じ川柳workerの戦闘保留。永久取消はcancel、再開は既存の警告/FIFO境界が所有する。
+    workshop_reply: Option<workshop_reply::State>,
     /// 観測・被弾・警告間隔から戦況と優先発話を決める同期Engine。
     combat: crate::combat::core::Engine,
     /// 許可能力・発行中command・実行結果と重複防止情報。現在slotはイベント観測と照合する。
@@ -265,11 +271,14 @@ pub struct Dialogue {
     audio: audio::Audio,
     haiku_routes: haiku_runtime::Routes,
     request_classifier: tokio::sync::Mutex<request_runtime::Models>,
+    reading_dictionary: tts_runtime::Dictionary,
     episodes: Option<Arc<crate::episode_log::Recorder>>,
     /// 状態の短い照合・更新区間だけで保持し、ネットワークや音声の完了待ちへ持ち越さない。
     data: Mutex<Data>,
-    /// 全接続に共通の通常turn実行枠一つ。生成から保存・音声配送までの競合を抑える。
-    serial: Semaphore,
+    /// 通常turnと警告の共有枠。川柳返答の戦闘保留中は警告へ譲る。
+    serial: Arc<Semaphore>,
+    // 生成・状態適用の順を保ち、確定した返答の音声配送とは並行できる。
+    turn_serial: Arc<Semaphore>,
     /// shutdownが完了待ちする登録済みjob。dataと同時取得する入口はjobsを先に取る。
     jobs: Mutex<Vec<tokio::task::JoinHandle<()>>>,
     /// 入力期限・発句時計・クールダウンに共通の、起動からの単調時計。
@@ -350,6 +359,7 @@ impl Dialogue {
             audio: audio::Audio::new()?,
             haiku_routes: haiku_runtime::Routes::new(&config)?,
             request_classifier: tokio::sync::Mutex::new(request_runtime::Models::default()),
+            reading_dictionary: tts_runtime::Dictionary::default(),
             episodes: if config.haiku.memory_enabled {
                 match crate::episode_log::Recorder::new(config.haiku.memory_dir.clone()) {
                     Ok(recorder) => Some(Arc::new(recorder)),
@@ -364,7 +374,8 @@ impl Dialogue {
             workshop_records: workshop_record::Recorder::new(config.haiku.memory_enabled),
             config,
             data: Mutex::new(Data::default()),
-            serial: Semaphore::new(1),
+            serial: Arc::new(Semaphore::new(1)),
+            turn_serial: Arc::new(Semaphore::new(1)),
             jobs: Mutex::new(vec![]),
             clock: Instant::now(),
         }))
@@ -415,6 +426,9 @@ impl Dialogue {
                 current_turn: String::new(),
                 status: PlaybackStatus::Ready,
                 cancel: None,
+                reply_outputs: Vec::new(),
+                pending_replies: VecDeque::new(),
+                workshop_reply: None,
                 combat: crate::combat::core::Engine::default(),
                 assist: crate::assist::AssistState::new([]),
                 assist_pending: None,
@@ -627,6 +641,7 @@ impl Dialogue {
         self.workshop_records.flush().await;
         self.workshop_records.forget_all();
         self.request_classifier.lock().await.close().await;
+        self.reading_dictionary.close().await;
         if let Some(recorder) = &self.episodes {
             let recorder = recorder.clone();
             let _ = tokio::task::spawn_blocking(move || recorder.close()).await;
@@ -1035,3 +1050,6 @@ mod acceptance_history_metadata;
 #[cfg(test)]
 #[path = "../../tests/acceptance/history_display.rs"]
 mod acceptance_history_display;
+#[cfg(test)]
+#[path = "../../tests/acceptance/hearing.rs"]
+mod acceptance_hearing;

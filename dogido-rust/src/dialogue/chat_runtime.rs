@@ -23,9 +23,10 @@ fn live(cancel: &watch::Receiver<bool>) -> Result<()> {
 /// 本文生成と読み準備をbudget内で実行し、表示用textと必要時spoken_textを返す。
 /// 文ストリームでは全文受理後に生成期限を外し、音声配送は同じturnの取消で停止する。
 /// select_routeはSession側で所有権と保留を照合する入口。
-/// 読み補正に子プロセスが必要な場合は、その終了処理まで待ってから返る。
+/// 読み補正はDialogueが所有する常駐辞書を使う。
 pub(super) async fn render(
     config: &DialogueConfig,
+    dictionary: &super::tts_runtime::Dictionary,
     llm: &RigLlm,
     input: &bridge::Input,
     cancel: &mut watch::Receiver<bool>,
@@ -36,7 +37,7 @@ pub(super) async fn render(
     let deadline = Instant::now() + budget;
     let mut native_cancel = cancel.clone();
     let mut result = if let Some(stream) = input.speech_stream.as_ref() {
-        // 音声/辞書の所有者へ取消を伝え、回収終了を待つ。futureだけを捨てない。
+        // 音声の所有者へ取消を伝え、回収終了を待つ。futureだけを捨てない。
         let (stop, mut local) = watch::channel(false);
         let work = body(config, llm, input, &mut local, &mut select_route);
         wait_stream_body(work, cancel, stop, deadline, || stream.generated()).await?
@@ -56,10 +57,9 @@ pub(super) async fn render(
         .filter(|_| result["dialogue_action"] != "silent" && result["audio_streamed"] != true)
     {
         let text = text.as_str().context("native chat result text")?;
-        // 読み補正は自身で取消・期限を監視し、所有する子プロセスを終了してから戻る。
-        // 外側でfutureを先に破棄すると終了待ちを失うため、readの完了を直接待つ。
+        // 読み補正は自身で取消・期限を監視する。辞書は返答後も共有する。
         let reading_deadline = deadline.min(Instant::now() + Duration::from_secs(35));
-        result["spoken_text"] = super::tts_runtime::read(config, text, cancel, reading_deadline)
+        result["spoken_text"] = super::tts_runtime::read(config, dictionary, text, cancel, reading_deadline)
             .await?
             .into();
     }
@@ -69,7 +69,7 @@ pub(super) async fn render(
 }
 
 /// 生成期限は全文を受理するまで。期限・取消では所有者へ停止を通知し、
-/// 辞書子プロセスとplayerの回収が終わるまでfutureを保持する。
+/// playerの回収が終わるまでfutureを保持する。辞書の寿命はDialogueが管理する。
 async fn wait_stream_body<T>(
     work: impl std::future::Future<Output = Result<T>>,
     cancel: &mut watch::Receiver<bool>,
@@ -121,7 +121,7 @@ async fn body(
         .into();
     // 一句の相談中は過去句を検索しない。戦闘pauseと通常会話への寄り道も、
     // 受付時にコードが確定したworkshopのopen状態を引き継ぐ。
-    if input.after_look.is_none() {
+    if input.after_look.is_none() && input.player_approach.is_none() {
         if context.asks_haiku_recall
             && input["poem_reference"]["open"] != true
             && input["workshop_fallback"] != true
@@ -266,7 +266,7 @@ async fn body(
                     }
                 }
             }
-            if input.after_look.is_some() && image.is_none() {
+            if input.after_look.is_some() && image.is_none() && input.player_approach.is_none() {
                 // 実行成功だけは既に照合済み。画像なしで景色を補作せず、従来の成功返答だけを配送する。
                 ensure!(
                     input
@@ -281,7 +281,10 @@ async fn body(
             }
             let mut streamed = false;
             let output = if config.llm_enabled {
-                let request = reply.request(&config.model, config.max_tokens)?;
+                let mut request = reply.request(&config.model, config.max_tokens)?;
+                if input.player_approach.is_some() {
+                    super::body_request_runtime::prepare_player_approach(&mut request);
+                }
                 let run = if let Some(stream) = input.speech_stream.as_ref()
                     && input["workshop_fallback"] != true
                     && input["workshop"].is_null()
@@ -319,8 +322,11 @@ async fn body(
                 "dialogue_action":output.action,"dialogue_outcome":output.status,
                 "dialogue_reason":output.reason,
                 "observation_revision":reply.details["world_context"]["revision"]});
+            if input.player_approach.is_some() {
+                result["body_action"] = json!(output.body_action);
+            }
             if let Some(request) = &input.after_look {
-                result["look_image_status"] = json!("captured");
+                result["look_image_status"] = json!(if image.is_some() { "captured" } else { "unavailable" });
                 result["look_capture_id"] = json!(request.capture_id);
             }
             super::body_runtime::attach_input(&mut result, &reply.details);
@@ -415,6 +421,7 @@ mod tests {
         let (_owner, mut rx) = watch::channel(false);
         let quiet = super::render(
             &c,
+            &super::super::tts_runtime::Dictionary::default(),
             &llm,
             &input("静かにして"),
             &mut rx,
@@ -448,6 +455,7 @@ mod tests {
             }
             let reply = super::render(
                 &c,
+                &super::super::tts_runtime::Dictionary::default(),
                 &llm,
                 &current,
                 &mut rx,
@@ -465,7 +473,7 @@ mod tests {
         let c = config();
         let llm = RigLlm::new("http://127.0.0.1:9/v1", None, Duration::from_secs(1)).unwrap();
         let (owner, mut rx) = watch::channel(false);
-        let missing = bridge::render(&c, &llm, input("こんにちは"), &mut rx)
+        let missing = bridge::render(&c, &super::super::tts_runtime::Dictionary::default(), &llm, input("こんにちは"), &mut rx)
             .await
             .unwrap_err();
         assert!(missing.to_string().contains("chat_native"), "{missing}");
@@ -473,6 +481,7 @@ mod tests {
         assert_eq!(
             super::render(
                 &c,
+                &super::super::tts_runtime::Dictionary::default(),
                 &llm,
                 &input("静かにして"),
                 &mut rx,
@@ -489,6 +498,7 @@ mod tests {
         assert_eq!(
             super::render(
                 &c,
+                &super::super::tts_runtime::Dictionary::default(),
                 &llm,
                 &input("静かにして"),
                 &mut rx,
@@ -536,6 +546,7 @@ mod tests {
         let started = Instant::now();
         let result = super::render(
             &c,
+            &super::super::tts_runtime::Dictionary::default(),
             &llm,
             &job,
             &mut rx,

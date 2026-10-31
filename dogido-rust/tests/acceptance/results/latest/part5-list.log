@@ -1,0 +1,9 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running unittests src/lib.rs (/private/tmp/dogido-tests-final-20261029/target-combined/debug/deps/dogido_rust-3b05f0013177c941)
+dialogue::visual_runtime::acceptance_image::acceptance_image_compared_change_emits_once_and_unchanged_still_updates_cache_control: test
+dialogue::visual_runtime::acceptance_image::acceptance_image_explicit_capture_survives_changed_pose_and_missing_body_sample_control: test
+dialogue::visual_runtime::acceptance_image::acceptance_image_java_protocol_to_rust_receipt_preserves_three_states: test
+dialogue::visual_runtime::acceptance_image::acceptance_image_twelve_second_uncompared_refreshes_never_report_scene_change: test
+dialogue::visual_runtime::acceptance_image::acceptance_image_uncompared_is_usable_in_ordinary_reply_without_change_opportunity: test
+
+5 tests, 0 benchmarks

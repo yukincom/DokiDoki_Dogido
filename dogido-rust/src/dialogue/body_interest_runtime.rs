@@ -175,3 +175,7 @@ pub(super) fn finish(s: &mut Session, turn: &str) {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+#[path = "../../tests/acceptance/part7_body_context.rs"]
+mod acceptance_body_results_context;

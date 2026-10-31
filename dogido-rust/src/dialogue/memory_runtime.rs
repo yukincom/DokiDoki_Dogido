@@ -138,6 +138,7 @@ impl Dialogue {
         let mut result = Self::memory_result(input, "haiku_recall", outcome, text);
         result["spoken_text"] = super::tts_runtime::read(
             &self.config,
+            &self.reading_dictionary,
             result["text"].as_str().context("recall text")?,
             cancel,
             tokio::time::Instant::now() + Duration::from_secs(30),
@@ -154,6 +155,8 @@ impl Dialogue {
         epoch: u64,
         input: &Value,
         result: &mut Value,
+        continuation: Option<&super::workshop_reply::Source<'_>>,
+        permit: &super::workshop_reply::Permit,
     ) {
         let step = result["workshop_feedback"].clone();
         if !self.config.haiku.memory_enabled || crate::haiku_memory::feedback_kind(&step).is_none()
@@ -172,8 +175,17 @@ impl Dialogue {
             {
                 return;
             }
-        } else if self.memory_live(sid, epoch, input, false).is_err() {
-            return;
+        } else {
+            let live = if let Some(source) = continuation {
+                source
+                    .check(permit, || self.memory_live(sid, epoch, input, false))
+                    .await
+            } else {
+                self.memory_live(sid, epoch, input, false)
+            };
+            if live.is_err() {
+                return;
+            }
         }
         let view = if praise {
             &input["feedback_workshop"]

@@ -12,7 +12,7 @@ pub(super) const AFTER_LOOK_CAPABILITY: &str = "client.body_view.after_look.v1";
 const IMAGE_FRESH_SECONDS: i64 = 30;
 struct Pending { command: Value, context: Context, issued: DateTime<Utc>, expires: DateTime<Utc> }
 #[derive(Clone)]
-pub(super) struct Captured { pub image: Attachment, pub context: Context, pub capture_id: String, pub sequence: u64, change: Value }
+pub(super) struct Captured { pub image: Attachment, pub context: Context, pub capture_id: String, pub sequence: u64 }
 /// 一件の実行成功に結び付く撮影。通常の最新画像とは別に、返答終了まで保持する。
 #[derive(Clone)]
 pub(super) struct LookCapture {
@@ -88,7 +88,7 @@ impl State {
         json!({"supported":self.enabled,"capture_trigger":"body_stopped_or_stationary_refresh","pending":self.pending.as_ref().map(|p| json!({
             "command_id":p.command["command_id"],"phase":"waiting_for_stop","issued_at":p.issued,"expires_at":p.expires})),
             "latest":self.latest.as_ref().map(|v| json!({"capture_id":v.capture_id,"motion_sequence":v.sequence,
-                "captured_at":v.image.captured_at,"sha256":v.image.sha256,"change":v.change})),"notice_pending":self.ready})
+                "captured_at":v.image.captured_at,"sha256":v.image.sha256,"scene_comparison":v.image.scene_comparison})),"notice_pending":self.ready})
     }
     pub fn owns(&self, id: &str) -> bool {
         self.pending.as_ref().is_some_and(|p| p.command["command_id"] == id) || self.done.iter().any(|v| v == id)
@@ -102,13 +102,12 @@ impl State {
         let Some(p) = self.pending.as_ref().filter(|p| p.command["command_id"] == result.command_id) else { return true; };
         let explicit = self.look.as_ref().is_some_and(|v| v.request.capture_id == result.command_id);
         let captured = (now < p.expires && result.status == Status::Succeeded).then(|| parse_image(result,p,now)).flatten();
-        if let Some(mut captured) = captured.filter(|v| v.sequence > self.sequence) {
-            let changed = captured.change["visual_change"] == true;
-            captured.change["previous_sha256"] = json!(self.latest.as_ref().map(|v| &v.image.sha256));
+        if let Some(captured) = captured.filter(|v| v.sequence > self.sequence) {
+            let changed = captured.image.scene_comparison.as_ref().is_some_and(|c| c.changed());
             self.sequence = captured.sequence; self.ready = changed && !explicit;
             if explicit && let Some(look) = self.look.as_mut() { look.image = Some(captured.clone()); }
             tracing::info!(event="body_stop_image_received",command_id=result.command_id,capture_id=captured.capture_id,
-                motion_sequence=captured.sequence,visual_change=changed,compared_to_four_before=%captured.change["compared_to_four_before"]);
+                motion_sequence=captured.sequence,visual_change=changed,comparison=?captured.image.scene_comparison.as_ref().map(|c| c.status));
             self.latest = Some(captured);
         } else { tracing::info!(event="body_stop_image_rejected", command_id=result.command_id, detail=result.detail_code); }
         if explicit && let Some(look) = self.look.as_mut() { look.finished = true; }
@@ -127,16 +126,14 @@ fn parse_image(result: &AdapterCommandResult, pending: &Pending, now: DateTime<U
     if uuid::Uuid::parse_str(capture_id).ok()?.to_string() != capture_id { return None; }
     let sequence = v["motion_sequence"].as_u64()?;
     if sequence == 0 || sequence > i64::MAX as u64 { return None; }
-    let changed = v["visual_change"].as_bool()?;
-    let compared = v["compared_to_four_before"].as_bool()?;
-    if !changed && !compared { return None; }
+    let comparison: crate::chat_image::SceneComparison = serde_json::from_value(v["scene_comparison"].clone()).ok()?;
+    if comparison.reference.as_ref().is_some_and(|r| Some(r.capture_id.as_str()) == v["capture_id"].as_str()) { return None; }
     let image = Attachment { png_base64:v["png_base64"].as_str()?.into(), sha256:v["sha256"].as_str()?.into(),
         width:v["width"].as_u64()?.try_into().ok()?, height:v["height"].as_u64()?.try_into().ok()?,
         captured_at:v["captured_at"].as_str()?.into(), annotation_status:v["annotation_status"].as_str()?.into(),
-        scene_comparison:Some(crate::chat_image::SceneComparison {visual_change:changed,compared_to_four_before:compared}) };
+        scene_comparison:Some(comparison) };
     image.validate().ok()?;
-    Some(Captured { image,context:pending.context.clone(),capture_id:format!("view_{capture_id}"),sequence,
-        change:json!({"visual_change":changed,"compared_to_four_before":compared,"captured_at":captured}) })
+    Some(Captured { image,context:pending.context.clone(),capture_id:format!("view_{capture_id}"),sequence })
 }
 
 /// 優先処理が空いた時に最新の変化だけを既存noticeへ渡す。古い画像を待ち列へ蓄積しない。
@@ -166,8 +163,7 @@ fn latest(s: &Session) -> Option<&Captured> {
 }
 fn capture_metadata(captured: &Captured) -> Value {
     json!({"capture_id":captured.capture_id,"captured_at":captured.image.captured_at,
-        "motion_sequence":captured.sequence,"previous_sha256":captured.change["previous_sha256"],
-        "visual_change":captured.change["visual_change"],"compared_to_four_before":captured.change["compared_to_four_before"]})
+        "motion_sequence":captured.sequence})
 }
 /// 変化がなくても既存の判断に画像を添える。画像の添付だけでは変化・新規判断を作らない。
 /// 生成待ちの間に既に選んだ一枚は差し替えず、撮影情報と対応表を同じ画像へ固定する。
@@ -187,7 +183,8 @@ pub(super) fn captured_look(s: &Session, request: &LookCapture) -> bool {
 
 /// 新入力による取消だけを照合する。撮影後の身体位置・向き・観測鮮度で返答を取り消さない。
 pub(super) fn look_input_current(s: &Session, row: &Value) -> bool {
-    row["look_capture_id"].is_null() || row["input_generation"].as_u64() == Some(s.input_generation)
+    (row["look_capture_id"].is_null() && row["player_approach_enabled"] != true)
+        || row["input_generation"].as_u64() == Some(s.input_generation)
 }
 
 /// 通常会話も最後に受信した一枚を参照する。会話ごとの新規撮影要求は発行しない。
@@ -247,3 +244,7 @@ impl Source {
 }
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+#[path = "../../tests/acceptance/part5_image.rs"]
+mod acceptance_image;

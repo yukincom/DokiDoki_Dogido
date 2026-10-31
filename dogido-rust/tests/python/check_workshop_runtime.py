@@ -1,0 +1,405 @@
+#!/usr/bin/env python3
+"""実HTTPと模擬モデル/TTSで一句の相談・検査・取消を確認する。所有プロセスは全回収。"""
+import argparse
+import json
+import re
+import threading
+import time
+
+from check_dialogue import acknowledge, display_row, request, register, row, snapshot, submit, submit_text, wait_for
+from check_haiku_runtime import LINES
+from check_workshop_fixture import fixture
+
+
+def step(text, action="explain", speech="葉の明るさと斧の黒さを並べた句やで。", checks=()):
+    return {"action": action, "purpose": "finish_workshop" if action == "close_workshop" else
+            "other" if action == "unrelated" else "understand_meaning", "confidence": .95,
+            "evidence": text, "speech": speech if action in {"respond", "explain", "ask"} else "",
+            "checks": list(checks), "close_after_action": False, "close_evidence": "", "findings": [],
+            "line_reference": {"found": False, "concept_id": "unknown", "evidence": "", "confidence": 0.0},
+            "line_proposal": {"found": False, "target_fragment": "", "replacement_text": "", "evidence": "", "confidence": 0.0}}
+
+
+def install(control, fn):
+    original = control["structured_handler"]
+    calls = []
+    def handler(incoming):
+        if incoming["max_tokens"] != 420:
+            return original(incoming)
+        prompt = "\n".join(m.get("content") or "" for m in incoming["messages"])
+        text = re.search(r"今回のプレイヤー発話（会話理解用）: ([^\n]+)", prompt).group(1)
+        calls.append((text, prompt))
+        payload = fn(text, prompt, len(calls))
+        return native_mock_message(payload, prompt, len(calls))
+    control["structured_handler"] = handler
+    return calls
+
+
+def native_mock_message(payload, prompt, number):
+    """既存の領域別ケースを使い、模擬LLMの送信形式だけ現行APIへ揃える。
+
+    本体の互換処理ではない。旧形式拒否の試験はcompletion_overrideで生の本文JSONを送る。
+    """
+    if not isinstance(payload, dict) or payload.get("action") not in {"inspect", "stage_player_edit"}:
+        return payload
+    action = payload["action"]
+    if action == "inspect":
+        name = "inspect_verse"
+        arguments = {key:payload[key] for key in ("checks", "inspect_text", "inspect_line_index") if key in payload}
+    else:
+        name = action
+        # 行IDと元句はBERT結果から本体が補完する。固定応答は変更後の一行全体を渡す。
+        proposal = payload.get("line_proposal", {})
+        arguments = {"replacement_text":proposal.get("replacement_text", ""),
+            "evidence":payload.get("evidence"), "confidence":payload.get("confidence")}
+    return {"role":"assistant", "content":None, "tool_calls":[{
+        "id":f"fixture-tool-{number}", "type":"function",
+        "function":{"name":name, "arguments":json.dumps(arguments, ensure_ascii=False)}}]}
+
+
+# 身体観測のownerと登録プレイヤーを一致させて発句を準備する。
+def ready(base, send, rows, *, body=True):
+    sid = register(base, preview=False, body=body)
+    send(sid)
+    wait_for(lambda: any(r["turn_id"].endswith(":poem") and r["playback_status"] == "completed" for r in rows(sid)))
+    return sid
+
+
+def wait_with_observations(base, send, sid, turn):
+    """実推論中もMinecraftと同じく観測を継続し、通常の鮮度判定を通す。"""
+    next_observation = 0.0
+    def poll():
+        nonlocal next_observation
+        if time.monotonic() >= next_observation:
+            send(sid)
+            next_observation = time.monotonic() + .25
+        return row(base, turn, {"completed", "failed", "cancelled"})
+    return wait_for(poll, timeout=95)
+
+
+def session(base, sid):
+    return next(s for s in snapshot(base)["sessions"] if s["session_id"] == sid)
+
+
+def check_text_workshop(passed):
+    with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
+        calls = install(control, lambda text, prompt, n: step(text))
+        sid = register(base, preview=False, voice_enabled=False, body=True)
+        send(sid)
+        acknowledged = set()
+        def display_poem():
+            for reply in rows(sid):
+                if reply.get("display_id") and reply["display_id"] not in acknowledged:
+                    acknowledge(base, sid, reply)
+                    acknowledged.add(reply["display_id"])
+            return next((r for r in rows(sid) if r["turn_id"].endswith(":poem")
+                         and r["playback_status"] == "audio_disabled"), None)
+        poem = wait_for(display_poem)
+        assert poem["text_displayed"] and poem["delivery_confirmed"], poem
+        before = wait_for(lambda: stored(sid))
+        assert len(before) == 1 and hud(sid)["canonical_lines"] == LINES
+        history = session(base, sid)["history"]
+        assert len([r for r in history if r["role"] == "event" and "示した" in r["text"]]) == 1, history
+        assert not any(r["playback_status"] == "completed" for r in rows(sid))
+        passed.append("text_haiku_ack_records_one_delivery_and_keeps_canonical_verse")
+
+        turn = submit_text(base, sid, "この句はどういう意味？")
+        reply = wait_for(lambda: display_row(base, turn))
+        assert reply["workshop_action"] == "explain", reply
+        assert not session(base, sid)["workshop_history"]
+        acknowledge(base, sid, reply)
+        acknowledge(base, sid, reply)
+        wait_for(lambda: row(base, turn, {"audio_disabled"}))
+        assert len(session(base, sid)["workshop_history"]) == 1
+        send(sid)
+        second = submit_text(base, sid, "その黒さは何を表してる？")
+        reply2 = wait_for(lambda: display_row(base, second))
+        assert "葉の明るさと斧の黒さ" in calls[-1][1], calls
+        acknowledge(base, sid, reply2)
+        wait_for(lambda: row(base, second, {"audio_disabled"}))
+        assert len(session(base, sid)["workshop_history"]) == 2
+        assert stored(sid) == before and hud(sid)["canonical_lines"] == LINES
+        assert not any(r["path"].startswith(("/audio_query", "/synthesis")) for r in seen), seen
+        passed.append("text_workshop_ack_continues_once_without_audio_or_verse_mutation")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--text-only", action="store_true", help="テキスト配送の追加確認だけ実行")
+    args = parser.parse_args()
+    passed = []
+    check_text_workshop(passed)
+    if args.text_only:
+        print(json.dumps({"passed": passed, "all_owned_processes_stopped": True}, ensure_ascii=False, indent=2))
+        return
+    with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
+        calls = install(control, lambda text, prompt, n: step(text))
+        sid = ready(base, send, rows)
+        before = stored(sid)
+        turn = submit(base, sid, "この句はどういう意味？")
+        result = wait_for(lambda: row(base, turn, {"completed"}))
+        assert result["workshop_action"] == "explain", (result, log.read_text())
+        assert len(calls) == 1
+        history = session(base, sid)["history"]
+        assert len(history) == 3 and history[0]["role"] == "assistant", history
+        assert all(r["role"] == "event" and r["reaction"] == "story" for r in history[1:]), history
+        assert "この句はどういう意味？" in history[-1]["text"] and result["text"] in history[-1]["text"]
+        assert len(session(base, sid)["workshop_history"]) == 1
+        send(sid)
+        turn2 = submit(base, sid, "その黒さは何を表してる？")
+        wait_for(lambda: row(base, turn2, {"completed"}))
+        assert "葉の明るさと斧の黒さ" in calls[-1][1]
+        assert stored(sid) == before and hud(sid)["canonical_lines"] == LINES
+        passed.append("one_step_meaning_shared_as_event_without_verse_mutation")
+
+        def inspect(text, prompt, n):
+            if "段階: decide" in prompt:
+                return step(text, "inspect", checks=["reading", "source"])
+            assert '"mora_count"' not in prompt and '"meter_delta"' not in prompt
+            assert '"source_status": "recorded"' in prompt
+            return step(text, speech="三行とも読みと出典の記録があるわ。")
+        calls2 = install(control, inspect)
+        send(sid)
+        turn = submit(base, sid, "保存されている読みと出典を教えて")
+        result = wait_for(lambda: row(base, turn, {"completed"}))
+        assert result["workshop_action"] == "explain" and len(calls2) == 2, result
+        assert [s["action"] for s in result["workshop_steps"]] == ["inspect", "explain"]
+        assert stored(sid) == before
+        passed.append("native_inspection_then_one_reply_with_recorded_sources")
+
+        natural = "『ふゆむ』は『冬む』やなくて、『草を踏む』の『ふむ』やと思うてな。雪もないのに、なぜ『冬』って響きが出たんやろうか？"
+        calls3 = install(control, lambda text, prompt, n: step(text, speech=natural))
+        send(sid)
+        turn = submit(base, sid, "どういう意味なの？")
+        result = wait_for(lambda: row(base, turn, {"completed"}))
+        assert result["workshop_reason"] == "accepted" and len(calls3) == 1, result
+        assert result["text"] == natural and stored(sid) == before
+        passed.append("quoted_natural_explanation_passes_without_prose_screening")
+
+        calls4 = install(control, lambda text, prompt, n: step("相談はここでおしまい", "close_workshop"))
+        send(sid)
+        turn = submit(base, sid, "今日は相談はここでおしまいにしよう")
+        result = wait_for(lambda: row(base, turn, {"completed"}))
+        assert result["workshop_action"] == "close_workshop" and len(calls4) == 0, result
+        assert hud(sid)["state"] == "closed", hud(sid)
+        passed.append("bert_close_applied_once_without_model")
+
+    with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
+        calls = install(control, lambda text, prompt, n: {
+            "action": "close_workshop", "purpose": "finish_workshop", "confidence": .95,
+            "evidence": text, "speech": "ほな、また話そな。"})
+        sid = ready(base, send, rows)
+        before = stored(sid)
+        turn = submit(base, sid, "この句の相談はここで終わりにしよう。")
+        result = wait_for(lambda: row(base, turn, {"completed"}))
+        assert result["workshop_action"] == "close_workshop" and len(calls) == 0, result
+        assert result["text"] == "ほな、この句はここまでにしよか。" and hud(sid)["state"] == "closed"
+        record_path = folder / "memory/sessions" / sid / "long_term/haiku_workshop_turns.jsonl"
+        def completed_records():
+            if not record_path.exists():
+                return []
+            records = [json.loads(line) for line in record_path.read_bytes().splitlines(keepends=True)
+                       if line.endswith(b"\n")]
+            return [r for r in records if r["event_kind"] == "turn_result"
+                    and r["result"]["turn_id"] == turn]
+        recorded = wait_for(completed_records)
+        assert len(recorded) == 1 and recorded[0]["state_after"]["open"] is False, recorded
+        assert recorded[0]["state_after"]["close_reason"] == "explicit_close", recorded
+        assert stored(sid) == before
+        passed.append("bert_close_ignores_unused_model_metadata_and_records_completed_state")
+
+    with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
+        def mistaken_close(text, prompt, n):
+            result = step(text, "close_workshop" if text == "終了でいいよ" else "respond")
+            result["speech"] = ("ほな今日はここまでや。また話そな。" if text == "終了でいいよ"
+                                else "うん、まだこの句の話を続けよか。")
+            return result
+        calls = install(control, mistaken_close)
+        sid = ready(base, send, rows)
+        for text in ["終了しないよ", "『終了』ってどういう意味？", "終了したらどうなる？", "終了かな？"]:
+            send(sid)
+            turn = submit(base, sid, text)
+            result = wait_for(lambda: row(base, turn, {"completed"}))
+            assert result["workshop_action"] == "respond" and hud(sid)["state"] == "open", (text, result)
+            assert result["workshop_reason"] == "accepted" and len(result["llm_reports"]) == 1
+            assert result["text"] == "うん、まだこの句の話を続けよか。"
+        assert len(calls) == 4
+        passed.append("model_continuation_keeps_workshop_open_without_retry")
+        send(sid)
+        turn = submit(base, sid, "終了でいいよ")
+        result = wait_for(lambda: row(base, turn, {"completed"}))
+        assert result["workshop_action"] == "close_workshop" and len(calls) == 4
+        assert hud(sid)["state"] == "closed"
+        assert result["text"] == "ほな、この句はここまでにしよか。" and not result["llm_reports"]
+        passed.append("short_bert_close_uses_code_reply_without_model")
+
+    with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
+        # BERT対象外の相談で旧終了actionを返しても、終了経路へ戻らない。
+        calls = install(control, lambda text, prompt, n: step(text, "close_workshop") if n == 1
+                        else step(text, "respond", "この句の話を続けよか。"))
+        sid = ready(base, send, rows)
+        before = stored(sid)
+        turn = submit(base, sid, "この句をもう少し話そう")
+        result = wait_for(lambda: row(base, turn, {"completed"}))
+        assert result["workshop_action"] == "respond" and len(calls) == 2, result
+        assert hud(sid)["state"] == "open" and stored(sid) == before
+        assert all(s.get("action") != "close_workshop" for s in result["workshop_steps"]), result
+        passed.append("not_target_cannot_reenter_removed_model_close_path")
+
+    with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
+        calls = install(control, lambda text, prompt, n: {"action": "explain"} if n == 1 else step(text))
+        sid = ready(base, send, rows)
+        turn = submit(base, sid, "この句を説明して")
+        result = wait_for(lambda: row(base, turn, {"completed"}))
+        assert result["workshop_action"] == "explain" and len(calls) == 2
+        passed.append("schema_retry_once_then_accepted")
+
+        calls2 = install(control, lambda text, prompt, n: step(text, "inspect", checks=["reading"]))
+        send(sid)
+        turn = submit(base, sid, "保存されている読みを教えて")
+        result = wait_for(lambda: row(base, turn, {"completed"}))
+        assert len(calls2) == 3 and result["workshop_action"] == "fallback", result
+        assert "音数" not in result["text"] and "5音" not in result["text"], result
+        passed.append("inspection_not_repeated_after_replan_failure")
+
+    with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
+        calls = install(control, lambda text, prompt, n: step(text, speech="失敗した返答の印やで。" if n == 1 else "次の説明やで。"))
+        sid = ready(base, send, rows)
+        (folder / "player_mode").write_text("fail")
+        turn = submit(base, sid, "一句を説明して")
+        wait_for(lambda: row(base, turn, {"failed"}))
+        assert not session(base, sid)["workshop_history"]
+        (folder / "player_mode").write_text("ok")
+        send(sid)
+        turn = submit(base, sid, "もう少し説明して")
+        wait_for(lambda: row(base, turn, {"completed"}))
+        assert "失敗した返答の印" not in calls[-1][1]
+        passed.append("failed_audio_excluded_from_next_workshop_prompt")
+
+    with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
+        entered = threading.Event(); release = threading.Event()
+        def blocking(text, prompt, n):
+            if n == 1:
+                entered.set(); release.wait(timeout=8)
+            return step(text, speech="古い返答やで。" if n == 1 else "新しい返答やで。")
+        calls = install(control, blocking)
+        sid = ready(base, send, rows)
+        try:
+            old = submit(base, sid, "一句を説明して")
+            wait_for(entered.is_set)
+            duplicate = request(base, "/api/v1/player-input", {"session_id": sid, "source": "voice", "text": "一句を説明して"})
+            assert duplicate["deduplicated"] and duplicate["turn_id"] == old
+            new = submit(base, sid, "下の行を説明して")
+            wait_for(lambda: row(base, old, {"cancelled"}))
+            release.set()
+            wait_for(lambda: row(base, new, {"completed"}))
+            history = session(base, sid)["workshop_history"]
+            assert len(history) == 1 and history[0]["turn_id"] == new, history
+            assert len(calls) == 2
+            passed.append("duplicate_no_new_call_and_new_input_cancels_old_result")
+        finally:
+            release.set()
+
+    from check_workshop_combat import SETTINGS, end, returned, drive
+    with fixture(combat_settings=SETTINGS) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
+        calls = install(control, lambda text, prompt, n: step(text))
+        sid = ready(base, send, rows)
+        (folder / "player_mode").write_text("slow")
+        turn = submit(base, sid, "この句を説明して")
+        wait_for(lambda: row(base, turn, {"started"}))
+        before = stored(sid)
+        send(sid, event={"name": "hostile_audio_detected", "source_kind": "auditory", "priority_hint": "background", "certainty": "high"},
+             auditory_threats=[{"label": "zombie", "source_id": "sound-z", "spoken_name_allowed": True}])
+        wait_for(lambda: row(base, turn, {"waiting_for_warning"}))
+        assert not session(base, sid)["workshop_history"]
+        assert hud(sid)["state"] == "danger" and stored(sid) == before
+        (folder / "player_mode").write_text("ok")
+        end(send, rows, sid)
+        returned(send, rows, sid)
+        drive(send, sid, lambda: row(base, turn, {"completed"}))
+        history = session(base, sid)["workshop_history"]
+        assert len(history) == 1 and history[0]["turn_id"] == turn and history[0]["dogido_text"] == step("")["speech"], history
+        assert stored(sid) == before and len(calls) == 1
+        passed.append("hostile_interrupt_holds_explanation_and_resumes_same_reply_once")
+
+    with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
+        calls = install(control, lambda text, prompt, n: step(text, "unrelated"))
+        sid = ready(base, send, rows)
+        wid = hud(sid)["workshop_id"]
+        before = stored(sid)
+        turns = []
+        for text in ["今日は楽しかったね", "明日も一緒に遊ぼうね"]:
+            send(sid)
+            turn = submit(base, sid, text)
+            turns.append(turn)
+            result = wait_for(lambda: row(base, turn, {"completed"}))
+            assert result["workshop_action"] == "unrelated" and result["text"] == control["leaf"]
+            assert len(result["llm_reports"]) == 2  # workshop + ordinary single generation
+            if len(calls) == 1:
+                assert hud(sid)["workshop_id"] == wid and hud(sid)["state"] == "open"
+        assert hud(sid)["state"] == "closed" and len(calls) == 2
+        assert not session(base, sid)["workshop_history"]
+        expected_turns = {t for turn in turns for t in (turn, turn + ":reply")}
+        conversation = [r for r in session(base, sid)["history"] if r["turn_id"] in expected_turns]
+        assert len(conversation) == 4 and [r["role"] for r in conversation] == ["user", "assistant"] * 2, conversation
+        assert stored(sid) == before
+        passed.append("unrelated_input_handed_to_casual_once_and_closes_after_two_completed_replies")
+
+    with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
+        calls = install(control, lambda text, prompt, n: step(text, "accept_pending"))
+        sid = ready(base, send, rows)
+        before = stored(sid)
+        turn = submit(base, sid, "その案でお願い")
+        result = wait_for(lambda: row(base, turn, {"completed"}))
+        assert result["workshop_action"] == "fallback" and len(calls) == 2
+        assert hud(sid)["state"] == "open" and stored(sid) == before
+        passed.append("unresolved_repair_target_cannot_change_or_save_canonical_verse")
+
+    with fixture(workshop_idle_ms=2500) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
+        entered = threading.Event(); release = threading.Event()
+        def delayed_close(text, prompt, n):
+            entered.set(); release.wait(timeout=6)
+            return step(text, "explain")
+        calls = install(control, delayed_close)
+        sid = ready(base, send, rows)
+        try:
+            turn = submit(base, sid, "この句の意味をもう少し説明して")
+            wait_for(entered.is_set)
+            time.sleep(3)  # 返答を生成している時間は無操作に数えない。
+            assert hud(sid)["state"] == "open"
+            assert not row(base, turn, {"cancelled"})
+            release.set()
+            wait_for(lambda: row(base, turn, {"completed"}), timeout=4)
+            assert hud(sid)["state"] == "open"
+            closing = submit(base, sid, "そろそろ相談はおしまいにしよう")
+            wait_for(lambda: row(base, closing, {"completed"}))
+            assert hud(sid)["state"] == "closed" and len(calls) == 1
+            passed.append("inflight_workshop_response_survives_idle_timeout_and_explicit_close_still_works")
+        finally:
+            release.set()
+
+    for text,label,index in [
+        ("最初の行の意味を教えて", "senryu_line_upper", 0),
+        ("真ん中の行の意味を教えて", "senryu_line_middle", 1),
+        ("最後の行の意味を教えて", "senryu_line_lower", 2),
+    ]:
+        with fixture(bert_labels={text:label}) as (base, _, _, control, _, _, _, _, send, hud, rows, stored, folder):
+            def explain_selected(text,prompt,n):
+                payload = step(text)
+                # 旧モデル行番号を返しても分類済みの対象は変わらない。
+                payload["line_reference"] = {"found":True, "concept_id":f"line_{(index+1)%3+1}", "evidence":text, "confidence":.99}
+                return payload
+            calls = install(control, explain_selected)
+            sid = ready(base, send, rows)
+            turn = submit(base, sid, text)
+            result = wait_for(lambda: row(base, turn, {"completed"}))
+            assert result["workshop_action"] == "explain" and len(calls) == 1, result
+            assert session(base,sid)["workshop_discussion_target"]["line_index"] == index
+            assert hud(sid)["canonical_lines"] == LINES and not hud(sid)["pending_lines"]
+            passed.append("bert_line_selects_target_without_authorizing_repair:" + label)
+
+    print(json.dumps({"passed": len(passed), "cases": passed}, ensure_ascii=False, indent=2))
+
+
+if __name__ == "__main__":
+    main()

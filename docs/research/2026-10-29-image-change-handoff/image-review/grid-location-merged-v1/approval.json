@@ -1,0 +1,8 @@
+{
+  "user_instruction": "コード側の変化有無の判定方法はそのまま。明るさ変化の判定結果を渡し、具体的な変化位置の枠なし説明と隣接枠を結合した画像で比較する。",
+  "system_sha256": "6e7cf28ee782bdb0d363fb804567000012ff73f4934d14bddaf9f6c5131645dc",
+  "scope": "8 actual changed pairs x2 conditions x3 seeds =48 responses",
+  "runtime_pid_observed": 1549,
+  "runtime_model": "gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf",
+  "runtime_mmproj": "mmproj-F16.gguf"
+}

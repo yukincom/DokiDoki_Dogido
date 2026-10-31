@@ -571,8 +571,8 @@ fn spontaneous_history_labels_speakers_without_changing_stored_roles_or_events()
     assert!(situation.contains("今はプレイヤーから新しい発言を受けてへん"));
     assert!(situation.contains("自分の発言に相づちや返事をせず"));
     for rule in [
-        "同じ意味合いの話をしたばかりで、新しく伝えることがなければ黙ってな。",
-        "言葉を変えただけなら、同じ話として扱ってな。",
+        "同じ意味合いの話をしたばかりだったら、黙ってな。",
+        "プレイヤーはちゃんと聞いとるから大丈夫やで。",
     ] {
         assert_eq!(p.request.messages[0].content.matches(rule).count(), 1);
         assert!(!situation.contains(rule), "shared rule belongs in system grounding only");

@@ -1,0 +1,33 @@
+{
+  "scope": "fixed HTTP responses; no real model",
+  "cases": [
+    {
+      "kind": "result",
+      "case": "missing_words",
+      "automatic_checks": "pass",
+      "acceptance": "review_required",
+      "review": "合格: どの語へ変えたいか質問し、句・材料・版・元entry・revisionは不変。置換語の補作、無関係な質問、固定fallbackは不合格。"
+    },
+    {
+      "kind": "result",
+      "case": "specified_words",
+      "automatic_checks": "pass",
+      "acceptance": "review_required",
+      "review": "合格: 上の句だけひかりさす、版+1・同じ句IDへrevision1件。他行と元entryは材料を含め不変。脱線、別語への補作、返答と保存の食違いは不合格。"
+    },
+    {
+      "kind": "result",
+      "case": "retained_words",
+      "automatic_checks": "pass",
+      "acceptance": "review_required",
+      "review": "合格: 最初はさくらいろを保持し保存不変。次に上の句だけ同じ語で保存、版+1・revision1件。他行の材料と元entryは不変。別案の補作や先走った保存は不合格。"
+    },
+    {
+      "kind": "result",
+      "case": "provided_materials",
+      "automatic_checks": "pass",
+      "acceptance": "review_required",
+      "review": "合格: 提示資料を説明し、各行での実使用は未確認と区別する。句の解釈は解釈として述べる。IDの一致を使用確認済みと断定したら不合格。句・版・元entry・revisionは不変。文言の完全一致は求めない。"
+    }
+  ]
+}

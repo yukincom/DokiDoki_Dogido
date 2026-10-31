@@ -425,10 +425,10 @@ public final class BodyViewCapture {
             BodyViewImage.Encoded resized=BodyViewImage.encode(original,data);
             if(frame.request.command!=null)BodyViewTargets.remember(frame.request.id,frame.targets,original);
             if(frame.request.command!=null) {
-                var change=CHANGES.observe(data.get("context").toString(),frame.request.translation,original);
+                var change=CHANGES.observe(data.get("context").toString(),frame.request.translation,original,
+                    new BodyViewChange.Reference(frame.request.id,frame.capturedAt,resized.sha256()));
                 data.addProperty("motion_sequence",frame.request.motionSequence);
-                data.addProperty("visual_change",change.changed());data.addProperty("compared_to_four_before",change.compared());
-                data.addProperty("pixel_mean_difference",change.meanDifference());data.addProperty("pixel_changed_fraction",change.changedFraction());
+                data.add("scene_comparison",change.json());
             }
             Files.write(directory.resolve("player-192.png"),resized.png(),StandardOpenOption.CREATE_NEW);
             data.addProperty("annotated_image","player-192.png");data.addProperty("annotated_sha256",resized.sha256());
@@ -448,7 +448,7 @@ public final class BodyViewCapture {
                 view.addProperty("body_entity_uuid",command.bodyId().toString());view.addProperty("body_epoch",command.epoch().toString());
                 view.addProperty("owner_uuid",command.ownerId().toString());view.addProperty("dimension",command.dimension());
                 view.addProperty("camera_restored",true);view.add("annotation_status",data.get("annotation_status").deepCopy());
-                for(String key:new String[]{"motion_sequence","visual_change","compared_to_four_before","pixel_mean_difference","pixel_changed_fraction"})
+                for(String key:new String[]{"motion_sequence","scene_comparison"})
                     view.add(key,data.get(key).deepCopy());
                 complete(frame.request,view,null);
             }

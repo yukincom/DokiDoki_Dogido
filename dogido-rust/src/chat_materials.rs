@@ -137,7 +137,7 @@ pub fn prepare(
     input: &PlayerInput,
     context: &Context,
     snapshot: &Snapshot,
-    labels: &impl Labels,
+    _labels: &impl Labels,
 ) -> Result<Prepared> {
     if input.knowledge_query_present {
         return Ok(Prepared::Knowledge);
@@ -207,8 +207,8 @@ pub fn prepare(
         named.clear();
         sources.clear();
     }
-    let audio = current::audio_fallback(event, labels);
-    let threat = current::threat(event, snapshot, audio.as_deref(), Some(&hearing));
+    // 音の本文は共通world_context.hearingだけへ渡す。旧メモは内部診断に残す。
+    let threat = current::threat(event, snapshot);
     let mut look = crate::world_catalog::catalog()
         .look_target_label(chat_catalog::catalog(), event.look_target.as_ref());
     if !look.is_empty()
@@ -233,12 +233,11 @@ pub fn prepare(
     let observation = if context.workshop_open {
         look.clear();
         observed.clear();
-        current::observation(event, &threat, &hearing, &[], &look, &[])
+        current::observation(event, &threat, &[], &look, &[])
     } else {
         current::observation(
             event,
             &threat,
-            &hearing,
             &snapshot.current.passive_types,
             &look,
             &snapshot.recent.passive_sightings,

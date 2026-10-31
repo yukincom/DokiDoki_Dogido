@@ -704,7 +704,181 @@ fn bert_edit_uses_interpreted_words_and_keeps_cas_and_other_lines() {
         let mut stale = base.clone();
         stale[0].surface_text = "既に変わった句".into();
         assert!(pending.validate(&stale).is_err());
-        // BERTの行に旧語が存在しなければ、別の行へ読み替えて適用しない。
-        assert!(Call::decode_for_target(message, &current, raw, Some(1)).is_err());
+        // 完成行の適用先はBERTが所有する。旧語から別行へ移し替えない。
+        let Call::PlayerEdit { frame, .. } =
+            Call::decode_for_target(message, &current, raw, Some(1)).unwrap()
+        else {
+            panic!("not an edit")
+        };
+        assert_eq!(frame["proposal"]["line_index"], 1);
+        assert_eq!(frame["proposal"]["target_fragment"], "");
     }
+}
+
+// 見込み: 完成行なら末尾の削除を部分一致で取り違えない。
+// 合格: あさひさして→あさひさし、部分変更、下句の削除が一行差分となり、他二行・原本は不変。旧語が付いても使わない。固定tool応答から実Engine/CASまでを確認し、モデル解釈は対象外。
+#[test]
+fn classified_complete_line_replaces_the_entire_selected_line() {
+    use crate::workshop::tools::Call;
+    let lines = Engine::default()
+        .whole_verse("あさひさして\nくろいおのへと\nあさのいろ", "generated")
+        .unwrap();
+    let view = json!({"current_lines":lines,"emission":{"lines":lines},"materials":{},"followup":"discussion"});
+    for (target, replacement) in [(0, "あさひさし"), (1, "しろいおのへと"), (2, "あさのい")]
+    {
+        let message = json!({"tool_calls":[{"id":"complete-line","type":"function","function":{
+            "name":"stage_player_edit","arguments":json!({
+                "replacement_text":replacement,"target_fragment":replacement
+            }).to_string()}}]});
+        let Call::PlayerEdit { frame, .. } = Call::decode_for_target(
+            message,
+            &view,
+            "本人の指定を解釈した変更後の一行",
+            Some(target),
+        )
+        .unwrap() else {
+            panic!("not an edit")
+        };
+        assert_eq!(frame["proposal"]["target_fragment"], "");
+        let Output::PlayerEdit(PlayerEditResult::Validated(result)) =
+            Engine::default().project(&frame).unwrap()
+        else {
+            panic!("not an edit")
+        };
+        assert!(
+            result.failure_reasons.is_empty(),
+            "{:?}",
+            result.failure_reasons
+        );
+        assert_eq!(result.lines[target].surface_text, replacement);
+        assert_eq!(result.lines[target].reading_text, replacement);
+        for i in 0..3 {
+            if i != target {
+                assert_eq!(result.lines[i], lines[i]);
+            }
+        }
+        assert_eq!(result.edits.len(), 1);
+        assert_eq!(result.edits[0].line_index, target);
+        let pending = Pending::stage(&lines, &lines, result.lines, target).unwrap();
+        pending.validate(&lines).unwrap();
+        let mut stale = lines.clone();
+        stale[target].surface_text = "べつのく".into();
+        assert!(pending.validate(&stale).is_err());
+        assert_eq!(view["current_lines"], json!(lines));
+    }
+}
+
+// 見込み: 完成行の同値指定は実編集にならない。
+// 合格: どの行も同じ本文ならno_change・差分0・結果本文なし、入力の行記録も不変。固定tool応答と実Engineの比較だけを検査し、保存はHTTP試験で確認。
+#[test]
+fn classified_identical_complete_line_is_no_change() {
+    use crate::workshop::tools::Call;
+    let (view, _) = fixture();
+    for target in 0..3 {
+        let replacement = &view["current_lines"][target]["surface_text"];
+        let message = json!({"tool_calls":[{"id":"same-line","type":"function","function":{
+            "name":"stage_player_edit","arguments":json!({"replacement_text":replacement}).to_string()}}]});
+        let Call::PlayerEdit { frame, .. } =
+            Call::decode_for_target(message, &view, "同じ句を指定", Some(target)).unwrap()
+        else {
+            panic!("not an edit")
+        };
+        let Output::PlayerEdit(PlayerEditResult::Validated(result)) =
+            Engine::default().project(&frame).unwrap()
+        else {
+            panic!("not an edit")
+        };
+        assert_eq!(result.failure_reasons, ["no_change"]);
+        assert!(result.edits.is_empty());
+        assert!(result.text.is_none());
+        assert_eq!(view, fixture().0);
+    }
+}
+
+// 見込み: 既知の行ラベルを本文から取り出せば、モデルを再呼出しせず編集できる。
+// 合格: 実例と全行のラベル形式を受理し、対象本文だけ変更。他二行・原snapshotは不変。固定tool出力と実Engineの試験。
+#[test]
+fn labelled_replacement_is_cooked_into_body_without_rejecting_the_edit() {
+    let (view, _) = fixture();
+    let before = view.clone();
+    for (index, label) in ["上の句", "中の句", "下の句"].iter().enumerate() {
+        for replacement in [
+            format!("{label}: ともしびに"),
+            format!("{label}：ともしびに"),
+            format!("line_{}=ともしびに", index + 1),
+            format!("「{label}: ともしびに」"),
+            format!("{label}:\nともしびに"),
+        ] {
+            let mut args = json!({"replacement_text":replacement});
+            fill_classified_edit_target(&view, index, &mut args).unwrap();
+            let frame =
+                normalize_player_edit_tool(&view, "ともしびとに変えましょう", &args).unwrap();
+            let Output::PlayerEdit(PlayerEditResult::Validated(result)) =
+                Engine::default().project(&frame).unwrap()
+            else {
+                panic!("not an edit")
+            };
+            assert!(result.failure_reasons.is_empty(), "{replacement}");
+            assert_eq!(result.lines[index].surface_text, "ともしびに");
+            for i in 0..3 {
+                if i != index {
+                    assert_eq!(
+                        result.lines[i].surface_text,
+                        view["current_lines"][i]["surface_text"]
+                    );
+                }
+            }
+        }
+    }
+    assert_eq!(view, before);
+}
+
+// 見込み: 三行を返した場合も既存の対象外不変・CASを保ったまま見出しを外せる。
+// 合格: 下句だけ抽出し、別行も変えた出力と古い元句は従来どおり実行不可。固定tool引数の検査。
+#[test]
+fn labelled_full_verse_keeps_target_and_version_checks() {
+    let (view, _) = fixture();
+    let mut args = json!({"replacement_text":"上の句: さくらのは\n中の句: くろいおのへと\n下の句: ともしびに"});
+    fill_classified_edit_target(&view, 2, &mut args).unwrap();
+    let frame = normalize_player_edit_tool(&view, "下の句を変えて", &args).unwrap();
+    assert_eq!(frame["proposal"]["replacement_text"], "ともしびに");
+    args["expected_text"] = "古い句".into();
+    assert!(normalize_player_edit_tool(&view, "下の句を変えて", &args).is_err());
+    fill_classified_edit_target(&view, 2, &mut args).unwrap();
+    args["replacement_text"] =
+        "上の句: さくらいろ\n中の句: くろいおのへと\n下の句: ともしびに".into();
+    assert!(normalize_player_edit_tool(&view, "下の句を変えて", &args).is_err());
+}
+
+// 見込み: 見出しの区切りがない通常の表現や本文途中の行名には触れない。
+// 合格: 原文一致を要求せず、モデルの語句・句読点・本文内の行名を保持。固定引数の正規化のみ。
+#[test]
+fn label_cooking_preserves_plain_words_and_inner_labels() {
+    let (view, _) = fixture();
+    for text in [
+        "ともしびと",
+        "ともしびに",
+        "下の句を詠む",
+        "ああ、下の句: ともしびに",
+        "下の句:",
+    ] {
+        let mut args = json!({"replacement_text":text});
+        fill_classified_edit_target(&view, 2, &mut args).unwrap();
+        let frame = normalize_player_edit_tool(&view, "別の認識原文", &args).unwrap();
+        assert_eq!(frame["proposal"]["replacement_text"], text);
+    }
+}
+
+// 見込み: 既存のline_ID付き三行形式を、先頭行だけの本文として誤って扱わない。
+// 合格: 上句を選んだ場合も三行を比較し、変更した上句だけ抽出。他行改変は拒否。固定tool出力の境界試験。
+#[test]
+fn legacy_labelled_whole_verse_is_not_collapsed_into_first_line() {
+    let (view, _) = fixture();
+    let mut args =
+        json!({"replacement_text":"line_1=ともしびに, line_2=くろいおのへと, line_3=あさのいろ。"});
+    fill_classified_edit_target(&view, 0, &mut args).unwrap();
+    let frame = normalize_player_edit_tool(&view, "上の句を変えて", &args).unwrap();
+    assert_eq!(frame["proposal"]["replacement_text"], "ともしびに");
+    args["replacement_text"] = "line_1=ともしびに, line_2=別の行, line_3=あさのいろ。".into();
+    assert!(normalize_player_edit_tool(&view, "上の句を変えて", &args).is_err());
 }

@@ -1,3 +1,4 @@
+//! パワーのある実行環境のため、繊細なコントロールは不要。会話のテンポを止める処理を入れるな。
 //! 一つの戦闘判断から選ばれた音声を、同じ取消所有権で順に配送する。
 use super::{Data, Dialogue, Session, bridge, id, observation_fresh};
 use super::{PlaybackStatus, workshop_combat_runtime::NoticeEnd};
@@ -415,6 +416,7 @@ impl Dialogue {
             return;
         };
         s.visual.cancel_look();
+        s.workshop_reply = None;
         if let Some(c) = s.cancel.take() {
             s.epoch += 1;
             s.status = PlaybackStatus::Cancelled;
@@ -505,7 +507,9 @@ impl Dialogue {
             input: input.map(str::to_owned),
             protected_until: None,
         });
-        s.status = PlaybackStatus::Queued;
+        if s.cancel.is_none() {
+            s.status = PlaybackStatus::Queued;
+        }
         if d.rows.len() == 200 {
             d.rows.pop_front();
         }
@@ -639,7 +643,9 @@ impl Dialogue {
                     s.ambient.end_rain_after_attention(window);
                 }
             }
-            s.status = status;
+            if s.cancel.is_none() {
+                s.status = status;
+            }
             let model_only = s.warning.as_ref().is_some_and(|w| {
                 w.actions
                     .iter()
@@ -905,8 +911,8 @@ impl Dialogue {
                         s.danger.begin_player_hazard_generation(action);
                     }
                     let result=if let Some(image)=action.image.as_deref() {
-                        super::reaction_runtime::render_image(config,&self.llm,&input,&mut cancel,Some(image)).await
-                    } else {bridge::render(config,&self.llm,input,&mut cancel).await};
+                        super::reaction_runtime::render_image(config,&self.reading_dictionary,&self.llm,&input,&mut cancel,Some(image)).await
+                    } else {bridge::render(config,&self.reading_dictionary,&self.llm,input,&mut cancel).await};
                     if crate::reaction_leaf::is_model_reaction(action) {
                         anyhow::ensure!(!*cancel.borrow(),"cancelled");
                         let mut d=self.data.lock().unwrap();
@@ -960,7 +966,7 @@ impl Dialogue {
                 if action.light_comment.is_some() {
                     // 照明は選択時に本文が完成している。追加生成をせず、表示本文を保ったまま
                     // 共通の読み訂正・辞書処理だけを音声用テキストへ適用する。
-                    text=super::tts_runtime::read(config,&text,&mut cancel,
+                    text=super::tts_runtime::read(config,&self.reading_dictionary,&text,&mut cancel,
                         tokio::time::Instant::now()+Duration::from_secs(35)).await?;
                 }
                 if let Some(plan)=&action.visual_plan{

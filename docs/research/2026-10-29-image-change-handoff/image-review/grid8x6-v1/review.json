@@ -1,0 +1,150 @@
+{
+  "reviewed_at": "2026-10-29T01:14:02.575706+00:00",
+  "status": "completed_diagnostic_not_production_acceptance",
+  "source_results_sha256": "c81470bc038ca70aa11540007cc2a21bd5601c3e8e942a1d247c191bb121c14d",
+  "method": "担当アシスタントが前後の実画像・枠画像・全78返答を照合。追加採点モデルなし。",
+  "summary": {
+    "images_only": {
+      "responses": 39,
+      "speak": 33,
+      "silent": 6,
+      "formats": {
+        "json": 39
+      }
+    },
+    "grid_hint": {
+      "responses": 39,
+      "speak": 24,
+      "silent": 15,
+      "formats": {
+        "json": 38,
+        "fenced_json": 1
+      }
+    }
+  },
+  "cases": [
+    {
+      "case_id": "pair_01",
+      "observation": "完全同一の金鉱石画像",
+      "assessment": "「変化がない」で3回とも沈黙。対照は3回とも金鉱石への発話。",
+      "speak_counts": {
+        "images_only": 3,
+        "grid_hint": 0
+      }
+    },
+    {
+      "case_id": "pair_02",
+      "observation": "海岸の小さな明るさ・雲の差",
+      "assessment": "閾値未満として通知し、3回とも沈黙。対照は1回だけ景色への感想。",
+      "speak_counts": {
+        "images_only": 1,
+        "grid_hint": 0
+      }
+    },
+    {
+      "case_id": "pair_03",
+      "observation": "水中の微細差",
+      "assessment": "両条件とも3回沈黙。",
+      "speak_counts": {
+        "images_only": 0,
+        "grid_hint": 0
+      }
+    },
+    {
+      "case_id": "pair_04",
+      "observation": "水中の泡・描画の小さな差",
+      "assessment": "「変化がない」で3回沈黙。対照は3回景色への感想。",
+      "speak_counts": {
+        "images_only": 3,
+        "grid_hint": 0
+      }
+    },
+    {
+      "case_id": "pair_05",
+      "observation": "水中の人物の向き・小さな色の差",
+      "assessment": "今回の閾値では無検出。3回沈黙。対象の小さな動きを全て拾う設定ではない。",
+      "speak_counts": {
+        "images_only": 3,
+        "grid_hint": 0
+      }
+    },
+    {
+      "case_id": "pair_06",
+      "observation": "砂浜にカメが現れる",
+      "assessment": "3マスで局所差を検出。枠条件は3回とも緑色の何かと表現し、カメの特定は0/3。対照は3/3でカメを特定。",
+      "speak_counts": {
+        "images_only": 3,
+        "grid_hint": 3
+      }
+    },
+    {
+      "case_id": "pair_07",
+      "observation": "金鉱石壁の右上の見え方が変わる",
+      "assessment": "右上の明るさ差1マスを検出。両条件とも金に関する発話。新発見や採掘の実イベントまでは画像から確定できない。",
+      "speak_counts": {
+        "images_only": 3,
+        "grid_hint": 3
+      }
+    },
+    {
+      "case_id": "pair_08",
+      "observation": "洞窟。人物が上端へ動き、左側の松明周辺も変わる",
+      "assessment": "検出したのは左の松明周辺1マス。枠条件の全3応答が松明に言及し、人物の動きには言及しない。1件は壁の松明を「落ちてる」と表現。",
+      "speak_counts": {
+        "images_only": 3,
+        "grid_hint": 3
+      }
+    },
+    {
+      "case_id": "pair_09",
+      "observation": "海岸の夜明け",
+      "assessment": "空を中心に22マスで明るさ変化を検出。枠条件は日の出を述べた1件、夕焼けと誤読した1件、景色の感想1件。",
+      "speak_counts": {
+        "images_only": 3,
+        "grid_hint": 3
+      }
+    },
+    {
+      "case_id": "pair_10",
+      "observation": "右側の地形が表示される",
+      "assessment": "13マスを検出。枠条件は2件が雲の形、1件が明るさの変化に言及し、目立つ地形表示への言及はない。",
+      "speak_counts": {
+        "images_only": 3,
+        "grid_hint": 3
+      }
+    },
+    {
+      "case_id": "pair_11",
+      "observation": "水中洞窟の床が明るくなる",
+      "assessment": "床を中心に20マスを検出。枠条件は暗さ、地面の変化、オレンジ色の枠そのものへの発話が各1件。明るさの向きの理解は安定しない。",
+      "speak_counts": {
+        "images_only": 2,
+        "grid_hint": 3
+      }
+    },
+    {
+      "case_id": "pair_12",
+      "observation": "暗い水中での大きな視点変更",
+      "assessment": "上部1マスで明るさ変化を検出。枠条件は明るくなったが2件、目の前の何かが1件。元画像全体では広い見え方の変化があり、1マスの枠で全変化を説明できない。",
+      "speak_counts": {
+        "images_only": 3,
+        "grid_hint": 3
+      }
+    },
+    {
+      "case_id": "pair_13",
+      "observation": "水中から夜の砂浜へ移動・旋回",
+      "assessment": "44マスを検出。枠条件の全3件が明るくなったと表現し、1件は太陽が出たかと推測。枠自体が暗い画像を明るくする交絡がある。",
+      "speak_counts": {
+        "images_only": 3,
+        "grid_hint": 3
+      }
+    }
+  ],
+  "limitations": [
+    "閾値は同じ13組で校正。未知の画像列への一般化は未検証。",
+    "過去発話なし。実運用の反復抑制・状態管理は未評価。",
+    "枠と説明を一緒に変更しており、どちらの単独効果かは分離していない。",
+    "枠線自体が対象の輪郭や画像の明るさを変える。"
+  ]
+}

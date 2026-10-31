@@ -1,0 +1,129 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running unittests src/lib.rs (/private/tmp/dogido-tests-final-20261029/target-combined/debug/deps/dogido_rust-3b05f0013177c941)
+
+running 17 tests
+test dialogue::acceptance_hearing::common_sound_retains_event_and_original_heard_time ... FAILED
+test dialogue::acceptance_hearing::control_catalog_sound_tags_remain_general_without_heard_evidence ... ok
+test dialogue::acceptance_hearing::control_player_side_sound_is_not_substituted_for_dogido_hearing ... ok
+test dialogue::acceptance_hearing::direct_source_identity_takes_precedence_over_circumstantial_evidence ... FAILED
+test dialogue::acceptance_hearing::duplicate_sound_is_collapsed_but_distinct_sound_event_survives ... FAILED
+test dialogue::acceptance_hearing::empty_truncated_and_unavailable_hearing_are_distinct ... FAILED
+test dialogue::acceptance_hearing::empty_visible_mob_list_is_not_complete_sound_source_evidence ... FAILED
+test dialogue::acceptance_hearing::environment_request_receives_same_sound_fact_exactly_once ... FAILED
+test dialogue::acceptance_hearing::hidden_mob_or_other_player_prevents_exclusion_based_attribution ... FAILED
+test dialogue::acceptance_hearing::hostile_sound_preserves_adapter_uncertainty ... FAILED
+test dialogue::acceptance_hearing::mismatched_time_position_or_player_action_keeps_source_unknown ... FAILED
+test dialogue::acceptance_hearing::ordinary_request_does_not_repeat_the_same_hearing_memo ... FAILED
+test dialogue::acceptance_hearing::ordinary_request_receives_sound_fact_exactly_once ... FAILED
+test dialogue::acceptance_hearing::player_breaking_sound_is_inferred_without_changing_sound_kind ... FAILED
+test dialogue::acceptance_hearing::player_emitter_confirmation_requires_actual_owner_source_match ... FAILED
+test dialogue::acceptance_hearing::player_footsteps_are_inferred_from_complete_concurrent_context ... FAILED
+test dialogue::acceptance_hearing::unknown_sound_keeps_uncertainty_without_inventing_a_source ... FAILED
+
+failures:
+
+---- dialogue::acceptance_hearing::common_sound_retains_event_and_original_heard_time stdout ----
+
+thread 'dialogue::acceptance_hearing::common_sound_retains_event_and_original_heard_time' (21458539) panicked at src/dialogue/../../tests/acceptance/hearing.rs:164:5:
+assertion `left == right` failed
+  left: Null
+ right: "observed"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- dialogue::acceptance_hearing::direct_source_identity_takes_precedence_over_circumstantial_evidence stdout ----
+
+thread 'dialogue::acceptance_hearing::direct_source_identity_takes_precedence_over_circumstantial_evidence' (21458548) panicked at src/dialogue/../../tests/acceptance/hearing.rs:124:10:
+共通観測のhearing.soundsに実際に届いた音を載せる
+
+---- dialogue::acceptance_hearing::duplicate_sound_is_collapsed_but_distinct_sound_event_survives stdout ----
+
+thread 'dialogue::acceptance_hearing::duplicate_sound_is_collapsed_but_distinct_sound_event_survives' (21458549) panicked at src/dialogue/../../tests/acceptance/hearing.rs:124:10:
+共通観測のhearing.soundsに実際に届いた音を載せる
+
+---- dialogue::acceptance_hearing::empty_truncated_and_unavailable_hearing_are_distinct stdout ----
+
+thread 'dialogue::acceptance_hearing::empty_truncated_and_unavailable_hearing_are_distinct' (21458550) panicked at src/dialogue/../../tests/acceptance/hearing.rs:352:9:
+assertion `left == right` failed
+  left: Null
+ right: "observed"
+
+---- dialogue::acceptance_hearing::empty_visible_mob_list_is_not_complete_sound_source_evidence stdout ----
+
+thread 'dialogue::acceptance_hearing::empty_visible_mob_list_is_not_complete_sound_source_evidence' (21458551) panicked at src/dialogue/../../tests/acceptance/hearing.rs:124:10:
+共通観測のhearing.soundsに実際に届いた音を載せる
+
+---- dialogue::acceptance_hearing::environment_request_receives_same_sound_fact_exactly_once stdout ----
+
+thread 'dialogue::acceptance_hearing::environment_request_receives_same_sound_fact_exactly_once' (21458552) panicked at src/dialogue/../../tests/acceptance/hearing.rs:201:5:
+assertion `left == right` failed: 環境生成にも実音の事実が必要
+  left: 0
+ right: 1
+
+---- dialogue::acceptance_hearing::hidden_mob_or_other_player_prevents_exclusion_based_attribution stdout ----
+
+thread 'dialogue::acceptance_hearing::hidden_mob_or_other_player_prevents_exclusion_based_attribution' (21458553) panicked at src/dialogue/../../tests/acceptance/hearing.rs:124:10:
+共通観測のhearing.soundsに実際に届いた音を載せる
+
+---- dialogue::acceptance_hearing::hostile_sound_preserves_adapter_uncertainty stdout ----
+
+thread 'dialogue::acceptance_hearing::hostile_sound_preserves_adapter_uncertainty' (21458554) panicked at src/dialogue/../../tests/acceptance/hearing.rs:124:10:
+共通観測のhearing.soundsに実際に届いた音を載せる
+
+---- dialogue::acceptance_hearing::mismatched_time_position_or_player_action_keeps_source_unknown stdout ----
+
+thread 'dialogue::acceptance_hearing::mismatched_time_position_or_player_action_keeps_source_unknown' (21458555) panicked at src/dialogue/../../tests/acceptance/hearing.rs:124:10:
+共通観測のhearing.soundsに実際に届いた音を載せる
+
+---- dialogue::acceptance_hearing::ordinary_request_does_not_repeat_the_same_hearing_memo stdout ----
+
+thread 'dialogue::acceptance_hearing::ordinary_request_does_not_repeat_the_same_hearing_memo' (21458556) panicked at src/dialogue/../../tests/acceptance/hearing.rs:220:5:
+同じ音メモが通常会話の複数欄へ重複している
+
+---- dialogue::acceptance_hearing::ordinary_request_receives_sound_fact_exactly_once stdout ----
+
+thread 'dialogue::acceptance_hearing::ordinary_request_receives_sound_fact_exactly_once' (21458557) panicked at src/dialogue/../../tests/acceptance/hearing.rs:188:5:
+assertion `left == right` failed: 通常生成へ共通の音事実を一度だけ渡す
+  left: 0
+ right: 1
+
+---- dialogue::acceptance_hearing::player_breaking_sound_is_inferred_without_changing_sound_kind stdout ----
+
+thread 'dialogue::acceptance_hearing::player_breaking_sound_is_inferred_without_changing_sound_kind' (21458558) panicked at src/dialogue/../../tests/acceptance/hearing.rs:124:10:
+共通観測のhearing.soundsに実際に届いた音を載せる
+
+---- dialogue::acceptance_hearing::player_emitter_confirmation_requires_actual_owner_source_match stdout ----
+
+thread 'dialogue::acceptance_hearing::player_emitter_confirmation_requires_actual_owner_source_match' (21458559) panicked at src/dialogue/../../tests/acceptance/hearing.rs:124:10:
+共通観測のhearing.soundsに実際に届いた音を載せる
+
+---- dialogue::acceptance_hearing::player_footsteps_are_inferred_from_complete_concurrent_context stdout ----
+
+thread 'dialogue::acceptance_hearing::player_footsteps_are_inferred_from_complete_concurrent_context' (21458560) panicked at src/dialogue/../../tests/acceptance/hearing.rs:124:10:
+共通観測のhearing.soundsに実際に届いた音を載せる
+
+---- dialogue::acceptance_hearing::unknown_sound_keeps_uncertainty_without_inventing_a_source stdout ----
+
+thread 'dialogue::acceptance_hearing::unknown_sound_keeps_uncertainty_without_inventing_a_source' (21458561) panicked at src/dialogue/../../tests/acceptance/hearing.rs:124:10:
+共通観測のhearing.soundsに実際に届いた音を載せる
+
+
+failures:
+    dialogue::acceptance_hearing::common_sound_retains_event_and_original_heard_time
+    dialogue::acceptance_hearing::direct_source_identity_takes_precedence_over_circumstantial_evidence
+    dialogue::acceptance_hearing::duplicate_sound_is_collapsed_but_distinct_sound_event_survives
+    dialogue::acceptance_hearing::empty_truncated_and_unavailable_hearing_are_distinct
+    dialogue::acceptance_hearing::empty_visible_mob_list_is_not_complete_sound_source_evidence
+    dialogue::acceptance_hearing::environment_request_receives_same_sound_fact_exactly_once
+    dialogue::acceptance_hearing::hidden_mob_or_other_player_prevents_exclusion_based_attribution
+    dialogue::acceptance_hearing::hostile_sound_preserves_adapter_uncertainty
+    dialogue::acceptance_hearing::mismatched_time_position_or_player_action_keeps_source_unknown
+    dialogue::acceptance_hearing::ordinary_request_does_not_repeat_the_same_hearing_memo
+    dialogue::acceptance_hearing::ordinary_request_receives_sound_fact_exactly_once
+    dialogue::acceptance_hearing::player_breaking_sound_is_inferred_without_changing_sound_kind
+    dialogue::acceptance_hearing::player_emitter_confirmation_requires_actual_owner_source_match
+    dialogue::acceptance_hearing::player_footsteps_are_inferred_from_complete_concurrent_context
+    dialogue::acceptance_hearing::unknown_sound_keeps_uncertainty_without_inventing_a_source
+
+test result: FAILED. 2 passed; 15 failed; 0 ignored; 0 measured; 929 filtered out; finished in 0.13s
+
+error: test failed, to rerun pass `--lib`

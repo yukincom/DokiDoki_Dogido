@@ -108,7 +108,8 @@ public final class BodySensesCollector {
             localWorld.addProperty("visible_villager_count",passive.stream().filter(m -> "villager".equals(m.type())).count());
             smell.observe(origin,client.player,client.world,ticks.getAsLong(),snapshotInterval);
             JsonArray heardThreats = EventJsonBuilder.buildAuditoryThreats(sounds.scanAuditoryThreats(origin,Map.of()).stream().limit(64).toList());
-            JsonArray ambient = EventJsonBuilder.buildAmbientSounds(sounds.scanAmbientSounds(origin,Map.of()));
+            var ambientSounds = sounds.scanAmbientSounds(origin,Map.of());
+            JsonArray ambient = EventJsonBuilder.buildAmbientSounds(ambientSounds);
             if (vision.unavailable() || vision.exhausted() || safetyVision.unavailable() || safetyVision.exhausted()) {
                 clearCollectors();
                 return unavailable(observation,serverTick,vision.unavailable() || safetyVision.unavailable() ? "area_unloaded" : "budget_exhausted",key);
@@ -134,7 +135,7 @@ public final class BodySensesCollector {
             senses.add("auditory_threats",heardThreats);
             senses.add("ambient_sounds",ambient);
             senses.addProperty("hearing_basis","body_server_and_positioned_client_sounds");
-            senses.addProperty("hearing_truncated",frame.hearing().truncated() || sounds.bodyHearingTruncated());
+            senses.addProperty("hearing_truncated",frame.hearing().truncated() || sounds.bodyHearingTruncated() || ambientSounds.size() > ambient.size());
             if (senses.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 65_536) {
                 clearCollectors();
                 return unavailable(observation,serverTick,"budget_exhausted",key);
@@ -232,7 +233,9 @@ public final class BodySensesCollector {
             if (unavailableReason(sample) != null) return;
             ObservationOrigin origin = origin(sample,frame.resolveBody(client.world),vision(sample,null));
             if (origin == null || !BodyHearingPolicy.arrives(origin.position(),played.source(),played.range())) return;
-            sounds.observeBodySound(origin,client.world,sound.getId().toString(),sound.getCategory(),played.source(),null,0,false);
+            var context = BodySoundContext.capture(client,origin,played.source(),played.range(),
+                frame.observation().get("age_ms").getAsLong(),sound.getId().toString());
+            sounds.observeBodySound(origin,client.world,sound.getId().toString(),sound.getCategory(),played.source(),null,0,false,context);
         } catch (RuntimeException | LinkageError ignored) {
             // 音取得失敗はplayer音へのfallbackを作らず、その発音だけ未取得にする。
         }

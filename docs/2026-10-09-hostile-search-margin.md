@@ -45,7 +45,7 @@
 
 ### 2. 送信とRust本体の接続テスト
 
-既存の [EventJsonBuilderTest](../adapter/minecraft-fabric/src/test/java/dogido/fabric/protocol/EventJsonBuilderTest.java) と [check_combat_runtime.py](../dogido-rust/scripts/check_combat_runtime.py) を使う。LLM・TTS・再生は既存の模擬実装、HTTPは独立ポート、保存先は一時ディレクトリとする。常駐セッションや実記憶へ試験入力を送らない。
+既存の [EventJsonBuilderTest](../adapter/minecraft-fabric/src/test/java/dogido/fabric/protocol/EventJsonBuilderTest.java) と [check_combat_runtime.py](../dogido-rust/tests/python/check_combat_runtime.py) を使う。LLM・TTS・再生は既存の模擬実装、HTTPは独立ポート、保存先は一時ディレクトリとする。常駐セッションや実記憶へ試験入力を送らない。
 
 | ID | 条件 | 期待する結果 |
 |---|---|---|
@@ -83,7 +83,7 @@ C1〜C4は自動検証成功。C1ではJavaの実フィルタ・実serializerが
 再実行時は、まず `adapter/minecraft-fabric` で `./gradlew --offline test build` を行う。その出力 `build/test-results/hostile-margin-wire.json` を、リポジトリ直下から次へ渡す。
 
 ```bash
-dogido-llm/bin/python dogido-rust/scripts/check_combat_runtime.py \
+dogido-llm/bin/python dogido-rust/tests/python/check_combat_runtime.py \
   --adapter-wire-fixture adapter/minecraft-fabric/build/test-results/hostile-margin-wire.json
 ```
 

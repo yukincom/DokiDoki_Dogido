@@ -16,6 +16,14 @@ Rustの版は `rust-toolchain.toml`、依存は `Cargo.lock` で固定してい�
 
 `cargo.sh` は通常のRust環境に加え、`DOGIDO_RUST_TOOLCHAIN_DIR` で指定した `cargo/`・`rustup/` を使えます。家庭用配布は準備済みのRust本体を同梱し、利用先でのRustビルドを前提にしません。
 
+音声入力には、既存のwhisper.cppビルドへ接続する常駐補助も用意します。`--whisper-cli`には現在設定しているCLIのパスを指定します。モデル・依存のダウンロードは行いません。
+
+```sh
+python dogido-rust/scripts/build_whisper_worker.py --whisper-cli ~/AI_assistant/whisper.cpp/build/bin/whisper-cli
+```
+
+音声入力の起動時にWhisperモデルを読み込み、録音の休止・再開をまたいで保持し、音声入力終了時に停止します。読み上げ用UniDicは本体が返答をまたいで共有し、本体終了時に回収します。[所有期間と確認範囲](../docs/2026-10-30-resident-speech-workers.md)。
+
 ## 設定と既定値
 
 戦闘・環境とHTTPの設定の既定値は、共有する `dogido_server/runtime_defaults.json` 一つにあります。Rustは `src/runtime_settings.rs`、Python起動補助は `dogido_server/runtime_settings.py` から読みます。`config.py` は型・入力制約と `.env` の上書きを担当し、同じ数値を再定義しません。Python単独導入と家庭用配布にも同じJSONを含めます。
@@ -106,7 +114,7 @@ DOGIDO_MEMORY_DIR=.dogido_memory/rust-migration
 
 旧 `dogido_server/tts_reading.py` は廃止しました。読みの判定・整形は `src/tts_reading.rs`、辞書tokenの取得だけが上記のPython補助です。`.[tts-reading]` はこの補助に必要な任意のUniDic依存であり、旧Python本体を起動するものではありません。
 
-データ整備用のPython補助は `dev_tools/catalog_tools/` に置きます。`reference_catalog`・`minecraft_knowledge` の検索CLI/APIは資料整備専用で、本体の実行時検索はRustの `src/knowledge/` が担当します。`dogido-rust/scripts/` の起動・SDK接続・検証スクリプトも引き続き使用します。
+データ整備用のPython補助は `dev_tools/catalog_tools/` に置きます。`reference_catalog`・`minecraft_knowledge` の検索CLI/APIは資料整備専用で、本体の実行時検索はRustの `src/knowledge/` が担当します。`dogido-rust/scripts/` は起動・SDK接続などの実行用です。Pythonテストと模擬データは `dogido-rust/tests/python/` に分離しています。
 
 ### 検証
 
@@ -116,11 +124,11 @@ DOGIDO_MEMORY_DIR=.dogido_memory/rust-migration
 ./dogido-rust/cargo.sh build --release --locked
 ```
 
-さらに変更した領域の `scripts/check_*.py` で模擬通信を確認します。保存済みの移植fixtureは回帰資産として使い、撤去したPython oracleを再導入して再生成しません。実モデル試験は生成内容と条件を別記し、実Minecraft・実マイク・スピーカーの確認を自動テストの成功から推定しません。
+さらに変更した領域の `tests/python/check_*.py` で模擬通信を確認します。保存済みの移植fixtureは回帰資産として使い、撤去したPython oracleを再導入して再生成しません。実モデル試験は生成内容と条件を別記し、実Minecraft・実マイク・スピーカーの確認を自動テストの成功から推定しません。
 
 実機で問題が出た機能の模擬確認は、次の既存スクリプトを入口にします。通常の開発用ビルドを用意し、リポジトリのルートから準備済みPython環境で実行します。これらは模擬モデル・音声を使う検証で、実機の合格とは分けます。
 
-| 対象 | 模擬確認スクリプト（`dogido-rust/scripts/`） |
+| 対象 | 模擬確認スクリプト（`dogido-rust/tests/python/`） |
 |---|---|
 | 通常会話・音声配送 | `check_dialogue.py` |
 | 詩の知識・通常会話との境界 | `check_poetry_knowledge.py` · `check_knowledge.py` |
@@ -134,7 +142,7 @@ DOGIDO_MEMORY_DIR=.dogido_memory/rust-migration
 
 ```sh
 ./dogido-rust/cargo.sh build --locked
-python dogido-rust/scripts/check_workshop_edits.py
+python dogido-rust/tests/python/check_workshop_edits.py
 ```
 
 記憶・知識引継ぎ・肯定的講評の3本は、通常CIの `test_http_check_imports.py` でも起動前のimportを検査します。HTTP動作は表の各スクリプトで別途確認します。

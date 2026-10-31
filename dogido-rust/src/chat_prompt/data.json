@@ -30,7 +30,6 @@
     {"field": "observation_block"},
     {"field": "topic_block"},
     {"field": "plausibility_block"},
-    {"field": "hearing_block"},
     {"field": "inventory_block"},
     {"text": "\n"}
   ],
@@ -39,7 +38,6 @@
     "- 所持品は渡された要約をもとに、話に関係ありそうな持ち物に触れてええよ\n",
     "手持ち: @@DOGIDO_held@@。\n所持品（インベントリ要約）: @@DOGIDO_inventory@@。\n"
   ],
-  "hearing": "いまドギドが拾っとる音のメモ: @@DOGIDO_summary@@。\n音から触れてええ具体的なモブ名: @@DOGIDO_named@@。\n実際に鳴った音から確定した環境音の発生源: @@DOGIDO_source@@。\n",
   "observation": "観測メモ（短い事実）:\n@@DOGIDO_summary@@\n",
   "look": "指差し（クロスヘアの先）: @@DOGIDO_look@@。『これ何？』って聞かれたときはこれを話題にしてええよ。\n",
   "topic": "話題のヒント（軽く触れてええ候補）:\n@@DOGIDO_topic@@\n",

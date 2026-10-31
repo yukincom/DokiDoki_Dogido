@@ -73,12 +73,24 @@ impl Dialogue {
         input: Option<&str>,
     ) {
         let s = d.sessions.get_mut(sid).unwrap();
-        if s.warning.is_some() || s.pending_warning.is_some() {
+        if super::reply_queue::warning_blocks_input(s) {
             return;
         }
         speech.delivery = Delivery::PlayerReply;
-        s.pending_warning = Some(vec![speech]);
-        s.pending_input = input.map(str::to_owned);
+        let source = input.and_then(|text| {
+            ["voice", "text"].into_iter().find_map(|source| {
+                s.request_classification
+                    .get(s.input_generation, text, source)
+                    .map(|c| c.source.clone())
+            })
+        });
+        let binding = super::request_runtime::Binding::capture(s);
+        s.pending_replies.push_back(super::reply_output::Pending {
+            speech,
+            input: input.map(str::to_owned),
+            source,
+            binding,
+        });
         self.start_pending(d, jobs, sid);
     }
     pub(super) fn assist_input(

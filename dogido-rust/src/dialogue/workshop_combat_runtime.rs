@@ -85,7 +85,7 @@ impl Dialogue {
         if !clear_for_resume(s)
             || s.warning.is_some()
             || s.pending_warning.is_some()
-            || s.cancel.is_some()
+            || s.cancel.is_some() && !super::workshop_reply::paused(s)
             || s.assist_pending.is_some()
             || s.deferred_input.is_some()
             || s.haiku.active.is_some()

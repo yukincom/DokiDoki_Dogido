@@ -1,0 +1,15 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s
+     Running unittests src/lib.rs (/private/tmp/dogido-part45-20261029/target/debug/deps/dogido_rust-3b05f0013177c941)
+
+running 8 tests
+test dialogue::visual_runtime::acceptance_image::acceptance_image_both_model_routes_send_one_current_image_and_one_comparison ... ok
+test dialogue::visual_runtime::acceptance_image::acceptance_image_compared_change_emits_once_and_unchanged_still_updates_cache_control ... ok
+test dialogue::visual_runtime::acceptance_image::acceptance_image_explicit_capture_survives_changed_pose_and_missing_body_sample_control ... ok
+test dialogue::visual_runtime::acceptance_image::acceptance_image_invalid_comparison_never_enters_latest_cache ... ok
+test dialogue::visual_runtime::acceptance_image::acceptance_image_java_protocol_to_rust_receipt_preserves_three_states ... ok
+test dialogue::visual_runtime::acceptance_image::acceptance_image_location_description_keeps_exact_cells_and_both_brightness_signs ... ok
+test dialogue::visual_runtime::acceptance_image::acceptance_image_twelve_second_uncompared_refreshes_never_report_scene_change ... ok
+test dialogue::visual_runtime::acceptance_image::acceptance_image_uncompared_is_usable_in_ordinary_reply_without_change_opportunity ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 945 filtered out; finished in 3.83s
+

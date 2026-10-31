@@ -176,7 +176,7 @@ Fetch Metadataはヘッダー無し・同一origin・直接アクセスだけを
 - 2026-10-21 身体視点接続: 共通カメラによる枠なし原寸PNG、標準保存先の`dogido_`名、撮影した身体の照合を実装。Rust全target862件、Fabric254件、模擬HTTP14項目成功。JAR・release build成功。同日13:53:57に実Minecraftで枠なし854×480の `dogido_` 写真を保存し、13:54:16に同じ句の最初の写真枠へ登録されたことを確認。本棚での写真付き表示は上記2026-10-22のユーザー確認で確認済み。詳細は[実機記録](2026-10-21-chat-image.md)。
 - 2026-10-21 撮影前倒し: Rust全テスト成功。撮影台帳6件では長い生成待ち・取消・対応先の固定・矛盾する結果の再送を検査。`check_haiku_screenshot.py` の11項目で、完成前の撮影要求、同じ句の保存後だけの登録、生成取消後の次句への不混入、保存失敗、原画像不変等を確認。既存 `check_haiku_runtime.py` は15件成功、release build成功。カメラ実装・adapter JAR・標準保存場所は変更せず、常駐本体やMinecraftも再起動していない。実GPU撮影の時機・ドギド視点の描画は未検証。
 - 2026-10-20 自動撮影: Rust全テスト成功（library 696件、main 2件、integration各組、実音声1件は明示skip）。本棚関連は原本不変、再送、剥離後の再送、30日期限、固定ルート・hash・symlink・削除句・満杯枠を検査。Java 216件とadapter build、JavaScript 67件、起動設定31件が成功。
-- 模擬HTTP試験 `dogido-rust/scripts/check_haiku_screenshot.py` で、新しい発句の実保存→同じ撮影IDの再配送→模擬PNG結果→正しい句への参照登録→永続化後ACKを確認。実ファイルhash一致、重複結果の不変性、非対応adapterでは撮影しないことも確認。使用したPNGはヘッダーfixtureであり、ゲームのGPU撮影や画像の見た目の確認ではない。
+- 模擬HTTP試験 `dogido-rust/tests/python/check_haiku_screenshot.py` で、新しい発句の実保存→同じ撮影IDの再配送→模擬PNG結果→正しい句への参照登録→永続化後ACKを確認。実ファイルhash一致、重複結果の不変性、非対応adapterでは撮影しないことも確認。使用したPNGはヘッダーfixtureであり、ゲームのGPU撮影や画像の見た目の確認ではない。
 - 発句後の連続自動更新は、2026-10-22の3画面による表示確認の範囲には含めていない。
 
 - 2026-10-19の制作記録・JSON出力: JavaScript 58件、本棚Rust 21件、Rust全target成功（lib 670件成功・既存skip 1件）。releaseとMacアプリのビルド成功。Clippyの本棚追加部分の指摘は修正済みだが、別領域の既存11指摘（`dialogue/warnings.rs`、`haiku/revision.rs`、`dialogue/foreground_runtime.rs`、`dialogue/combat_reply_tests.rs`）により全体の `-D warnings` は未通過。

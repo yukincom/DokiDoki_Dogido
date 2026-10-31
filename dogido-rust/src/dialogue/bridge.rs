@@ -18,6 +18,8 @@ pub(super) struct Input {
     pub visual: Option<super::visual_runtime::Source>,
     pub speech_stream: Option<super::speech_stream_runtime::Source>,
     pub after_look: Option<super::visual_runtime::LookCapture>,
+    // 受付済みlook_playerの成功結果だけを、同じ返答での移動選択へ結ぶ。
+    pub player_approach: Option<crate::body::requests::CompletedLook>,
 }
 
 impl Input {
@@ -36,6 +38,7 @@ impl Input {
             visual: None,
             speech_stream: None,
             after_look: None,
+            player_approach: None,
         }
     }
 }
@@ -51,6 +54,7 @@ impl From<Value> for Input {
             visual: None,
             speech_stream: None,
             after_look: None,
+            player_approach: None,
             frame,
         }
     }
@@ -81,15 +85,17 @@ pub async fn cancelled(cancel: &mut watch::Receiver<bool>) {
 
 pub async fn render(
     config: &DialogueConfig,
+    dictionary: &super::tts_runtime::Dictionary,
     llm: &RigLlm,
     input: impl Into<Input>,
     cancel: &mut watch::Receiver<bool>,
 ) -> Result<Value> {
-    render_with_route(config, llm, input, cancel, |_| Ok(())).await
+    render_with_route(config, dictionary, llm, input, cancel, |_| Ok(())).await
 }
 
 pub async fn render_with_route(
     config: &DialogueConfig,
+    dictionary: &super::tts_runtime::Dictionary,
     llm: &RigLlm,
     input: impl Into<Input>,
     cancel: &mut watch::Receiver<bool>,
@@ -97,6 +103,7 @@ pub async fn render_with_route(
 ) -> Result<Value> {
     render_with_budget(
         config,
+        dictionary,
         llm,
         input.into(),
         cancel,
@@ -108,6 +115,7 @@ pub async fn render_with_route(
 
 async fn render_with_budget(
     config: &DialogueConfig,
+    dictionary: &super::tts_runtime::Dictionary,
     llm: &RigLlm,
     mut input: Input,
     cancel: &mut watch::Receiver<bool>,
@@ -146,7 +154,7 @@ async fn render_with_budget(
     }
     // 環境leafは入力の読み辞書を使わない。直前に固定した観測で判断を始める。
     if input["op"] == "combat_leaf" {
-        return super::reaction_runtime::render(config, llm, &input, cancel).await;
+        return super::reaction_runtime::render(config, dictionary, llm, &input, cancel).await;
     }
     let overlay = super::reading_runtime::load_overlay(config).await?;
     input["reading_corrections"] = json!(overlay);
@@ -167,6 +175,7 @@ async fn render_with_budget(
     }
     super::chat_runtime::render(
         config,
+        dictionary,
         llm,
         &input,
         cancel,
@@ -199,6 +208,7 @@ mod tests {
         ] {
             let result = render(
                 &config,
+                &super::super::tts_runtime::Dictionary::default(),
                 &llm,
                 json!({"op":"assist_route","text":text}),
                 &mut rx,
@@ -208,7 +218,7 @@ mod tests {
             assert_eq!(result, json!({"knowledge_query":expected}));
         }
         assert!(
-            render(&config, &llm, json!({"op":"assist_route"}), &mut rx)
+            render(&config, &super::super::tts_runtime::Dictionary::default(), &llm, json!({"op":"assist_route"}), &mut rx)
                 .await
                 .is_err()
         );
@@ -216,6 +226,7 @@ mod tests {
         assert!(
             render(
                 &config,
+                &super::super::tts_runtime::Dictionary::default(),
                 &llm,
                 json!({"op":"assist_route","text":"枕詞って何？"}),
                 &mut rx
@@ -228,6 +239,7 @@ mod tests {
         assert!(
             render(
                 &config,
+                &super::super::tts_runtime::Dictionary::default(),
                 &llm,
                 json!({"op":"assist_route","text":"枕詞って何？"}),
                 &mut orphaned
@@ -245,7 +257,7 @@ mod tests {
         };
         let llm = RigLlm::new("http://127.0.0.1:9/v1", None, Duration::from_secs(1)).unwrap();
         let (_owner, mut cancel) = watch::channel(true);
-        let result = render(&config, &llm, json!({
+        let result = render(&config, &super::super::tts_runtime::Dictionary::default(), &llm, json!({
             "op":"light_plan", "details":{},
             "fallback_payload":{"action":"stay_silent","basis_ids":["light_source_gain_observed"],"confidence":0.0}
         }), &mut cancel).await;

@@ -646,3 +646,11 @@ impl State {
         self.prepared = None;
     }
 }
+
+#[cfg(test)]
+#[path = "../../../tests/acceptance/part7_body_results.rs"]
+mod acceptance_body_results;
+
+#[cfg(test)]
+#[path = "../../../tests/acceptance/part6_body_schema.rs"]
+mod acceptance_body_schema;

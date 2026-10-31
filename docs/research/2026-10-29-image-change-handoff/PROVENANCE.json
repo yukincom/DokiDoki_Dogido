@@ -1,0 +1,1876 @@
+{
+  "source_root": "/private/tmp/dogido-tests-final-20261029",
+  "files": [
+    {
+      "path": "image-review/prepared/REPORT.md",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/REPORT.md",
+      "sha256": "554b1f84e00fd43efa47ffb3be1b7f9278cedfde2cf1ccd7cccf628414e6502c"
+    },
+    {
+      "path": "image-review/prepared/approval.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/approval.json",
+      "sha256": "493e8c6627b3faac20f96fcacf3de2b672b9e1bd4a1423d7aacf43aac90c9d9d"
+    },
+    {
+      "path": "image-review/prepared/candidate-measurements.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/candidate-measurements.json",
+      "sha256": "95b17b81c92a38dc9aecd01e4d1f8e608def23d1316b906cfbaa28206c324fe3"
+    },
+    {
+      "path": "image-review/prepared/manifest.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/manifest.json",
+      "sha256": "25d0e329f910aeee0ffb42222ecc10c60bd7c1ca1c61548ac02bc3a26063d121"
+    },
+    {
+      "path": "image-review/prepared/model-info.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/model-info.json",
+      "sha256": "cd1b9a03d1053dbecf258dd0939a6e844808a92404fa57e64c2e50311ae2657e"
+    },
+    {
+      "path": "image-review/prepared/pair_01/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_01/after-model.png",
+      "sha256": "ef92af29c112e4fc590fad0757bdb424971940b488959d91f9b550bc875be563"
+    },
+    {
+      "path": "image-review/prepared/pair_01/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_01/after-native.png",
+      "sha256": "b0a2f75ba8eb5c02259c9c6086641615c903e3765930a44ece305704598977b1"
+    },
+    {
+      "path": "image-review/prepared/pair_01/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_01/after.json",
+      "sha256": "cb9ce2392f6d3cc0d80c7d58fdf2adc09aa1ba815fe9c8bf7d6a075a9886b4ae"
+    },
+    {
+      "path": "image-review/prepared/pair_01/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_01/before-model.png",
+      "sha256": "12d2d3d67b60075d74f6d1836edb61de272ba82173b86ef66c0a903055088bae"
+    },
+    {
+      "path": "image-review/prepared/pair_01/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_01/before-native.png",
+      "sha256": "f06f0a95c0ed4df06186c6095ad6c101d004bbf16bfabd7229ed6cbe911c265d"
+    },
+    {
+      "path": "image-review/prepared/pair_01/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_01/before.json",
+      "sha256": "56176371a15956e2b8ed0572ea41f32fcac5ed0755de146cf1672f1b08dd15c2"
+    },
+    {
+      "path": "image-review/prepared/pair_02/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_02/after-model.png",
+      "sha256": "db0de40eb26d7dccafb8bd49f2e45f3f19bd9fc2fc5fcfc05e98c03697f70d9c"
+    },
+    {
+      "path": "image-review/prepared/pair_02/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_02/after-native.png",
+      "sha256": "8db5c87a5b85ab473f1dcd01ff26bd05a38164dc512e080346545ea7bf9572e6"
+    },
+    {
+      "path": "image-review/prepared/pair_02/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_02/after.json",
+      "sha256": "c9fc33efa6e405510144bf6c4f56004dcde03b2421be06705957fa8653de741d"
+    },
+    {
+      "path": "image-review/prepared/pair_02/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_02/before-model.png",
+      "sha256": "b9440668644b6eeb8a42adbd0a29bc7f77021a30c331db6834c2ecdb33838ac3"
+    },
+    {
+      "path": "image-review/prepared/pair_02/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_02/before-native.png",
+      "sha256": "daae58e067907aafb0b2bf8975b0bb63857aa8b63f6fec33208fbccc10153790"
+    },
+    {
+      "path": "image-review/prepared/pair_02/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_02/before.json",
+      "sha256": "401a408023ac9086bbcd31361d5213f92dc5c66783af628b899dc601f30b60f7"
+    },
+    {
+      "path": "image-review/prepared/pair_03/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_03/after-model.png",
+      "sha256": "15a4c24ee4c57a6cd761a8a992567236abd5712c11e6b1797b944763a02f945a"
+    },
+    {
+      "path": "image-review/prepared/pair_03/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_03/after-native.png",
+      "sha256": "390d9c5b29bbb165543d3b549d02e01a9e30d0ff1b855c67d9225d92a77b4204"
+    },
+    {
+      "path": "image-review/prepared/pair_03/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_03/after.json",
+      "sha256": "39668d2b51623c44e353b224bc275e5f52ee1a5a9d09511b4010b826bcb1b80a"
+    },
+    {
+      "path": "image-review/prepared/pair_03/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_03/before-model.png",
+      "sha256": "f524037a4c2f07add2111c3cf2ed16497d7f6be8ae6fbc3e14a7affb0211902f"
+    },
+    {
+      "path": "image-review/prepared/pair_03/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_03/before-native.png",
+      "sha256": "ce65c8f202fe37d876754764a178383d5a4de27b1a7223007b0bf3c05c29952f"
+    },
+    {
+      "path": "image-review/prepared/pair_03/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_03/before.json",
+      "sha256": "f854ea1cce5d61a4cb991a6dccc055901cd54136429d743e7e444b6c763039ae"
+    },
+    {
+      "path": "image-review/prepared/pair_04/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_04/after-model.png",
+      "sha256": "d51dddce2626d9ca5608d4ff22b405a64b5faefda0f31d6d81ce70812d4ca91a"
+    },
+    {
+      "path": "image-review/prepared/pair_04/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_04/after-native.png",
+      "sha256": "624b48e92f9eda04cd93e49072c870484d4fd3000299bdb5d1d008902693b486"
+    },
+    {
+      "path": "image-review/prepared/pair_04/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_04/after.json",
+      "sha256": "1cfebc3612d3a766efbe54f0cfef98f08050ae7e387e7091c8ce3e11ef426af4"
+    },
+    {
+      "path": "image-review/prepared/pair_04/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_04/before-model.png",
+      "sha256": "82c33aaff405462e21eaee2e78d9c0ab5d0a81590fa176aef0fd3d95cf70766d"
+    },
+    {
+      "path": "image-review/prepared/pair_04/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_04/before-native.png",
+      "sha256": "af1bc2f9e9f90b7cc601adc0ccde2849a0fe1868b18a4bf2a03f50b290b14ccf"
+    },
+    {
+      "path": "image-review/prepared/pair_04/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_04/before.json",
+      "sha256": "2ec8c477352ee3d5c8325b8eaa34ed44c77b5193e918907f8eccbb1d32c75971"
+    },
+    {
+      "path": "image-review/prepared/pair_05/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_05/after-model.png",
+      "sha256": "bcbc1df965be93ba4c690455fd46b340c7f9f962261bd3a12abb1ab5ab89424a"
+    },
+    {
+      "path": "image-review/prepared/pair_05/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_05/after-native.png",
+      "sha256": "1d6c1ec52aac942ed1bcbd2ee9112c7f139640957b36aa6458f064164b15edbf"
+    },
+    {
+      "path": "image-review/prepared/pair_05/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_05/after.json",
+      "sha256": "f8006c00af27b18b2feb041d5e3b2effb4da78970383c7c1aa63a94d603c3140"
+    },
+    {
+      "path": "image-review/prepared/pair_05/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_05/before-model.png",
+      "sha256": "f2bc1947487a53149236536b4462ef662787c5f222ced4010070e7cc8473b761"
+    },
+    {
+      "path": "image-review/prepared/pair_05/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_05/before-native.png",
+      "sha256": "6d239e74e60ca922314b94d6106fd2784a9e9e21888b3258f42db31fe08fc7d3"
+    },
+    {
+      "path": "image-review/prepared/pair_05/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_05/before.json",
+      "sha256": "71c9cfb087aca46290d7dd3ad4ab7f87d5e64bdbea165e98a6dbb57f3c21b3d7"
+    },
+    {
+      "path": "image-review/prepared/pair_06/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_06/after-model.png",
+      "sha256": "f2dcfb680b2079a0b2a998ecf9cbc6f749fd586314a6aee559ec78bbaa41ca74"
+    },
+    {
+      "path": "image-review/prepared/pair_06/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_06/after-native.png",
+      "sha256": "db8092c70e657c96fc981e471465fc681b3c88bc11546b5d50da2955eedccc14"
+    },
+    {
+      "path": "image-review/prepared/pair_06/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_06/after.json",
+      "sha256": "da482249a065e3d2251659b09ecbb52ae2de94076672c0e3f154695b3fdbb71d"
+    },
+    {
+      "path": "image-review/prepared/pair_06/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_06/before-model.png",
+      "sha256": "8e17aa47257308f45c6b21980f51ad312b4f36807e8e9569f833a7fa2d06a7a2"
+    },
+    {
+      "path": "image-review/prepared/pair_06/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_06/before-native.png",
+      "sha256": "e46271497363ad2b92f23c383a66b43e16139b2352e18e4273e1ed4b1d502769"
+    },
+    {
+      "path": "image-review/prepared/pair_06/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_06/before.json",
+      "sha256": "f2e51842f5ba1f6fdcbc56d4bd498a9d6e05c7e8f063d245d8c1f70e86932188"
+    },
+    {
+      "path": "image-review/prepared/pair_07/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_07/after-model.png",
+      "sha256": "6140969dfc42f7f2aa2c7cd6977e562b965001b31598d77d7f11a7be855bfc78"
+    },
+    {
+      "path": "image-review/prepared/pair_07/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_07/after-native.png",
+      "sha256": "33642c5c35b3c5521b4366caaf50c4a8a3c2112bea8888f0ffef5f6b4185e6b7"
+    },
+    {
+      "path": "image-review/prepared/pair_07/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_07/after.json",
+      "sha256": "35b4011dee418d470c586d539ec97a56da5559b90721a3a2e17354dd7e7aab60"
+    },
+    {
+      "path": "image-review/prepared/pair_07/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_07/before-model.png",
+      "sha256": "5c53392c26d8c8c0058850f579930fd7fdc8455dadb7f92d8e64a248d853c1ae"
+    },
+    {
+      "path": "image-review/prepared/pair_07/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_07/before-native.png",
+      "sha256": "a25d1c8353230b553bc89782b829a6d7180502673ef7ea0986b96746b507bde5"
+    },
+    {
+      "path": "image-review/prepared/pair_07/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_07/before.json",
+      "sha256": "ae024797f48c3f76ec212f8355e90e19ba468428c65ef9d3dec3bac3223883c6"
+    },
+    {
+      "path": "image-review/prepared/pair_08/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_08/after-model.png",
+      "sha256": "9c31051debce144edcb990d6837cb2a3f41fe91384f87e37b575442f0a758b6a"
+    },
+    {
+      "path": "image-review/prepared/pair_08/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_08/after-native.png",
+      "sha256": "b36c0efa0c4cf2fb02c8fc2a2ccc86d673bfb94a942dcf8a4cc95de16f946140"
+    },
+    {
+      "path": "image-review/prepared/pair_08/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_08/after.json",
+      "sha256": "8085ef8c02bc2ac10d17c0f28c137bbdedee0cfd9c5a05bb5cce7592995bd6d6"
+    },
+    {
+      "path": "image-review/prepared/pair_08/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_08/before-model.png",
+      "sha256": "ca16bbcdde526dca93ca20667eef12d30ec40f8be286fd3de7f06f46e7e7bca8"
+    },
+    {
+      "path": "image-review/prepared/pair_08/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_08/before-native.png",
+      "sha256": "d34d16d18659c8f1dc7081cd897df7b01c7c5685c0c794f788abd27c5cf96fbd"
+    },
+    {
+      "path": "image-review/prepared/pair_08/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_08/before.json",
+      "sha256": "e067263692c2fed8cb385a13c524b4b77e2c00fe11d2b4abf13348900fe69150"
+    },
+    {
+      "path": "image-review/prepared/pair_09/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_09/after-model.png",
+      "sha256": "71ad953f54b199c38903b664fb9ff5ac83dccd581c1754e8f22a66d1b3218155"
+    },
+    {
+      "path": "image-review/prepared/pair_09/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_09/after-native.png",
+      "sha256": "50877f03ae00c7a82971fa51767080f616dab279f070cce71b83cdb0910655e2"
+    },
+    {
+      "path": "image-review/prepared/pair_09/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_09/after.json",
+      "sha256": "ec3f9e4fd456ed7c613e002822dd24599991baa3866cf4c48c755cf8c62abe38"
+    },
+    {
+      "path": "image-review/prepared/pair_09/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_09/before-model.png",
+      "sha256": "6e408355655fc3fe2eff10dc9d52fa5d389198041a0428d615492c64fc6a7c6e"
+    },
+    {
+      "path": "image-review/prepared/pair_09/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_09/before-native.png",
+      "sha256": "dd3c99b26b53af58b35ccac8709508a80e0eea5279a00429eb5d0d061895f491"
+    },
+    {
+      "path": "image-review/prepared/pair_09/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_09/before.json",
+      "sha256": "979161a0c25c53f28c79169acb4a4e5dc7220946057db4cbaf42fa75f0a82ea1"
+    },
+    {
+      "path": "image-review/prepared/pair_10/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_10/after-model.png",
+      "sha256": "eadb129c295d5b34b6db66969f62435f6933f3078fb896897e98f080649aec3c"
+    },
+    {
+      "path": "image-review/prepared/pair_10/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_10/after-native.png",
+      "sha256": "fcc3fe104fd38a7e8c8345b99b6c0731bc910f65a848ee64c0077dbd8053b39a"
+    },
+    {
+      "path": "image-review/prepared/pair_10/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_10/after.json",
+      "sha256": "10de1c877e5e6e70613b8d0c4e3766330b462c1e03dd897c103a496d87f338f9"
+    },
+    {
+      "path": "image-review/prepared/pair_10/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_10/before-model.png",
+      "sha256": "085ba32dffa7a1c2251489735cabf1df86603a586eec25e25a212493dd3b437f"
+    },
+    {
+      "path": "image-review/prepared/pair_10/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_10/before-native.png",
+      "sha256": "cccba093877c81654116bca9112b6e43adc50d25a609e4b5722e6af76d7a566c"
+    },
+    {
+      "path": "image-review/prepared/pair_10/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_10/before.json",
+      "sha256": "917cfbffcbd8f4f9a19c913434deb7a9dec716c46edc3130af5c88e5e04baad3"
+    },
+    {
+      "path": "image-review/prepared/pair_11/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_11/after-model.png",
+      "sha256": "45062858a514441bab7d92beb4b1a331716e7f34d61ff6195dbe37bb8464c9d4"
+    },
+    {
+      "path": "image-review/prepared/pair_11/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_11/after-native.png",
+      "sha256": "244d58a3a76a9e3cb572278cfdcac92be560b79301c230ba734cea3244825692"
+    },
+    {
+      "path": "image-review/prepared/pair_11/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_11/after.json",
+      "sha256": "5fde5bb420dc3a32f71832622dc120a32e77f9b4b2b7f9285eddd464dd13be15"
+    },
+    {
+      "path": "image-review/prepared/pair_11/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_11/before-model.png",
+      "sha256": "b6ad1be4de2c095067a8fc531a64ee9e85afd167901cc4985115920dbef699c6"
+    },
+    {
+      "path": "image-review/prepared/pair_11/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_11/before-native.png",
+      "sha256": "66d656d0c708a5cc23dbe5161a4f406bab6f9b1a9e4ff91028481a8c57fd35b3"
+    },
+    {
+      "path": "image-review/prepared/pair_11/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_11/before.json",
+      "sha256": "6246d99d443c6e7546e984838e1d757498f142ef84c73eff9fd067277911bb4f"
+    },
+    {
+      "path": "image-review/prepared/pair_12/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_12/after-model.png",
+      "sha256": "e79a0ad74fd7d8a2b937d9f627fbca4b20ac85338df5406f2e853f0da08acbfa"
+    },
+    {
+      "path": "image-review/prepared/pair_12/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_12/after-native.png",
+      "sha256": "efc6c13bb1f1be6354f801b628c134920192113ddc8c1099bd25db7a61365c6e"
+    },
+    {
+      "path": "image-review/prepared/pair_12/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_12/after.json",
+      "sha256": "74d939366a618e127914d42a3ae0f7b6e845141ba1f5741e60241816a93ea78e"
+    },
+    {
+      "path": "image-review/prepared/pair_12/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_12/before-model.png",
+      "sha256": "a2ad99e72133e0372c889debe4d55715996bca563cf75ac65d914c78d1df9730"
+    },
+    {
+      "path": "image-review/prepared/pair_12/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_12/before-native.png",
+      "sha256": "3d3509b9c0fb0055fe137ce1d6fb5ac425e4c86fb026aa44e4843bc81f3ebc75"
+    },
+    {
+      "path": "image-review/prepared/pair_12/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_12/before.json",
+      "sha256": "900019029bfa81938cde13f11942bf5a7dfb3d39c290bc2dae55cc677551b2ed"
+    },
+    {
+      "path": "image-review/prepared/pair_13/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_13/after-model.png",
+      "sha256": "af95fd1dd8870bae47c8ff0db33802f085a7c4d7d377faec42680591a39fcac2"
+    },
+    {
+      "path": "image-review/prepared/pair_13/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_13/after-native.png",
+      "sha256": "7ebcd4ad0f751a921eb420fd70d5a90302f4625ac8eedfb2dd18e018562eafb6"
+    },
+    {
+      "path": "image-review/prepared/pair_13/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_13/after.json",
+      "sha256": "99c66a3857ca75c3104639edd751eb73675a84c157be38a5405c738787376de7"
+    },
+    {
+      "path": "image-review/prepared/pair_13/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_13/before-model.png",
+      "sha256": "cff52c8cfdeb29341d0b0a4317f7dbcd08a0f71b3262947091806e5b3235e1d5"
+    },
+    {
+      "path": "image-review/prepared/pair_13/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_13/before-native.png",
+      "sha256": "94ee44d60da3c8210ef91b957331c71b8ead8b0feb4c36cd84c49f32371ec6e5"
+    },
+    {
+      "path": "image-review/prepared/pair_13/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/pair_13/before.json",
+      "sha256": "3576f198c8fffb7568cd9ef4786ce2079951cb71c59c846b28435115aba18441"
+    },
+    {
+      "path": "image-review/prepared/request-previews.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/request-previews.json",
+      "sha256": "ac2b0e5f909c9b9ee91cb5d9329388ea25cf62516b8654e52e7a59db570c73c5"
+    },
+    {
+      "path": "image-review/prepared/results.jsonl",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared/results.jsonl",
+      "sha256": "4c2b84b77eeaeaf555347d892659d2e1c3f999365f84b6bd9f8317f8701c59b3"
+    },
+    {
+      "path": "image-review/prepared-v2/REPORT.md",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/REPORT.md",
+      "sha256": "12c2a65e85c5e4e2f4b44883535c39ad2fa87a323231cd21bb23735c8656e636"
+    },
+    {
+      "path": "image-review/prepared-v2/RESULTS_REVIEW.md",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/RESULTS_REVIEW.md",
+      "sha256": "8c81d1823a7e83a1ec2061325297258e78fa19fb0acb6f223e7b82cb5b4fca4a"
+    },
+    {
+      "path": "image-review/prepared-v2/approval.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/approval.json",
+      "sha256": "493e8c6627b3faac20f96fcacf3de2b672b9e1bd4a1423d7aacf43aac90c9d9d"
+    },
+    {
+      "path": "image-review/prepared-v2/manifest.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/manifest.json",
+      "sha256": "8157b5ab93eacbf15429c151bf9ce0e4260f41685ba4ac3383fc97c8a494f7a2"
+    },
+    {
+      "path": "image-review/prepared-v2/model-info.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/model-info.json",
+      "sha256": "b3958a3e064850c9f89043449d9a93152f1439a127498c1d1eb164a8648d5bcf"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_01/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_01/after-model.png",
+      "sha256": "ef92af29c112e4fc590fad0757bdb424971940b488959d91f9b550bc875be563"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_01/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_01/after-native.png",
+      "sha256": "b0a2f75ba8eb5c02259c9c6086641615c903e3765930a44ece305704598977b1"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_01/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_01/after.json",
+      "sha256": "cb9ce2392f6d3cc0d80c7d58fdf2adc09aa1ba815fe9c8bf7d6a075a9886b4ae"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_01/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_01/before-model.png",
+      "sha256": "12d2d3d67b60075d74f6d1836edb61de272ba82173b86ef66c0a903055088bae"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_01/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_01/before-native.png",
+      "sha256": "f06f0a95c0ed4df06186c6095ad6c101d004bbf16bfabd7229ed6cbe911c265d"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_01/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_01/before.json",
+      "sha256": "56176371a15956e2b8ed0572ea41f32fcac5ed0755de146cf1672f1b08dd15c2"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_02/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_02/after-model.png",
+      "sha256": "db0de40eb26d7dccafb8bd49f2e45f3f19bd9fc2fc5fcfc05e98c03697f70d9c"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_02/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_02/after-native.png",
+      "sha256": "8db5c87a5b85ab473f1dcd01ff26bd05a38164dc512e080346545ea7bf9572e6"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_02/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_02/after.json",
+      "sha256": "c9fc33efa6e405510144bf6c4f56004dcde03b2421be06705957fa8653de741d"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_02/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_02/before-model.png",
+      "sha256": "b9440668644b6eeb8a42adbd0a29bc7f77021a30c331db6834c2ecdb33838ac3"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_02/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_02/before-native.png",
+      "sha256": "daae58e067907aafb0b2bf8975b0bb63857aa8b63f6fec33208fbccc10153790"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_02/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_02/before.json",
+      "sha256": "401a408023ac9086bbcd31361d5213f92dc5c66783af628b899dc601f30b60f7"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_03/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_03/after-model.png",
+      "sha256": "15a4c24ee4c57a6cd761a8a992567236abd5712c11e6b1797b944763a02f945a"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_03/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_03/after-native.png",
+      "sha256": "390d9c5b29bbb165543d3b549d02e01a9e30d0ff1b855c67d9225d92a77b4204"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_03/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_03/after.json",
+      "sha256": "39668d2b51623c44e353b224bc275e5f52ee1a5a9d09511b4010b826bcb1b80a"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_03/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_03/before-model.png",
+      "sha256": "f524037a4c2f07add2111c3cf2ed16497d7f6be8ae6fbc3e14a7affb0211902f"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_03/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_03/before-native.png",
+      "sha256": "ce65c8f202fe37d876754764a178383d5a4de27b1a7223007b0bf3c05c29952f"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_03/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_03/before.json",
+      "sha256": "f854ea1cce5d61a4cb991a6dccc055901cd54136429d743e7e444b6c763039ae"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_04/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_04/after-model.png",
+      "sha256": "d51dddce2626d9ca5608d4ff22b405a64b5faefda0f31d6d81ce70812d4ca91a"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_04/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_04/after-native.png",
+      "sha256": "624b48e92f9eda04cd93e49072c870484d4fd3000299bdb5d1d008902693b486"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_04/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_04/after.json",
+      "sha256": "1cfebc3612d3a766efbe54f0cfef98f08050ae7e387e7091c8ce3e11ef426af4"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_04/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_04/before-model.png",
+      "sha256": "82c33aaff405462e21eaee2e78d9c0ab5d0a81590fa176aef0fd3d95cf70766d"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_04/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_04/before-native.png",
+      "sha256": "af1bc2f9e9f90b7cc601adc0ccde2849a0fe1868b18a4bf2a03f50b290b14ccf"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_04/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_04/before.json",
+      "sha256": "2ec8c477352ee3d5c8325b8eaa34ed44c77b5193e918907f8eccbb1d32c75971"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_05/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_05/after-model.png",
+      "sha256": "bcbc1df965be93ba4c690455fd46b340c7f9f962261bd3a12abb1ab5ab89424a"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_05/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_05/after-native.png",
+      "sha256": "1d6c1ec52aac942ed1bcbd2ee9112c7f139640957b36aa6458f064164b15edbf"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_05/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_05/after.json",
+      "sha256": "f8006c00af27b18b2feb041d5e3b2effb4da78970383c7c1aa63a94d603c3140"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_05/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_05/before-model.png",
+      "sha256": "f2bc1947487a53149236536b4462ef662787c5f222ced4010070e7cc8473b761"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_05/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_05/before-native.png",
+      "sha256": "6d239e74e60ca922314b94d6106fd2784a9e9e21888b3258f42db31fe08fc7d3"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_05/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_05/before.json",
+      "sha256": "71c9cfb087aca46290d7dd3ad4ab7f87d5e64bdbea165e98a6dbb57f3c21b3d7"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_06/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_06/after-model.png",
+      "sha256": "f2dcfb680b2079a0b2a998ecf9cbc6f749fd586314a6aee559ec78bbaa41ca74"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_06/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_06/after-native.png",
+      "sha256": "db8092c70e657c96fc981e471465fc681b3c88bc11546b5d50da2955eedccc14"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_06/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_06/after.json",
+      "sha256": "da482249a065e3d2251659b09ecbb52ae2de94076672c0e3f154695b3fdbb71d"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_06/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_06/before-model.png",
+      "sha256": "8e17aa47257308f45c6b21980f51ad312b4f36807e8e9569f833a7fa2d06a7a2"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_06/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_06/before-native.png",
+      "sha256": "e46271497363ad2b92f23c383a66b43e16139b2352e18e4273e1ed4b1d502769"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_06/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_06/before.json",
+      "sha256": "f2e51842f5ba1f6fdcbc56d4bd498a9d6e05c7e8f063d245d8c1f70e86932188"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_07/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_07/after-model.png",
+      "sha256": "6140969dfc42f7f2aa2c7cd6977e562b965001b31598d77d7f11a7be855bfc78"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_07/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_07/after-native.png",
+      "sha256": "33642c5c35b3c5521b4366caaf50c4a8a3c2112bea8888f0ffef5f6b4185e6b7"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_07/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_07/after.json",
+      "sha256": "35b4011dee418d470c586d539ec97a56da5559b90721a3a2e17354dd7e7aab60"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_07/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_07/before-model.png",
+      "sha256": "5c53392c26d8c8c0058850f579930fd7fdc8455dadb7f92d8e64a248d853c1ae"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_07/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_07/before-native.png",
+      "sha256": "a25d1c8353230b553bc89782b829a6d7180502673ef7ea0986b96746b507bde5"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_07/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_07/before.json",
+      "sha256": "ae024797f48c3f76ec212f8355e90e19ba468428c65ef9d3dec3bac3223883c6"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_08/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_08/after-model.png",
+      "sha256": "9c31051debce144edcb990d6837cb2a3f41fe91384f87e37b575442f0a758b6a"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_08/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_08/after-native.png",
+      "sha256": "b36c0efa0c4cf2fb02c8fc2a2ccc86d673bfb94a942dcf8a4cc95de16f946140"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_08/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_08/after.json",
+      "sha256": "8085ef8c02bc2ac10d17c0f28c137bbdedee0cfd9c5a05bb5cce7592995bd6d6"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_08/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_08/before-model.png",
+      "sha256": "ca16bbcdde526dca93ca20667eef12d30ec40f8be286fd3de7f06f46e7e7bca8"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_08/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_08/before-native.png",
+      "sha256": "d34d16d18659c8f1dc7081cd897df7b01c7c5685c0c794f788abd27c5cf96fbd"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_08/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_08/before.json",
+      "sha256": "e067263692c2fed8cb385a13c524b4b77e2c00fe11d2b4abf13348900fe69150"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_09/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_09/after-model.png",
+      "sha256": "71ad953f54b199c38903b664fb9ff5ac83dccd581c1754e8f22a66d1b3218155"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_09/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_09/after-native.png",
+      "sha256": "50877f03ae00c7a82971fa51767080f616dab279f070cce71b83cdb0910655e2"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_09/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_09/after.json",
+      "sha256": "ec3f9e4fd456ed7c613e002822dd24599991baa3866cf4c48c755cf8c62abe38"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_09/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_09/before-model.png",
+      "sha256": "6e408355655fc3fe2eff10dc9d52fa5d389198041a0428d615492c64fc6a7c6e"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_09/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_09/before-native.png",
+      "sha256": "dd3c99b26b53af58b35ccac8709508a80e0eea5279a00429eb5d0d061895f491"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_09/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_09/before.json",
+      "sha256": "979161a0c25c53f28c79169acb4a4e5dc7220946057db4cbaf42fa75f0a82ea1"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_10/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_10/after-model.png",
+      "sha256": "eadb129c295d5b34b6db66969f62435f6933f3078fb896897e98f080649aec3c"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_10/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_10/after-native.png",
+      "sha256": "fcc3fe104fd38a7e8c8345b99b6c0731bc910f65a848ee64c0077dbd8053b39a"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_10/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_10/after.json",
+      "sha256": "10de1c877e5e6e70613b8d0c4e3766330b462c1e03dd897c103a496d87f338f9"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_10/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_10/before-model.png",
+      "sha256": "085ba32dffa7a1c2251489735cabf1df86603a586eec25e25a212493dd3b437f"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_10/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_10/before-native.png",
+      "sha256": "cccba093877c81654116bca9112b6e43adc50d25a609e4b5722e6af76d7a566c"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_10/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_10/before.json",
+      "sha256": "917cfbffcbd8f4f9a19c913434deb7a9dec716c46edc3130af5c88e5e04baad3"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_11/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_11/after-model.png",
+      "sha256": "45062858a514441bab7d92beb4b1a331716e7f34d61ff6195dbe37bb8464c9d4"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_11/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_11/after-native.png",
+      "sha256": "244d58a3a76a9e3cb572278cfdcac92be560b79301c230ba734cea3244825692"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_11/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_11/after.json",
+      "sha256": "5fde5bb420dc3a32f71832622dc120a32e77f9b4b2b7f9285eddd464dd13be15"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_11/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_11/before-model.png",
+      "sha256": "b6ad1be4de2c095067a8fc531a64ee9e85afd167901cc4985115920dbef699c6"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_11/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_11/before-native.png",
+      "sha256": "66d656d0c708a5cc23dbe5161a4f406bab6f9b1a9e4ff91028481a8c57fd35b3"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_11/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_11/before.json",
+      "sha256": "6246d99d443c6e7546e984838e1d757498f142ef84c73eff9fd067277911bb4f"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_12/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_12/after-model.png",
+      "sha256": "e79a0ad74fd7d8a2b937d9f627fbca4b20ac85338df5406f2e853f0da08acbfa"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_12/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_12/after-native.png",
+      "sha256": "efc6c13bb1f1be6354f801b628c134920192113ddc8c1099bd25db7a61365c6e"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_12/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_12/after.json",
+      "sha256": "74d939366a618e127914d42a3ae0f7b6e845141ba1f5741e60241816a93ea78e"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_12/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_12/before-model.png",
+      "sha256": "a2ad99e72133e0372c889debe4d55715996bca563cf75ac65d914c78d1df9730"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_12/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_12/before-native.png",
+      "sha256": "3d3509b9c0fb0055fe137ce1d6fb5ac425e4c86fb026aa44e4843bc81f3ebc75"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_12/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_12/before.json",
+      "sha256": "900019029bfa81938cde13f11942bf5a7dfb3d39c290bc2dae55cc677551b2ed"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_13/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_13/after-model.png",
+      "sha256": "af95fd1dd8870bae47c8ff0db33802f085a7c4d7d377faec42680591a39fcac2"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_13/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_13/after-native.png",
+      "sha256": "7ebcd4ad0f751a921eb420fd70d5a90302f4625ac8eedfb2dd18e018562eafb6"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_13/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_13/after.json",
+      "sha256": "99c66a3857ca75c3104639edd751eb73675a84c157be38a5405c738787376de7"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_13/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_13/before-model.png",
+      "sha256": "cff52c8cfdeb29341d0b0a4317f7dbcd08a0f71b3262947091806e5b3235e1d5"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_13/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_13/before-native.png",
+      "sha256": "94ee44d60da3c8210ef91b957331c71b8ead8b0feb4c36cd84c49f32371ec6e5"
+    },
+    {
+      "path": "image-review/prepared-v2/pair_13/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/pair_13/before.json",
+      "sha256": "3576f198c8fffb7568cd9ef4786ce2079951cb71c59c846b28435115aba18441"
+    },
+    {
+      "path": "image-review/prepared-v2/request-previews.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/request-previews.json",
+      "sha256": "93cbfb5d2ba8e96311ecd00231a8f27978c14f4a5650c17e1b6e91c8c0993702"
+    },
+    {
+      "path": "image-review/prepared-v2/results.jsonl",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/results.jsonl",
+      "sha256": "0be91041e230956dce8428c9981649942c43fb3334437ce52658e0e10108f8cc"
+    },
+    {
+      "path": "image-review/prepared-v2/review.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/prepared-v2/review.json",
+      "sha256": "2183239488399b89947bffe7464d03516101cc4591186cfa793feaaae70b2a9c"
+    },
+    {
+      "path": "image-review/grid8x6-v1/REPORT.md",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/REPORT.md",
+      "sha256": "1e9e71d10c4c1f83828190a554780dd9275c11825336558b9bab13043f984c84"
+    },
+    {
+      "path": "image-review/grid8x6-v1/RESULTS_REVIEW.md",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/RESULTS_REVIEW.md",
+      "sha256": "95f9b50d39ecced67252727f91e99c02fc317727117d00b4ec73fa9d660a8094"
+    },
+    {
+      "path": "image-review/grid8x6-v1/approval.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/approval.json",
+      "sha256": "9cf54536fb6df0b5ea26de18be7e304c2b658b9a662e2bee5c04e35ab53b9199"
+    },
+    {
+      "path": "image-review/grid8x6-v1/manifest.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/manifest.json",
+      "sha256": "4cd1cdc2228a40ba5a385bbe413e1798ff9dcd58e56fc2267723d278099e2ccc"
+    },
+    {
+      "path": "image-review/grid8x6-v1/model-info.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/model-info.json",
+      "sha256": "e616357b819ee2b491bee409c2973299e8bd7d4760eab3f1e29ea8a2c2f17a72"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_01/after-grid.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_01/after-grid.png",
+      "sha256": "ef92af29c112e4fc590fad0757bdb424971940b488959d91f9b550bc875be563"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_01/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_01/after-model.png",
+      "sha256": "ef92af29c112e4fc590fad0757bdb424971940b488959d91f9b550bc875be563"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_01/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_01/after-native.png",
+      "sha256": "b0a2f75ba8eb5c02259c9c6086641615c903e3765930a44ece305704598977b1"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_01/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_01/after.json",
+      "sha256": "cb9ce2392f6d3cc0d80c7d58fdf2adc09aa1ba815fe9c8bf7d6a075a9886b4ae"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_01/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_01/before-model.png",
+      "sha256": "12d2d3d67b60075d74f6d1836edb61de272ba82173b86ef66c0a903055088bae"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_01/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_01/before-native.png",
+      "sha256": "f06f0a95c0ed4df06186c6095ad6c101d004bbf16bfabd7229ed6cbe911c265d"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_01/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_01/before.json",
+      "sha256": "56176371a15956e2b8ed0572ea41f32fcac5ed0755de146cf1672f1b08dd15c2"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_02/after-grid.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_02/after-grid.png",
+      "sha256": "db0de40eb26d7dccafb8bd49f2e45f3f19bd9fc2fc5fcfc05e98c03697f70d9c"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_02/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_02/after-model.png",
+      "sha256": "db0de40eb26d7dccafb8bd49f2e45f3f19bd9fc2fc5fcfc05e98c03697f70d9c"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_02/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_02/after-native.png",
+      "sha256": "8db5c87a5b85ab473f1dcd01ff26bd05a38164dc512e080346545ea7bf9572e6"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_02/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_02/after.json",
+      "sha256": "c9fc33efa6e405510144bf6c4f56004dcde03b2421be06705957fa8653de741d"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_02/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_02/before-model.png",
+      "sha256": "b9440668644b6eeb8a42adbd0a29bc7f77021a30c331db6834c2ecdb33838ac3"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_02/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_02/before-native.png",
+      "sha256": "daae58e067907aafb0b2bf8975b0bb63857aa8b63f6fec33208fbccc10153790"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_02/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_02/before.json",
+      "sha256": "401a408023ac9086bbcd31361d5213f92dc5c66783af628b899dc601f30b60f7"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_03/after-grid.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_03/after-grid.png",
+      "sha256": "15a4c24ee4c57a6cd761a8a992567236abd5712c11e6b1797b944763a02f945a"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_03/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_03/after-model.png",
+      "sha256": "15a4c24ee4c57a6cd761a8a992567236abd5712c11e6b1797b944763a02f945a"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_03/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_03/after-native.png",
+      "sha256": "390d9c5b29bbb165543d3b549d02e01a9e30d0ff1b855c67d9225d92a77b4204"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_03/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_03/after.json",
+      "sha256": "39668d2b51623c44e353b224bc275e5f52ee1a5a9d09511b4010b826bcb1b80a"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_03/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_03/before-model.png",
+      "sha256": "f524037a4c2f07add2111c3cf2ed16497d7f6be8ae6fbc3e14a7affb0211902f"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_03/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_03/before-native.png",
+      "sha256": "ce65c8f202fe37d876754764a178383d5a4de27b1a7223007b0bf3c05c29952f"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_03/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_03/before.json",
+      "sha256": "f854ea1cce5d61a4cb991a6dccc055901cd54136429d743e7e444b6c763039ae"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_04/after-grid.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_04/after-grid.png",
+      "sha256": "d51dddce2626d9ca5608d4ff22b405a64b5faefda0f31d6d81ce70812d4ca91a"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_04/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_04/after-model.png",
+      "sha256": "d51dddce2626d9ca5608d4ff22b405a64b5faefda0f31d6d81ce70812d4ca91a"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_04/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_04/after-native.png",
+      "sha256": "624b48e92f9eda04cd93e49072c870484d4fd3000299bdb5d1d008902693b486"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_04/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_04/after.json",
+      "sha256": "1cfebc3612d3a766efbe54f0cfef98f08050ae7e387e7091c8ce3e11ef426af4"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_04/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_04/before-model.png",
+      "sha256": "82c33aaff405462e21eaee2e78d9c0ab5d0a81590fa176aef0fd3d95cf70766d"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_04/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_04/before-native.png",
+      "sha256": "af1bc2f9e9f90b7cc601adc0ccde2849a0fe1868b18a4bf2a03f50b290b14ccf"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_04/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_04/before.json",
+      "sha256": "2ec8c477352ee3d5c8325b8eaa34ed44c77b5193e918907f8eccbb1d32c75971"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_05/after-grid.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_05/after-grid.png",
+      "sha256": "bcbc1df965be93ba4c690455fd46b340c7f9f962261bd3a12abb1ab5ab89424a"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_05/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_05/after-model.png",
+      "sha256": "bcbc1df965be93ba4c690455fd46b340c7f9f962261bd3a12abb1ab5ab89424a"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_05/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_05/after-native.png",
+      "sha256": "1d6c1ec52aac942ed1bcbd2ee9112c7f139640957b36aa6458f064164b15edbf"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_05/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_05/after.json",
+      "sha256": "f8006c00af27b18b2feb041d5e3b2effb4da78970383c7c1aa63a94d603c3140"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_05/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_05/before-model.png",
+      "sha256": "f2bc1947487a53149236536b4462ef662787c5f222ced4010070e7cc8473b761"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_05/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_05/before-native.png",
+      "sha256": "6d239e74e60ca922314b94d6106fd2784a9e9e21888b3258f42db31fe08fc7d3"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_05/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_05/before.json",
+      "sha256": "71c9cfb087aca46290d7dd3ad4ab7f87d5e64bdbea165e98a6dbb57f3c21b3d7"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_06/after-grid.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_06/after-grid.png",
+      "sha256": "fd0976d53b64dbaa81eea4e9cdafebaf5895a471c4029e4d039c45f110e7428b"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_06/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_06/after-model.png",
+      "sha256": "f2dcfb680b2079a0b2a998ecf9cbc6f749fd586314a6aee559ec78bbaa41ca74"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_06/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_06/after-native.png",
+      "sha256": "db8092c70e657c96fc981e471465fc681b3c88bc11546b5d50da2955eedccc14"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_06/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_06/after.json",
+      "sha256": "da482249a065e3d2251659b09ecbb52ae2de94076672c0e3f154695b3fdbb71d"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_06/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_06/before-model.png",
+      "sha256": "8e17aa47257308f45c6b21980f51ad312b4f36807e8e9569f833a7fa2d06a7a2"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_06/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_06/before-native.png",
+      "sha256": "e46271497363ad2b92f23c383a66b43e16139b2352e18e4273e1ed4b1d502769"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_06/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_06/before.json",
+      "sha256": "f2e51842f5ba1f6fdcbc56d4bd498a9d6e05c7e8f063d245d8c1f70e86932188"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_07/after-grid.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_07/after-grid.png",
+      "sha256": "6ef71ed22e86e7ee3ae9405f662972e03bc32d88870b4327ac20a608b6c59cd6"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_07/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_07/after-model.png",
+      "sha256": "6140969dfc42f7f2aa2c7cd6977e562b965001b31598d77d7f11a7be855bfc78"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_07/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_07/after-native.png",
+      "sha256": "33642c5c35b3c5521b4366caaf50c4a8a3c2112bea8888f0ffef5f6b4185e6b7"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_07/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_07/after.json",
+      "sha256": "35b4011dee418d470c586d539ec97a56da5559b90721a3a2e17354dd7e7aab60"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_07/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_07/before-model.png",
+      "sha256": "5c53392c26d8c8c0058850f579930fd7fdc8455dadb7f92d8e64a248d853c1ae"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_07/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_07/before-native.png",
+      "sha256": "a25d1c8353230b553bc89782b829a6d7180502673ef7ea0986b96746b507bde5"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_07/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_07/before.json",
+      "sha256": "ae024797f48c3f76ec212f8355e90e19ba468428c65ef9d3dec3bac3223883c6"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_08/after-grid.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_08/after-grid.png",
+      "sha256": "3bae9753f05f432cf305526314503506109751e557f3dcb2a526e056c80a36ed"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_08/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_08/after-model.png",
+      "sha256": "9c31051debce144edcb990d6837cb2a3f41fe91384f87e37b575442f0a758b6a"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_08/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_08/after-native.png",
+      "sha256": "b36c0efa0c4cf2fb02c8fc2a2ccc86d673bfb94a942dcf8a4cc95de16f946140"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_08/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_08/after.json",
+      "sha256": "8085ef8c02bc2ac10d17c0f28c137bbdedee0cfd9c5a05bb5cce7592995bd6d6"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_08/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_08/before-model.png",
+      "sha256": "ca16bbcdde526dca93ca20667eef12d30ec40f8be286fd3de7f06f46e7e7bca8"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_08/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_08/before-native.png",
+      "sha256": "d34d16d18659c8f1dc7081cd897df7b01c7c5685c0c794f788abd27c5cf96fbd"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_08/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_08/before.json",
+      "sha256": "e067263692c2fed8cb385a13c524b4b77e2c00fe11d2b4abf13348900fe69150"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_09/after-grid.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_09/after-grid.png",
+      "sha256": "2b3480a4c1eb1b6b398e6f913452db4ecdd1bec78994d99c0fee9caa42221e81"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_09/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_09/after-model.png",
+      "sha256": "71ad953f54b199c38903b664fb9ff5ac83dccd581c1754e8f22a66d1b3218155"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_09/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_09/after-native.png",
+      "sha256": "50877f03ae00c7a82971fa51767080f616dab279f070cce71b83cdb0910655e2"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_09/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_09/after.json",
+      "sha256": "ec3f9e4fd456ed7c613e002822dd24599991baa3866cf4c48c755cf8c62abe38"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_09/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_09/before-model.png",
+      "sha256": "6e408355655fc3fe2eff10dc9d52fa5d389198041a0428d615492c64fc6a7c6e"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_09/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_09/before-native.png",
+      "sha256": "dd3c99b26b53af58b35ccac8709508a80e0eea5279a00429eb5d0d061895f491"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_09/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_09/before.json",
+      "sha256": "979161a0c25c53f28c79169acb4a4e5dc7220946057db4cbaf42fa75f0a82ea1"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_10/after-grid.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_10/after-grid.png",
+      "sha256": "8072b017dc4b65ce5a21b17d953874fd58b78458056f029ae96c2150d6e81c6c"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_10/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_10/after-model.png",
+      "sha256": "eadb129c295d5b34b6db66969f62435f6933f3078fb896897e98f080649aec3c"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_10/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_10/after-native.png",
+      "sha256": "fcc3fe104fd38a7e8c8345b99b6c0731bc910f65a848ee64c0077dbd8053b39a"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_10/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_10/after.json",
+      "sha256": "10de1c877e5e6e70613b8d0c4e3766330b462c1e03dd897c103a496d87f338f9"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_10/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_10/before-model.png",
+      "sha256": "085ba32dffa7a1c2251489735cabf1df86603a586eec25e25a212493dd3b437f"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_10/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_10/before-native.png",
+      "sha256": "cccba093877c81654116bca9112b6e43adc50d25a609e4b5722e6af76d7a566c"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_10/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_10/before.json",
+      "sha256": "917cfbffcbd8f4f9a19c913434deb7a9dec716c46edc3130af5c88e5e04baad3"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_11/after-grid.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_11/after-grid.png",
+      "sha256": "e9c694edb96871cea71c2fc36db780a7b7b4a8653cb7e4de4d61dbb7653cdfd8"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_11/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_11/after-model.png",
+      "sha256": "45062858a514441bab7d92beb4b1a331716e7f34d61ff6195dbe37bb8464c9d4"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_11/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_11/after-native.png",
+      "sha256": "244d58a3a76a9e3cb572278cfdcac92be560b79301c230ba734cea3244825692"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_11/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_11/after.json",
+      "sha256": "5fde5bb420dc3a32f71832622dc120a32e77f9b4b2b7f9285eddd464dd13be15"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_11/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_11/before-model.png",
+      "sha256": "b6ad1be4de2c095067a8fc531a64ee9e85afd167901cc4985115920dbef699c6"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_11/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_11/before-native.png",
+      "sha256": "66d656d0c708a5cc23dbe5161a4f406bab6f9b1a9e4ff91028481a8c57fd35b3"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_11/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_11/before.json",
+      "sha256": "6246d99d443c6e7546e984838e1d757498f142ef84c73eff9fd067277911bb4f"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_12/after-grid.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_12/after-grid.png",
+      "sha256": "9c5c47a1c012e83d193a550c1ed5283d64d3d9da94d39878eb3f102d384af9a8"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_12/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_12/after-model.png",
+      "sha256": "e79a0ad74fd7d8a2b937d9f627fbca4b20ac85338df5406f2e853f0da08acbfa"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_12/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_12/after-native.png",
+      "sha256": "efc6c13bb1f1be6354f801b628c134920192113ddc8c1099bd25db7a61365c6e"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_12/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_12/after.json",
+      "sha256": "74d939366a618e127914d42a3ae0f7b6e845141ba1f5741e60241816a93ea78e"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_12/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_12/before-model.png",
+      "sha256": "a2ad99e72133e0372c889debe4d55715996bca563cf75ac65d914c78d1df9730"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_12/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_12/before-native.png",
+      "sha256": "3d3509b9c0fb0055fe137ce1d6fb5ac425e4c86fb026aa44e4843bc81f3ebc75"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_12/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_12/before.json",
+      "sha256": "900019029bfa81938cde13f11942bf5a7dfb3d39c290bc2dae55cc677551b2ed"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_13/after-grid.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_13/after-grid.png",
+      "sha256": "66bc91a759a715209dcadc0844a04a93e39d28926c0a0aa49f7bdb2e4894aa71"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_13/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_13/after-model.png",
+      "sha256": "af95fd1dd8870bae47c8ff0db33802f085a7c4d7d377faec42680591a39fcac2"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_13/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_13/after-native.png",
+      "sha256": "7ebcd4ad0f751a921eb420fd70d5a90302f4625ac8eedfb2dd18e018562eafb6"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_13/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_13/after.json",
+      "sha256": "99c66a3857ca75c3104639edd751eb73675a84c157be38a5405c738787376de7"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_13/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_13/before-model.png",
+      "sha256": "cff52c8cfdeb29341d0b0a4317f7dbcd08a0f71b3262947091806e5b3235e1d5"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_13/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_13/before-native.png",
+      "sha256": "94ee44d60da3c8210ef91b957331c71b8ead8b0feb4c36cd84c49f32371ec6e5"
+    },
+    {
+      "path": "image-review/grid8x6-v1/pair_13/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/pair_13/before.json",
+      "sha256": "3576f198c8fffb7568cd9ef4786ce2079951cb71c59c846b28435115aba18441"
+    },
+    {
+      "path": "image-review/grid8x6-v1/part5_grid.py",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/part5_grid.py",
+      "sha256": "345755f12717524e306658447e921752eccf7b9f6a823e157e6b724f30282c00"
+    },
+    {
+      "path": "image-review/grid8x6-v1/part5_model.py",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/part5_model.py",
+      "sha256": "9e552c5cd10d630bd2007f33e04849af6ef4303b247daa9605b7c881469d0da7"
+    },
+    {
+      "path": "image-review/grid8x6-v1/preflight.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/preflight.json",
+      "sha256": "c6d468c0de83e832d25bba14682a4f035f103410dfd28fd5ee662ceb8707d3b4"
+    },
+    {
+      "path": "image-review/grid8x6-v1/request-previews.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/request-previews.json",
+      "sha256": "ddff99fba77e80cba84925a438ca55bc7a6e7b9ed5794c6e3808ebb6db99696b"
+    },
+    {
+      "path": "image-review/grid8x6-v1/results.jsonl",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/results.jsonl",
+      "sha256": "c81470bc038ca70aa11540007cc2a21bd5601c3e8e942a1d247c191bb121c14d"
+    },
+    {
+      "path": "image-review/grid8x6-v1/review.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid8x6-v1/review.json",
+      "sha256": "410b6eba220c76bdb0371af84295679875c371456809dacda62fe24421618a48"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/REPORT.md",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/REPORT.md",
+      "sha256": "52c9c79da99c868973e80f6e539663fbfbd79d138b097ae43e64786318044665"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/RESULTS_REVIEW.md",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/RESULTS_REVIEW.md",
+      "sha256": "e31790bd9e39bc314b31cc6ee349a803e456720d6e3c439f69d1b81b91568f65"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/approval.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/approval.json",
+      "sha256": "323da241ec9d9a1b874a13f9c12a1a7971559853dabdf3d5070199f26106d0a4"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/manifest.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/manifest.json",
+      "sha256": "ac6df52980d7f22245dfbf1d4e6c28c08ec82d99a344ff038b0a794f80298c05"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/model-info.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/model-info.json",
+      "sha256": "746dba34f49b73118f0ce812ddaa68500f8af7ca066969833a8422b107440bf8"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_06/after-grid.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_06/after-grid.png",
+      "sha256": "fd0976d53b64dbaa81eea4e9cdafebaf5895a471c4029e4d039c45f110e7428b"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_06/after-merged.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_06/after-merged.png",
+      "sha256": "1640bbf7b9aada8bf0fe6ca0e1d1842aa2a27ea7c6668ab0b754e9addbb8dbbc"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_06/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_06/after-model.png",
+      "sha256": "f2dcfb680b2079a0b2a998ecf9cbc6f749fd586314a6aee559ec78bbaa41ca74"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_06/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_06/after-native.png",
+      "sha256": "db8092c70e657c96fc981e471465fc681b3c88bc11546b5d50da2955eedccc14"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_06/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_06/after.json",
+      "sha256": "da482249a065e3d2251659b09ecbb52ae2de94076672c0e3f154695b3fdbb71d"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_06/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_06/before-model.png",
+      "sha256": "8e17aa47257308f45c6b21980f51ad312b4f36807e8e9569f833a7fa2d06a7a2"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_06/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_06/before-native.png",
+      "sha256": "e46271497363ad2b92f23c383a66b43e16139b2352e18e4273e1ed4b1d502769"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_06/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_06/before.json",
+      "sha256": "f2e51842f5ba1f6fdcbc56d4bd498a9d6e05c7e8f063d245d8c1f70e86932188"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_07/after-grid.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_07/after-grid.png",
+      "sha256": "6ef71ed22e86e7ee3ae9405f662972e03bc32d88870b4327ac20a608b6c59cd6"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_07/after-merged.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_07/after-merged.png",
+      "sha256": "6ef71ed22e86e7ee3ae9405f662972e03bc32d88870b4327ac20a608b6c59cd6"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_07/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_07/after-model.png",
+      "sha256": "6140969dfc42f7f2aa2c7cd6977e562b965001b31598d77d7f11a7be855bfc78"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_07/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_07/after-native.png",
+      "sha256": "33642c5c35b3c5521b4366caaf50c4a8a3c2112bea8888f0ffef5f6b4185e6b7"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_07/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_07/after.json",
+      "sha256": "35b4011dee418d470c586d539ec97a56da5559b90721a3a2e17354dd7e7aab60"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_07/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_07/before-model.png",
+      "sha256": "5c53392c26d8c8c0058850f579930fd7fdc8455dadb7f92d8e64a248d853c1ae"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_07/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_07/before-native.png",
+      "sha256": "a25d1c8353230b553bc89782b829a6d7180502673ef7ea0986b96746b507bde5"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_07/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_07/before.json",
+      "sha256": "ae024797f48c3f76ec212f8355e90e19ba468428c65ef9d3dec3bac3223883c6"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_08/after-grid.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_08/after-grid.png",
+      "sha256": "3bae9753f05f432cf305526314503506109751e557f3dcb2a526e056c80a36ed"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_08/after-merged.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_08/after-merged.png",
+      "sha256": "3bae9753f05f432cf305526314503506109751e557f3dcb2a526e056c80a36ed"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_08/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_08/after-model.png",
+      "sha256": "9c31051debce144edcb990d6837cb2a3f41fe91384f87e37b575442f0a758b6a"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_08/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_08/after-native.png",
+      "sha256": "b36c0efa0c4cf2fb02c8fc2a2ccc86d673bfb94a942dcf8a4cc95de16f946140"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_08/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_08/after.json",
+      "sha256": "8085ef8c02bc2ac10d17c0f28c137bbdedee0cfd9c5a05bb5cce7592995bd6d6"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_08/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_08/before-model.png",
+      "sha256": "ca16bbcdde526dca93ca20667eef12d30ec40f8be286fd3de7f06f46e7e7bca8"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_08/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_08/before-native.png",
+      "sha256": "d34d16d18659c8f1dc7081cd897df7b01c7c5685c0c794f788abd27c5cf96fbd"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_08/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_08/before.json",
+      "sha256": "e067263692c2fed8cb385a13c524b4b77e2c00fe11d2b4abf13348900fe69150"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_09/after-grid.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_09/after-grid.png",
+      "sha256": "2b3480a4c1eb1b6b398e6f913452db4ecdd1bec78994d99c0fee9caa42221e81"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_09/after-merged.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_09/after-merged.png",
+      "sha256": "59d7d67038e1ab321f7094f442e36c360ff95c128c3594041804d0d1a417bcf6"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_09/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_09/after-model.png",
+      "sha256": "71ad953f54b199c38903b664fb9ff5ac83dccd581c1754e8f22a66d1b3218155"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_09/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_09/after-native.png",
+      "sha256": "50877f03ae00c7a82971fa51767080f616dab279f070cce71b83cdb0910655e2"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_09/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_09/after.json",
+      "sha256": "ec3f9e4fd456ed7c613e002822dd24599991baa3866cf4c48c755cf8c62abe38"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_09/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_09/before-model.png",
+      "sha256": "6e408355655fc3fe2eff10dc9d52fa5d389198041a0428d615492c64fc6a7c6e"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_09/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_09/before-native.png",
+      "sha256": "dd3c99b26b53af58b35ccac8709508a80e0eea5279a00429eb5d0d061895f491"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_09/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_09/before.json",
+      "sha256": "979161a0c25c53f28c79169acb4a4e5dc7220946057db4cbaf42fa75f0a82ea1"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_10/after-grid.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_10/after-grid.png",
+      "sha256": "8072b017dc4b65ce5a21b17d953874fd58b78458056f029ae96c2150d6e81c6c"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_10/after-merged.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_10/after-merged.png",
+      "sha256": "8522e7f7a914e1c295a01123b001418aaa57518427be1b7a6c5ca935a0c70018"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_10/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_10/after-model.png",
+      "sha256": "eadb129c295d5b34b6db66969f62435f6933f3078fb896897e98f080649aec3c"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_10/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_10/after-native.png",
+      "sha256": "fcc3fe104fd38a7e8c8345b99b6c0731bc910f65a848ee64c0077dbd8053b39a"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_10/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_10/after.json",
+      "sha256": "10de1c877e5e6e70613b8d0c4e3766330b462c1e03dd897c103a496d87f338f9"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_10/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_10/before-model.png",
+      "sha256": "085ba32dffa7a1c2251489735cabf1df86603a586eec25e25a212493dd3b437f"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_10/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_10/before-native.png",
+      "sha256": "cccba093877c81654116bca9112b6e43adc50d25a609e4b5722e6af76d7a566c"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_10/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_10/before.json",
+      "sha256": "917cfbffcbd8f4f9a19c913434deb7a9dec716c46edc3130af5c88e5e04baad3"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_11/after-grid.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_11/after-grid.png",
+      "sha256": "e9c694edb96871cea71c2fc36db780a7b7b4a8653cb7e4de4d61dbb7653cdfd8"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_11/after-merged.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_11/after-merged.png",
+      "sha256": "ccb9f8cfd0621501afb44bed1db5e928ff418241605ecd2651402075e41877b8"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_11/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_11/after-model.png",
+      "sha256": "45062858a514441bab7d92beb4b1a331716e7f34d61ff6195dbe37bb8464c9d4"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_11/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_11/after-native.png",
+      "sha256": "244d58a3a76a9e3cb572278cfdcac92be560b79301c230ba734cea3244825692"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_11/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_11/after.json",
+      "sha256": "5fde5bb420dc3a32f71832622dc120a32e77f9b4b2b7f9285eddd464dd13be15"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_11/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_11/before-model.png",
+      "sha256": "b6ad1be4de2c095067a8fc531a64ee9e85afd167901cc4985115920dbef699c6"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_11/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_11/before-native.png",
+      "sha256": "66d656d0c708a5cc23dbe5161a4f406bab6f9b1a9e4ff91028481a8c57fd35b3"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_11/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_11/before.json",
+      "sha256": "6246d99d443c6e7546e984838e1d757498f142ef84c73eff9fd067277911bb4f"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_12/after-grid.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_12/after-grid.png",
+      "sha256": "9c5c47a1c012e83d193a550c1ed5283d64d3d9da94d39878eb3f102d384af9a8"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_12/after-merged.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_12/after-merged.png",
+      "sha256": "9c5c47a1c012e83d193a550c1ed5283d64d3d9da94d39878eb3f102d384af9a8"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_12/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_12/after-model.png",
+      "sha256": "e79a0ad74fd7d8a2b937d9f627fbca4b20ac85338df5406f2e853f0da08acbfa"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_12/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_12/after-native.png",
+      "sha256": "efc6c13bb1f1be6354f801b628c134920192113ddc8c1099bd25db7a61365c6e"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_12/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_12/after.json",
+      "sha256": "74d939366a618e127914d42a3ae0f7b6e845141ba1f5741e60241816a93ea78e"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_12/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_12/before-model.png",
+      "sha256": "a2ad99e72133e0372c889debe4d55715996bca563cf75ac65d914c78d1df9730"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_12/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_12/before-native.png",
+      "sha256": "3d3509b9c0fb0055fe137ce1d6fb5ac425e4c86fb026aa44e4843bc81f3ebc75"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_12/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_12/before.json",
+      "sha256": "900019029bfa81938cde13f11942bf5a7dfb3d39c290bc2dae55cc677551b2ed"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_13/after-grid.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_13/after-grid.png",
+      "sha256": "66bc91a759a715209dcadc0844a04a93e39d28926c0a0aa49f7bdb2e4894aa71"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_13/after-merged.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_13/after-merged.png",
+      "sha256": "8336bbbdbc0996bd7c44e96c44043c506e80c284251058a24a78be60a8cb86a7"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_13/after-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_13/after-model.png",
+      "sha256": "af95fd1dd8870bae47c8ff0db33802f085a7c4d7d377faec42680591a39fcac2"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_13/after-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_13/after-native.png",
+      "sha256": "7ebcd4ad0f751a921eb420fd70d5a90302f4625ac8eedfb2dd18e018562eafb6"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_13/after.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_13/after.json",
+      "sha256": "99c66a3857ca75c3104639edd751eb73675a84c157be38a5405c738787376de7"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_13/before-model.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_13/before-model.png",
+      "sha256": "cff52c8cfdeb29341d0b0a4317f7dbcd08a0f71b3262947091806e5b3235e1d5"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_13/before-native.png",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_13/before-native.png",
+      "sha256": "94ee44d60da3c8210ef91b957331c71b8ead8b0feb4c36cd84c49f32371ec6e5"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/pair_13/before.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/pair_13/before.json",
+      "sha256": "3576f198c8fffb7568cd9ef4786ce2079951cb71c59c846b28435115aba18441"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/part5_grid.py",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/part5_grid.py",
+      "sha256": "345755f12717524e306658447e921752eccf7b9f6a823e157e6b724f30282c00"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/part5_grid_presentation.py",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/part5_grid_presentation.py",
+      "sha256": "83f81a3eef1ae3099a9cc388f288ad687d696e5b717fbaadefcdfce8c5f04bc6"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/part5_model.py",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/part5_model.py",
+      "sha256": "8f3d7067436029a58d6baf50935ab7132b5a6233ec3238156d2c91b3f00b1204"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/preflight.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/preflight.json",
+      "sha256": "0c468a33314b4773ac536798d42f2fcf2ace22718425535c13822733e4309f41"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/request-previews.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/request-previews.json",
+      "sha256": "c398e104c8c637b28b88fba5b72a31eed264df7d1802bb7e3b4fb93cf73d8766"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/results.jsonl",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/results.jsonl",
+      "sha256": "64b14bfde991e65172038e8cc8f2de9dbe67d92ef9ffc052c748b01b53953a05"
+    },
+    {
+      "path": "image-review/grid-location-merged-v1/review.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/grid-location-merged-v1/review.json",
+      "sha256": "095c943383a4624d75434a791ee0ebd0fe9f3f8f588b208b4e6fbe5ed047cbb4"
+    },
+    {
+      "path": "image-review/code-before-grid/part5_model.md",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/code-before-grid/part5_model.md",
+      "sha256": "99ffa3460b00f93b5b3f94ca960c14740bcbedf99b1e14162538573a94334e2a"
+    },
+    {
+      "path": "image-review/code-before-grid/part5_model.py",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/code-before-grid/part5_model.py",
+      "sha256": "0f03815b9b05830d9ab9f63ffaac05d17656742548dd527ab08251f9a607cbdf"
+    },
+    {
+      "path": "image-review/code-before-grid/part5_model_prompt.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/code-before-grid/part5_model_prompt.json",
+      "sha256": "44f985a1f92ec00676b68aabb10fffb06044f0db95fa8a0060d567b670586a67"
+    },
+    {
+      "path": "image-review/code-before-location-merged/part5_grid.md",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/code-before-location-merged/part5_grid.md",
+      "sha256": "eae4bd9c87507ee22368a3f7a2c81f75b2a867c9b0c0021b0f504b5c1ce95ce0"
+    },
+    {
+      "path": "image-review/code-before-location-merged/part5_grid.py",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/code-before-location-merged/part5_grid.py",
+      "sha256": "345755f12717524e306658447e921752eccf7b9f6a823e157e6b724f30282c00"
+    },
+    {
+      "path": "image-review/code-before-location-merged/part5_model.py",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/code-before-location-merged/part5_model.py",
+      "sha256": "9e552c5cd10d630bd2007f33e04849af6ef4303b247daa9605b7c881469d0da7"
+    },
+    {
+      "path": "image-review/candidate-pairs.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/candidate-pairs.json",
+      "sha256": "61816ed8219d8e20a0fdfc7f1957469d4d012359d77cc3acc902e5667df4b710"
+    },
+    {
+      "path": "image-review/candidate-metrics.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/candidate-metrics.json",
+      "sha256": "d3e645d3d6687fe72e76bb1b5a4e5b720f173f473cfe610c6ddacd392736a330"
+    },
+    {
+      "path": "image-review/candidates.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/candidates.json",
+      "sha256": "3cdb53c40cf1bad0fa70fad4da677b33b1046c752fe69f238d989637320b7f3e"
+    },
+    {
+      "path": "image-review/write_review.py",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/write_review.py",
+      "sha256": "8c75f2c05e0aaac0c13bb6c58ae74ad6db2adc5aa1f18d8e341f6f4baf021b48"
+    },
+    {
+      "path": "image-review/write_grid_review.py",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/write_grid_review.py",
+      "sha256": "86d43b6fac54ec8527678b55f8019095b09b932270cfbddfa95ef81f7a4bffcd"
+    },
+    {
+      "path": "image-review/write_location_merged_review.py",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/image-review/write_location_merged_review.py",
+      "sha256": "f7633f332a85c9a29c05deb770d22ec3aeba278946dc354c552dfa92ce2534a6"
+    },
+    {
+      "path": "combined/dogido-rust/tests/acceptance/part5_model.py",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/combined/dogido-rust/tests/acceptance/part5_model.py",
+      "sha256": "8f3d7067436029a58d6baf50935ab7132b5a6233ec3238156d2c91b3f00b1204"
+    },
+    {
+      "path": "combined/dogido-rust/tests/acceptance/part5_model.md",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/combined/dogido-rust/tests/acceptance/part5_model.md",
+      "sha256": "e0daadf62d56d825101c06f07729d21a041be075185baa61f1db2672c70c7704"
+    },
+    {
+      "path": "combined/dogido-rust/tests/acceptance/part5_model_prompt.json",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/combined/dogido-rust/tests/acceptance/part5_model_prompt.json",
+      "sha256": "44f985a1f92ec00676b68aabb10fffb06044f0db95fa8a0060d567b670586a67"
+    },
+    {
+      "path": "combined/dogido-rust/tests/acceptance/part5_grid.py",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/combined/dogido-rust/tests/acceptance/part5_grid.py",
+      "sha256": "345755f12717524e306658447e921752eccf7b9f6a823e157e6b724f30282c00"
+    },
+    {
+      "path": "combined/dogido-rust/tests/acceptance/part5_grid.md",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/combined/dogido-rust/tests/acceptance/part5_grid.md",
+      "sha256": "4cd4d76df2c6a3f86d8c22f85686a78b18a9f482a80e871efca8dd7ed93131b8"
+    },
+    {
+      "path": "combined/dogido-rust/tests/acceptance/part5_grid_presentation.py",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/combined/dogido-rust/tests/acceptance/part5_grid_presentation.py",
+      "sha256": "83f81a3eef1ae3099a9cc388f288ad687d696e5b717fbaadefcdfce8c5f04bc6"
+    },
+    {
+      "path": "combined/dogido-rust/tests/acceptance/part5_grid_presentation.md",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/combined/dogido-rust/tests/acceptance/part5_grid_presentation.md",
+      "sha256": "4b217f758d8639968ebc1e77a8c28db3fe7019f925bf43ddff1bc18d118014cd"
+    },
+    {
+      "path": "combined/dogido-rust/tests/acceptance/part5_image.rs",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/combined/dogido-rust/tests/acceptance/part5_image.rs",
+      "sha256": "6af3c20429cf2c469b84b9ac39e15565887af888962599ece50f09b10f9fd951"
+    },
+    {
+      "path": "combined/dogido-rust/tests/acceptance/java_wire.py",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/combined/dogido-rust/tests/acceptance/java_wire.py",
+      "sha256": "22c6ec2ec64cf5b5f64c2fae7e2fd491be3ae9e08aa48b1fc06ceea84a5d828f"
+    },
+    {
+      "path": "combined/dogido-rust/tests/acceptance/java/dogido/fabric/screenshot/BodyViewPairMetrics.java",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/combined/dogido-rust/tests/acceptance/java/dogido/fabric/screenshot/BodyViewPairMetrics.java",
+      "sha256": "b4324ba84dcf9bee0820baf40de2feeabcdea36d7521764742c288a260a5f34b"
+    },
+    {
+      "path": "combined/dogido-rust/tests/acceptance/java/dogido/fabric/screenshot/BodyViewWireFixture.java",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/combined/dogido-rust/tests/acceptance/java/dogido/fabric/screenshot/BodyViewWireFixture.java",
+      "sha256": "94a2fae464f0a6782194a2a02bc9f06302a23d5e1317c72d4f25bb24e33effb2"
+    },
+    {
+      "path": "combined/docs/research/2026-10-20-vision-resolution/run_experiment.py",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/combined/docs/research/2026-10-20-vision-resolution/run_experiment.py",
+      "sha256": "2e589fc115fb7aef68ea37668afbee287a869f7ac5187130ae4291dd0733e537"
+    },
+    {
+      "path": "combined/adapter/minecraft-fabric/src/main/java/dogido/fabric/screenshot/BodyViewChange.java",
+      "original_path": "/private/tmp/dogido-tests-final-20261029/combined/adapter/minecraft-fabric/src/main/java/dogido/fabric/screenshot/BodyViewChange.java",
+      "sha256": "ad52442fe634d58eb4458ba7b038b32ff5f6d83e99be90d55b01b629804b107b"
+    }
+  ],
+  "scope_note": "画像試験に必要なコードと資料を複写。旧全体READMEなど他パート専用の参照資料は含めない。"
+}

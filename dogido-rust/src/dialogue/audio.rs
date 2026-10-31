@@ -1,3 +1,4 @@
+//! パワーのある実行環境のため、繊細なコントロールは不要。会話のテンポを止める処理を入れるな。
 //! 発話本文を文ごとに音声合成し、一文先を準備しながら順番に再生する。
 //! 合成・再生プロセスと取消を扱い、履歴や句の状態は呼出側が配送結果から確定する。
 use super::{DialogueConfig, bridge::cancelled, sentences::sentences};
@@ -47,12 +48,30 @@ impl Audio {
         cancel: &mut watch::Receiver<bool>,
         started: impl FnOnce(),
     ) -> Result<()> {
+        self.speak_from(config, spoken, 0, cancel, started, |_| {})
+            .await
+    }
+
+    /// 完了済み文数から再開し、playerが正常終了した文だけをcompletedへ通知する。
+    pub(super) async fn speak_from(
+        &self,
+        config: &DialogueConfig,
+        spoken: &str,
+        completed: usize,
+        cancel: &mut watch::Receiver<bool>,
+        started: impl FnOnce(),
+        sentence_completed: impl Fn(usize),
+    ) -> Result<()> {
         ensure!(config.audio_enabled, "audio_disabled");
         let chunks = sentences(spoken)
             .filter(|s| !s.trim().is_empty())
             .collect::<Vec<_>>();
         ensure!(!chunks.is_empty(), "empty_spoken_text");
         let count = chunks.len();
+        ensure!(completed <= count, "invalid completed sentence count");
+        if completed == count {
+            return Ok(());
+        }
         let began = Instant::now();
         let mut producer_cancel = cancel.clone();
         let (tx, mut rx) = mpsc::channel::<Result<(usize, Arc<Vec<u8>>)>>(1);
@@ -60,7 +79,7 @@ impl Audio {
         // 合成前に待ち列の枠を予約する。再生中の一文に加え、先読みは一文だけ。
         // spawnしないため、speak終了時に合成futureだけが残ることはない。
         let produce = async move {
-            for (index, text) in chunks.into_iter().enumerate() {
+            for (index, text) in chunks.into_iter().enumerate().skip(completed) {
                 let permit = tokio::select! {
                     biased;
                     _ = cancelled(&mut producer_cancel) => break,
@@ -101,6 +120,7 @@ impl Audio {
                         }
                     })
                     .await?;
+                    sentence_completed(index + 1);
                 }
                 Ok(())
             }

@@ -1,0 +1,15 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.20s
+     Running unittests src/lib.rs (/private/tmp/dogido-part45-20261029/target/debug/deps/dogido_rust-3b05f0013177c941)
+
+running 8 tests
+test chat_materials::tests::all_existing_observation_frames_prepare_a_single_request_without_mutation ... ok
+test chat_materials::tests::block_sound_actions_reach_both_ordinary_chat_and_sound_question_requests ... ok
+test chat_materials::tests::current_companion_name_survives_the_retained_name_table_limit ... ok
+test chat_materials::tests::frozen_observation_history_and_unobserved_question_reach_one_reply ... ok
+test chat_materials::tests::named_observations_reach_the_request_without_promoting_player_report_to_fact ... ok
+test chat_materials::tests::named_sound_uses_latest_name_normalized_longest_match_and_actual_sound_kind ... ok
+test chat_materials::tests::retained_companion_name_never_restores_current_presence ... ok
+test chat_materials::tests::shared_world_context_is_used_once_without_legacy_place_or_weather_materials ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 945 filtered out; finished in 0.22s
+

@@ -32,7 +32,7 @@
 | `cargo check --all-targets` | 警告ゼロ |
 | `cargo test --lib` | 451件中448件成功。3件の失敗はサンドボックスが Python 補助の起動を拒否したため（`cannot start haiku helper / Operation not permitted`）。権限を外して3件だけ再実行し**全件成功** |
 | `cargo test --release --test '*'`（統合テスト） | 全件成功 |
-| Python `pytest`（`tests/` と `dogido-rust/scripts/test_*.py`） | 204成功・11スキップ |
+| Python `pytest`（`tests/` と `dogido-rust/tests/python/test_*.py`） | 204成功・11スキップ |
 | `launch_dialogue.py --settings-dir . --check` | 成功。Rust本体・資料・補助の import を確認 |
 | 戦闘・環境設定キー（99個）の突合 | Python `Settings` に不足なし・既定値のずれなし |
 | Fabric が送るイベント名 8種 | すべて Rust 側に文字列があり、`docs/event-schema.md` にも記載あり |
@@ -41,7 +41,7 @@
 ### 実行していない確認（結論に含めない）
 
 - Fabric の Gradle ビルド・テスト
-- `dogido-rust/scripts/check_*.py` の模擬通信スクリプト群
+- `dogido-rust/tests/python/check_*.py` の模擬通信スクリプト群
 - `--voice` 経路の実行
 - 実 Minecraft・実マイク・実 TTS
 - `docs/` の Grok レビュー4本のうち、精読したのは `compat-leftover-checklist` の前半のみ
@@ -191,7 +191,7 @@
 
 ### L2. 空洞なテストと小さな残骸
 
-- `dogido-rust/scripts/test_haiku_tokens.py:15` の `assert 'dogido_server.state_machine.machine' not in sys.modules` は、そのモジュールがもう無いので**常に真**。意味がない。
+- `dogido-rust/tests/python/test_haiku_tokens.py:15` の `assert 'dogido_server.state_machine.machine' not in sys.modules` は、そのモジュールがもう無いので**常に真**。意味がない。
 - `dogido_server/state_machine/` に `.DS_Store` だけが残る（空ディレクトリ）。
 - `dogido_server/config.py:147` のコメントが「`dogido_server.voice_input` プロセス」と、存在しない構成を指している。
 - `dogido_server.egg-info/SOURCES.txt` が旧構成（`service.py` など）のまま。`.gitignore` 済みで実害はない。`pip install -e .` で更新される。

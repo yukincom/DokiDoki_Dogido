@@ -230,7 +230,8 @@ public final class SoundObserver {
                     observation.spokenNameAllowed(),
                     observation.observedTick(),
                     SoundObservationPolicy.ageMillis(System.nanoTime(), observation.heardAtNanos()),
-                    observation.identity()
+                    observation.identity(),
+                    observation.sourceContext()
                 )
             );
         }
@@ -299,7 +300,8 @@ public final class SoundObserver {
                     true,
                     observation.observedTick(),
                     SoundObservationPolicy.ageMillis(System.nanoTime(), observation.heardAtNanos()),
-                    observation.identity()
+                    observation.identity(),
+                    observation.sourceContext()
                 )
             );
         }
@@ -429,6 +431,11 @@ public final class SoundObserver {
      */
     public void observeBodySound(ObservationOrigin origin, ClientWorld world, String rawSoundId,
             SoundCategory category, Vec3d source, UUID entityId, long ageMs, boolean server) {
+        observeBodySound(origin,world,rawSoundId,category,source,entityId,ageMs,server,null);
+    }
+    public void observeBodySound(ObservationOrigin origin, ClientWorld world, String rawSoundId,
+            SoundCategory category, Vec3d source, UUID entityId, long ageMs, boolean server,
+            com.google.gson.JsonObject sourceContext) {
         if (!origin.body() || ageMs < 0 || ageMs > SOUND_OBSERVATION_TTL_TICKS*50L) return;
         String soundId = rawSoundId.contains(":") ? rawSoundId.substring(rawSoundId.indexOf(':')+1) : rawSoundId;
         LivingEntity entity = null;
@@ -450,10 +457,18 @@ public final class SoundObserver {
         // UUID付きの実音は既に発音者が確定している。分類表に無いplayer音も捨てず、音IDと由来をそのまま運ぶ。
         if (label == null && entityId != null && entityId.equals(origin.threatTargetId())) label = "environment:player_action";
         if (label == null) return;
-        String id = entityId == null ? unresolvedSoundSourceId(source,soundId) : entityId.toString();
+        String incomingId = entityId == null ? unresolvedSoundSourceId(source,soundId) : entityId.toString();
         long now = System.nanoTime();
         long incomingHeardAt = now-ageMs*1_000_000L;
-        var stamp = this.bodySoundDeduplicator.reconcile(soundId,source,incomingHeardAt,id,server,now);
+        var stamp = this.bodySoundDeduplicator.reconcile(soundId,source,incomingHeardAt,incomingId,server,now);
+        // 一対一で照合できた同じ発音だけからUUIDと採取時の根拠を引き継ぐ。
+        var paired = java.util.stream.Stream.concat(this.recentSoundObservations.stream(),this.recentAmbientSoundObservations.stream())
+            .filter(old -> old.sourceId().equals(stamp.previousSourceId()) && soundId.equals(old.soundEvent())
+                && old.heardAtNanos() == stamp.previousHeardAt()).findFirst().orElse(null);
+        UUID effectiveEntityId = entityId != null ? entityId : paired == null ? null : paired.entityUuid();
+        String id = effectiveEntityId == null ? incomingId : effectiveEntityId.toString();
+        var evidence = sourceContext != null ? sourceContext.deepCopy()
+            : paired == null || paired.sourceContext() == null ? null : paired.sourceContext().deepCopy();
         long latestPairTime = Math.max(incomingHeardAt,stamp.previousHeardAt());
         boolean perSourceThreat = threat;
         // 敵対音は従来どおり音源単位。非敵対音は同じ音種の新しい実音だけを旧配送から守る。
@@ -471,8 +486,8 @@ public final class SoundObserver {
             this.recentSoundObservations.removeIf(old -> old.sourceId().equals(stamp.previousSourceId()) && soundId.equals(old.soundEvent()));
             this.recentAmbientSoundObservations.removeIf(old -> old.sourceId().equals(stamp.previousSourceId()) && soundId.equals(old.soundEvent()));
         }
-        var observation = new SoundObservation(heardTick,heardAt,entityId,id,label,soundId,
-            source.x,source.y,source.z,true,entity == null ? null : mobIdentity(entity));
+        var observation = new SoundObservation(heardTick,heardAt,effectiveEntityId,id,label,soundId,
+            source.x,source.y,source.z,true,entity != null ? mobIdentity(entity) : paired == null ? null : paired.identity(),evidence);
         Deque<SoundObservation> target = threat ? this.recentSoundObservations : this.recentAmbientSoundObservations;
         // 遅れて届いた同じ音で、既に新しい実音の記録を巻き戻さない。
         if (target.stream().anyMatch(old -> old.sourceId().equals(id) && (perSourceThreat || soundId.equals(old.soundEvent())) && old.heardAtNanos() > heardAt+100_000_000L)) return;
@@ -895,8 +910,15 @@ public final class SoundObserver {
         double sourceY,
         double sourceZ,
         boolean spokenNameAllowed,
-        MobIdentityObservation identity
+        MobIdentityObservation identity,
+        com.google.gson.JsonObject sourceContext
     ) {
+        SoundObservation(long observedTick, long heardAtNanos, UUID entityUuid, String sourceId,
+                String label, String soundEvent, double sourceX, double sourceY, double sourceZ,
+                boolean spokenNameAllowed, MobIdentityObservation identity) {
+            this(observedTick,heardAtNanos,entityUuid,sourceId,label,soundEvent,sourceX,sourceY,sourceZ,
+                spokenNameAllowed,identity,null);
+        }
     }
 
     private void recordAmbientSoundObservation(

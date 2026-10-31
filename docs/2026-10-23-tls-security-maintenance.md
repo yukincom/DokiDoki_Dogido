@@ -50,7 +50,7 @@ UniDic補助の `fugashi.Tagger`、依頼分類workerの `torch`／`transformers
 ## 検査結果
 
 - `cargo test --all-targets --locked`：34 target、874件成功、実音声1件は既存skip。`cargo build --release --locked`も成功。
-- `pytest -q tests dogido-rust/scripts/test_*.py`：196件成功、11件skip、22 subtest成功。最低版・更新失敗時の停止・旧uv配布拒否・3種類のライセンス配置・生成notebookのhash固定導入と構文、既存の設定・家庭用ランチャー等を確認した。
+- `pytest -q tests dogido-rust/tests/python/test_*.py`：196件成功、11件skip、22 subtest成功。最低版・更新失敗時の停止・旧uv配布拒否・3種類のライセンス配置・生成notebookのhash固定導入と構文、既存の設定・家庭用ランチャー等を確認した。
 - 更新済みの本体venv：pip 26.2.2、certifi 2026.10.19、uv 0.13.5。実際のuv版検査とwheelライセンス取得に成功。グローバルのHomebrew uvはこの作業では変更していない。
 - 本リポジトリ内4 venvを点検。現役のAEC・依頼分類器venvにはpip／certifi／uvがなく、その部品の更新対象なし。残っていた廃止Web補助venvのcertifiは2026.7.22から2026.10.19へ更新した。廃止したWeb経路は復活させていない。
 - 一時フォルダにpipなしの新規venvを作り、offline ensurepip→hash固定pip→certifiの実導入に成功。Colabと同じ専用targetへpipを導入し、`python -S`で実行して別targetへcertifiを導入する正常系も成功した。Colab GPU上のモデル検証は実施していない。

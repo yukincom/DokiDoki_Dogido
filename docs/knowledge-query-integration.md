@@ -133,7 +133,7 @@ workshop中の一般知識質問は専用枝で一度だけ答え、pin、未採
 | `dogido-rust/src/dialogue/workshop_runtime.rs` | workshop中の知識回答と句の状態不変 |
 | `dogido_server/language_dialogue/source_cards.json` | Rustも直接読む現役の国語資料。旧教材CLIとは別 |
 | `reference/` · `.dogido_reference/` | 国語・詩形の正本と、Minecraft公式資料から作ったローカルDB |
-| `dogido-rust/scripts/check_knowledge.py` · `check_knowledge_handoff.py` · `check_language_runtime.py` | 質問・検索・保留・返答・履歴確定の模擬通信検証 |
+| `dogido-rust/tests/python/check_knowledge.py` · `check_knowledge_handoff.py` · `check_language_runtime.py` | 質問・検索・保留・返答・履歴確定の模擬通信検証 |
 
 移植前のPython実装・比較器は退役しました。Rustの保存済みfixtureとドメインテストを回帰資産に使い、過去のテスト件数を現在の検証件数に読み替えません。
 

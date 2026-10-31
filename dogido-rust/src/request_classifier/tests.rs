@@ -1,4 +1,4 @@
-//! 原文整形と、模擬workerによる通信失敗・取消後の回収を検査する。
+//! 原文整形と、模擬workerによる通信失敗・worker停止後の回収を検査する。
 //! モデルの分類精度やゲームでの実行を証明するテストではない。
 use super::*;
 use std::{fs, path::PathBuf};
@@ -215,8 +215,10 @@ async fn load_contract_failure_and_load_timeout_reap_worker() {
     }
 }
 
+// 見込み: 全体終了用のworker停止信号なら、推論が固まっていても子を回収する。
+// 合格: classifyは失敗しhelperが空、PIDが存在しない。模擬workerでの通信と回収のみ。
 #[tokio::test]
-async fn cancellation_during_inference_reaps_worker() {
+async fn worker_stop_during_inference_reaps_worker() {
     let fixture = Fixture::new("hang");
     let (tx, mut cancel) = watch::channel(false);
     let mut model = fixture

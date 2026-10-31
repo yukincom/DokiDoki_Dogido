@@ -3,6 +3,20 @@
 入力の整形・モード選択・結果の用途と取消はRust所有。stdoutはJSONL応答専用。
 一つのworkerは通常16分類または川柳8分類の一方だけを読み込み、途中で切り替えない。
 推論依存は本体のrequest-classifier extraで準備し、モデルや依存を自動取得しない。
+
+モデルの付け替え（同じ分類ラベルの新版）:
+1. 新しい保管ルートにadopted-model.jsonとcheckpoint一式を配置する。
+   checkpoint_pathはこのルートからの相対パス。model.safetensorsだけでなく
+   config.json・tokenizer.json・tokenizer_config.jsonも同じ採用版に揃え、
+   checkpoint_files_sha256を全ファイルの新しいSHA-256へ更新する。
+   classifier_mode・label_to_id・evaluated_inputはその版の採用記録に合わせる。
+2. --settings-dirの.envでDOGIDO_REQUEST_CLASSIFIER_NORMAL_MODEL_ROOTまたは
+   DOGIDO_REQUEST_CLASSIFIER_SENRYU_MODEL_ROOTを新しいルートへ変更し、本体を再起動する。
+   同じラベル契約のModernBERTなら、Rustの変更・再ビルドは不要。
+3. ラベル追加・順序変更時は、このファイルの*_LABELSとRustの
+   src/request_classifier.rsのLabel/各ラベル配列、および消費先の対応を一緒に更新する。
+   ModernBERT以外へ移る場合はread_specとWorker.handleのモデル読込・推論も変更する。
+   入力取消はモデル差し替えの契機にしない。モデルはプロセスの寿命中保持する。
 """
 import contextlib
 import hashlib

@@ -1,0 +1,66 @@
+[
+  {
+    "part": 1,
+    "title": "位置の主語と視点",
+    "status": "pass",
+    "passed": 12,
+    "failed": 0,
+    "ignored": 0
+  },
+  {
+    "part": 2,
+    "title": "履歴の記録と復元",
+    "status": "fail",
+    "passed": 6,
+    "failed": 7,
+    "ignored": 0
+  },
+  {
+    "part": 3,
+    "title": "履歴表示と今回の用件",
+    "status": "fail",
+    "passed": 1,
+    "failed": 6,
+    "ignored": 0
+  },
+  {
+    "part": 4,
+    "title": "聴覚の事実と辞書の区別",
+    "status": "fail",
+    "passed": 2,
+    "failed": 9,
+    "ignored": 0
+  },
+  {
+    "part": 5,
+    "title": "画像の未比較と変化の区別",
+    "status": "fail",
+    "passed": 2,
+    "failed": 3,
+    "ignored": 0
+  },
+  {
+    "part": 6,
+    "title": "身体行動のJSON例",
+    "status": "fail",
+    "passed": 1,
+    "failed": 2,
+    "ignored": 0
+  },
+  {
+    "part": 7,
+    "title": "身体行動の実行結果",
+    "status": "fail",
+    "passed": 2,
+    "failed": 9,
+    "ignored": 0
+  },
+  {
+    "part": 8,
+    "title": "川柳の具体変更",
+    "status": "fail",
+    "passed": 5,
+    "failed": 2,
+    "ignored": 0
+  }
+]

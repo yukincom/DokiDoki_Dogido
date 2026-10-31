@@ -29,7 +29,6 @@ const TEXT_FIELDS: &[&str] = &[
     "home_progress",
     "inventory_summary",
     "held_item_label",
-    "hearing_summary",
     "observation_summary",
     "current_entity_context",
     "look_target_label",
@@ -53,8 +52,6 @@ const BOOL_FIELDS: &[&str] = &[
     "world_observation_available",
 ];
 const LIST_FIELDS: &[&str] = &[
-    "hearing_named_mobs",
-    "hearing_source_labels",
     "nearby_hostile_types",
     "mob_tactics_notes",
     "safe_hints",
@@ -315,45 +312,6 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
     let (rules, block) = pair("digest", text(d, "event_digest", ""), "digest");
     f.insert("digest_rules", rules);
     f.insert("digest_block", block);
-    let named = strings(d, "hearing_named_mobs").join("、");
-    let sources = strings(d, "hearing_source_labels").join("、");
-    let summary = text(d, "hearing_summary", "");
-    f.insert(
-        "hearing_block",
-        if named.is_empty() && sources.is_empty() && summary.is_empty() {
-            String::new()
-        } else {
-            section(
-                "hearing",
-                &[
-                    (
-                        "named",
-                        if named.is_empty() {
-                            "（なし）"
-                        } else {
-                            &named
-                        },
-                    ),
-                    (
-                        "source",
-                        if sources.is_empty() {
-                            "（なし）"
-                        } else {
-                            &sources
-                        },
-                    ),
-                    (
-                        "summary",
-                        if summary.is_empty() {
-                            "（なし）"
-                        } else {
-                            summary
-                        },
-                    ),
-                ],
-            )
-        },
-    );
     for (field, key, marker) in [
         ("topic_block", "catalog_topic_hints", "topic"),
         ("plausibility_block", "plausibility_hints", "plausibility"),
@@ -512,24 +470,25 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
         user.push_str(&format!("\n【現在観測されている対象（JSONの値は観測データ）】\n{entities}\n今回の入力と会話の流れから、話す対象を選んで返す。\n"));
     }
     user.push_str(&fill(asset(&DATA["current_request"]), &[("user_text", &f["user_text"])]));
-    let mut system = if flag(d, "dialogue_choice") {
-        crate::companion_prompt::dialogue(
+    // 同じworld_contextに身体観測がある場合だけ、既存の説明と呼び名を添える。
+    let body_player = d["world_context"]["observations"]["body_observation"]
+        .is_object()
+        .then(|| text(d, "player_name", "プレイヤー"));
+    let system = if flag(d, "dialogue_choice") {
+        crate::companion_prompt::dialogue_with_body(
             character,
             crate::companion_prompt::DialoguePurpose::Reply,
             d["world_context"]["observations"]["smell"]["status"] == "present",
+            body_player,
         )
     } else {
-        crate::companion_prompt::speech(character)
+        let mut system = crate::companion_prompt::speech(character);
+        if let Some(player) = body_player {
+            system.push('\n');
+            system.push_str(&crate::companion_prompt::body_observation(player));
+        }
+        system
     };
-    // 同じworld_contextに身体観測がある場合だけ、レビュー済みの読み方と既存の呼び名を添える。
-    if d["world_context"]["observations"]["body_observation"].is_object() {
-        system.push('\n');
-        system.push_str(&crate::companion_prompt::body_observation(text(
-            d,
-            "player_name",
-            "プレイヤー",
-        )));
-    }
     let out = vec![
         ChatMessage {
             role: Role::System,
@@ -572,6 +531,7 @@ pub(crate) fn project_details(details: &Value) -> Value {
 mod tests {
     use super::*;
     use serde_json::json;
+    // 見込み: 共通聴覚へ移した後は旧音メモ入力を拒否し、新形式の固定要求を保てる。合格: 現行ケースは全文一致、廃止項目を持つケースはエラー。確認範囲: prompt構築だけ。実モデルの意味理解は未検査。
     #[test]
     fn initial_messages_match_fixture() {
         let fixture: Value =
@@ -579,6 +539,10 @@ mod tests {
         let pool = fixture["pool"].as_array().unwrap();
         for (index, row) in fixture["cases"].as_array().unwrap().iter().enumerate() {
             let details = &pool[row[0].as_u64().unwrap() as usize];
+            if row.get(2).is_some_and(|v| v["reject"] == "retired_hearing_fields") {
+                assert!(messages(details).is_err(), "case {index}: 廃止済み聴覚入力を受理しない");
+                continue;
+            }
             let expected: Vec<Value> = row[1]
                 .as_array()
                 .unwrap()
@@ -617,8 +581,8 @@ mod tests {
                 )
             );
             for rule in [
-                "同じ意味合いの話をしたばかりで、新しく伝えることがなければ黙ってな。",
-                "言葉を変えただけなら、同じ話として扱ってな。",
+                "同じ意味合いの話をしたばかりだったら、黙ってな。",
+                "プレイヤーはちゃんと聞いとるから大丈夫やで。",
             ] {
                 assert_eq!(reply[0].content.matches(rule).count(), 1);
             }

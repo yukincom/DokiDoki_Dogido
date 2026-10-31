@@ -1,0 +1,22 @@
+   Compiling dogido-rust v0.1.0 (/private/tmp/dogido-tests-final-20261029/combined/dogido-rust)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.66s
+     Running unittests src/lib.rs (/private/tmp/dogido-tests-final-20261029/target-combined/debug/deps/dogido_rust-3b05f0013177c941)
+dialogue::acceptance_hearing::common_sound_retains_event_and_original_heard_time: test
+dialogue::acceptance_hearing::control_catalog_sound_tags_remain_general_without_heard_evidence: test
+dialogue::acceptance_hearing::control_player_side_sound_is_not_substituted_for_dogido_hearing: test
+dialogue::acceptance_hearing::direct_source_identity_takes_precedence_over_circumstantial_evidence: test
+dialogue::acceptance_hearing::duplicate_sound_is_collapsed_but_distinct_sound_event_survives: test
+dialogue::acceptance_hearing::empty_truncated_and_unavailable_hearing_are_distinct: test
+dialogue::acceptance_hearing::empty_visible_mob_list_is_not_complete_sound_source_evidence: test
+dialogue::acceptance_hearing::environment_request_receives_same_sound_fact_exactly_once: test
+dialogue::acceptance_hearing::hidden_mob_or_other_player_prevents_exclusion_based_attribution: test
+dialogue::acceptance_hearing::hostile_sound_preserves_adapter_uncertainty: test
+dialogue::acceptance_hearing::mismatched_time_position_or_player_action_keeps_source_unknown: test
+dialogue::acceptance_hearing::ordinary_request_does_not_repeat_the_same_hearing_memo: test
+dialogue::acceptance_hearing::ordinary_request_receives_sound_fact_exactly_once: test
+dialogue::acceptance_hearing::player_breaking_sound_is_inferred_without_changing_sound_kind: test
+dialogue::acceptance_hearing::player_emitter_confirmation_requires_actual_owner_source_match: test
+dialogue::acceptance_hearing::player_footsteps_are_inferred_from_complete_concurrent_context: test
+dialogue::acceptance_hearing::unknown_sound_keeps_uncertainty_without_inventing_a_source: test
+
+17 tests, 0 benchmarks

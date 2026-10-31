@@ -71,7 +71,7 @@ Minecraft実行時に対象を確認できなくなった場合も同じ案内�
 - `dogido-rust/src/dialogue/horse_recall_runtime.rs`: 馬一覧の保持、通常会話からの呼出し、最新状態への適用、実行結果の会話への接続。
 - `dogido-rust/src/dialogue/horse_recall_runtime/assist.rs`: 戦闘・警告中の限定操作。通常会話と同じnative二段契約と命令queueを使う。
 - `adapter/minecraft-fabric/.../horse_recall/`: 所有馬観測、実移動、着地点、演出。
-- `dogido-rust/scripts/check_horse_recall.py`: 実HTTPと模擬LLM/TTSによる接続・候補の段階的公開・再配送・ACK・取消・改名検査。
+- `dogido-rust/tests/python/check_horse_recall.py`: 実HTTPと模擬LLM/TTSによる接続・候補の段階的公開・再配送・ACK・取消・改名検査。
 
 初版のコードでRust全656テスト（33 target）と `clippy --all-targets --locked -- -D warnings` が通過。模擬HTTPは7項目が通過し、期限内に実行・期限後に受信した成功を失敗へ変えないことも確認した。Fabricは `./gradlew test build --offline --no-daemon` で133テストとjarのビルドが通過した。これらは実Minecraftでの移動・描画・音声を検証するものではない。
 

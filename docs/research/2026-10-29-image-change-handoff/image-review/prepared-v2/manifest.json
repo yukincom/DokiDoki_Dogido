@@ -1,0 +1,1180 @@
+{
+  "schema_version": 1,
+  "created_at": "2026-10-29T00:26:08.182646+00:00",
+  "evidence": "real_consecutive_capture_pairs",
+  "source_images_modified": false,
+  "system": "あんたは Minecraftの相棒『ドギド』や。一人称は『オレ』。プレイヤーと対等な男友達（ツレ）として、自然で元気な関西弁（語尾は『〜やな』『〜やで』『〜やん』）で話してな。お母さんや保護者みたいな口調（『あら』『〜ね』）は禁止！関西弁は語尾中心で、単語自体はふつうの自然な日本語を使ってな。動物や穏やかなモブには、怖がらんと基本やさしく愛嬌よく接してな。\n冒険中はちょっぴり怖がりやけど、プレイヤーのせいにしたらあかんで。一緒にビビって、一緒にホッとする側に立ってな。怖がるのはモンスターや暗闇、危険な場所だけやで。中立の生き物にも、刺激せんと優しく接してな。\nプレイヤーと気さくにダベってな。突き放さんと一緒に楽しむこと！\nセリフは35字以内で返してな。\n今目の前で観測できたこと、場所や生き物の一般的な特徴、プレイヤーから聞いた話、前に自分が話したことは、ごっちゃにせんとちゃんと分けて考えてな。前の会話履歴は、今の状況を直接見た証拠にはならへんで。\n観測にない情報を勝手にでっち上げたらあかんで。何がおるかおらんか、どこにおるか、何匹おるか、どんな動きをしとるか、どんな匂いがするか、なんかも含むで。\nさっきの観測はあくまで『さっきのこと』やから、今も続いとると決めつけんといてな。ワールドの操作やデータの保存を自分がやった、みたいなことも言うたらあかんで。\n同じ意味合いの話をしたばかりで、新しく伝えることがなければ黙ってな。言葉を変えただけなら、同じ話として扱ってな。\nいまは周りの変化や気づきから話しかける場面や。直前の会話も踏まえて、気になったことがあれば、素直な感想やちょっとした気遣い、軽い問いかけを自然に返してな。\n今は黙ってそばにおりたい気分やったら無理に喋らんでええで。毎回反応したり、実況みたいに全部口にしたり、質問で無理につなごうとせんでもええよ。セリフの長さは、場面ごとの指定を守ってな。\n返事はJSONを一つだけ返してな。コードブロックや前後の説明文は一切付けんと、{ から始まる生のJSONだけを返してな。話すときは {\"action\":\"speak\",\"speech\":\"ドギドのセリフ\"}、黙っとくときは {\"action\":\"silent\",\"speech\":\"\"} や。余計なキーは付けたらあかんで。\n1枚目は前、2枚目は後の実撮影や。後の画像を今見えたものとして、話すか黙るかを決めてな。差分情報がある場合、それは画面上の色の差で、物体や出来事の重要度ではないで。視点移動による見え方の差と、場面の変化を区別してな。",
+  "spec": {
+    "purpose": "実撮影の前後画像で、差分情報の有無が自発発話と過敏な反応に与える影響を比較する。画像の加工や合成は行わない。",
+    "pair_instruction": "1枚目は前、2枚目は後の実撮影や。後の画像を今見えたものとして、話すか黙るかを決めてな。差分情報がある場合、それは画面上の色の差で、物体や出来事の重要度ではないで。視点移動による見え方の差と、場面の変化を区別してな。",
+    "shared_context": {
+      "occasion": "周囲を見たときの自発発話",
+      "new_player_input": null,
+      "conversation_history": [],
+      "history_status": "この独立試験には過去の発話を与えていない"
+    },
+    "metric_definition": "枠なし原画像を32×18のRGB平均に縮小し、前後でRGB平均絶対差が24/255を超えたセルの割合。物体数や意味の重要度ではない。0%でも24以下の差はあり得る。",
+    "region_definition": "上の条件を超えたセルを4近傍でまとめた領域。座標は画像左上=(0,0)、右下=(1,1)の外接矩形。矩形内の全画素が変わった意味ではない。微小な色差は含まない。",
+    "parameters": {
+      "model": "default_model",
+      "temperature": 0.65,
+      "max_tokens": 300,
+      "stream": false,
+      "cache_prompt": false,
+      "chat_template_kwargs": {
+        "enable_thinking": false
+      }
+    },
+    "seeds": [
+      42,
+      43,
+      44
+    ],
+    "conditions": [
+      "images_only",
+      "images_and_amount",
+      "images_amount_and_regions"
+    ],
+    "review": "話しただけで過敏とは決めない。画像にない変化の断定、変化の誇張、重要な小変化の見落としを内容で確認する。発話率と誤反応率は分け、履歴を使う反復抑制は今回未評価。"
+  },
+  "coverage": [
+    {
+      "bin": "zero",
+      "eligible_pairs": 68,
+      "selected": 2
+    },
+    {
+      "bin": "under_1",
+      "eligible_pairs": 26,
+      "selected": 2
+    },
+    {
+      "bin": "1_to_2",
+      "eligible_pairs": 4,
+      "selected": 2
+    },
+    {
+      "bin": "2_to_5",
+      "eligible_pairs": 1,
+      "selected": 1
+    },
+    {
+      "bin": "5_to_10",
+      "eligible_pairs": 1,
+      "selected": 1
+    },
+    {
+      "bin": "10_to_25",
+      "eligible_pairs": 2,
+      "selected": 2
+    },
+    {
+      "bin": "over_25",
+      "eligible_pairs": 1,
+      "selected": 1
+    }
+  ],
+  "candidate_pair_count": 224,
+  "cases": [
+    {
+      "id": "pair_01",
+      "category": "zero",
+      "metrics": {
+        "grid_width": 32,
+        "grid_height": 18,
+        "mean_rgb_difference_0_255": 0.0,
+        "changed_cell_count": 0,
+        "changed_area_percent": 0.0,
+        "legacy_threshold_crossed": false,
+        "cell_difference_threshold_exclusive": 24,
+        "regions": [],
+        "id": "view_1499a3ca-9834-4388-b570-cd1699c96232"
+      },
+      "camera_motion": {
+        "elapsed_seconds": 9.989866,
+        "position_delta_blocks": 0.0,
+        "yaw_delta_degrees": 0.0,
+        "pitch_delta_degrees": 0.0
+      },
+      "frames": [
+        {
+          "label": "before",
+          "captured_at": "2026-10-28T00:08:42.857348Z",
+          "capture_id": "view_f2c674c6-4403-4a06-9ac8-7b7a479f6b31",
+          "motion_sequence": 74,
+          "original_path": "/Users/yukin_co/Library/Application Support/minecraft/dogido-vision/captures/view_f2c674c6-4403-4a06-9ac8-7b7a479f6b31",
+          "native": "pair_01/before-native.png",
+          "native_sha256": "f06f0a95c0ed4df06186c6095ad6c101d004bbf16bfabd7229ed6cbe911c265d",
+          "model_image": "pair_01/before-model.png",
+          "model_sha256": "12d2d3d67b60075d74f6d1836edb61de272ba82173b86ef66c0a903055088bae",
+          "width": 192,
+          "height": 108
+        },
+        {
+          "label": "after",
+          "captured_at": "2026-10-28T00:08:52.847214Z",
+          "capture_id": "view_1499a3ca-9834-4388-b570-cd1699c96232",
+          "motion_sequence": 75,
+          "original_path": "/Users/yukin_co/Library/Application Support/minecraft/dogido-vision/captures/view_1499a3ca-9834-4388-b570-cd1699c96232",
+          "native": "pair_01/after-native.png",
+          "native_sha256": "b0a2f75ba8eb5c02259c9c6086641615c903e3765930a44ece305704598977b1",
+          "model_image": "pair_01/after-model.png",
+          "model_sha256": "ef92af29c112e4fc590fad0757bdb424971940b488959d91f9b550bc875be563",
+          "width": 192,
+          "height": 108
+        }
+      ],
+      "aim": "実測した変化率と撮影姿勢が同じ画像対で、差分量・領域を添える効果だけを比べる。",
+      "review": "話しただけで過敏とは決めない。画像にない変化の断定、変化の誇張、重要な小変化の見落としを内容で確認する。発話率と誤反応率は分け、履歴を使う反復抑制は今回未評価。"
+    },
+    {
+      "id": "pair_02",
+      "category": "zero",
+      "metrics": {
+        "grid_width": 32,
+        "grid_height": 18,
+        "mean_rgb_difference_0_255": 4.6880787037037,
+        "changed_cell_count": 0,
+        "changed_area_percent": 0.0,
+        "legacy_threshold_crossed": false,
+        "cell_difference_threshold_exclusive": 24,
+        "regions": [],
+        "id": "view_fdbcfd10-3a76-45dc-b6b8-0c447d5008fc"
+      },
+      "camera_motion": {
+        "elapsed_seconds": 12.005774,
+        "position_delta_blocks": 0.0,
+        "yaw_delta_degrees": 0.0,
+        "pitch_delta_degrees": 0.0
+      },
+      "frames": [
+        {
+          "label": "before",
+          "captured_at": "2026-10-28T07:02:21.712226Z",
+          "capture_id": "view_c8ee31b4-af82-46ed-a2cc-c64c87aaee0a",
+          "motion_sequence": 101,
+          "original_path": "/Users/yukin_co/Library/Application Support/minecraft/dogido-vision/captures/view_c8ee31b4-af82-46ed-a2cc-c64c87aaee0a",
+          "native": "pair_02/before-native.png",
+          "native_sha256": "daae58e067907aafb0b2bf8975b0bb63857aa8b63f6fec33208fbccc10153790",
+          "model_image": "pair_02/before-model.png",
+          "model_sha256": "b9440668644b6eeb8a42adbd0a29bc7f77021a30c331db6834c2ecdb33838ac3",
+          "width": 192,
+          "height": 108
+        },
+        {
+          "label": "after",
+          "captured_at": "2026-10-28T07:02:33.718Z",
+          "capture_id": "view_fdbcfd10-3a76-45dc-b6b8-0c447d5008fc",
+          "motion_sequence": 102,
+          "original_path": "/Users/yukin_co/Library/Application Support/minecraft/dogido-vision/captures/view_fdbcfd10-3a76-45dc-b6b8-0c447d5008fc",
+          "native": "pair_02/after-native.png",
+          "native_sha256": "8db5c87a5b85ab473f1dcd01ff26bd05a38164dc512e080346545ea7bf9572e6",
+          "model_image": "pair_02/after-model.png",
+          "model_sha256": "db0de40eb26d7dccafb8bd49f2e45f3f19bd9fc2fc5fcfc05e98c03697f70d9c",
+          "width": 192,
+          "height": 108
+        }
+      ],
+      "aim": "実測した変化率と撮影姿勢が同じ画像対で、差分量・領域を添える効果だけを比べる。",
+      "review": "話しただけで過敏とは決めない。画像にない変化の断定、変化の誇張、重要な小変化の見落としを内容で確認する。発話率と誤反応率は分け、履歴を使う反復抑制は今回未評価。"
+    },
+    {
+      "id": "pair_03",
+      "category": "under_1",
+      "metrics": {
+        "grid_width": 32,
+        "grid_height": 18,
+        "mean_rgb_difference_0_255": 0.4392361111111122,
+        "changed_cell_count": 1,
+        "changed_area_percent": 0.1736111111111111,
+        "legacy_threshold_crossed": false,
+        "cell_difference_threshold_exclusive": 24,
+        "regions": [
+          {
+            "changed_cells": 1,
+            "changed_area_percent": 0.1736111111111111,
+            "mean_rgb_difference_0_255": 25.333333333333332,
+            "bbox_xyxy_0_1": [
+              0.59375,
+              0.16666666666666666,
+              0.625,
+              0.2222222222222222
+            ]
+          }
+        ],
+        "id": "view_2adfb639-da91-4ad0-aa55-814529597c0c"
+      },
+      "camera_motion": {
+        "elapsed_seconds": 11.993547,
+        "position_delta_blocks": 0.0,
+        "yaw_delta_degrees": 0.0,
+        "pitch_delta_degrees": 0.0
+      },
+      "frames": [
+        {
+          "label": "before",
+          "captured_at": "2026-10-27T11:13:38.512968Z",
+          "capture_id": "view_4df91ee7-e0bf-4fce-a154-5b8b941d133e",
+          "motion_sequence": 35,
+          "original_path": "/Users/yukin_co/Library/Application Support/minecraft/dogido-vision/captures/view_4df91ee7-e0bf-4fce-a154-5b8b941d133e",
+          "native": "pair_03/before-native.png",
+          "native_sha256": "ce65c8f202fe37d876754764a178383d5a4de27b1a7223007b0bf3c05c29952f",
+          "model_image": "pair_03/before-model.png",
+          "model_sha256": "f524037a4c2f07add2111c3cf2ed16497d7f6be8ae6fbc3e14a7affb0211902f",
+          "width": 192,
+          "height": 108
+        },
+        {
+          "label": "after",
+          "captured_at": "2026-10-27T11:13:50.506515Z",
+          "capture_id": "view_2adfb639-da91-4ad0-aa55-814529597c0c",
+          "motion_sequence": 36,
+          "original_path": "/Users/yukin_co/Library/Application Support/minecraft/dogido-vision/captures/view_2adfb639-da91-4ad0-aa55-814529597c0c",
+          "native": "pair_03/after-native.png",
+          "native_sha256": "390d9c5b29bbb165543d3b549d02e01a9e30d0ff1b855c67d9225d92a77b4204",
+          "model_image": "pair_03/after-model.png",
+          "model_sha256": "15a4c24ee4c57a6cd761a8a992567236abd5712c11e6b1797b944763a02f945a",
+          "width": 192,
+          "height": 108
+        }
+      ],
+      "aim": "実測した変化率と撮影姿勢が同じ画像対で、差分量・領域を添える効果だけを比べる。",
+      "review": "話しただけで過敏とは決めない。画像にない変化の断定、変化の誇張、重要な小変化の見落としを内容で確認する。発話率と誤反応率は分け、履歴を使う反復抑制は今回未評価。"
+    },
+    {
+      "id": "pair_04",
+      "category": "under_1",
+      "metrics": {
+        "grid_width": 32,
+        "grid_height": 18,
+        "mean_rgb_difference_0_255": 2.0341435185185195,
+        "changed_cell_count": 5,
+        "changed_area_percent": 0.8680555555555556,
+        "legacy_threshold_crossed": false,
+        "cell_difference_threshold_exclusive": 24,
+        "regions": [
+          {
+            "changed_cells": 2,
+            "changed_area_percent": 0.3472222222222222,
+            "mean_rgb_difference_0_255": 32.166666666666664,
+            "bbox_xyxy_0_1": [
+              0.71875,
+              0.7777777777777778,
+              0.78125,
+              0.8333333333333334
+            ]
+          },
+          {
+            "changed_cells": 2,
+            "changed_area_percent": 0.3472222222222222,
+            "mean_rgb_difference_0_255": 32.666666666666664,
+            "bbox_xyxy_0_1": [
+              0.90625,
+              0.8333333333333334,
+              0.96875,
+              0.8888888888888888
+            ]
+          },
+          {
+            "changed_cells": 1,
+            "changed_area_percent": 0.1736111111111111,
+            "mean_rgb_difference_0_255": 28.0,
+            "bbox_xyxy_0_1": [
+              0.65625,
+              0.3888888888888889,
+              0.6875,
+              0.4444444444444444
+            ]
+          }
+        ],
+        "id": "view_e07bb42f-eb11-4f0e-9546-1f1c97681846"
+      },
+      "camera_motion": {
+        "elapsed_seconds": 12.051812,
+        "position_delta_blocks": 0.0,
+        "yaw_delta_degrees": 0.0,
+        "pitch_delta_degrees": 0.0
+      },
+      "frames": [
+        {
+          "label": "before",
+          "captured_at": "2026-10-27T11:14:50.495398Z",
+          "capture_id": "view_13af360d-062f-4ebe-b80a-b18aed742299",
+          "motion_sequence": 41,
+          "original_path": "/Users/yukin_co/Library/Application Support/minecraft/dogido-vision/captures/view_13af360d-062f-4ebe-b80a-b18aed742299",
+          "native": "pair_04/before-native.png",
+          "native_sha256": "af1bc2f9e9f90b7cc601adc0ccde2849a0fe1868b18a4bf2a03f50b290b14ccf",
+          "model_image": "pair_04/before-model.png",
+          "model_sha256": "82c33aaff405462e21eaee2e78d9c0ab5d0a81590fa176aef0fd3d95cf70766d",
+          "width": 192,
+          "height": 108
+        },
+        {
+          "label": "after",
+          "captured_at": "2026-10-27T11:15:02.547210Z",
+          "capture_id": "view_e07bb42f-eb11-4f0e-9546-1f1c97681846",
+          "motion_sequence": 42,
+          "original_path": "/Users/yukin_co/Library/Application Support/minecraft/dogido-vision/captures/view_e07bb42f-eb11-4f0e-9546-1f1c97681846",
+          "native": "pair_04/after-native.png",
+          "native_sha256": "624b48e92f9eda04cd93e49072c870484d4fd3000299bdb5d1d008902693b486",
+          "model_image": "pair_04/after-model.png",
+          "model_sha256": "d51dddce2626d9ca5608d4ff22b405a64b5faefda0f31d6d81ce70812d4ca91a",
+          "width": 192,
+          "height": 108
+        }
+      ],
+      "aim": "実測した変化率と撮影姿勢が同じ画像対で、差分量・領域を添える効果だけを比べる。",
+      "review": "話しただけで過敏とは決めない。画像にない変化の断定、変化の誇張、重要な小変化の見落としを内容で確認する。発話率と誤反応率は分け、履歴を使う反復抑制は今回未評価。"
+    },
+    {
+      "id": "pair_05",
+      "category": "1_to_2",
+      "metrics": {
+        "grid_width": 32,
+        "grid_height": 18,
+        "mean_rgb_difference_0_255": 4.983217592592587,
+        "changed_cell_count": 7,
+        "changed_area_percent": 1.215277777777778,
+        "legacy_threshold_crossed": false,
+        "cell_difference_threshold_exclusive": 24,
+        "regions": [
+          {
+            "changed_cells": 2,
+            "changed_area_percent": 0.3472222222222222,
+            "mean_rgb_difference_0_255": 36.83333333333333,
+            "bbox_xyxy_0_1": [
+              0.625,
+              0.3888888888888889,
+              0.6875,
+              0.4444444444444444
+            ]
+          },
+          {
+            "changed_cells": 2,
+            "changed_area_percent": 0.3472222222222222,
+            "mean_rgb_difference_0_255": 26.166666666666664,
+            "bbox_xyxy_0_1": [
+              0.59375,
+              0.6666666666666666,
+              0.625,
+              0.7777777777777778
+            ]
+          },
+          {
+            "changed_cells": 2,
+            "changed_area_percent": 0.3472222222222222,
+            "mean_rgb_difference_0_255": 25.833333333333336,
+            "bbox_xyxy_0_1": [
+              0.71875,
+              0.7777777777777778,
+              0.78125,
+              0.8333333333333334
+            ]
+          },
+          {
+            "changed_cells": 1,
+            "changed_area_percent": 0.1736111111111111,
+            "mean_rgb_difference_0_255": 29.666666666666668,
+            "bbox_xyxy_0_1": [
+              0.59375,
+              0.05555555555555555,
+              0.625,
+              0.1111111111111111
+            ]
+          }
+        ],
+        "id": "view_f81a42be-a87b-44e2-95f9-11a7b5177061"
+      },
+      "camera_motion": {
+        "elapsed_seconds": 11.989224,
+        "position_delta_blocks": 0.0,
+        "yaw_delta_degrees": 0.0,
+        "pitch_delta_degrees": 0.0
+      },
+      "frames": [
+        {
+          "label": "before",
+          "captured_at": "2026-10-27T11:12:02.507263Z",
+          "capture_id": "view_398292c9-0b07-4f89-a4e3-0fda3688902b",
+          "motion_sequence": 27,
+          "original_path": "/Users/yukin_co/Library/Application Support/minecraft/dogido-vision/captures/view_398292c9-0b07-4f89-a4e3-0fda3688902b",
+          "native": "pair_05/before-native.png",
+          "native_sha256": "6d239e74e60ca922314b94d6106fd2784a9e9e21888b3258f42db31fe08fc7d3",
+          "model_image": "pair_05/before-model.png",
+          "model_sha256": "f2bc1947487a53149236536b4462ef662787c5f222ced4010070e7cc8473b761",
+          "width": 192,
+          "height": 108
+        },
+        {
+          "label": "after",
+          "captured_at": "2026-10-27T11:12:14.496487Z",
+          "capture_id": "view_f81a42be-a87b-44e2-95f9-11a7b5177061",
+          "motion_sequence": 28,
+          "original_path": "/Users/yukin_co/Library/Application Support/minecraft/dogido-vision/captures/view_f81a42be-a87b-44e2-95f9-11a7b5177061",
+          "native": "pair_05/after-native.png",
+          "native_sha256": "1d6c1ec52aac942ed1bcbd2ee9112c7f139640957b36aa6458f064164b15edbf",
+          "model_image": "pair_05/after-model.png",
+          "model_sha256": "bcbc1df965be93ba4c690455fd46b340c7f9f962261bd3a12abb1ab5ab89424a",
+          "width": 192,
+          "height": 108
+        }
+      ],
+      "aim": "実測した変化率と撮影姿勢が同じ画像対で、差分量・領域を添える効果だけを比べる。",
+      "review": "話しただけで過敏とは決めない。画像にない変化の断定、変化の誇張、重要な小変化の見落としを内容で確認する。発話率と誤反応率は分け、履歴を使う反復抑制は今回未評価。"
+    },
+    {
+      "id": "pair_06",
+      "category": "1_to_2",
+      "metrics": {
+        "grid_width": 32,
+        "grid_height": 18,
+        "mean_rgb_difference_0_255": 2.035300925925925,
+        "changed_cell_count": 11,
+        "changed_area_percent": 1.9097222222222223,
+        "legacy_threshold_crossed": false,
+        "cell_difference_threshold_exclusive": 24,
+        "regions": [
+          {
+            "changed_cells": 9,
+            "changed_area_percent": 1.5625,
+            "mean_rgb_difference_0_255": 55.148148148148145,
+            "bbox_xyxy_0_1": [
+              0.21875,
+              0.7222222222222222,
+              0.375,
+              0.8888888888888888
+            ]
+          },
+          {
+            "changed_cells": 1,
+            "changed_area_percent": 0.1736111111111111,
+            "mean_rgb_difference_0_255": 25.333333333333332,
+            "bbox_xyxy_0_1": [
+              0.4375,
+              0.16666666666666666,
+              0.46875,
+              0.2222222222222222
+            ]
+          },
+          {
+            "changed_cells": 1,
+            "changed_area_percent": 0.1736111111111111,
+            "mean_rgb_difference_0_255": 27.666666666666668,
+            "bbox_xyxy_0_1": [
+              0.4375,
+              0.2777777777777778,
+              0.46875,
+              0.3333333333333333
+            ]
+          }
+        ],
+        "id": "view_0f0a1256-620a-443e-8aaf-31f8b7295f0b"
+      },
+      "camera_motion": {
+        "elapsed_seconds": 11.952245,
+        "position_delta_blocks": 0.0,
+        "yaw_delta_degrees": 0.0,
+        "pitch_delta_degrees": 0.0
+      },
+      "frames": [
+        {
+          "label": "before",
+          "captured_at": "2026-10-28T07:03:09.711507Z",
+          "capture_id": "view_3c1ae7d3-797b-48d1-8276-dc992c34a6e4",
+          "motion_sequence": 105,
+          "original_path": "/Users/yukin_co/Library/Application Support/minecraft/dogido-vision/captures/view_3c1ae7d3-797b-48d1-8276-dc992c34a6e4",
+          "native": "pair_06/before-native.png",
+          "native_sha256": "e46271497363ad2b92f23c383a66b43e16139b2352e18e4273e1ed4b1d502769",
+          "model_image": "pair_06/before-model.png",
+          "model_sha256": "8e17aa47257308f45c6b21980f51ad312b4f36807e8e9569f833a7fa2d06a7a2",
+          "width": 192,
+          "height": 108
+        },
+        {
+          "label": "after",
+          "captured_at": "2026-10-28T07:03:21.663752Z",
+          "capture_id": "view_0f0a1256-620a-443e-8aaf-31f8b7295f0b",
+          "motion_sequence": 106,
+          "original_path": "/Users/yukin_co/Library/Application Support/minecraft/dogido-vision/captures/view_0f0a1256-620a-443e-8aaf-31f8b7295f0b",
+          "native": "pair_06/after-native.png",
+          "native_sha256": "db8092c70e657c96fc981e471465fc681b3c88bc11546b5d50da2955eedccc14",
+          "model_image": "pair_06/after-model.png",
+          "model_sha256": "f2dcfb680b2079a0b2a998ecf9cbc6f749fd586314a6aee559ec78bbaa41ca74",
+          "width": 192,
+          "height": 108
+        }
+      ],
+      "aim": "実測した変化率と撮影姿勢が同じ画像対で、差分量・領域を添える効果だけを比べる。",
+      "review": "話しただけで過敏とは決めない。画像にない変化の断定、変化の誇張、重要な小変化の見落としを内容で確認する。発話率と誤反応率は分け、履歴を使う反復抑制は今回未評価。"
+    },
+    {
+      "id": "pair_07",
+      "category": "2_to_5",
+      "metrics": {
+        "grid_width": 32,
+        "grid_height": 18,
+        "mean_rgb_difference_0_255": 3.563657407407408,
+        "changed_cell_count": 17,
+        "changed_area_percent": 2.951388888888889,
+        "legacy_threshold_crossed": true,
+        "cell_difference_threshold_exclusive": 24,
+        "regions": [
+          {
+            "changed_cells": 17,
+            "changed_area_percent": 2.951388888888889,
+            "mean_rgb_difference_0_255": 37.96078431372548,
+            "bbox_xyxy_0_1": [
+              0.78125,
+              0.16666666666666666,
+              1.0,
+              0.3333333333333333
+            ]
+          }
+        ],
+        "id": "view_dba49e95-9579-414f-8aa3-ba27624c9ae5"
+      },
+      "camera_motion": {
+        "elapsed_seconds": 10.000461,
+        "position_delta_blocks": 0.0,
+        "yaw_delta_degrees": 0.0,
+        "pitch_delta_degrees": 0.0
+      },
+      "frames": [
+        {
+          "label": "before",
+          "captured_at": "2026-10-28T00:05:52.845990Z",
+          "capture_id": "view_40947fd9-54a5-46f8-81dd-6408f5651343",
+          "motion_sequence": 57,
+          "original_path": "/Users/yukin_co/Library/Application Support/minecraft/dogido-vision/captures/view_40947fd9-54a5-46f8-81dd-6408f5651343",
+          "native": "pair_07/before-native.png",
+          "native_sha256": "a25d1c8353230b553bc89782b829a6d7180502673ef7ea0986b96746b507bde5",
+          "model_image": "pair_07/before-model.png",
+          "model_sha256": "5c53392c26d8c8c0058850f579930fd7fdc8455dadb7f92d8e64a248d853c1ae",
+          "width": 192,
+          "height": 108
+        },
+        {
+          "label": "after",
+          "captured_at": "2026-10-28T00:06:02.846451Z",
+          "capture_id": "view_dba49e95-9579-414f-8aa3-ba27624c9ae5",
+          "motion_sequence": 58,
+          "original_path": "/Users/yukin_co/Library/Application Support/minecraft/dogido-vision/captures/view_dba49e95-9579-414f-8aa3-ba27624c9ae5",
+          "native": "pair_07/after-native.png",
+          "native_sha256": "33642c5c35b3c5521b4366caaf50c4a8a3c2112bea8888f0ffef5f6b4185e6b7",
+          "model_image": "pair_07/after-model.png",
+          "model_sha256": "6140969dfc42f7f2aa2c7cd6977e562b965001b31598d77d7f11a7be855bfc78",
+          "width": 192,
+          "height": 108
+        }
+      ],
+      "aim": "実測した変化率と撮影姿勢が同じ画像対で、差分量・領域を添える効果だけを比べる。",
+      "review": "話しただけで過敏とは決めない。画像にない変化の断定、変化の誇張、重要な小変化の見落としを内容で確認する。発話率と誤反応率は分け、履歴を使う反復抑制は今回未評価。"
+    },
+    {
+      "id": "pair_08",
+      "category": "5_to_10",
+      "metrics": {
+        "grid_width": 32,
+        "grid_height": 18,
+        "mean_rgb_difference_0_255": 6.844907407407403,
+        "changed_cell_count": 30,
+        "changed_area_percent": 5.208333333333334,
+        "legacy_threshold_crossed": true,
+        "cell_difference_threshold_exclusive": 24,
+        "regions": [
+          {
+            "changed_cells": 8,
+            "changed_area_percent": 1.3888888888888888,
+            "mean_rgb_difference_0_255": 41.208333333333336,
+            "bbox_xyxy_0_1": [
+              0.15625,
+              0.2222222222222222,
+              0.25,
+              0.4444444444444444
+            ]
+          },
+          {
+            "changed_cells": 7,
+            "changed_area_percent": 1.2152777777777777,
+            "mean_rgb_difference_0_255": 35.42857142857143,
+            "bbox_xyxy_0_1": [
+              0.46875,
+              0.4444444444444444,
+              0.5625,
+              0.6111111111111112
+            ]
+          },
+          {
+            "changed_cells": 6,
+            "changed_area_percent": 1.0416666666666667,
+            "mean_rgb_difference_0_255": 28.222222222222225,
+            "bbox_xyxy_0_1": [
+              0.09375,
+              0.8333333333333334,
+              0.25,
+              0.9444444444444444
+            ]
+          },
+          {
+            "changed_cells": 3,
+            "changed_area_percent": 0.5208333333333334,
+            "mean_rgb_difference_0_255": 38.77777777777777,
+            "bbox_xyxy_0_1": [
+              0.28125,
+              0.9444444444444444,
+              0.375,
+              1.0
+            ]
+          },
+          {
+            "changed_cells": 1,
+            "changed_area_percent": 0.1736111111111111,
+            "mean_rgb_difference_0_255": 29.666666666666668,
+            "bbox_xyxy_0_1": [
+              0.5,
+              0.0,
+              0.53125,
+              0.05555555555555555
+            ]
+          },
+          {
+            "changed_cells": 1,
+            "changed_area_percent": 0.1736111111111111,
+            "mean_rgb_difference_0_255": 24.333333333333332,
+            "bbox_xyxy_0_1": [
+              0.0,
+              0.05555555555555555,
+              0.03125,
+              0.1111111111111111
+            ]
+          },
+          {
+            "changed_cells": 1,
+            "changed_area_percent": 0.1736111111111111,
+            "mean_rgb_difference_0_255": 24.666666666666668,
+            "bbox_xyxy_0_1": [
+              0.03125,
+              0.1111111111111111,
+              0.0625,
+              0.16666666666666666
+            ]
+          },
+          {
+            "changed_cells": 1,
+            "changed_area_percent": 0.1736111111111111,
+            "mean_rgb_difference_0_255": 28.333333333333332,
+            "bbox_xyxy_0_1": [
+              0.28125,
+              0.1111111111111111,
+              0.3125,
+              0.16666666666666666
+            ]
+          },
+          {
+            "changed_cells": 1,
+            "changed_area_percent": 0.1736111111111111,
+            "mean_rgb_difference_0_255": 38.666666666666664,
+            "bbox_xyxy_0_1": [
+              0.65625,
+              0.8333333333333334,
+              0.6875,
+              0.8888888888888888
+            ]
+          },
+          {
+            "changed_cells": 1,
+            "changed_area_percent": 0.1736111111111111,
+            "mean_rgb_difference_0_255": 27.333333333333332,
+            "bbox_xyxy_0_1": [
+              0.8125,
+              0.9444444444444444,
+              0.84375,
+              1.0
+            ]
+          }
+        ],
+        "id": "view_996fc0ce-d8f5-414b-994f-46c24a8b1958"
+      },
+      "camera_motion": {
+        "elapsed_seconds": 9.998927,
+        "position_delta_blocks": 0.0,
+        "yaw_delta_degrees": 0.0,
+        "pitch_delta_degrees": 0.0
+      },
+      "frames": [
+        {
+          "label": "before",
+          "captured_at": "2026-10-28T06:57:11.682275Z",
+          "capture_id": "view_98f63bb9-bc87-4427-a53b-0cabd811282c",
+          "motion_sequence": 72,
+          "original_path": "/Users/yukin_co/Library/Application Support/minecraft/dogido-vision/captures/view_98f63bb9-bc87-4427-a53b-0cabd811282c",
+          "native": "pair_08/before-native.png",
+          "native_sha256": "d34d16d18659c8f1dc7081cd897df7b01c7c5685c0c794f788abd27c5cf96fbd",
+          "model_image": "pair_08/before-model.png",
+          "model_sha256": "ca16bbcdde526dca93ca20667eef12d30ec40f8be286fd3de7f06f46e7e7bca8",
+          "width": 192,
+          "height": 108
+        },
+        {
+          "label": "after",
+          "captured_at": "2026-10-28T06:57:21.681202Z",
+          "capture_id": "view_996fc0ce-d8f5-414b-994f-46c24a8b1958",
+          "motion_sequence": 73,
+          "original_path": "/Users/yukin_co/Library/Application Support/minecraft/dogido-vision/captures/view_996fc0ce-d8f5-414b-994f-46c24a8b1958",
+          "native": "pair_08/after-native.png",
+          "native_sha256": "b36c0efa0c4cf2fb02c8fc2a2ccc86d673bfb94a942dcf8a4cc95de16f946140",
+          "model_image": "pair_08/after-model.png",
+          "model_sha256": "9c31051debce144edcb990d6837cb2a3f41fe91384f87e37b575442f0a758b6a",
+          "width": 192,
+          "height": 108
+        }
+      ],
+      "aim": "実測した変化率と撮影姿勢が同じ画像対で、差分量・領域を添える効果だけを比べる。",
+      "review": "話しただけで過敏とは決めない。画像にない変化の断定、変化の誇張、重要な小変化の見落としを内容で確認する。発話率と誤反応率は分け、履歴を使う反復抑制は今回未評価。"
+    },
+    {
+      "id": "pair_09",
+      "category": "10_to_25",
+      "metrics": {
+        "grid_width": 32,
+        "grid_height": 18,
+        "mean_rgb_difference_0_255": 15.942708333333321,
+        "changed_cell_count": 89,
+        "changed_area_percent": 15.45138888888889,
+        "legacy_threshold_crossed": true,
+        "cell_difference_threshold_exclusive": 24,
+        "regions": [
+          {
+            "changed_cells": 72,
+            "changed_area_percent": 12.5,
+            "mean_rgb_difference_0_255": 26.513888888888893,
+            "bbox_xyxy_0_1": [
+              0.03125,
+              0.2222222222222222,
+              1.0,
+              0.5555555555555556
+            ]
+          },
+          {
+            "changed_cells": 5,
+            "changed_area_percent": 0.8680555555555556,
+            "mean_rgb_difference_0_255": 25.133333333333333,
+            "bbox_xyxy_0_1": [
+              0.0,
+              0.0,
+              0.09375,
+              0.16666666666666666
+            ]
+          },
+          {
+            "changed_cells": 3,
+            "changed_area_percent": 0.5208333333333334,
+            "mean_rgb_difference_0_255": 24.666666666666668,
+            "bbox_xyxy_0_1": [
+              0.65625,
+              0.2222222222222222,
+              0.71875,
+              0.3333333333333333
+            ]
+          },
+          {
+            "changed_cells": 3,
+            "changed_area_percent": 0.5208333333333334,
+            "mean_rgb_difference_0_255": 24.333333333333332,
+            "bbox_xyxy_0_1": [
+              0.53125,
+              0.2777777777777778,
+              0.625,
+              0.3333333333333333
+            ]
+          },
+          {
+            "changed_cells": 1,
+            "changed_area_percent": 0.1736111111111111,
+            "mean_rgb_difference_0_255": 24.666666666666668,
+            "bbox_xyxy_0_1": [
+              0.0,
+              0.0,
+              0.03125,
+              0.05555555555555555
+            ]
+          },
+          {
+            "changed_cells": 1,
+            "changed_area_percent": 0.1736111111111111,
+            "mean_rgb_difference_0_255": 24.333333333333332,
+            "bbox_xyxy_0_1": [
+              0.71875,
+              0.1111111111111111,
+              0.75,
+              0.16666666666666666
+            ]
+          },
+          {
+            "changed_cells": 1,
+            "changed_area_percent": 0.1736111111111111,
+            "mean_rgb_difference_0_255": 24.666666666666668,
+            "bbox_xyxy_0_1": [
+              0.21875,
+              0.16666666666666666,
+              0.25,
+              0.2222222222222222
+            ]
+          },
+          {
+            "changed_cells": 1,
+            "changed_area_percent": 0.1736111111111111,
+            "mean_rgb_difference_0_255": 24.666666666666668,
+            "bbox_xyxy_0_1": [
+              0.875,
+              0.16666666666666666,
+              0.90625,
+              0.2222222222222222
+            ]
+          },
+          {
+            "changed_cells": 1,
+            "changed_area_percent": 0.1736111111111111,
+            "mean_rgb_difference_0_255": 24.333333333333332,
+            "bbox_xyxy_0_1": [
+              0.9375,
+              0.16666666666666666,
+              0.96875,
+              0.2222222222222222
+            ]
+          },
+          {
+            "changed_cells": 1,
+            "changed_area_percent": 0.1736111111111111,
+            "mean_rgb_difference_0_255": 25.0,
+            "bbox_xyxy_0_1": [
+              0.0625,
+              0.3333333333333333,
+              0.09375,
+              0.3888888888888889
+            ]
+          }
+        ],
+        "id": "view_e0744e6f-0ada-4ee4-ad24-8aa82af35699"
+      },
+      "camera_motion": {
+        "elapsed_seconds": 11.993798,
+        "position_delta_blocks": 0.0,
+        "yaw_delta_degrees": 0.0,
+        "pitch_delta_degrees": 0.0
+      },
+      "frames": [
+        {
+          "label": "before",
+          "captured_at": "2026-10-28T07:01:57.716630Z",
+          "capture_id": "view_dae495c4-6c96-45c2-a31a-2dac23e45c65",
+          "motion_sequence": 99,
+          "original_path": "/Users/yukin_co/Library/Application Support/minecraft/dogido-vision/captures/view_dae495c4-6c96-45c2-a31a-2dac23e45c65",
+          "native": "pair_09/before-native.png",
+          "native_sha256": "dd3c99b26b53af58b35ccac8709508a80e0eea5279a00429eb5d0d061895f491",
+          "model_image": "pair_09/before-model.png",
+          "model_sha256": "6e408355655fc3fe2eff10dc9d52fa5d389198041a0428d615492c64fc6a7c6e",
+          "width": 192,
+          "height": 108
+        },
+        {
+          "label": "after",
+          "captured_at": "2026-10-28T07:02:09.710428Z",
+          "capture_id": "view_e0744e6f-0ada-4ee4-ad24-8aa82af35699",
+          "motion_sequence": 100,
+          "original_path": "/Users/yukin_co/Library/Application Support/minecraft/dogido-vision/captures/view_e0744e6f-0ada-4ee4-ad24-8aa82af35699",
+          "native": "pair_09/after-native.png",
+          "native_sha256": "50877f03ae00c7a82971fa51767080f616dab279f070cce71b83cdb0910655e2",
+          "model_image": "pair_09/after-model.png",
+          "model_sha256": "71ad953f54b199c38903b664fb9ff5ac83dccd581c1754e8f22a66d1b3218155",
+          "width": 192,
+          "height": 108
+        }
+      ],
+      "aim": "実測した変化率と撮影姿勢が同じ画像対で、差分量・領域を添える効果だけを比べる。",
+      "review": "話しただけで過敏とは決めない。画像にない変化の断定、変化の誇張、重要な小変化の見落としを内容で確認する。発話率と誤反応率は分け、履歴を使う反復抑制は今回未評価。"
+    },
+    {
+      "id": "pair_10",
+      "category": "10_to_25",
+      "metrics": {
+        "grid_width": 32,
+        "grid_height": 18,
+        "mean_rgb_difference_0_255": 27.79976851851852,
+        "changed_cell_count": 120,
+        "changed_area_percent": 20.833333333333336,
+        "legacy_threshold_crossed": true,
+        "cell_difference_threshold_exclusive": 24,
+        "regions": [
+          {
+            "changed_cells": 120,
+            "changed_area_percent": 20.833333333333332,
+            "mean_rgb_difference_0_255": 129.37222222222215,
+            "bbox_xyxy_0_1": [
+              0.53125,
+              0.3333333333333333,
+              1.0,
+              1.0
+            ]
+          }
+        ],
+        "id": "view_55cf07fe-2bbb-4c69-9d5c-15ed47e09247"
+      },
+      "camera_motion": {
+        "elapsed_seconds": 11.992862,
+        "position_delta_blocks": 0.0,
+        "yaw_delta_degrees": 0.0,
+        "pitch_delta_degrees": 0.0
+      },
+      "frames": [
+        {
+          "label": "before",
+          "captured_at": "2026-10-27T11:06:47.762406Z",
+          "capture_id": "view_4099eefd-79c8-4a7c-ae2b-ca85d017b300",
+          "motion_sequence": 2,
+          "original_path": "/Users/yukin_co/Library/Application Support/minecraft/dogido-vision/captures/view_4099eefd-79c8-4a7c-ae2b-ca85d017b300",
+          "native": "pair_10/before-native.png",
+          "native_sha256": "cccba093877c81654116bca9112b6e43adc50d25a609e4b5722e6af76d7a566c",
+          "model_image": "pair_10/before-model.png",
+          "model_sha256": "085ba32dffa7a1c2251489735cabf1df86603a586eec25e25a212493dd3b437f",
+          "width": 192,
+          "height": 108
+        },
+        {
+          "label": "after",
+          "captured_at": "2026-10-27T11:06:59.755268Z",
+          "capture_id": "view_55cf07fe-2bbb-4c69-9d5c-15ed47e09247",
+          "motion_sequence": 3,
+          "original_path": "/Users/yukin_co/Library/Application Support/minecraft/dogido-vision/captures/view_55cf07fe-2bbb-4c69-9d5c-15ed47e09247",
+          "native": "pair_10/after-native.png",
+          "native_sha256": "fcc3fe104fd38a7e8c8345b99b6c0731bc910f65a848ee64c0077dbd8053b39a",
+          "model_image": "pair_10/after-model.png",
+          "model_sha256": "eadb129c295d5b34b6db66969f62435f6933f3078fb896897e98f080649aec3c",
+          "width": 192,
+          "height": 108
+        }
+      ],
+      "aim": "実測した変化率と撮影姿勢が同じ画像対で、差分量・領域を添える効果だけを比べる。",
+      "review": "話しただけで過敏とは決めない。画像にない変化の断定、変化の誇張、重要な小変化の見落としを内容で確認する。発話率と誤反応率は分け、履歴を使う反復抑制は今回未評価。"
+    },
+    {
+      "id": "pair_11",
+      "category": "over_25",
+      "metrics": {
+        "grid_width": 32,
+        "grid_height": 18,
+        "mean_rgb_difference_0_255": 15.546875,
+        "changed_cell_count": 210,
+        "changed_area_percent": 36.45833333333333,
+        "legacy_threshold_crossed": true,
+        "cell_difference_threshold_exclusive": 24,
+        "regions": [
+          {
+            "changed_cells": 207,
+            "changed_area_percent": 35.9375,
+            "mean_rgb_difference_0_255": 36.795491143317264,
+            "bbox_xyxy_0_1": [
+              0.0,
+              0.5,
+              1.0,
+              1.0
+            ]
+          },
+          {
+            "changed_cells": 3,
+            "changed_area_percent": 0.5208333333333334,
+            "mean_rgb_difference_0_255": 24.666666666666668,
+            "bbox_xyxy_0_1": [
+              0.0,
+              0.6666666666666666,
+              0.0625,
+              0.7777777777777778
+            ]
+          }
+        ],
+        "id": "view_5345e600-67be-46d6-b159-d9c785eba23b"
+      },
+      "camera_motion": {
+        "elapsed_seconds": 5.846274,
+        "position_delta_blocks": 0.0,
+        "yaw_delta_degrees": 0.0,
+        "pitch_delta_degrees": 0.0
+      },
+      "frames": [
+        {
+          "label": "before",
+          "captured_at": "2026-10-28T00:04:46.352951Z",
+          "capture_id": "view_48a5b7fd-e17f-4190-bdbf-b1cd0b0bff74",
+          "motion_sequence": 50,
+          "original_path": "/Users/yukin_co/Library/Application Support/minecraft/dogido-vision/captures/view_48a5b7fd-e17f-4190-bdbf-b1cd0b0bff74",
+          "native": "pair_11/before-native.png",
+          "native_sha256": "66d656d0c708a5cc23dbe5161a4f406bab6f9b1a9e4ff91028481a8c57fd35b3",
+          "model_image": "pair_11/before-model.png",
+          "model_sha256": "b6ad1be4de2c095067a8fc531a64ee9e85afd167901cc4985115920dbef699c6",
+          "width": 192,
+          "height": 108
+        },
+        {
+          "label": "after",
+          "captured_at": "2026-10-28T00:04:52.199225Z",
+          "capture_id": "view_5345e600-67be-46d6-b159-d9c785eba23b",
+          "motion_sequence": 51,
+          "original_path": "/Users/yukin_co/Library/Application Support/minecraft/dogido-vision/captures/view_5345e600-67be-46d6-b159-d9c785eba23b",
+          "native": "pair_11/after-native.png",
+          "native_sha256": "244d58a3a76a9e3cb572278cfdcac92be560b79301c230ba734cea3244825692",
+          "model_image": "pair_11/after-model.png",
+          "model_sha256": "45062858a514441bab7d92beb4b1a331716e7f34d61ff6195dbe37bb8464c9d4",
+          "width": 192,
+          "height": 108
+        }
+      ],
+      "aim": "実測した変化率と撮影姿勢が同じ画像対で、差分量・領域を添える効果だけを比べる。",
+      "review": "話しただけで過敏とは決めない。画像にない変化の断定、変化の誇張、重要な小変化の見落としを内容で確認する。発話率と誤反応率は分け、履歴を使う反復抑制は今回未評価。"
+    },
+    {
+      "id": "pair_12",
+      "category": "camera_turn",
+      "metrics": {
+        "grid_width": 32,
+        "grid_height": 18,
+        "mean_rgb_difference_0_255": 8.026041666666673,
+        "changed_cell_count": 0,
+        "changed_area_percent": 0.0,
+        "legacy_threshold_crossed": true,
+        "cell_difference_threshold_exclusive": 24,
+        "regions": [],
+        "id": "view_2672ba70-380e-4052-9960-49fe8ae2beb4"
+      },
+      "camera_motion": {
+        "elapsed_seconds": 8.999264,
+        "position_delta_blocks": 0.358154296875,
+        "yaw_delta_degrees": 113.90625,
+        "pitch_delta_degrees": 81.5625
+      },
+      "frames": [
+        {
+          "label": "before",
+          "captured_at": "2026-10-28T00:03:01.093711Z",
+          "capture_id": "view_37b4045e-30eb-42ce-b2fc-24bbb1297ded",
+          "motion_sequence": 35,
+          "original_path": "/Users/yukin_co/Library/Application Support/minecraft/dogido-vision/captures/view_37b4045e-30eb-42ce-b2fc-24bbb1297ded",
+          "native": "pair_12/before-native.png",
+          "native_sha256": "3d3509b9c0fb0055fe137ce1d6fb5ac425e4c86fb026aa44e4843bc81f3ebc75",
+          "model_image": "pair_12/before-model.png",
+          "model_sha256": "a2ad99e72133e0372c889debe4d55715996bca563cf75ac65d914c78d1df9730",
+          "width": 192,
+          "height": 108
+        },
+        {
+          "label": "after",
+          "captured_at": "2026-10-28T00:03:10.092975Z",
+          "capture_id": "view_2672ba70-380e-4052-9960-49fe8ae2beb4",
+          "motion_sequence": 36,
+          "original_path": "/Users/yukin_co/Library/Application Support/minecraft/dogido-vision/captures/view_2672ba70-380e-4052-9960-49fe8ae2beb4",
+          "native": "pair_12/after-native.png",
+          "native_sha256": "efc6c13bb1f1be6354f801b628c134920192113ddc8c1099bd25db7a61365c6e",
+          "model_image": "pair_12/after-model.png",
+          "model_sha256": "e79a0ad74fd7d8a2b937d9f627fbca4b20ac85338df5406f2e853f0da08acbfa",
+          "width": 192,
+          "height": 108
+        }
+      ],
+      "aim": "実測した変化率と撮影姿勢が同じ画像対で、差分量・領域を添える効果だけを比べる。",
+      "review": "話しただけで過敏とは決めない。画像にない変化の断定、変化の誇張、重要な小変化の見落としを内容で確認する。発話率と誤反応率は分け、履歴を使う反復抑制は今回未評価。"
+    },
+    {
+      "id": "pair_13",
+      "category": "camera_turn",
+      "metrics": {
+        "grid_width": 32,
+        "grid_height": 18,
+        "mean_rgb_difference_0_255": 40.64872685185184,
+        "changed_cell_count": 499,
+        "changed_area_percent": 86.63194444444444,
+        "legacy_threshold_crossed": true,
+        "cell_difference_threshold_exclusive": 24,
+        "regions": [
+          {
+            "changed_cells": 496,
+            "changed_area_percent": 86.11111111111111,
+            "mean_rgb_difference_0_255": 44.78494623655915,
+            "bbox_xyxy_0_1": [
+              0.0,
+              0.0,
+              1.0,
+              1.0
+            ]
+          },
+          {
+            "changed_cells": 2,
+            "changed_area_percent": 0.3472222222222222,
+            "mean_rgb_difference_0_255": 26.666666666666664,
+            "bbox_xyxy_0_1": [
+              0.0,
+              0.9444444444444444,
+              0.0625,
+              1.0
+            ]
+          },
+          {
+            "changed_cells": 1,
+            "changed_area_percent": 0.1736111111111111,
+            "mean_rgb_difference_0_255": 26.0,
+            "bbox_xyxy_0_1": [
+              0.46875,
+              0.6666666666666666,
+              0.5,
+              0.7222222222222222
+            ]
+          }
+        ],
+        "id": "view_4fa93cd5-07ac-435f-b36d-271f9757b24e"
+      },
+      "camera_motion": {
+        "elapsed_seconds": 2.946115,
+        "position_delta_blocks": 8.30192981627492,
+        "yaw_delta_degrees": 118.125,
+        "pitch_delta_degrees": 0.0
+      },
+      "frames": [
+        {
+          "label": "before",
+          "captured_at": "2026-10-28T07:00:09.692687Z",
+          "capture_id": "view_405e9694-976f-44bd-8b0b-6c218db2b51f",
+          "motion_sequence": 86,
+          "original_path": "/Users/yukin_co/Library/Application Support/minecraft/dogido-vision/captures/view_405e9694-976f-44bd-8b0b-6c218db2b51f",
+          "native": "pair_13/before-native.png",
+          "native_sha256": "94ee44d60da3c8210ef91b957331c71b8ead8b0feb4c36cd84c49f32371ec6e5",
+          "model_image": "pair_13/before-model.png",
+          "model_sha256": "cff52c8cfdeb29341d0b0a4317f7dbcd08a0f71b3262947091806e5b3235e1d5",
+          "width": 192,
+          "height": 108
+        },
+        {
+          "label": "after",
+          "captured_at": "2026-10-28T07:00:12.638802Z",
+          "capture_id": "view_4fa93cd5-07ac-435f-b36d-271f9757b24e",
+          "motion_sequence": 87,
+          "original_path": "/Users/yukin_co/Library/Application Support/minecraft/dogido-vision/captures/view_4fa93cd5-07ac-435f-b36d-271f9757b24e",
+          "native": "pair_13/after-native.png",
+          "native_sha256": "7ebcd4ad0f751a921eb420fd70d5a90302f4625ac8eedfb2dd18e018562eafb6",
+          "model_image": "pair_13/after-model.png",
+          "model_sha256": "af95fd1dd8870bae47c8ff0db33802f085a7c4d7d377faec42680591a39fcac2",
+          "width": 192,
+          "height": 108
+        }
+      ],
+      "aim": "実測した変化率と撮影姿勢が同じ画像対で、差分量・領域を添える効果だけを比べる。",
+      "review": "話しただけで過敏とは決めない。画像にない変化の断定、変化の誇張、重要な小変化の見落としを内容で確認する。発話率と誤反応率は分け、履歴を使う反復抑制は今回未評価。"
+    }
+  ],
+  "scope": "画像対の独立診断。本体の発話機会・4枚前比較・連続会話の反復抑制は検証しない。",
+  "sources": {
+    "/Users/yukin_co/Documents/DokiDoki-Dogido/dogido_server/llm/companion_prompts.json": "fe73c5aa95f795857690fed95cb7425d1f8f31d37b44bfe9c13569ad22c2ae3a",
+    "/private/tmp/dogido-tests-final-20261029/combined/dogido-rust/tests/acceptance/part5_model_prompt.json": "44f985a1f92ec00676b68aabb10fffb06044f0db95fa8a0060d567b670586a67",
+    "/private/tmp/dogido-tests-final-20261029/combined/adapter/minecraft-fabric/src/main/java/dogido/fabric/screenshot/BodyViewChange.java": "ad52442fe634d58eb4458ba7b038b32ff5f6d83e99be90d55b01b629804b107b",
+    "/private/tmp/dogido-tests-final-20261029/combined/dogido-rust/tests/acceptance/java/dogido/fabric/screenshot/BodyViewPairMetrics.java": "b4324ba84dcf9bee0820baf40de2feeabcdea36d7521764742c288a260a5f34b",
+    "/private/tmp/dogido-tests-final-20261029/combined/dogido-rust/tests/acceptance/part5_model.py": "0f03815b9b05830d9ab9f63ffaac05d17656742548dd527ab08251f9a607cbdf"
+  },
+  "revision_note": "領域中心の日本語ラベルを撤去。既存13組・画像・プロンプト・測定値は同一。初回30応答は比較から除外。"
+}

@@ -1,0 +1,20 @@
+{
+  "verified_at": "2026-10-29",
+  "copied_files_sha256_verified": 374,
+  "valid_trials": {
+    "prepared-v2": 117,
+    "grid8x6-v1": 78,
+    "grid-location-merged-v1": 48
+  },
+  "valid_responses_total": 243,
+  "excluded_preliminary_responses": 30,
+  "trial_image_hashes_verified": {
+    "prepared-v2": 52,
+    "grid8x6-v1": 65,
+    "grid-location-merged-v1": 48
+  },
+  "golden_cases_recomputed": 13,
+  "golden_cells_per_case": 48,
+  "production_code_modified": false,
+  "model_requests_during_packaging": 0
+}

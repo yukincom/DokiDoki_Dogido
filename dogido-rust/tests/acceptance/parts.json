@@ -1,0 +1,163 @@
+{
+  "1": {
+    "title": "位置の主語と視点",
+    "filter": "dialogue::acceptance_position",
+    "files": [
+      "position.rs"
+    ],
+    "tests": [
+      "dialogue::acceptance_position::common_observation_distinguishes_subject_reference_and_invisible_position",
+      "dialogue::acceptance_position::ordinary_reply_receives_subject_facts",
+      "dialogue::acceptance_position::environment_receives_the_same_subject_facts",
+      "dialogue::acceptance_position::rotating_only_player_changes_only_player_reference",
+      "dialogue::acceptance_position::rotating_only_dogido_changes_only_dogido_reference",
+      "dialogue::acceptance_position::distance_9_38_is_9_blocks",
+      "dialogue::acceptance_position::distance_9_99_is_9_not_10_blocks",
+      "dialogue::acceptance_position::distance_0_99_is_0_not_1_block",
+      "dialogue::acceptance_position::distance_10_01_is_10_blocks_without_decimal_suffix",
+      "dialogue::acceptance_position::unavailable_observation_clears_previous_position_in_both_model_routes",
+      "dialogue::acceptance_position::changing_visibility_preserves_known_position",
+      "dialogue::acceptance_position::position_changes_use_subject_facts_and_internal_comparison_keeps_numeric_data"
+    ]
+  },
+  "2": {
+    "title": "履歴の記録と復元",
+    "filter": "dialogue::acceptance_history_metadata",
+    "files": [
+      "history_metadata.rs"
+    ],
+    "tests": [
+      "dialogue::acceptance_history_metadata::input_admission_records_time_and_player_input_kind",
+      "dialogue::acceptance_history_metadata::audio_completion_records_delivery_time_and_actual_reply_target",
+      "dialogue::acceptance_history_metadata::text_ack_records_reply_metadata_without_faking_audio_completion",
+      "dialogue::acceptance_history_metadata::duplicate_ack_and_audio_completion_preserve_first_record_in_either_order",
+      "dialogue::acceptance_history_metadata::ambient_delivery_is_spontaneous_without_invented_reply_target",
+      "dialogue::acceptance_history_metadata::combat_delivery_is_warning_even_when_its_words_match_ambient",
+      "dialogue::acceptance_history_metadata::urgent_environment_delivery_is_warning_even_when_its_words_match_ambient",
+      "dialogue::acceptance_history_metadata::snapshot_json_and_real_restore_preserve_time_kind_and_reply_target",
+      "dialogue::acceptance_history_metadata::legacy_rows_keep_missing_time_kind_and_reply_target_unknown",
+      "dialogue::acceptance_history_metadata::failed_cancelled_and_old_epoch_results_do_not_create_spoken_history",
+      "dialogue::acceptance_history_metadata::wrong_session_and_old_epoch_display_ack_cannot_confirm_history",
+      "dialogue::acceptance_history_metadata::silence_remains_event_and_never_becomes_spoken_reply_or_haiku_material",
+      "dialogue::acceptance_history_metadata::retention_and_compaction_still_keep_twenty_turns_and_forty_auxiliary_rows"
+    ]
+  },
+  "3": {
+    "title": "履歴表示と今回の用件",
+    "filter": "acceptance_history_display",
+    "files": [
+      "history_display.rs"
+    ],
+    "tests": [
+      "dialogue::acceptance_history_display::acceptance_history_display_normal_identifies_time_kind_and_reply_target_per_row",
+      "dialogue::acceptance_history_display::acceptance_history_display_environment_uses_same_readable_history_without_uuid",
+      "dialogue::acceptance_history_display::acceptance_history_display_current_question_follows_history_and_surrounding_material",
+      "dialogue::acceptance_history_display::acceptance_history_display_environment_declares_no_new_player_input",
+      "dialogue::acceptance_history_display::acceptance_history_display_missing_metadata_stays_unknown",
+      "dialogue::acceptance_history_display::acceptance_history_display_missing_reply_target_stays_unknown",
+      "dialogue::acceptance_history_display::acceptance_history_display_control_keeps_all_retained_rows_in_both_requests"
+    ]
+  },
+  "4": {
+    "title": "聴覚の事実と辞書の区別",
+    "filter": "acceptance_hearing",
+    "files": [
+      "hearing.rs"
+    ],
+    "tests": [
+      "dialogue::acceptance_hearing::common_sound_retains_event_and_original_heard_time",
+      "dialogue::acceptance_hearing::ordinary_request_receives_sound_fact_exactly_once",
+      "dialogue::acceptance_hearing::environment_request_receives_same_sound_fact_exactly_once",
+      "dialogue::acceptance_hearing::ordinary_request_does_not_repeat_the_same_hearing_memo",
+      "dialogue::acceptance_hearing::unknown_sound_keeps_uncertainty_without_inventing_a_source",
+      "dialogue::acceptance_hearing::player_emitter_confirmation_requires_actual_owner_source_match",
+      "dialogue::acceptance_hearing::duplicate_sound_is_collapsed_but_distinct_sound_event_survives",
+      "dialogue::acceptance_hearing::hostile_sound_preserves_adapter_uncertainty",
+      "dialogue::acceptance_hearing::empty_truncated_and_unavailable_hearing_are_distinct",
+      "dialogue::acceptance_hearing::control_catalog_sound_tags_remain_general_without_heard_evidence",
+      "dialogue::acceptance_hearing::control_player_side_sound_is_not_substituted_for_dogido_hearing",
+      "dialogue::acceptance_hearing::player_footsteps_are_inferred_from_complete_concurrent_context",
+      "dialogue::acceptance_hearing::player_breaking_sound_is_inferred_without_changing_sound_kind",
+      "dialogue::acceptance_hearing::empty_visible_mob_list_is_not_complete_sound_source_evidence",
+      "dialogue::acceptance_hearing::hidden_mob_or_other_player_prevents_exclusion_based_attribution",
+      "dialogue::acceptance_hearing::mismatched_time_position_or_player_action_keeps_source_unknown",
+      "dialogue::acceptance_hearing::direct_source_identity_takes_precedence_over_circumstantial_evidence",
+      "dialogue::acceptance_hearing::retained_sounds_preserve_time_certainty_and_attribution_in_both_requests",
+      "dialogue::acceptance_hearing::unavailable_body_does_not_replay_retained_hearing",
+      "dialogue::acceptance_hearing::truncated_sound_keeps_unknown_source_and_exports_both_model_inputs",
+      "dialogue::acceptance_hearing::retained_hostile_sound_keeps_name_permission_and_original_time"
+    ]
+  },
+  "5": {
+    "title": "画像の未比較と変化の区別",
+    "filter": "acceptance_image",
+    "files": [
+      "part5_image.rs"
+    ],
+    "tests": [
+      "dialogue::visual_runtime::acceptance_image::acceptance_image_uncompared_is_usable_in_ordinary_reply_without_change_opportunity",
+      "dialogue::visual_runtime::acceptance_image::acceptance_image_twelve_second_uncompared_refreshes_never_report_scene_change",
+      "dialogue::visual_runtime::acceptance_image::acceptance_image_compared_change_emits_once_and_unchanged_still_updates_cache_control",
+      "dialogue::visual_runtime::acceptance_image::acceptance_image_explicit_capture_survives_changed_pose_and_missing_body_sample_control",
+      "dialogue::visual_runtime::acceptance_image::acceptance_image_java_protocol_to_rust_receipt_preserves_three_states",
+      "dialogue::visual_runtime::acceptance_image::acceptance_image_invalid_comparison_never_enters_latest_cache",
+      "dialogue::visual_runtime::acceptance_image::acceptance_image_location_description_keeps_exact_cells_and_both_brightness_signs",
+      "dialogue::visual_runtime::acceptance_image::acceptance_image_both_model_routes_send_one_current_image_and_one_comparison"
+    ],
+    "prepare": [
+      "java_image_checks.py"
+    ]
+  },
+  "6": {
+    "title": "身体行動のJSON例",
+    "filter": "acceptance_body_schema",
+    "files": [
+      "part6_body_schema.rs"
+    ],
+    "tests": [
+      "body::autonomy::state::acceptance_body_schema::acceptance_body_schema_normal_prompt_examples_pass_real_receivers",
+      "body::autonomy::state::acceptance_body_schema::acceptance_body_schema_image_prompt_example_passes_real_receivers",
+      "body::autonomy::state::acceptance_body_schema::acceptance_body_schema_control_object_target_accepts_and_string_target_rejects"
+    ]
+  },
+  "7": {
+    "title": "身体行動の実行結果",
+    "filter": "acceptance_body_results",
+    "files": [
+      "part7_body_results.rs",
+      "part7_body_context.rs"
+    ],
+    "tests": [
+      "body::autonomy::state::acceptance_body_results::acceptance_body_results_success_reaches_next_choice_as_observed_result",
+      "body::autonomy::state::acceptance_body_results::acceptance_body_results_failure_reaches_next_choice_without_claiming_arrival",
+      "body::autonomy::state::acceptance_body_results::acceptance_body_results_cancel_is_carried_forward_and_late_success_cannot_overwrite_it",
+      "body::autonomy::state::acceptance_body_results::acceptance_body_results_waiting_and_adapter_acceptance_do_not_mean_completion",
+      "body::autonomy::state::acceptance_body_results::acceptance_body_results_wrong_command_or_epoch_cannot_complete_choice_control",
+      "body::autonomy::state::acceptance_body_results::acceptance_body_results_history_stays_bounded_and_old_generation_cannot_leak_control",
+      "dialogue::body_interest_runtime::acceptance_body_results_context::acceptance_body_results_current_body_state_accompanies_next_model_options",
+      "dialogue::body_interest_runtime::acceptance_body_results_context::acceptance_body_results_ordinary_reply_receives_queued_operation",
+      "dialogue::body_interest_runtime::acceptance_body_results_context::acceptance_body_results_ordinary_reply_receives_successful_operation",
+      "dialogue::body_interest_runtime::acceptance_body_results_context::acceptance_body_results_ordinary_reply_receives_failed_operation",
+      "dialogue::body_interest_runtime::acceptance_body_results_context::acceptance_body_results_ordinary_reply_receives_cancelled_operation"
+    ]
+  },
+  "8": {
+    "title": "川柳の具体変更",
+    "filter": "acceptance_part8_",
+    "files": [
+      "part8_workshop.rs",
+      "part8_edit_engine.rs"
+    ],
+    "tests": [
+      "dialogue::workshop_runtime::acceptance_part8::acceptance_part8_current_lines_have_upper_middle_lower_labels_in_model_input",
+      "dialogue::workshop_runtime::acceptance_part8::acceptance_part8_classified_change_receives_current_candidate_without_new_words",
+      "dialogue::workshop_runtime::acceptance_part8::acceptance_part8_interpreted_player_words_save_only_selected_line",
+      "dialogue::workshop_runtime::acceptance_part8::acceptance_part8_selected_candidate_is_saved_without_reinventing_words",
+      "dialogue::workshop_runtime::acceptance_part8::acceptance_part8_ask_for_missing_words_keeps_verse_version_and_files",
+      "dialogue::workshop_runtime::acceptance_part8::acceptance_part8_stale_base_version_or_cancel_cannot_write_revision",
+      "dialogue::workshop_runtime::acceptance_part8::acceptance_part8_extra_changed_line_cannot_cross_save_boundary",
+      "dialogue::workshop_runtime::acceptance_part8::acceptance_part8_saved_shared_materials_reach_consultation_and_revision_inputs",
+      "dialogue::workshop_runtime::acceptance_part8::acceptance_part8_inspection_preserves_provided_materials_without_mutation"
+    ]
+  }
+}

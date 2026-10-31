@@ -1,0 +1,35 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running unittests src/lib.rs (/private/tmp/dogido-tests-final-20261029/target-combined/debug/deps/dogido_rust-3b05f0013177c941)
+
+running 7 tests
+test dialogue::workshop_runtime::acceptance_part8::acceptance_part8_ask_for_missing_words_keeps_verse_version_and_files ... ok
+test dialogue::workshop_runtime::acceptance_part8::acceptance_part8_classified_change_receives_current_candidate_without_new_words ... FAILED
+test dialogue::workshop_runtime::acceptance_part8::acceptance_part8_current_lines_have_upper_middle_lower_labels_in_model_input ... FAILED
+test dialogue::workshop_runtime::acceptance_part8::acceptance_part8_extra_changed_line_cannot_cross_save_boundary ... ok
+test dialogue::workshop_runtime::acceptance_part8::acceptance_part8_interpreted_player_words_save_only_selected_line ... ok
+test dialogue::workshop_runtime::acceptance_part8::acceptance_part8_selected_candidate_is_saved_without_reinventing_words ... ok
+test dialogue::workshop_runtime::acceptance_part8::acceptance_part8_stale_base_version_or_cancel_cannot_write_revision ... ok
+
+failures:
+
+---- dialogue::workshop_runtime::acceptance_part8::acceptance_part8_classified_change_receives_current_candidate_without_new_words stdout ----
+
+thread 'dialogue::workshop_runtime::acceptance_part8::acceptance_part8_classified_change_receives_current_candidate_without_new_words' (21358752) panicked at src/dialogue/../../tests/acceptance/part8_workshop.rs:204:5:
+assertion `left == right` failed: 具体変更の入力から保持案が落ちた
+  left: Null
+ right: Object {"proposal": Object {"line_index": Number(0), "target_fragment": String("さくらのは"), "replacement_text": String("さくらいろ")}, "validation_codes": Array []}
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- dialogue::workshop_runtime::acceptance_part8::acceptance_part8_current_lines_have_upper_middle_lower_labels_in_model_input stdout ----
+
+thread 'dialogue::workshop_runtime::acceptance_part8::acceptance_part8_current_lines_have_upper_middle_lower_labels_in_model_input' (21358755) panicked at src/dialogue/../../tests/acceptance/part8_workshop.rs:189:5:
+行ラベルと本文の組が欠けている: [("上の句", "さくらのは"), ("中の句", "くろいおのへと"), ("下の句", "あさのいろ")]
+
+
+failures:
+    dialogue::workshop_runtime::acceptance_part8::acceptance_part8_classified_change_receives_current_candidate_without_new_words
+    dialogue::workshop_runtime::acceptance_part8::acceptance_part8_current_lines_have_upper_middle_lower_labels_in_model_input
+
+test result: FAILED. 5 passed; 2 failed; 0 ignored; 0 measured; 933 filtered out; finished in 0.17s
+
+error: test failed, to rerun pass `--lib`

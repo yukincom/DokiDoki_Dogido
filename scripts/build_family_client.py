@@ -5,6 +5,7 @@ import argparse
 import hashlib
 from importlib import metadata
 import json
+import os
 from pathlib import Path
 import re
 import shutil
@@ -15,7 +16,7 @@ import zipfile
 VERSION = "fabric-loader-0.18.4-1.21.11"
 TEMPLATES = Path(__file__).resolve().parent / "family-client"
 sys.path.insert(0, str(TEMPLATES))
-from family_runtime import CLASSIFIER_FILES, RUST_BINARY, RUNTIME_SCRIPTS, validate_runtime
+from family_runtime import CLASSIFIER_FILES, RUST_BINARY, RUNTIME_SCRIPTS, WHISPER_WORKER, validate_runtime
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "dogido-rust/scripts"))
 from runtime_build import check_binary_freshness
 ENV = """# このフォルダ専用。個人の .env はコピーしない。
@@ -56,12 +57,14 @@ def dependencies(path: Path) -> list[str]:
             for line in output("otool", "-L", path).splitlines()[1:]]
 
 
-def portable_whisper(source: Path, destination: Path) -> None:
+def portable_whisper(source: Path, destination: Path, worker_source: Path, worker_target: Path) -> None:
     pending = []
     for name in ("whisper-cli", "whisper-vad-speech-segments"):
         target = destination / "bin" / name
         copy_file(source / "build/bin" / name, target)
         pending.append(target)
+    copy_file(worker_source, worker_target)
+    pending.append(worker_target)
     visited = set()
     while pending:
         current = pending.pop()
@@ -86,8 +89,11 @@ def portable_whisper(source: Path, destination: Path) -> None:
         command = ["install_name_tool"]
         for rpath in rpaths:
             command.extend(["-delete_rpath", rpath])
-        command.extend(["-add_rpath", "@executable_path/../lib" if binary.parent.name == "bin"
-                        else "@loader_path", str(binary)])
+        if binary == worker_target:
+            rpath = "@executable_path/" + os.path.relpath(destination / "lib", binary.parent)
+        else:
+            rpath = "@executable_path/../lib" if binary.parent.name == "bin" else "@loader_path"
+        command.extend(["-add_rpath", rpath, str(binary)])
         subprocess.run(command, check=True, capture_output=True, text=True)
         subprocess.run(["codesign", "--force", "--sign", "-", str(binary)],
                        check=True, capture_output=True, text=True)
@@ -175,7 +181,8 @@ def build(args: argparse.Namespace) -> None:
     copy_file(source / "LICENSE-CHARACTER.md", target / "LICENSE-CHARACTER.md")
     copy_file(source / ".dogido_tools/echo-cancel/bin/dogido-audio-capture",
               target / ".dogido_tools/echo-cancel/bin/dogido-audio-capture")
-    portable_whisper(args.whisper_root, target / ".dogido_tools/whisper")
+    portable_whisper(args.whisper_root, target / ".dogido_tools/whisper",
+                     source / WHISPER_WORKER, target / WHISPER_WORKER)
     copy_file(args.whisper_root / "models/ggml-kotoba-whisper-v2.0-q5_0.bin",
               target / ".dogido_tools/models/ggml-kotoba-whisper-v2.0-q5_0.bin")
     copy_file(args.vad_model, target / ".dogido_tools/models/ggml-silero-v6.2.0.bin")

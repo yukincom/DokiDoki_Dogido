@@ -1,5 +1,6 @@
+//! パワーのある実行環境のため、繊細なコントロールは不要。会話のテンポを止める処理を入れるな。
 //! 通常返答の可視JSON本文を文ごとに読み補正・合成・再生へ渡す。
-//! 一文先の音声と上限付き一返答の文字だけを待ち列に持ち、同じturnの取消・終端・辞書回収を所有する。
+//! 一文先の音声と上限付き一返答の文字だけを待ち列に持ち、同じturnの取消・終端を所有する。辞書はDialogueが返答をまたいで共有する。
 //! 先に聞こえた文は取り消せない。生成の後半の失敗では全文を確定せず、受理済み全文の表示ACKは従来どおり扱う。
 use super::{
     Dialogue, DialogueConfig, audio::Audio, bridge, chat_leaf_runtime::Run, tts_runtime::Reader,
@@ -23,6 +24,7 @@ pub(super) struct Source {
     turn: String,
     epoch: u64,
     generated: Arc<AtomicBool>,
+    generation_permit: Option<Arc<super::workshop_reply::Permit>>,
 }
 impl Source {
     pub(super) fn new(owner: &Arc<Dialogue>, sid: &str, turn: &str, epoch: u64) -> Option<Self> {
@@ -32,7 +34,15 @@ impl Source {
             turn: turn.into(),
             epoch,
             generated: Arc::new(AtomicBool::new(false)),
+            generation_permit: None,
         })
+    }
+    pub(super) fn with_generation_permit(
+        mut self,
+        permit: Arc<super::workshop_reply::Permit>,
+    ) -> Self {
+        self.generation_permit = Some(permit);
+        self
     }
     /// 全文の受理と表示への引渡しまで完了したら、生成期限を外して音声配送を続ける。
     pub(super) fn generated(&self) -> bool {
@@ -63,7 +73,9 @@ impl Source {
         }
         pipeline(
             &config,
+            &owner.reading_dictionary,
             &owner.audio,
+            &owner.serial,
             llm,
             SpeechInput { request: &request, image, corrections },
             cancel,
@@ -76,12 +88,13 @@ impl Source {
                     let text = row.and_then(|r| r["player_input_text"].as_str())
                         .unwrap_or("")
                         .to_owned();
-                    if let Some(session) = data
-                        .sessions
-                        .get_mut(&self.sid)
-                        .filter(|s| s.epoch == self.epoch)
-                    {
-                        session.history.push_input(&self.turn, &text, input_occurred_at);
+                    if let Some(session) = data.sessions.get_mut(&self.sid).filter(|s| {
+                        s.epoch == self.epoch
+                            || super::reply_output::current(s, &self.turn, self.epoch)
+                    }) {
+                        session
+                            .history
+                            .push_input(&self.turn, &text, input_occurred_at);
                     }
                 }
             },
@@ -102,6 +115,9 @@ impl Source {
                     "speech turn changed"
                 );
                 self.generated.store(true, Ordering::Release);
+                if let Some(permit) = &self.generation_permit {
+                    permit.release();
+                }
                 Ok(())
             },
         )
@@ -215,7 +231,7 @@ fn confirmed_action(raw: &str) -> Option<String> {
 async fn send_sentences(
     config: &DialogueConfig,
     audio: &Audio,
-    reader: &mut Reader,
+    reader: &mut Reader<'_>,
     chunks: Vec<String>,
     tx: &mpsc::Sender<(usize, Arc<Vec<u8>>)>,
     cancel: &mut watch::Receiver<bool>,
@@ -257,7 +273,9 @@ struct SpeechInput<'a> {
 
 async fn pipeline(
     config: &DialogueConfig,
+    dictionary: &super::tts_runtime::Dictionary,
     audio: &Audio,
+    serial: &tokio::sync::Semaphore,
     llm: &RigLlm,
     input: SpeechInput<'_>,
     cancel: &mut watch::Receiver<bool>,
@@ -307,7 +325,7 @@ async fn pipeline(
     };
     let produce = async {
         let mut abort = stop_rx.clone();
-        let mut reader = Reader::new(corrections);
+        let mut reader = Reader::new(dictionary, corrections);
         let mut prefix = Prefix::default();
         let mut index = 0;
         let work = async {
@@ -355,13 +373,15 @@ async fn pipeline(
             }
             let _ = stop.send(true);
         }
-        let cleanup = reader.finish(work.is_err() || *stop_rx.borrow()).await;
         drop(audio_tx);
-        work?;
-        cleanup
+        work
     };
     let play = async {
         let mut abort = stop_rx.clone();
+        let _audio_permit = tokio::select! { biased;
+            _ = bridge::cancelled(&mut abort) => return Err(anyhow::anyhow!("cancelled")),
+            permit = serial.acquire() => permit.unwrap(),
+        };
         let result = audio
             .play_stream(config, audio_rx, &mut abort, || {
                 did_start.store(true, Ordering::SeqCst);

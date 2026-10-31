@@ -53,7 +53,7 @@
 # 上記は既存のポータルfixture不一致1件で終了。
 ./dogido-rust/cargo.sh test --offline --test '*' -- --skip canonical_raw_catalog_entries_are_not_fixture_backed --quiet
 ./dogido-rust/cargo.sh build --release --offline --locked
-python3 dogido-rust/scripts/check_chat_native.py --binary dogido-rust/target/debug/dogido-rust
+python3 dogido-rust/tests/python/check_chat_native.py --binary dogido-rust/target/debug/dogido-rust
 ```
 
 ## 確認範囲
