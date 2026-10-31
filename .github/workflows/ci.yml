@@ -20,8 +20,19 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
+        with:
+          distribution: temurin
+          java-version: '21'
+      # Rustの画像受入試験は本体Javaをコンパイルする。個人のGradleキャッシュに依存しない。
+      - name: Install image test dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends libgoogle-gson-java
       # cargo.shが既存のrust-toolchain.tomlとCargo.lockを使用する。
       - name: Test all Rust targets
+        env:
+          DOGIDO_ACCEPTANCE_GSON: /usr/share/java/gson.jar
         run: ./dogido-rust/cargo.sh test --all-targets --locked
 
   helpers:

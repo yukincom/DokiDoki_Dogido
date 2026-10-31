@@ -1,4 +1,8 @@
+// 見込み: 相談用の行名を本文から分け、正本と新案生成用の共有投影は保つ。
+// 合格: 入力不変のまま相談・共有文脈・revisionの期待値へ一致。読み取り投影だけを扱い、モデル・編集保存は対象外。
 use super::*;
+// 見込み: 行配列への変更は相談用detailsだけへ反映し、他の投影と入力を変えない。
+// 合格: 全216ケースの構造・直列化がfixtureと一致し、revisionも既存の型で読める。外部処理は呼ばない。
 #[test]
 fn canonical_context_details_and_revision_goldens() {
     let data: Value = serde_json::from_str(include_str!("fixtures.json")).unwrap();

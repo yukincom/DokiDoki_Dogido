@@ -119,6 +119,31 @@ async fn completed(d: &Dialogue, mock: &Mock) {
 }
 const INSPECT: &str = r#"{"action":"silent","speech":"","body_action":{"action":"inspect","target_id":"c1"}}"#;
 
+/// 共有説明の配線と、当回の選択肢だけを示すJSON完成例を別々に検査する。
+/// 過去の行動名や契約の一般説明を、今回選べる行動として数えない。
+fn assert_current_body_prompt(system: &str, input: &Value) {
+    let options = &input["body_options"];
+    let prefix = format!("{}\n", crate::companion_prompt::environment_with_body(false, true, true));
+    let examples = system.strip_prefix(&prefix).expect("共有環境契約と身体説明を一回使う");
+    assert_eq!(examples, crate::companion_prompt::environment_body_examples(options));
+    let mut example_actions = std::collections::BTreeSet::new();
+    for line in examples.lines() {
+        let example: Value = serde_json::from_str(line).unwrap();
+        let action = example["body_action"]["action"].as_str().unwrap();
+        assert!(example_actions.insert(action.to_owned()), "同じ行動の例を重複させない");
+        assert!(options["available_actions"].get(action).is_some(), "{action}");
+        if action == "inspect" {
+            assert_eq!(example["body_action"]["target_id"], options["candidates"][0]["id"]);
+        } else {
+            assert!(example["body_action"]["target_id"].is_null());
+        }
+    }
+    assert_eq!(
+        example_actions,
+        options["available_actions"].as_object().unwrap().keys().cloned().collect()
+    );
+}
+
 fn arrived(command: &Value, sequence: i64) -> Value {
     let mut receipt = wire(sequence);
     receipt["command_results"] = json!([{"command_id":command["command_id"],"command_type":"inspect_body_target",
@@ -179,6 +204,8 @@ async fn a_receipt_on_a_duplicate_event_still_records_one_real_arrival() {
     d.shutdown().await;
 }
 
+// 見込み: 固定の見物選択を既存命令へ渡し、terminal ACKで配送を終える。
+// 合格: 再送後のACKで配送が止まり、再受信でも再配送せず、生成一回と匿名候補・現在行動の例を保持。範囲: 模擬HTTP/ACK。
 #[tokio::test]
 async fn model_choice_reaches_existing_commands_and_terminal_ack_once() {
     let mock = Mock::new(Duration::ZERO,INSPECT).await;
@@ -206,8 +233,8 @@ async fn model_choice_reaches_existing_commands_and_terminal_ack_once() {
         let requests = mock.seen.lock().unwrap();
         assert_eq!(requests.len(),1);
         let messages = requests[0]["messages"].as_array().unwrap();
-        assert_eq!(messages[0]["content"],crate::companion_prompt::environment(false,true));
         let input: Value = serde_json::from_str(messages[1]["content"].as_str().unwrap()).unwrap();
+        assert_current_body_prompt(messages[0]["content"].as_str().unwrap(), &input);
         assert_eq!(input["body_options"]["candidates"][0]["id"],"c1");
         assert!(input["body_options"]["candidates"][0].get("position").is_none());
         assert!(!input["body_options"]["candidates"].to_string().contains(COW));
@@ -495,6 +522,8 @@ async fn returning_while_waiting_for_the_generation_slot_discards_the_queued_exi
     d.shutdown().await;
 }
 
+// 見込み: 作業中か・見物候補があるかで、現在選べる行動と完成例が一緒に変わる。
+// 合格: 四条件の行動名・説明を完全一致し、例は同じ行動集合と当回候補IDだけ。範囲: 固定stay応答の要求構築、実モデルは含まない。
 #[tokio::test]
 async fn unified_request_exposes_only_current_action_names_and_descriptions() {
     for working in [false,true] {
@@ -510,14 +539,14 @@ async fn unified_request_exposes_only_current_action_names_and_descriptions() {
                 assert_eq!(requests.len(),1);
                 let system=requests[0]["messages"][0]["content"].as_str().unwrap();
                 assert!(system.contains("周囲の変化と会話も見て、"));
-                for action in ["owner_near","owner_face","inspect","stay"] { assert!(!system.contains(action)); }
                 let input:Value=serde_json::from_str(requests[0]["messages"][1]["content"].as_str().unwrap()).unwrap();
                 assert_ne!(input["trigger"]["kind"],"owner_left_reassurance_range");
                 let actions=&input["body_options"]["available_actions"];
-                assert_eq!(actions["owner_near"],"そばへ戻る");
-                assert_eq!(actions["stay"],"その場におる");
-                assert_eq!(actions.get("owner_face").is_some(),!working);
-                assert_eq!(actions.get("inspect").is_some(),candidates);
+                let mut expected=json!({"owner_near":"そばへ戻る","stay":"その場におる","look_owner":"その場でプレイヤーを見る"});
+                if !working { expected["owner_face"]=json!("顔が見える位置へ近づく"); }
+                if candidates { expected["inspect"]=json!("見物"); }
+                assert_eq!(actions,&expected);
+                assert_current_body_prompt(system, &input);
             }
             assert!(d.data.lock().unwrap().sessions["s"].body_autonomy.commands(Instant::now(),chrono::Utc::now()).is_empty());
             d.shutdown().await;
@@ -558,8 +587,10 @@ fn follow_arrival_wire(sequence: i64, arrived: bool, working: bool) -> Value {
     value
 }
 
+// 見込み: 到着を受けた一回の環境要求に、その時点で選べる注視・接近・待機だけを示す。
+// 合格: 作業有無に応じた行動集合と説明・完成例が一致し、到着の継続で再生成しない。範囲: 固定stay応答と模擬観測。
 #[tokio::test]
-async fn return_arrival_uses_one_existing_request_with_only_current_face_or_stay_choices() {
+async fn return_arrival_uses_one_existing_request_with_only_current_body_choices() {
     for working in [false,true] {
         let mock=Mock::new(Duration::ZERO,r#"{"action":"silent","speech":"","body_action":{"action":"stay","target_id":null}}"#).await;
         let d=server(&mock,true);
@@ -568,14 +599,14 @@ async fn return_arrival_uses_one_existing_request_with_only_current_face_or_stay
         observe(&d,follow_arrival_wire(2,true,working)); completed(&d,&mock).await;
         {
             let requests=mock.seen.lock().unwrap(); assert_eq!(requests.len(),1);
-            assert_eq!(requests[0]["messages"][0]["content"],crate::companion_prompt::environment(false,true));
             let input:Value=serde_json::from_str(requests[0]["messages"][1]["content"].as_str().unwrap()).unwrap();
             assert_eq!(input["trigger"]["kind"],"owner_arrived_near");
             let options=&input["body_options"];
             assert_eq!(options["candidates"],json!([]));
-            assert_eq!(options["available_actions"].as_object().unwrap().len(),if working {2} else {3});
-            assert!(options["available_actions"].get("stay").is_some());
-            assert_eq!(options["available_actions"].get("owner_face").is_some(),!working);
+            let mut expected=json!({"stay":"その場におる","look_owner":"その場でプレイヤーを見る"});
+            if !working { expected["owner_face"]=json!("顔が見える位置へ近づく"); }
+            assert_eq!(options["available_actions"],expected);
+            assert_current_body_prompt(requests[0]["messages"][0]["content"].as_str().unwrap(), &input);
             assert_eq!(input["world_context"]["observations"]["reassurance"]["owner_working"],working);
         }
         for seq in 3..12 { assert_eq!(observe(&d,follow_arrival_wire(seq,true,working))["commands"],json!([])); }

@@ -20,6 +20,8 @@ python3 dogido-rust/tests/acceptance/run.py
 
 RustがPATHにない環境は `DOGIDO_RUST_TOOLCHAIN_DIR`、ビルド先は `CARGO_TARGET_DIR` を指定。パート5はJDK21以上と既存Gsonを使います。見つからなければ `JAVA_HOME` と `DOGIDO_ACCEPTANCE_GSON` を指定します。
 
+CIのRustジョブはJDK21とUbuntuの `libgoogle-gson-java` を用意し、`DOGIDO_ACCEPTANCE_GSON=/usr/share/java/gson.jar` で画像のJava境界試験も実行します。ローカルのGradleキャッシュはCIの前提にしません。
+
 [結果](results/latest/summary.json)と各ログを残します。終了コードは0=全成功、1=実行済みの失敗、2=準備不備。0件実行やignoredは成功にしません。
 
 説明検査: `python3 dogido-rust/tests/acceptance/check_explanations.py`。実モデル用のパート8は [別の実行手順](part8_model.md) を使い、通常の8パート実行には含めません。

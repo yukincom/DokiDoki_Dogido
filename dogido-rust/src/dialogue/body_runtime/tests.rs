@@ -1,4 +1,5 @@
 //! 生eventの受理・接続分離・モデル材料への反映を実際のDialogue経由で検査する。
+//! 生姿勢は診断に残し、会話材料には主語付きの事実を渡す。模擬eventの検査で、実機の視認や返答品質は含まない。
 use super::*;
 use crate::{
     chat_materials::CompletedHistory,
@@ -197,6 +198,8 @@ async fn body_comparison_stays_internal_while_model_context_contains_no_raw_pose
     d.shutdown().await;
 }
 
+// 見込み: 視認不明でも診断は生姿勢を保持し、モデルには主語付きの未確定事実だけを添える。
+// 合格: 生visionは変えず、モデル側だけfactを追加しself/player姿勢を隠す。範囲: 模擬eventから診断と会話材料への投影。
 #[tokio::test]
 async fn body_unavailable_vision_keeps_raw_pose_only_in_diagnostic() {
     let d = server();
@@ -214,6 +217,7 @@ async fn body_unavailable_vision_keeps_raw_pose_only_in_diagnostic() {
         "unavailable"
     );
     assert!(projected["current"].get("self").is_none());
+    assert!(projected["current"].get("player").is_none());
     let snapshot = d.snapshot(Some("s"));
     let diagnostic = snapshot["sessions"]
         .as_array()
@@ -225,10 +229,12 @@ async fn body_unavailable_vision_keeps_raw_pose_only_in_diagnostic() {
         diagnostic["body_observation"]["current"]["player"]["position"]["z"],
         23.0
     );
-    assert_eq!(
-        diagnostic["body_observation"]["current"]["vision"],
-        projected["current"]["vision"]
-    );
+    let raw_vision = serde_json::to_value(&e).unwrap()["body_observation"]["sample"]["vision"].clone();
+    assert_eq!(diagnostic["body_observation"]["current"]["vision"], raw_vision);
+    assert!(raw_vision.get("fact").is_none());
+    let mut model_vision = raw_vision;
+    model_vision["fact"] = json!("ドギドからプレイヤーの姿が見えるかは分からない。");
+    assert_eq!(projected["current"]["vision"], model_vision);
     let probe = &diagnostic["body_probe"];
     assert_eq!(probe["context"]["owner_id"], OWNER);
     assert_eq!(probe["server_tick"], 100);

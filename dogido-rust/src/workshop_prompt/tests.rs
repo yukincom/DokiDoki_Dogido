@@ -1,3 +1,5 @@
+// 見込み: 相談用の行名と本文、本人の指定語を保つ指示を既定promptへ投影する。
+// 合格: 保存した期待値と全文一致し、入力を変えず辞書helperを呼ばない。モデルの解釈・編集保存・音声は対象外。
 use super::*;
 use crate::python_worker::Helper;
 use std::path::Path;
@@ -18,6 +20,8 @@ static FIXTURES: LazyLock<Value> = LazyLock::new(|| {
     fixture
 });
 
+// 見込み: 既定指示と相談用の行配列を、各分岐の材料・retryへそのまま組み立てる。
+// 合格: 全360ケースのmessagesがfixtureと一致し入力は不変。prompt構築のみで、モデル応答は未検証。
 #[test]
 fn all_consultation_prompts_match_fixture_exactly() {
     let mut count = 0;
@@ -49,6 +53,8 @@ fn all_consultation_prompts_match_fixture_exactly() {
     assert_eq!(ASSETS["extra_order"], json!(keys));
 }
 
+// 見込み: 編集可能な既定指示も標準promptと同じ結果になり、利用者の指定した文言だけが変わる。
+// 合格: 全fixtureが一致し、system・追加文の反映と必須slot欠落の拒否を確認。モデルは呼ばない。
 #[test]
 fn editable_templates_preserve_every_default_and_apply_only_requested_instructions() {
     let mut settings = editable_defaults();
@@ -180,6 +186,8 @@ fn pid(dir: &Path) -> u32 {
         .unwrap()
 }
 
+// 見込み: 相談準備は現行の行配列をコードで組み立て、かなの入力も辞書へ渡さない。
+// 合格: 3ケースのprompt・detailsが期待値と一致し、入力不変・helper要求0件。模擬helperであり実モデルは対象外。
 #[tokio::test]
 async fn native_preparation_uses_no_helper_for_nonedit_or_kana_fragments() {
     let cases = FIXTURES["projection_cases"].as_array().unwrap();
@@ -236,6 +244,8 @@ async fn preparing_even_kanji_edits_never_asks_helper_to_select_an_action() {
     std::fs::remove_dir_all(dir).unwrap();
 }
 
+// 見込み: 相談用detailsだけ行名と本文を分け、新案生成用の共有材料・句・出典は保持する。
+// 合格: 全相談投影と既存revision入力がfixtureに一致する。読み取り投影のみで、編集のCAS・保存は別試験。
 #[test]
 fn native_runtime_materials_match_every_canonical_preparation() {
     for case in FIXTURES["projection_cases"].as_array().unwrap() {

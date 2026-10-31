@@ -444,6 +444,9 @@ mod tests {
         assert_eq!(saved(s), true);
     }
 
+    // 見込み: 表示済みの返答は入力世代が進んでも一度だけ保持し、未表示の失効返答は履歴へ入れない。
+    // 合格: ACK再送と復元後も相談履歴は1件、別sessionと未確認の旧epochは拒否し、音声状態はaudio_disabled。
+    // 範囲: テキスト相談の表示ACK・履歴・復元。ブラウザ描画と実音声は含まない。
     #[tokio::test]
     async fn displayed_text_is_explicit_current_and_once_without_audio_completion() {
         let dialogue = Dialogue::new(DialogueConfig {
@@ -529,19 +532,41 @@ mod tests {
             recovery["dialogue"]["utterances"]
         );
         restored.shutdown().await;
-        dialogue.update(
-            "text",
-            "turn",
-            0,
-            PlaybackStatus::AudioDisabled,
-            Some(&result),
-        );
         {
             let mut d = dialogue.data.lock().unwrap();
-            d.rows[0]["text_displayed"] = false.into();
-            d.sessions.get_mut("text").unwrap().epoch += 1;
+            let s = d.sessions.get_mut("text").unwrap();
+            s.epoch += 1;
+            s.current_turn = "undisplayed".into();
+            let wid = s.haiku.workshop.as_ref().unwrap().hud_id.clone();
+            d.rows.push_back(json!({"session_id":"text","turn_id":"undisplayed","epoch":1,
+                "workshop_id":wid,"player_input_text":"もう少し聞かせて"}));
         }
-        assert!(!dialogue.acknowledge_workshop_text("text", "turn"));
+        assert!(dialogue.update(
+            "text",
+            "undisplayed",
+            1,
+            PlaybackStatus::AudioDisabled,
+            Some(&result),
+        ));
+        assert!(dialogue.snapshot(None)["utterances"][1]["display_id"].is_string());
+        {
+            let mut d = dialogue.data.lock().unwrap();
+            let s = d.sessions.get_mut("text").unwrap();
+            s.epoch += 1;
+            s.current_turn = "newer".into();
+        }
+        assert!(!dialogue.acknowledge_workshop_text("text", "undisplayed"));
+        assert!(dialogue.acknowledge_workshop_text("text", "turn"));
+        let snap = dialogue.snapshot(None);
+        assert_eq!(
+            snap["sessions"][0]["workshop_history"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(snap["utterances"][1]["text_displayed"], false);
+        assert_eq!(snap["utterances"][1]["playback_status"], "audio_disabled");
         dialogue.shutdown().await;
     }
 }

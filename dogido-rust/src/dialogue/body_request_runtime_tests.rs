@@ -4,6 +4,8 @@ use super::*;
 use crate::request_classifier::{Classification, Mode as ClassifierMode, Prediction};
 use std::{sync::Mutex, time::Duration};
 
+// 見込み: 呼び寄せの返事は移動と並行して生成し、共通返答promptと身体説明を使う。
+// 合格: ACK前に要求・返事が各一件、成功はACKで一度だけ確定。範囲: 固定HTTP応答と模擬ACK、実移動は含まない。
 #[tokio::test]
 async fn recall_reply_starts_before_arrival_and_uses_the_existing_reply_prompt() {
     const OWNER: &str = "10000000-0000-4000-8000-000000000001";
@@ -100,16 +102,18 @@ async fn recall_reply_starts_before_arrival_and_uses_the_existing_reply_prompt()
         let messages = &sent[0]["messages"];
         assert_eq!(
             messages[0]["content"],
-            crate::companion_prompt::dialogue(
+            crate::companion_prompt::dialogue_with_body(
                 "normal",
                 crate::companion_prompt::DialoguePurpose::Reply,
-                false
+                false,
+                Some("プレイヤー")
             )
         );
         let context: Value =
             serde_json::from_str(messages[1]["content"].as_str().unwrap()).unwrap();
         assert_eq!(context["event"], "body_recall");
         assert_eq!(context["player_input"], TEXT);
+        assert_eq!(context["world_context"]["observations"]["body_observation"]["status"], "unavailable");
         assert_eq!(context["situation"], "プレイヤーに呼ばれて、そばに到着したところや。到着後の返事として、自然に短く応えてな。");
         assert!(context.get("body_options").is_none());
         assert!(context.get("execution_result").is_none());
@@ -123,10 +127,12 @@ async fn recall_reply_starts_before_arrival_and_uses_the_existing_reply_prompt()
     }
     {
         let mut data = dialogue.data.lock().unwrap();
-        assert!(
+        assert_eq!(
             data.rows
                 .iter()
-                .any(|r| r["text"] == "来たで、どうしたん？")
+                .filter(|r| r["text"] == "来たで、どうしたん？")
+                .count(),
+            1
         );
         // 返答が出た後でも、到着の正本はまだ未確定。
         assert!(

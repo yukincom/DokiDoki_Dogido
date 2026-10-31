@@ -591,6 +591,8 @@ mod tests {
             assert_eq!(speech[0].content, crate::companion_prompt::speech(mode));
         }
     }
+    // 見込み: 身体観測のある入力だけに、既存の呼び名と主語付き事実の読み方を添える。
+    // 合格: 観測なしでは説明なし、observed/unavailableでは同じ共有説明が一回。範囲: prompt構築のみ。
     #[test]
     fn body_guidance_uses_existing_player_name_only_when_body_is_present() {
         for (name, expected) in [
@@ -610,11 +612,17 @@ mod tests {
                 assert!(
                     out[0]
                         .content
-                        .contains(&format!("player は{expected}のことやで。"))
+                        .contains(&format!("事実の文にあるドギドはオレ、プレイヤーは{expected}のことやで。"))
                 );
                 assert_eq!(
-                    out[0].content.matches("body_observation はオレの身体").count(),
+                    out[0].content.matches(&crate::companion_prompt::body_observation(name)).count(),
                     1
+                );
+                assert_eq!(
+                    out[0].content,
+                    crate::companion_prompt::dialogue_with_body(
+                        "normal", crate::companion_prompt::DialoguePurpose::Reply, false, Some(name)
+                    )
                 );
                 assert!(
                     out[0]

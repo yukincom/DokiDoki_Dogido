@@ -586,47 +586,45 @@ async fn current_input_excludes_completed_requests_without_erasing_conversation(
     }
 }
 
+// 見込み: 通常の再生中も分類と操作受付は進み、元の音声は取り消されない。
+// 合格: 旧行はstarted・取消なしのまま分類1回、剣命令1件または馬候補不可へ到達し、再開処理でも重複しない。
+// 範囲: 模擬BERTと共通受付・操作作成。実音声の直列再生とMinecraft実操作は含まない。
 #[tokio::test]
-async fn playing_reply_queues_one_classification_then_dispatches_each_operation_once() {
+async fn playing_reply_classifies_and_dispatches_each_operation_once_without_waiting() {
     for label in [2, 3] {
         let f = Fixture::new(label, 0.0, false);
         f.d.prepare_request_classifier().await.unwrap();
-        let (tx, rx) = watch::channel(false);
-        {
-            let mut d = f.d.data.lock().unwrap();
-            let s = d.sessions.get_mut("s").unwrap();
-            s.current_turn = "old".into();
-            s.cancel = Some(tx);
-            d.rows
-                .push_back(json!({"session_id":"s","turn_id":"old","playback_status":"started"}));
-        }
+        let rx = playing(&f);
         let accepted = f.d.submit(Some("s"), "それをお願い", "voice");
-        assert_eq!(accepted["queued"], true);
+        assert_eq!(accepted["reason"], "request_classification");
         f.idle().await;
         assert!(!*rx.borrow());
+        assert_eq!(f.row(&json!("old"))["playback_status"], "started");
         assert_eq!(f.inputs().len(), 1);
-        assert!(
-            f.d.data.lock().unwrap().sessions["s"]
-                .assist
-                .commands(chrono::Utc::now())
-                .is_empty()
-        );
-        {
-            let mut d = f.d.data.lock().unwrap();
-            d.sessions.get_mut("s").unwrap().cancel = None;
-            d.rows[0]["playback_status"] = "completed".into();
-        }
-        f.d.resume_reply_input("s");
-        f.idle().await;
         let row = f.row(&accepted["turn_id"]);
         let response = &row["forwarded_input"];
         if label == 2 {
             assert_eq!(response["reason"], "assist_input", "{row}");
         } else {
             // 模擬sessionでは馬の候補取得は使えない。既存経路での拒否を終端として保持する。
-            assert_eq!(row["resolution"], "horse_selection_unavailable", "{row}");
-            assert_eq!(row["playback_status"], "cancelled");
+            assert_eq!(response["reason"], "horse_selection_unavailable", "{row}");
         }
+        let commands = f.d.data.lock().unwrap().sessions["s"]
+            .assist
+            .commands(chrono::Utc::now());
+        assert_eq!(commands.len(), usize::from(label == 2));
+        assert!(f.d.update("s", "old", 0, crate::playback::Status::Completed, None));
+        assert_eq!(f.row(&json!("old"))["playback_status"], "completed");
+        f.d.resume_reply_input("s");
+        f.idle().await;
+        assert!(!*rx.borrow());
+        assert_eq!(f.row(&accepted["turn_id"])["forwarded_input"], *response);
+        assert_eq!(
+            f.d.data.lock().unwrap().sessions["s"]
+                .assist
+                .commands(chrono::Utc::now()),
+            commands
+        );
         assert_eq!(f.inputs().len(), 1);
         assert!(
             f.d.data.lock().unwrap().sessions["s"]
@@ -835,26 +833,46 @@ async fn voice_generation_rejects_old_recordings_after_pause_resume_and_replacem
     f.finish().await;
 }
 
-fn playing(f: &Fixture) {
+fn playing(f: &Fixture) -> watch::Receiver<bool> {
+    let (tx, rx) = watch::channel(false);
     let mut d = f.d.data.lock().unwrap();
     let s = d.sessions.get_mut("s").unwrap();
     s.current_turn = "old".into();
-    s.cancel = Some(watch::channel(false).0);
+    s.cancel = Some(tx);
     d.rows
-        .push_back(json!({"session_id":"s","turn_id":"old","playback_status":"started"}));
+        .push_back(json!({"session_id":"s","turn_id":"old","epoch":0,"playback_status":"started"}));
+    rx
+}
+// 通常再生では入力を保留しない。戦闘で保持した川柳workerの再開待ちだけを模擬する。
+fn retained_workshop_reply(f: &Fixture) {
+    let _rx = playing(f);
+    let mut d = f.d.data.lock().unwrap();
+    let s = d.sessions.get_mut("s").unwrap();
+    s.workshop_reply = Some(super::super::workshop_reply::State::new(
+        "old",
+        s.epoch,
+        &s.haiku.workshop.as_ref().unwrap().hud_id,
+    ));
+    assert!(f.d.pause_workshop_reply(&mut d, "s"));
 }
 fn finish_playing(f: &Fixture) {
     let mut d = f.d.data.lock().unwrap();
-    d.sessions.get_mut("s").unwrap().cancel = None;
+    let s = d.sessions.get_mut("s").unwrap();
+    s.cancel = None;
+    s.workshop_reply = None;
     d.rows.iter_mut().find(|r| r["turn_id"] == "old").unwrap()["playback_status"] =
         "completed".into();
 }
+// 見込み: 戦闘で保持した川柳返答への追加入力は、分類済みの同一句だけ再開へ持ち越せる。
+// 合格: 再中断中は同じ入力が1件残り、同一句の再開後は排出され、川柳分類は計1回。
+// 範囲: 模擬BERT・保留worker状態と既存FIFO。実戦闘判定・音声再開は含まない。
 #[tokio::test]
 async fn completed_senryu_queue_waits_for_same_verse_without_another_inference() {
     let f = Fixture::with_modes(1, 0.0, false, &[Mode::Normal, Mode::Senryu]);
     open_workshop(&f.d, "s");
-    playing(&f);
+    retained_workshop_reply(&f);
     let a = f.d.submit(Some("s"), "上の意味は", "text");
+    assert_eq!(a["reason"], "reply_input_routing");
     f.idle().await;
     {
         let mut d = f.d.data.lock().unwrap();
@@ -896,14 +914,27 @@ async fn completed_senryu_queue_waits_for_same_verse_without_another_inference()
     );
     f.finish().await;
 }
+// 見込み: 戦闘警告中に分類した通常入力を、後から開いた川柳の受付へ付け替えない。
+// 合格: 警告中は通常分類済み1件を保持し、句を開くと取消・転送なしとなり再分類しない。
+// 範囲: 模擬BERT・警告状態と共通受付FIFO。実戦闘の開始・解除条件は含まない。
 #[tokio::test]
 async fn queued_normal_input_is_cancelled_when_workshop_opens() {
     let f = Fixture::with_modes(0, 0.0, false, &[Mode::Normal, Mode::Senryu]);
-    playing(&f);
+    f.d.data
+        .lock()
+        .unwrap()
+        .sessions
+        .get_mut("s")
+        .unwrap()
+        .pending_warning = Some(vec![crate::combat::model::Speech::new(
+        "creeper_fuse",
+        "危ない！",
+    )]);
     let a = f.d.submit(Some("s"), "同じ話", "text");
+    assert_eq!(a["reason"], "reply_input_routing");
     f.idle().await;
+    assert_eq!(f.d.data.lock().unwrap().sessions["s"].reply_queue.len(), 1);
     open_workshop(&f.d, "s");
-    finish_playing(&f);
     f.d.resume_reply_input("s");
     f.idle().await;
     assert!(
@@ -915,17 +946,22 @@ async fn queued_normal_input_is_cancelled_when_workshop_opens() {
         f.row(&a["turn_id"])["resolution"],
         "superseded_classifier_mode"
     );
+    assert!(f.row(&a["turn_id"])["forwarded_input"].is_null());
     assert_eq!(f.inputs().len(), 1);
     assert_eq!(f.inputs()[0]["mode"], "normal");
     f.finish().await;
 }
 
+// 見込み: 同じ原文でも、川柳の受付から戦闘中の通常受付へ変われば別入力として扱う。
+// 合格: 旧川柳入力は保留1件を維持し、新入力は通常モデル未設定で拒否され、重複扱い・追加推論なし。
+// 範囲: 模擬BERT・保留worker状態と受付境界。実戦闘の判定・モデル精度は含まない。
 #[tokio::test]
 async fn same_text_during_combat_does_not_deduplicate_into_old_senryu_input() {
     let f = Fixture::with_modes(1, 0.0, false, &[Mode::Senryu]);
     open_workshop(&f.d, "s");
-    playing(&f);
+    retained_workshop_reply(&f);
     let before = f.d.submit(Some("s"), "上の意味は", "text");
+    assert_eq!(before["reason"], "reply_input_routing");
     f.idle().await;
     {
         let mut d = f.d.data.lock().unwrap();
