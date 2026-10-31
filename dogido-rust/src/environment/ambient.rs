@@ -202,19 +202,19 @@ impl Ambient {
         if busy
             || focus.player_priority
             || !elapsed(now, input_at, s.ms("player_input_priority_cooldown_ms"))
-            || matches!(mode, Mode::Panic | Mode::SuppressedPanic | Mode::Aftermath)
-            || !e.visual_threats.is_empty()
-            || !e.auditory_threats.is_empty()
+            || matches!(mode, Mode::SuppressedPanic | Mode::Aftermath)
         {
             return vec![];
         }
         if focus.foreground && !focus.casual_foreground {
             return vec![];
         }
-        if self.light_request(e, now, focus, s) {
+        // 敵の姿や声だけなら周期の気づきを選べる。ほかの平時の反応は従来の条件を使う。
+        let notice_only = mode == Mode::Panic || !e.visual_threats.is_empty() || !e.auditory_threats.is_empty();
+        if !notice_only && self.light_request(e, now, focus, s) {
             return vec![];
         }
-        if let Some(speech) = self.eye_action(e, now, s) {
+        if !notice_only && let Some(speech) = self.eye_action(e, now, s) {
             return vec![speech];
         }
         if focus.boss_presence || focus.ominous_presence {
@@ -228,7 +228,7 @@ impl Ambient {
         // 雨上がりの「あっ」は非敵対ambient。Web・学習・会話中のmute等をすべて通った後だけ候補にする。
         // 呼出側の既存比較で暗所等の警告が勝てるよう、ゾンビ臭の優先経路には入れない。
         // 通常臭の検討済み状態と2分のゾンビ臭cooldownは、この一言では変更しない。
-        if let Some(window) = self.rain_after.pending(e)
+        if !notice_only && let Some(window) = self.rain_after.pending(e)
             && let Some(component) = rain_after_component(e, window)
         {
             let mut line = smell::speech_components(std::slice::from_ref(component));
@@ -301,7 +301,7 @@ pub fn still_applicable(speech: &Speech, e: &GameEvent) -> bool {
     // 暗所や雷の許可条件をambientの「敵なし」で上書きしない。
     if !matches!(
         speech.kind,
-        "surroundings_notice" | "smell" | "light_source_gain" | "ender_eye_throw"
+        "smell" | "light_source_gain" | "ender_eye_throw"
     ) || speech
         .leaf
         .as_ref()

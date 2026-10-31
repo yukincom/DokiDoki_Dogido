@@ -26,6 +26,11 @@ fn changed(e: &GameEvent, f: impl FnOnce(&mut Value)) -> GameEvent {
     f(&mut v);
     GameEvent::parse(v).unwrap()
 }
+// 本人が実際に交戦している試験だけに使う。視認や音だけの模擬観測とは区別する。
+fn engaged(e: GameEvent) -> GameEvent {
+    changed(&e, |v| v["combat"]["player_engaged"] = json!(true))
+}
+
 fn tick(engine: &mut Engine, e: &GameEvent, at: u64) -> dogido_rust::combat::core::Decision {
     engine.observe(
         e,
@@ -164,7 +169,7 @@ fn pending_burning_keeps_fuse_priority_and_existing_cooldown() {
 #[test]
 fn quiet_needs_three_commands_and_resets_only_after_aftermath() {
     let mut engine = Engine::default();
-    let e = event(json!([visual("zombie", "z", 4.0)]), json!([]));
+    let e = engaged(event(json!([visual("zombie", "z", 4.0)]), json!([])));
     assert_eq!(tick(&mut engine, &e, 0).mode, Mode::Panic);
     let s = Settings::default();
     let ws = threats::Settings::default();
@@ -232,7 +237,7 @@ fn low_health_rearms_above_five_or_missing_health() {
 #[test]
 fn auditory_first_fourth_tenth_and_sixty_second_reset() {
     let mut engine = Engine::default();
-    let e = event(json!([]), json!([sound("heard")]));
+    let e = engaged(event(json!([]), json!([sound("heard")])));
     for n in 1..=11 {
         let d = tick(&mut engine, &e, n * 2000);
         assert_eq!(
@@ -250,7 +255,7 @@ fn auditory_first_fourth_tenth_and_sixty_second_reset() {
 #[test]
 fn auditory_busy_defers_latest_milestone_without_marking_visual_seen() {
     let mut engine = Engine::default();
-    let e = event(json!([]), json!([sound("heard")]));
+    let e = engaged(event(json!([]), json!([sound("heard")])));
     assert!(
         engine
             .observe(
@@ -273,7 +278,7 @@ fn auditory_busy_defers_latest_milestone_without_marking_visual_seen() {
 #[test]
 fn auditory_chasing_uses_horizontal_displacement_and_name_permission() {
     let mut engine = Engine::default();
-    let e = event(json!([]), json!([sound("heard")]));
+    let e = engaged(event(json!([]), json!([sound("heard")])));
     for n in 1..10 {
         tick(&mut engine, &e, n * 2000);
     }
@@ -328,7 +333,7 @@ fn skeleton_scream_does_not_consume_low_health_warning() {
 #[test]
 fn stalled_tracks_individuals_and_partial_does_not_reset_it() {
     let mut engine = Engine::default();
-    let e = event(json!([visual("zombie", "z", 8.0)]), json!([]));
+    let e = engaged(event(json!([visual("zombie", "z", 8.0)]), json!([])));
     tick(&mut engine, &e, 0);
     let partial = changed(&event(json!([]), json!([])), |v| {
         v["event"]["name"] = "ambient_mob_detected".into()
@@ -367,7 +372,7 @@ fn dark_alert_respects_light_and_submersion_without_creating_combat() {
     assert_eq!(tick(&mut engine, &water, 2000).mode, Mode::Normal);
 }
 #[test]
-fn all_ordinary_hostiles_and_water_use_regular_fallback() {
+fn engaged_ordinary_hostiles_and_water_use_regular_fallback() {
     for kind in [
         "witch",
         "pillager",
@@ -379,7 +384,7 @@ fn all_ordinary_hostiles_and_water_use_regular_fallback() {
         "enderman",
     ] {
         let mut engine = Engine::default();
-        let e = event(json!([visual(kind, "enemy", 8.0)]), json!([]));
+        let e = engaged(event(json!([visual(kind, "enemy", 8.0)]), json!([])));
         assert!(
             tick(&mut engine, &e, 0)
                 .actions
@@ -463,7 +468,7 @@ fn stale_visuals_and_transient_sonic_observation_are_not_refreshed_by_partial() 
     assert!(!d.chat_allowed);
 }
 #[test]
-fn rain_does_not_consume_regular_warning_and_water_skeleton_gasps() {
+fn engaged_rain_preserves_regular_warning_and_water_skeleton_gasps() {
     let mut engine = Engine::default();
     let rain = changed(
         &event(json!([visual("zombie", "z", 8.0)]), json!([])),
@@ -472,6 +477,7 @@ fn rain_does_not_consume_regular_warning_and_water_skeleton_gasps() {
             v["world"]["weather"] = "rain".into();
         },
     );
+    let rain = engaged(rain);
     assert!(
         tick(&mut engine, &rain, 0)
             .actions
@@ -532,11 +538,71 @@ fn darkness_keeps_chat_allowed_on_complete_and_passive_partial_observations() {
             "damage" => v["combat"]["recent_damage_ms"] = json!(0),
             _ => v["combat"]["combat_active_hint"] = json!(true),
         });
-        assert!(
-            !engine
+        assert_eq!(
+            engine
                 .observe(&threat, 1000, false, true, &settings, &warnings)
                 .chat_allowed,
+            danger != "damage",
             "{danger}"
+        );
+    }
+}
+
+// 見込み: 普通の敵を見聞きしただけなら、個体数でpanicになっても会話が続く。
+// 合格: 実戦闘エンジンへ完全観測・音の部分通知・離脱を渡し、警告発話・音声停止・会話保留が全てない。
+#[test]
+fn ordinary_sight_count_and_sound_stay_observations_until_engagement() {
+    let mut engine = Engine::default();
+    let one = changed(
+        &event(json!([visual("zombie", "z1", 2.)]), json!([])),
+        |v| {
+            v["combat"] = json!({"combat_active_hint":true, "player_engaged":false});
+        },
+    );
+    let two = changed(&one, |v| {
+        v["visual_threats"]
+            .as_array_mut()
+            .unwrap()
+            .push(visual("zombie", "z2", 6.))
+    });
+    let heard = changed(&one, |v| {
+        v["event"]["name"] = json!("hostile_audio_detected");
+        v["visual_threats"] = json!([]);
+        v["auditory_threats"] = json!([sound("unseen")]);
+    });
+    let clear = changed(&event(json!([]), json!([])), |v| {
+        v["event"]["name"] = json!("combat_ended")
+    });
+    let rainy = changed(&one, |v| {
+        v["world"]["time_phase"] = json!("day");
+        v["world"]["weather"] = json!("rain");
+    });
+    let behind = changed(&one, |v| {
+        v["visual_threats"][0]["direction"]["horizontal"] = json!("back")
+    });
+    for (i, (frame, full)) in [
+        (&one, true),
+        (&behind, true),
+        (&rainy, true),
+        (&two, true),
+        (&heard, false),
+        (&clear, true),
+        (&clear, true),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let d = engine.observe(
+            frame,
+            i as u64 * 100,
+            full,
+            false,
+            &Settings::default(),
+            &threats::Settings::default(),
+        );
+        assert!(
+            d.chat_allowed && !d.stop_audio && d.actions.is_empty(),
+            "{i}: {d:?}"
         );
     }
 }

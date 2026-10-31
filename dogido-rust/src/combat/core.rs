@@ -30,6 +30,9 @@ pub struct Decision {
     pub stop_audio: bool,
     pub chat_allowed: bool,
     pub dimension_changed: bool,
+    /// 単に敵を見聞きしたフレーム。会話の保留・危険履歴を開始しない。
+    #[serde(skip)]
+    pub(crate) presence_only: bool,
 }
 /// 1セッションあたりの脅威状態、被弾履歴、および警告インターバルを保持・管理する。
 /// 完全観測と部分通知を厳密に区別し、通知ペイロードの情報省略を「安全になった」と誤認・過小評価しないよう保護する。
@@ -45,6 +48,8 @@ pub struct Engine {
     latest_full_at: Option<u64>,
     /// 部分通知で危険が増えたことを保持し、次の完全観測まで通常会話の早すぎる再開を止める。
     partial_danger: bool,
+    // いる→いないの間に、本人の交戦や固有の危険が一度でもあったか区別する。
+    presence_only_encounter: Option<bool>,
     last_damage: Option<(u64, u64)>,
     last_audio: Option<u64>,
     aftermath_until: Option<u64>,
@@ -71,6 +76,7 @@ impl Default for Engine {
             latest_full: None,
             latest_full_at: None,
             partial_danger: false,
+            presence_only_encounter: None,
             last_damage: None,
             last_audio: None,
             aftermath_until: None,
@@ -144,6 +150,7 @@ impl Engine {
         }
         let dimension_changed = self.specials.observe(event, now, complete, s);
         if dimension_changed {
+            self.presence_only_encounter = None;
             self.policy = Policy::default();
             self.auditory = Auditory::default();
             self.outcomes.reset_for_dimension(s);
@@ -182,24 +189,40 @@ impl Engine {
         {
             self.low_health_armed = true;
         }
+        let recent_damage = self.recent_damage(now, s);
+        let contact = Outcomes::hostile_presence(&e) == Some(true)
+            || e.combat.combat_active_hint == Some(true)
+            || e.combat.player_engaged == Some(true);
+        let routine = contact
+            && !recent_damage
+            && e.combat.player_engaged != Some(true)
+            && !e.visual_threats.iter().any(|t| {
+                super::specials::has_dedicated_warning(&t.r#type)
+                    || t.fuse_active == Some(true)
+                    || t.approaching && rear_near(t, s)
+            });
         if complete {
             self.partial_danger = false;
             self.update_stalled(&e, now);
         } else {
-            self.partial_danger |= !event.visual_threats.is_empty()
-                || !event.auditory_threats.is_empty()
-                || event.combat.combat_active_hint == Some(true)
-                || event
-                    .combat
-                    .recent_damage_ms
-                    .is_some_and(|n| n <= s.ms("recent_damage_window_ms") as i64);
-            // 暗さは下のAlertと環境材料で扱う。非敵対の部分通知に暗さが同居しても、
-            // 完全観測と同じく進行中の会話・発句を継続できるよう、戦闘の保留条件へ混ぜない。
+            self.partial_danger |= recent_damage || contact && !routine;
         }
         // 撃破・爆散など今回の明示結果を先に処理し、通常の危険度警告より先に配送候補にする。
         let immediate = self.outcomes.observe(event, now);
-        if complete && event.event.name == EventName::CombatEnded {
-            self.pending_safe_at = self.outcomes.boss_defeat_confirmed(event).then_some(now);
+        let end = complete && event.event.name == EventName::CombatEnded;
+        let presence_ended = end
+            && self.presence_only_encounter == Some(true)
+            && immediate.is_none()
+            && !recent_damage
+            && !contact
+            && event
+                .combat
+                .hostile_outcomes
+                .as_ref()
+                .is_none_or(Vec::is_empty);
+        if end {
+            self.pending_safe_at =
+                (!presence_ended && self.outcomes.boss_defeat_confirmed(event)).then_some(now);
         }
         if self
             .pending_safe_at
@@ -212,7 +235,8 @@ impl Engine {
             && e.visual_threats.is_empty()
             && (self.outcomes.has_boss_context() && self.outcomes.boss_defeat_confirmed(&e)
                 || safe && !self.previous_safe && e.auditory_threats.is_empty());
-        let clear = complete
+        let clear = !presence_ended
+            && complete
             && Outcomes::clear_confirmed(event)
             && self.outcomes.boss_defeat_confirmed(event);
         let died = complete && event.event.name == EventName::PlayerDied;
@@ -225,7 +249,7 @@ impl Engine {
             self.aftermath_until = Some(now.saturating_add(s.ms("aftermath_time_ms")));
             self.pending_safe_at = None;
         }
-        if previous == Mode::Aftermath && self.mode == Mode::Normal {
+        if presence_ended || previous == Mode::Aftermath && self.mode == Mode::Normal {
             self.shut_up_count = 0;
         }
         let explicit = matches!(
@@ -239,14 +263,15 @@ impl Engine {
             mode: self.mode,
             actions: vec![],
             stop_audio: false,
-            chat_allowed: !matches!(self.mode, Mode::Panic | Mode::SuppressedPanic)
+            chat_allowed: (routine || !matches!(self.mode, Mode::Panic | Mode::SuppressedPanic))
                 && !self.partial_danger
-                && !explicit
+                && (!explicit || presence_ended)
                 && (complete
                     || self
                         .latest_full_at
                         .is_some_and(|at| now.saturating_sub(at) <= 10_000)),
             dimension_changed,
+            presence_only: routine || presence_ended,
         };
         if dimension_changed {
             d.stop_audio = true;
@@ -263,14 +288,28 @@ impl Engine {
                 d.actions.push(speech);
                 d.stop_audio = clear;
             }
-        } else if self.mode != Mode::Aftermath
-            && (!explicit || matches!(event.event.name, EventName::CombatEnded))
-        {
-            for speech in self.select(&e, now, complete, busy, previous, prior_audio, s, ws) {
+        } else if self.mode != Mode::Aftermath && (!explicit || end && !presence_ended) {
+            for speech in self.select(
+                &e,
+                now,
+                complete,
+                busy,
+                previous,
+                prior_audio,
+                routine,
+                s,
+                ws,
+            ) {
                 self.deliver(&e, now, speech, &mut d);
             }
         }
-        if self.dark_push_audio_active && blocks_environment(&e) {
+        d.presence_only &= d.actions.is_empty() && !dimension_changed && !self.partial_danger;
+        if died || end && !presence_ended {
+            self.presence_only_encounter = None;
+        } else if !end && (contact || recent_damage || explicit) {
+            *self.presence_only_encounter.get_or_insert(true) &= d.presence_only;
+        }
+        if !d.presence_only && self.dark_push_audio_active && blocks_environment(&e) {
             d.stop_audio = true;
             self.dark_push_audio_active = false;
         }
@@ -325,6 +364,7 @@ impl Engine {
             stop_audio: false,
             chat_allowed: false,
             dimension_changed: false,
+            presence_only: false,
         };
         if let Some(speech) = query {
             self.deliver(event, now, speech, &mut d);
@@ -363,6 +403,10 @@ impl Engine {
         ] {
             v["combat"][name] = serde_json::to_value(&full.combat).unwrap()[name].clone();
         }
+        if event.combat.player_engaged.is_none() {
+            v["combat"]["player_engaged"] =
+                serde_json::to_value(full.combat.player_engaged).unwrap();
+        }
         for section in ["world", "player"] {
             let prior = serde_json::to_value(full).unwrap()[section].clone();
             for (key, value) in prior.as_object().unwrap() {
@@ -380,6 +424,12 @@ impl Engine {
         }
         GameEvent::parse(v).expect("combining validated independent observations")
     }
+    fn recent_damage(&self, now: u64, s: &Settings) -> bool {
+        self.last_damage.is_some_and(|(at, age)| {
+            age.saturating_add(now.saturating_sub(at)) <= s.ms("recent_damage_window_ms")
+        })
+    }
+
     /// 現在脅威・被弾・警告抑止を設定閾値へ照合し、次の戦況modeを選ぶ。
     fn resolve_mode(&self, e: &GameEvent, now: u64, s: &Settings) -> Mode {
         let nearest = e
@@ -393,25 +443,13 @@ impl Engine {
                 .filter(|t| t.distance.is_some_and(|d| d <= 10.0))
                 .count() as i64
         });
-        let damage = self
-            .last_damage
-            .map(|(at, age)| age.saturating_add(now.saturating_sub(at)));
-        let rear = e.visual_threats.iter().any(|t| {
-            matches!(
-                t.direction.horizontal,
-                Some(H::Back | H::BackLeft | H::BackRight)
-            ) && t
-                .distance
-                .is_some_and(|d| d <= s.number("rear_warning_distance"))
-        });
-        let panic = nearest <= s.number("panic_distance")
-            || count >= 2
-            || damage.is_some_and(|age| age <= s.ms("recent_damage_window_ms"))
-            || rear;
+        let rear = e.visual_threats.iter().any(|t| rear_near(t, s));
+        let recent_damage = self.recent_damage(now, s);
+        let panic = nearest <= s.number("panic_distance") || count >= 2 || recent_damage || rear;
         let active = e.combat.combat_active_hint == Some(true)
             || !e.visual_threats.is_empty()
             || !e.auditory_threats.is_empty()
-            || damage.is_some_and(|age| age <= s.ms("recent_damage_window_ms"));
+            || recent_damage;
         if panic {
             return if self.shut_up_count >= 3 && active {
                 Mode::SuppressedPanic
@@ -436,6 +474,7 @@ impl Engine {
         busy: bool,
         previous: Mode,
         prior_audio: Option<u64>,
+        routine: bool,
         s: &Settings,
         ws: &threats::Settings,
     ) -> Vec<Speech> {
@@ -458,7 +497,7 @@ impl Engine {
                     "warden" | "wither" | "ender_dragon" | "elder_guardian" | "ravager"
                 )
             });
-        let body = self.select_body(e, now, complete, busy, previous, s, ws);
+        let body = self.select_body(e, now, complete, busy, previous, routine, s, ws);
         let reserved = body.as_ref().is_some_and(|a| {
             matches!(
                 a.kind,
@@ -482,7 +521,8 @@ impl Engine {
             return actions;
         }
         if let Some(body) = body {
-            if body.cue_id.is_none()
+            if !routine
+                && body.cue_id.is_none()
                 && body.visual_plan.is_none()
                 && self.mode != Mode::SuppressedPanic
                 && self.policy.cue_allowed(e, now, ws)
@@ -523,6 +563,7 @@ impl Engine {
         complete: bool,
         busy: bool,
         previous: Mode,
+        routine: bool,
         s: &Settings,
         ws: &threats::Settings,
     ) -> Option<Speech> {
@@ -535,14 +576,13 @@ impl Engine {
             if !complete {
                 return None;
             }
-            let mut urgent = self
-                .specials
-                .rear_ambush(e, now, cue, s)
-                .or_else(|| {
-                    self.specials
-                        .front_ambush(e, now, self.dark_push_active, occluded(e), cue, s)
-                })
-                .or_else(|| self.policy.close_ambush(e, now, ws).map(from_warning));
+            let mut urgent = self.specials.rear_ambush(e, now, cue, s).or_else(|| {
+                self.specials
+                    .front_ambush(e, now, self.dark_push_active, occluded(e), cue, s)
+            });
+            if urgent.is_none() && !routine {
+                urgent = self.policy.close_ambush(e, now, ws).map(from_warning);
+            }
             if urgent.is_none() && self.specials.has_fresh_boss(e) {
                 urgent =
                     self.specials
@@ -556,7 +596,7 @@ impl Engine {
             }
             return urgent;
         }
-        if self.mode == Mode::SuppressedPanic && cue {
+        if !routine && self.mode == Mode::SuppressedPanic && cue {
             let (id, text) = if previous == Mode::SuppressedPanic {
                 ("suppressed_breath", "ハァハァ……")
             } else {
@@ -581,12 +621,14 @@ impl Engine {
             }) {
                 return Some(speech);
             }
-            if self.mode != Mode::SuppressedPanic
+            if !routine
+                && self.mode != Mode::SuppressedPanic
                 && let Some(plan) = self.policy.close_ambush(e, now, ws)
             {
                 return Some(from_warning(plan));
             }
-            if self.mode != Mode::SuppressedPanic
+            if !routine
+                && self.mode != Mode::SuppressedPanic
                 && self.policy.has_close_ambush(e)
                 && !matches!(
                     e.world.biome.as_deref(),
@@ -618,7 +660,7 @@ impl Engine {
                 format!("{}！体力やばいで！", call_name(e, s)),
             ));
         }
-        if complete {
+        if complete && !routine {
             if self.specials.mass_latched()
                 && threats::ground_count(e, ws) >= s.ms("hostile_mass_callout_threshold") as usize
             {
@@ -671,9 +713,10 @@ impl Engine {
         {
             return None;
         }
-        if let Some(speech) = self
-            .auditory
-            .select(e, now, occluded(e), s, &self.policy, ws)
+        if !routine
+            && let Some(speech) = self
+                .auditory
+                .select(e, now, occluded(e), s, &self.policy, ws)
         {
             return Some(speech);
         }
@@ -795,6 +838,15 @@ impl Engine {
         }
     }
 }
+fn rear_near(t: &crate::events::VisualThreat, s: &Settings) -> bool {
+    matches!(
+        t.direction.horizontal,
+        Some(H::Back | H::BackLeft | H::BackRight)
+    ) && t
+        .distance
+        .is_some_and(|d| d <= s.number("rear_warning_distance"))
+}
+
 fn from_warning(plan: Warning) -> Speech {
     let ids = if plan.group_counts.is_empty() {
         vec![plan.target.clone()]

@@ -34,6 +34,8 @@ time.sleep(2 if p.exists() else .08)
                 nonlocal seq
                 seq+=1; e=event(0); e['sequence']=seq; e['observed_at']=datetime.now(timezone.utc).isoformat()
                 e['visual_threats']=[event(0,kind=t,entity=f'{t}{i}',distance=distance,direction=directions[i] if directions else direction,fuse=fuse if t=='creeper' else None)['visual_threats'][0] for i,t in enumerate(types)]
+                # 群れの警告・再生を確認するため、この場面は本人が交戦中と明示する。
+                e['combat']['player_engaged'] = bool(types)
                 if reverse:e['visual_threats'].reverse()
                 request(base,'/api/v1/game-events',e,sid=sid)
             def warnings(sid):return [r for r in snapshot(base)['utterances'] if r['session_id']==sid and r['category']=='callout']

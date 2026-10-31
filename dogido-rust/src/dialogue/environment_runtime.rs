@@ -141,6 +141,16 @@ pub(super) fn context(s: &Session, event: &GameEvent, complete: bool) -> GameEve
     GameEvent::parse(data).expect("merged validated observations")
 }
 
+/// 警告の選択と同じ会話許可を使い、敵が見えたことだけで周期の気づきを取り消さない。
+pub(super) fn notice_allowed(s: &Session) -> bool {
+    s.chat_allowed
+        && !s.foreground.combat_active
+        && !matches!(
+            s.mode,
+            crate::combat::model::Mode::SuppressedPanic | crate::combat::model::Mode::Aftermath
+        )
+}
+
 /// 同じ判断で受理した身体観測を使い、発話機会の制約を計算する。
 /// 呼出元がdata lock内で投影したeventを渡すため、危険判定と視点・時点が揃う。
 fn focus(
@@ -164,7 +174,7 @@ fn focus(
         player_priority: s.cancel.is_some() || s.assist_pending.is_some(),
         boss_presence: boss,
         ominous_presence: ominous,
-        notice_ready: s.conversation_observation.noticing_context().is_some(),
+        notice_ready: notice_allowed(s) && s.conversation_observation.noticing_context().is_some(),
         submerged: e.world.is_submerged == Some(true),
         safe_zone_with_door: danger::safe_zone_with_door(e),
         light: LightContext {
@@ -517,7 +527,8 @@ impl Dialogue {
         };
         let (boss, ominous) = s.combat.environmental_presence(now, &self.config.combat);
         s.danger.set_presence(boss, ominous);
-        let focus = focus(s, &event, now, &self.config.combat);
+        let mut focus = focus(s, &event, now, &self.config.combat);
+        focus.notice_ready &= !speaking;
         if combat_priority != CombatPriority::None {
             let stop = if combat_priority == CombatPriority::FrontAmbush {
                 s.danger.interrupt_for_threat(&event, &self.config.combat)
@@ -779,6 +790,65 @@ mod tests {
         assert_ne!(updated, expected);
         assert_eq!(actions[0].leaf.as_ref().unwrap().details["reaction_context"]["recent"], updated);
         assert_eq!(actions[1].leaf.as_ref().unwrap().details["conversation_context"]["recent"], updated);
+    }
+
+    // 模擬身体snapshot→既存の周期選択・モデル材料・配送判定。プレイヤーだけが見た敵は数えず、
+    // 身体が見た敵の増加と初めての声を一回の候補にする。同じ声の年齢の変化では繰り返さない。
+    #[test]
+    fn passive_hostiles_reach_one_periodic_notice_from_dogidos_own_senses() {
+        let dialogue = Dialogue::new(DialogueConfig::default()).unwrap();
+        dialogue.register("s", "試験", false);
+        let mut data = dialogue.data.lock().unwrap();
+        let s = data.sessions.get_mut("s").unwrap();
+        s.player_uuid = Some("11111111-1111-4111-8111-111111111111".into());
+        // 戦況は近くの敵を記録し、通常会話が可能な場合を与える。戦闘判断自体は別試験。
+        s.mode = crate::combat::model::Mode::Panic;
+        s.received = Some(std::time::Instant::now());
+        let settings = &dialogue.config.combat;
+
+        for (tick, count, heard_age) in [(1, 1, None), (2, 2, Some(0)), (3, 2, Some(500))] {
+            let mut wire = empty_event("試験");
+            wire["visual_threats"] = json!([{"type":"creeper","distance":6}]);
+            let mut wire = json!(crate::body::tests::with_senses(wire, tick));
+            let senses = &mut wire["body_observation"]["sample"]["senses"];
+            senses["visual_threats"] = json!((0..count).map(|i|
+                json!({"type":"zombie","entity_id":format!("z{i}"),"distance":5})).collect::<Vec<_>>());
+            senses["auditory_threats"] = json!(heard_age.map(|age|
+                json!({"label":"zombie","source_id":"sound","spoken_name_allowed":true,
+                    "heard_ago_ms":age,"sound_event":"entity.zombie.ambient"})).into_iter().collect::<Vec<_>>());
+            let raw = GameEvent::parse(wire).unwrap();
+            super::super::body_runtime::observe(s, &raw);
+            s.latest = Some(raw.clone());
+            s.environment_latest = Some(raw.clone());
+            let event = super::super::body_runtime::event(s, &raw);
+            let facts = crate::conversation_observation::project(&event, None, 32., 7., 5000).unwrap();
+            s.conversation_observation.observe(super::super::body_runtime::with_context(facts, &event));
+            s.conversation_observation.sample_notice(tick, 1, true);
+
+            let focus = focus(s, &event, tick, settings);
+            let mut actions = s.ambient.actions(&event, tick, s.mode, false, &focus, settings);
+            if tick != 2 {
+                assert!(actions.is_empty());
+                continue;
+            }
+            assert_eq!(actions.len(), 1);
+            let a = &mut actions[0];
+            assert_eq!(a.kind, crate::environment::notice::KIND);
+            a.delivery = Delivery::Ambient;
+            crate::environment::reaction::attach(a, &event, settings);
+            assert!(refresh_dialogue_context(s, &mut actions));
+            let a = &actions[0];
+            let context = &a.leaf.as_ref().unwrap().details["reaction_context"]["world_context"];
+            let changes = context["changes"].as_array().unwrap();
+            let counted = changes.iter().find(|r| r["kind"] == "visible_hostiles").unwrap();
+            assert_eq!((&counted["before"], &counted["now"]), (&json!({"zombie":1}), &json!({"zombie":2})));
+            let heard = changes.iter().find(|r| r["kind"] == "heard_hostile_sounds").unwrap();
+            assert_eq!(heard["now"], json!([context["observations"]["hearing"]["sounds"][0]["description"]]));
+            assert!(super::super::warnings::applicable(a, s, &dialogue.config.warnings, settings));
+            s.chat_allowed = false;
+            assert!(!super::super::warnings::applicable(a, s, &dialogue.config.warnings, settings));
+            s.chat_allowed = true;
+        }
     }
 
     #[test]

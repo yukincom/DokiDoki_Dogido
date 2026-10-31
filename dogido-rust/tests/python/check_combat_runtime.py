@@ -79,7 +79,7 @@ time.sleep(float((root/'delay').read_text()))
 
                 sid = register(base, preview=False, body=True)
                 send_wire(sid, "inner")
-                wait_for(lambda: done(sid))
+                assert not any(r.get("combat_actions") for r in rows(sid))
                 send_wire(sid, "outer")
                 session = next(s for s in snapshot(base)["sessions"] if s["session_id"] == sid)
                 assert session["state"] == "alert", session
@@ -102,15 +102,16 @@ time.sleep(float((root/'delay').read_text()))
                 previous_leaf = control["leaf"]
                 control["leaf"] = "ふう、ひと息つけたな。"
                 send_wire(sid, "ended")
-                answer = wait_for(lambda: done(sid, kind="aftermath"))
-                assert any(a.get("leaf", {}).get("details", {}).get("combat_outcome") == "disengaged"
-                           for a in answer["combat_actions"]), answer
-                assert not any(any(a["kind"] == "hostile_defeated" for a in r.get("combat_actions", [])) for r in rows(sid))
-                passed.append("adapter_exported_range_exit_is_disengagement_not_death")
+                assert not any(a["kind"] in {"aftermath", "hostile_defeated"}
+                               for r in rows(sid) for a in r.get("combat_actions", [])), rows(sid)
+                passed.append("adapter_observation_only_exit_creates_no_combat_speech")
                 close(sid)
 
                 sid = register(base, preview=False, body=True)
                 send_wire(sid, "inner")
+                assert not any(r.get("combat_actions") for r in rows(sid))
+                # このケースは本人の交戦後の安堵と、新たな導火による割り込みを検査する。
+                send(sid, mobs=[mob(distance=6)], combat={"player_engaged":True})
                 wait_for(lambda: done(sid))
                 (folder / "delay").write_text("5")
                 send_wire(sid, "ended")
@@ -127,7 +128,6 @@ time.sleep(float((root/'delay').read_text()))
 
             sid=register(base,preview=False,body=True)
             send(sid,mobs=[mob(distance=6)])
-            wait_for(lambda:done(sid))
             before=llm_calls()
             say(sid,"ゾンビどこ？")
             answer=wait_for(lambda:done(sid,"ゾンビどこ？"))
@@ -148,7 +148,6 @@ time.sleep(float((root/'delay').read_text()))
 
             sid=register(base,preview=False,body=True)
             send(sid,mobs=[mob(distance=8)])
-            wait_for(lambda:done(sid))
             (folder/"delay").write_text(".7")
             got=say(sid,"ゾンビどこ？"); turn=got["turn_id"]
             wait_for(lambda:row(base,turn,{"started"}))
@@ -185,11 +184,12 @@ time.sleep(float((root/'delay').read_text()))
             sid=register(base,preview=False,body=True)
             send(sid)
             before=llm_calls()
-            send(sid,name="hostile_audio_detected",audio=[{"label":"zombie","source_id":"sound-z", "spoken_name_allowed":True}])
-            answer=wait_for(lambda:done(sid,kind="auditory_hostile"))
-            assert "ゾンビ" in answer["text"],answer
+            # 鳴き声だけでは固定反応も追加生成も始めない。観測は模擬HTTPから本体に入力する。
+            send(sid,name="hostile_audio_detected",audio=[{"label":"zombie","source_id":"sound-z", "spoken_name_allowed":True}],
+                 combat={"combat_active_hint":True,"player_engaged":False})
+            assert not rows(sid), rows(sid)
             assert llm_calls()==before
-            passed.append("audio_only_enemy_reaction_and_independent_lifetime")
+            passed.append("audio_only_enemy_stays_a_conversation_observation")
             close(sid)
 
             sid=register(base,preview=False,body=True)
@@ -200,7 +200,7 @@ time.sleep(float((root/'delay').read_text()))
             passed.append("boss_cue_and_body_share_completion")
 
             sid=register(base,preview=False,body=True)
-            send(sid,mobs=[mob(distance=6)],combat={"combat_active_hint":True})
+            send(sid,mobs=[mob(distance=6)],combat={"combat_active_hint":True,"player_engaged":True})
             wait_for(lambda:done(sid))
             for _ in range(3):
                 say(sid,"静かにして")
@@ -214,7 +214,7 @@ time.sleep(float((root/'delay').read_text()))
             close(sid)
 
             sid=register(base,preview=False,body=True)
-            send(sid,mobs=[mob(distance=6)])
+            send(sid,mobs=[mob(distance=6)],combat={"player_engaged":True})
             wait_for(lambda:done(sid))
             before=llm_calls()
             outcome={"entity_id":"z","type":"zombie","outcome":"player_kill","evidence":"server_death_event"}
@@ -237,7 +237,7 @@ time.sleep(float((root/'delay').read_text()))
             control["delay"]=2
             before_leaf=llm_calls()
             sound=[{"label":"zombie","source_id":"unseen","spoken_name_allowed":True}]
-            send(sid,audio=sound,world={"sky_visible":False,"ceiling_height":2,"enclosure_score":.8})
+            send(sid,audio=sound,combat={"player_engaged":True},world={"sky_visible":False,"ceiling_height":2,"enclosure_score":.8})
             wait_for(lambda:llm_calls()>before_leaf)
             send(sid,name="threat_approaching",mobs=[mob(distance=2,direction="back")],audio=sound,
                  world={"sky_visible":False,"ceiling_height":2,"enclosure_score":.8})

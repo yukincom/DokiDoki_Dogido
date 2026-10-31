@@ -26,6 +26,8 @@ def main():
                 nonlocal seq
                 seq+=1; e=event(0,**kw); e['sequence']=seq
                 e['observed_at']=(datetime.now(timezone.utc)-timedelta(seconds=30 if stale else 0)).isoformat()
+                # この配送試験の敵は本人と交戦中。初見だけのケースはcheck_combat_dialogueで別に通す。
+                e['combat']['player_engaged'] = not gone
                 if gone:e['visual_threats']=[]
                 return request(base,'/api/v1/game-events',e,sid=sid)
             def warnings(sid):return [r for r in snapshot(base)['utterances'] if r['session_id']==sid and r['category']=='callout']
@@ -40,7 +42,7 @@ def main():
             wait_for(lambda:row(base,wt,{'started'}))
             for _ in range(5):send(sid)
             wait_for(lambda:row(base,wt,{'completed'}))
-            # 通常の敵発見は再生中の会話が終わってから警告する。
+            # 本人が交戦中の非緊急警告は、再生中の会話が終わってから配送する。
             completed=row(base,chat,{'completed'}); assert completed
             trace=log.read_text()
             chat_done=re.search(r'event="dialogue_status"[^\n]*turn_id="'+re.escape(chat)+r'" playback_status="completed"',trace)

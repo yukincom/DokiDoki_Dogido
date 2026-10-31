@@ -68,6 +68,7 @@ def main():
                    "direction": {"horizontal": "right"}}
             zombie = {"type": "zombie", "entity_id": "z", "distance": 2,
                       "direction": {"horizontal": "front", "cardinal": "north"}}
+            engaged = {"combat_active_hint": True, "player_engaged": True}
             bread = {"status":"present","components":[{"smell_id":"bread","category":"food","valence":"pleasant","source_kind":"hotbar","effective_strength":3}],"basis":"smell_policy_v2"}
 
             def send(sid, *, world=None, dimension="minecraft:overworld", **extra):
@@ -159,24 +160,29 @@ def main():
             send(sid)
             before_calls = len(calls())
             time.sleep(.12)
-            # 新しい種類を含む部分通知だけでは周期比較を起動しない。
-            request(base, "/api/v1/game-events", {
-                "schema_version":"2026-05-24", "adapter":"fixture", "sequence":sequence+1,
-                "observed_at":datetime.now(timezone.utc).isoformat(),
-                "event":{"name":"hostile_audio_detected","source_kind":"auditory","priority_hint":"background","certainty":"high"},
-                "nearby_composition":{"mobs":[{"id":"cow","quantity":1}],"blocks":[],"mobs_truncated":False,"blocks_truncated":False}}, sid=sid)
-            sequence += 1
+            # 本人が交戦していないゾンビの音だけで固定警告を出さず、周期の全観測で初めて気づきを一度選ぶ。
+            # 実HTTP・模擬モデル。モデルが受けた種類と数量、silentの記録、同一種類で再生成されないことを確認。
+            passive = {"combat_active_hint": True, "player_engaged": False}
+            heard = [{"label":"zombie","source_id":"unseen-zombie","spoken_name_allowed":True}]
+            send(sid, event={"name":"hostile_audio_detected","source_kind":"auditory",
+                             "priority_hint":"background","certainty":"high"},
+                 auditory_threats=heard, combat=passive)
             time.sleep(.12)
-            assert len(calls()) == before_calls
-            send(sid, passive_mobs=[cow])
+            assert len(calls()) == before_calls and not rows(sid), rows(sid)
+            nearby = {"mobs":[{"id":"zombie","quantity":1}], "blocks":[],
+                      "mobs_truncated":False,"blocks_truncated":False}
+            send(sid, visual_threats=[zombie], auditory_threats=heard, nearby_composition=nearby, combat=passive)
             wait_for(lambda: any(r["playback_status"] == "not_selected" for r in reactions(sid)))
-            assert len(calls()) == before_calls+1
+            context = reaction_context(calls()[-1]["body"])["world_context"]
+            assert any(m["id"] == "zombie" and m["quantity"] == 1
+                       for m in context["observations"]["nearby_mob_types"]), context
+            assert len(calls()) == before_calls+1 and len(rows(sid)) == 1, rows(sid)
             time.sleep(.12)
-            send(sid, passive_mobs=[cow])
+            send(sid, visual_threats=[zombie], auditory_threats=heard, nearby_composition=nearby, combat=passive)
             time.sleep(.12)
-            assert len(calls()) == before_calls+1
+            assert len(calls()) == before_calls+1 and len(rows(sid)) == 1
             close(sid)
-            passed.append("only_fresh_periodic_snapshot_triggers_and_unchanged_table_stays_quiet")
+            passed.append("passive_zombie_reaches_periodic_notice_once_and_may_stay_silent")
 
             # 4個体上限と独立した集計を実生成payloadまで運び、数量だけでは再発話しない。
             sid = register(base, preview=False, body=True)
@@ -388,7 +394,7 @@ def main():
                 elif change == "session_closed":
                     close(sid)
                 elif change == "hostile_arrived":
-                    send(sid, visual_threats=[zombie])
+                    send(sid, visual_threats=[zombie], combat=engaged)
                 else:
                     newer = submit(base, sid)
                     wait_for(lambda: row(base, newer, {"completed"}))
@@ -413,7 +419,7 @@ def main():
             assert cue_index < model_index, entries
             pending = reactions(sid)[-1]
             started = time.monotonic()
-            send(sid, visual_threats=[zombie])
+            send(sid, visual_threats=[zombie], combat=engaged)
             wait_for(lambda: next((r for r in rows(sid) if r["category"] == "callout" and r["playback_status"] in {"started", "completed"}), None), timeout=1)
             assert time.monotonic() - started < 1
             wait_for(lambda: row(base, pending["turn_id"], {"cancelled"}))
@@ -424,7 +430,7 @@ def main():
             sid = register(base, preview=False, body=True)
             before_calls = len(calls())
             for _ in range(2):
-                send(sid, visual_threats=[zombie], passive_mobs=[cow], smell_observation=bread,
+                send(sid, visual_threats=[zombie], combat=engaged, passive_mobs=[cow], smell_observation=bread,
                      world={"weather": "thunder", "thunder_sound_recent_ms": 0, "biome": "forest"})
             wait_for(lambda: any(r["category"] == "callout" and r["playback_status"] == "completed" for r in rows(sid)))
             assert len(calls()) == before_calls, calls()[before_calls:]

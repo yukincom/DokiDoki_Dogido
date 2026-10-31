@@ -34,7 +34,7 @@ pub(crate) fn threat(event: &GameEvent, sound: &AuditoryThreat) -> Value {
     let label = sound.spoken_name_allowed.then(|| crate::environment::ambient::mob_label(&sound.label));
     let attribution = attribution(event.observed_at, sound.heard_ago_ms, owner(event),
         sound.source_id.as_deref(), sound.sound_event.as_deref(), sound.extra.get("source_context"));
-    json!({"description":description(label.as_deref(), "hostile", sound.sound_event.as_deref(), false),
+    json!({"category":"hostile","description":description(label.as_deref(), "hostile", sound.sound_event.as_deref(), false),
         "sound_event":sound.sound_event,"direction":sound.direction,"distance_band":sound.distance_band,
         "certainty":sound.certainty,"spoken_name_allowed":sound.spoken_name_allowed,
         "heard_ago_ms":sound.heard_ago_ms,"emitter":attribution.0,"emitter_attribution":attribution.1,

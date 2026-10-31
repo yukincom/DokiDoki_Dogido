@@ -49,6 +49,8 @@
 
 ### 戦闘
 
+2026-11-01: 普通の敵の視認・増加・鳴き声による alert / panic は状況の記録に使う。この観測だけなら通常会話を続け、既存の周期の気づきへ渡す。以下の戦闘警告・保留は、本人の交戦や個別の危険を伴う場合に適用する。[現行仕様](current-spec.md#11-戦闘判定)。
+
 - `recent_damage_ms`
 - `combat_active_hint`
 - `combat_end_candidate`

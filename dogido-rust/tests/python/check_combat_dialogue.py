@@ -62,26 +62,56 @@ def main():
     with fixture(enabled=False) as f:
         base, _, log, control, seen, _, _, _, send, _, rows, _, folder = f
         sid = register(base, preview=False, body=True)
-        zombie = mob("zombie", "stable")
-        send(sid, visual_threats=[zombie], combat={"combat_active_hint": True})
-        wait_for(lambda: rows(sid) and all(r["playback_status"] in {
-            "completed", "cancelled", "failed"} for r in rows(sid)))
-        control["delay"] = .7
-        response = say(base, sid, "ドギド、冒険楽しい？")
-        turn = response["turn_id"]
-        assert not response.get("queued"), response
-        for _ in range(4):
-            send(sid, visual_threats=[zombie], combat={"combat_active_hint": True})
-            time.sleep(.1)
-        result = wait_for(lambda: row(base, turn, {"completed"}))
-        assert result["delivery_confirmed"] and result.get("resolution") != "reply_resumed", result
-        assert session(base, sid)["foreground"]["combat_active"]
-        assert session(base, sid)["foreground"]["route"] == "casual"
-        prompt = "\n".join(m["content"] for r in seen if r["path"] == "/v1/chat/completions"
-                           for m in r["body"]["messages"])
-        approved = "敵がおるときも、プレイヤーとの会話に応じてな。注意が必要な状況なら、回答に短く注意を自然に含めてな。変化がない注意は繰り返さんでええで。"
-        assert approved in prompt
-        passed.append("combat_presence_does_not_cancel_player_reply_and_approved_prompt_is_used")
+        # 普通の敵の初見、増加、別個体の声が続いても生成・再生中の同じ返答を一度届ける。
+        # 実HTTP・模擬モデルとplayer。次の質問でも敵の観測がモデルに届き、固定警告は一件もない。
+        send(sid)
+        gate = threading.Event()
+        started = threading.Event()
+        prompts = []
+        original = control["structured_handler"]
+
+        def hold_first_reply(incoming):
+            if incoming.get("temperature") != .65:
+                return original(incoming)
+            prompts.append(incoming)
+            if len(prompts) == 1:
+                started.set()
+                gate.wait(timeout=12)
+            return {"action": "speak", "speech": "一緒に冒険できてうれしいで。"}
+
+        control["structured_handler"] = hold_first_reply
+        passive = {"combat_active_hint": True, "player_engaged": False}
+        zombies = [mob("zombie", "z1"), mob("zombie", "z2")]
+        heard = [{"label": "zombie", "source_id": "unseen", "spoken_name_allowed": True}]
+        try:
+            turn = say(base, sid, "ドギド、冒険楽しい？")["turn_id"]
+            wait_for(started.is_set)
+            epoch = row(base, turn, {"generating"})["epoch"]
+            send(sid, visual_threats=zombies[:1], combat=passive)
+            assert row(base, turn, {"generating"})["epoch"] == epoch
+            (folder / "player_mode").write_text("slow")
+            gate.set()
+            wait_for(lambda: row(base, turn, {"started"}))
+            send(sid, visual_threats=zombies, combat=passive)
+            send(sid, event={"name": "hostile_audio_detected", "source_kind": "auditory",
+                             "priority_hint": "background", "certainty": "high"},
+                 auditory_threats=heard, combat=passive)
+            assert row(base, turn, {"started"})["epoch"] == epoch
+            (folder / "player_mode").write_text("ok")
+            result = wait_for(lambda: row(base, turn, {"completed"}))
+            assert result["epoch"] == epoch and result["delivery_confirmed"], result
+            assert result.get("resolution") != "reply_resumed" and len(prompts) == 1, result
+            assert sum(h.get("turn_id") == turn + ":reply" for h in session(base, sid)["history"]) == 1
+            send(sid, visual_threats=zombies, auditory_threats=heard, combat=passive)
+            response = say(base, sid, "ドギド、この先も一緒に行こか？")
+            assert not response.get("queued"), response
+            wait_for(lambda: row(base, response["turn_id"], {"completed"}))
+            assert len(prompts) == 2 and session(base, sid)["foreground"]["route"] == "casual"
+            prompt = "\n".join(m["content"] for m in prompts[1]["messages"])
+            assert "ゾンビ" in prompt and not any(r.get("combat_actions") for r in rows(sid)), rows(sid)
+            passed.append("passive_hostiles_preserve_generating_and_playing_reply_and_reach_next_prompt")
+        finally:
+            gate.set()
 
     with fixture(enabled=False) as f:
         base, _, log, control, seen, _, _, _, send, _, rows, _, folder = f
@@ -133,6 +163,7 @@ def main():
             assert session(base, sid)["foreground"]["combat_active"]
             assert len(prompts) == 3, prompts
             current_prompt = "\n".join(m["content"] for m in prompts[1]["messages"])
+            assert "敵がおるときも、プレイヤーとの会話に応じてな。注意が必要な状況なら、回答に短く注意を自然に含めてな。変化がない注意は繰り返さんでええで。" in current_prompt
             assert "desert" in current_prompt or "砂漠" in current_prompt, current_prompt
             assert f"プレイヤー: {first_text}" not in current_prompt, current_prompt
             history = session(base, sid)["history"]

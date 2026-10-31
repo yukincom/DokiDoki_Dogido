@@ -262,7 +262,7 @@ mod tests {
         e["event"]["source_kind"] = json!("visual");
         e["visual_threats"] = json!([{"type":"creeper","entity_id":"c1","distance":4,"direction":{"horizontal":"front","vertical":"same"},"approaching":true}]);
         e["combat"] =
-            json!({"combat_active_hint":true,"hostiles_within_7":1,"hostiles_within_10":1});
+            json!({"combat_active_hint":true,"player_engaged":true,"hostiles_within_7":1,"hostiles_within_10":1});
         d.observe("s", crate::events::GameEvent::parse(e).unwrap(), None);
         d.shutdown().await;
         let rows = rows(&root);

@@ -4,7 +4,7 @@
 use crate::conversation_observation::{Change, Context};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 pub const KIND: &str = "surroundings_notice";
 
@@ -20,10 +20,20 @@ pub struct Snapshot {
     pub table: Table,
 }
 
+/// 身体の視認配列は遮られた個体を含まない。個体ID・順番ではなく種類ごとに数える。
+pub(crate) fn visible_hostiles(event: &crate::events::GameEvent) -> BTreeMap<&str, usize> {
+    let mut counts = BTreeMap::new();
+    for target in &event.visual_threats {
+        *counts.entry(target.r#type.as_str()).or_default() += 1;
+    }
+    counts
+}
+
 pub fn snapshot(context: &Context) -> Snapshot {
     let observations = &context.observations;
     let mut table: Table = [
         "nearby_mob_types",
+        "visible_hostiles",
         "nearby_block_types",
         "location_biome",
         "place",
@@ -43,6 +53,16 @@ pub fn snapshot(context: &Context) -> Snapshot {
         "nearby_mob_types".into(),
         mob_kind_signature(&observations["nearby_mob_types"]),
     );
+    let hearing = &observations["hearing"];
+    if hearing["observer"] == "dogido" && let Some(sounds) = hearing["sounds"].as_array() {
+        // 時刻・方向・距離・個体IDでは同じ声を毎回新規扱いしない。呼称の確度は既存の聴覚表現に従う。
+        let descriptions: BTreeSet<_> = sounds
+            .iter()
+            .filter(|sound| sound["category"] == "hostile")
+            .filter_map(|sound| sound["description"].as_str())
+            .collect();
+        table.insert("heard_hostile_sounds".into(), json!(descriptions));
+    }
     if let Some(smell) = table.get_mut("smell") {
         *smell = super::ambient::smell_change_signature(smell);
     }
@@ -86,7 +106,17 @@ pub fn changes(previous: &Snapshot, current: &Context) -> Vec<Change> {
     }
     for (key, value) in &now.table {
         let before = previous.table.get(key).unwrap_or(&Value::Null);
-        if before != value {
+        // 視野外へ出た個体や保持期限を過ぎた音は、撃破や鳴き止んだ証拠にしない。
+        let noticed = match key.as_str() {
+            "visible_hostiles" => before.as_object().zip(value.as_object()).is_some_and(|(a, b)| {
+                b.iter().any(|(kind, count)| count.as_u64() > a.get(kind).and_then(Value::as_u64))
+            }),
+            "heard_hostile_sounds" => before.as_array().zip(value.as_array()).is_some_and(|(a, b)| {
+                b.iter().any(|description| !a.contains(description))
+            }),
+            _ => before != value,
+        };
+        if noticed {
             changes.push(Change {
                 kind: key.clone(),
                 before: before.clone(),

@@ -229,6 +229,9 @@ pub(super) fn applicable(
             super::workshop_combat_runtime::applicable(session, id, *version)
         }
         Scope::Event => true,
+        Scope::Safe if action.kind == crate::environment::notice::KIND => {
+            observation_fresh(session) && super::environment_runtime::notice_allowed(session)
+        }
         Scope::Safe => {
             observation_fresh(session)
                 && (matches!(

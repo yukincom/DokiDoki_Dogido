@@ -213,7 +213,8 @@ impl Dialogue {
                     &names,
                     &chat_context::CatalogLabels,
                 );
-                let conversation_threat = warnings::interruption_reason(&event).is_some()
+                let conversation_threat = !decision.presence_only
+                    && warnings::interruption_reason(&event).is_some()
                     && !workshop_focus::owns_input(s);
                 if event.event.name == EventName::PlayerDied
                     || decision.dimension_changed

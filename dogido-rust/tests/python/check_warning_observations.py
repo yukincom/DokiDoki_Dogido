@@ -46,6 +46,8 @@ time.sleep(.04 if '/panic/' in sys.argv[1] else delay)
                 e["sequence"] = seq
                 e["observed_at"] = (datetime.now(timezone.utc) - timedelta(seconds=30 if stale else 0)).isoformat()
                 e["event"]["name"] = name
+                # スコープの試験では本人が交戦した場面から警告を配送する。
+                e["combat"]["player_engaged"] = not empty and name != "ambient_mob_detected"
                 if count > 1:
                     e["visual_threats"] = [dict(e["visual_threats"][0], entity_id=f"z{i}") for i in range(count)]
                 audio_only = audio_only or name == "hostile_audio_detected"

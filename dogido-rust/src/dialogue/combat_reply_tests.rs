@@ -42,6 +42,7 @@ fn apply(dialogue: &Arc<Dialogue>, actions: Vec<Speech>) {
         stop_audio: actions.iter().any(|a| a.interrupt),
         actions,
         dimension_changed: false,
+        presence_only: false,
     };
     let mut jobs = dialogue.jobs.lock().unwrap();
     let mut d = dialogue.data.lock().unwrap();

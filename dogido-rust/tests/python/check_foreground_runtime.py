@@ -50,7 +50,7 @@ def main():
         sid = register(base, preview=False); send(sid)
         turn = submit(base, sid, "枕詞って何？")
         wait_for(lambda: row(base, turn, {"completed"}))
-        send(sid, visual_threats=[{"type":"zombie", "entity_id":"z", "distance":5,
+        send(sid, combat={"player_engaged": True}, visual_threats=[{"type":"zombie", "entity_id":"z", "distance":5,
                                   "direction":{"horizontal":"front"}}])
         state = foreground(base, sid)
         assert state["combat_active"] and state["route"] == "knowledge", state
@@ -75,7 +75,7 @@ def main():
         turn = submit(base, sid, "ドギド、こんにちは")
         wait_for(lambda: row(base, turn, {"completed"}))
         assert foreground(base, sid)["route"] == "casual"
-        send(sid, visual_threats=[{"type":"zombie", "entity_id":"z2", "distance":5}])
+        send(sid, combat={"player_engaged": True}, visual_threats=[{"type":"zombie", "entity_id":"z2", "distance":5}])
         assert foreground(base, sid)["combat_active"]
         send(sid, event={"name":"player_died", "source_kind":"system", "priority_hint":"background", "certainty":"high"})
         assert not foreground(base, sid)["combat_active"]
@@ -89,7 +89,7 @@ def main():
         assert not foreground(base, sid)["combat_active"], log.read_text()
         send(sid)
         assert not foreground(base, sid)["combat_active"]
-        send(sid, visual_threats=[{"type":"zombie", "entity_id":"portal-z", "distance":5}])
+        send(sid, combat={"player_engaged": True}, visual_threats=[{"type":"zombie", "entity_id":"portal-z", "distance":5}])
         assert foreground(base, sid)["combat_active"]
         send(sid, player={"name":"試験", "dimension":"minecraft:the_nether"})
         assert not foreground(base, sid)["combat_active"], log.read_text()

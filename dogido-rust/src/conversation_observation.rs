@@ -161,6 +161,7 @@ pub fn project(
         observations: json!({
             "observed_at":event.observed_at,
             "hearing":hearing::project(event, thunder_age_ms),
+            "visible_hostiles":event.body_origin().map(|_| notice::visible_hostiles(event)),
             "dimension":event.player.dimension,
             "subject_states":subjects::project(event, &precipitation)?,
             "place":place.place_line,

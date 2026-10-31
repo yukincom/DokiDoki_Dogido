@@ -21,6 +21,11 @@ use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet};
 use words::*;
 
+/// 専用の視認警告を持つ種類。鳴き声だけでは発見としない。
+pub(super) fn has_dedicated_warning(kind: &str) -> bool {
+    is_ranged(kind) || is_boss(kind) || is_flying(kind)
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Specials {
     dimension: Option<String>,
