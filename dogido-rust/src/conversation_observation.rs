@@ -192,9 +192,12 @@ fn quantity(value: &crate::events::NearbyQuantity) -> Value {
     }
 }
 
+pub(crate) const PLAYER_HOSTILES_CLEARED: &str = "player_hostiles_cleared";
+
 /// Session-owned changes since the last completed decision, not a second memory store.
 #[derive(Default)]
 pub struct State {
+    player_hostiles_observed: bool,
     body_context: Option<crate::body::contracts::Context>,
     current: Option<Context>,
     considered: u64,
@@ -254,6 +257,7 @@ impl State {
         next.revision = self.considered;
         if let Some(previous) = &self.current {
             if previous.observations["dimension"] != next.observations["dimension"] {
+                self.player_hostiles_observed = false;
                 next.revision = previous.revision.saturating_add(1);
                 self.considered = previous.revision;
                 self.current = Some(next);
@@ -362,6 +366,30 @@ impl State {
             }
         }
         self.current = Some(next);
+    }
+    /// プレイヤー周辺の戦闘観測はドギド自身の視覚・聴覚とは別。距離・解除時間の再判定はしない。
+    pub(crate) fn observe_player_combat(&mut self, event: &GameEvent) {
+        let Some(context) = &mut self.current else {
+            return;
+        };
+        let died = event.event.name == crate::events::EventName::PlayerDied;
+        let present = if died { Some(false) } else {
+            crate::combat::outcomes::Outcomes::hostile_presence(event)
+        };
+        let Some(present) = present else { return };
+        let was_present = std::mem::replace(&mut self.player_hostiles_observed, present);
+        if present || died {
+            context.changes.retain(|c| c.kind != PLAYER_HOSTILES_CLEARED);
+        } else if was_present {
+            context.revision = context.revision.saturating_add(1);
+            context.changes.push(Change {
+                kind: PLAYER_HOSTILES_CLEARED.into(),
+                before: json!(true),
+                now: json!({"scope":"プレイヤーの周囲","fact":"どうやら敵が周囲からいなくなったようだ"}),
+                observed_at: event.observed_at.to_rfc3339(),
+                revision: context.revision,
+            });
+        }
     }
     pub fn context(&self) -> Option<Context> {
         self.current.clone().map(|mut c| {

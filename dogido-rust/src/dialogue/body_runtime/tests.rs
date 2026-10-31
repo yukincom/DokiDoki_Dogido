@@ -712,3 +712,79 @@ async fn moving_or_non_adjacent_heat_does_not_interrupt_the_recall_reply() {
         d.shutdown().await;
     }
 }
+
+// 見込み: 敵を見聞きした戦闘だけが、不在の変化を一度残す。合格: 空の部分通知・撃破・被弾だけでは出ず、再発見で古い差分を消す。
+// 確認範囲: 模擬Fabricイベント→通常会話と周期の気づきの材料。実機の距離判定・モデルの発話は対象外。
+#[tokio::test]
+async fn combat_clear_is_one_player_scoped_change_after_observed_hostiles() {
+    let d = server();
+    let permit = d.serial.acquire().await.unwrap();
+    let mut sequence = 0;
+    let mut send = |name: &str, fields: Value| {
+        sequence += 1;
+        let raw = edit(event(sequence, 100 + sequence as u64, 23.0), |v| {
+            v["event"]["name"] = json!(name);
+            for (key, value) in fields.as_object().unwrap() {
+                v[key] = value.clone();
+            }
+        });
+        d.observe("s", raw.clone(), None);
+        capture(&d, &raw).context.world_context.unwrap()
+    };
+    let changes = |ctx: &Context| {
+        ctx.changes
+            .iter()
+            .filter(|c| c.kind == "player_hostiles_cleared")
+            .cloned()
+            .collect::<Vec<_>>()
+    };
+    send("status_snapshot", json!({"combat":{"recent_damage_ms":0}}));
+    assert!(changes(&send("combat_ended", json!({}))).is_empty());
+    assert!(
+        changes(&send(
+            "status_snapshot",
+            json!({"visual_threats":[{"type":"zombie","entity_id":"z","distance":20}]})
+        ))
+        .is_empty()
+    );
+    assert!(changes(&send("ambient_mob_detected", json!({}))).is_empty());
+    let outcome = json!({"type":"zombie","entity_id":"z","outcome":"player_kill","evidence":"server_death_event"});
+    assert!(
+        changes(&send(
+            "hostile_defeated",
+            json!({"combat":{"hostile_outcomes":[outcome]}})
+        ))
+        .is_empty()
+    );
+    assert!(changes(&send("status_snapshot", json!({}))).is_empty());
+    let first = changes(&send("combat_ended", json!({})));
+    assert_eq!(first.len(), 1);
+    assert_eq!(
+        first[0].now,
+        json!({"scope":"プレイヤーの周囲","fact":"どうやら敵が周囲からいなくなったようだ"})
+    );
+    assert_eq!(changes(&send("combat_ended", json!({}))), first);
+    {
+        let mut data = d.data.lock().unwrap();
+        let s = &mut data.sessions.get_mut("s").unwrap().conversation_observation;
+        s.sample_notice(180_001, 1, true);
+        assert_eq!(changes(&s.noticing_context().unwrap()), first);
+        s.sample_notice(180_002, 1, true);
+        assert!(s.noticing_context().is_none());
+    }
+    let audible = json!({"auditory_threats":[{"label":"skeleton","source_id":"skeleton"}]});
+    assert!(changes(&send("hostile_audio_detected", audible)).is_empty());
+    let second = send("combat_ended", json!({}));
+    assert!(changes(&second)[0].revision > first[0].revision);
+    d.data
+        .lock()
+        .unwrap()
+        .sessions
+        .get_mut("s")
+        .unwrap()
+        .conversation_observation
+        .considered(second.revision);
+    assert!(changes(&send("status_snapshot", json!({}))).is_empty());
+    drop(permit);
+    d.shutdown().await;
+}

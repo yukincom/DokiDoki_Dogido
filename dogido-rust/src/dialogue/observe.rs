@@ -161,6 +161,7 @@ impl Dialogue {
                         Ok(context) => {
                             let context = super::body_runtime::with_context(context, &current);
                             s.conversation_observation.observe(context);
+                            s.conversation_observation.observe_player_combat(&event);
                             s.conversation_observation.sample_notice(
                                 now,
                                 self.config.combat.ms("surroundings_notice_interval_ms"),

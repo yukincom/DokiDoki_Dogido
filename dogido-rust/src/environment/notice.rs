@@ -96,6 +96,17 @@ pub fn changes(previous: &Snapshot, current: &Context) -> Vec<Change> {
             });
         }
     }
+    // 戦闘の遷移は全snapshot間にも起きる。既存の未消費差分をこの比較周期に一度だけ含める。
+    changes.extend(
+        current
+            .changes
+            .iter()
+            .filter(|c| {
+                c.kind == crate::conversation_observation::PLAYER_HOSTILES_CLEARED
+                    && c.revision > previous.revision
+            })
+            .cloned(),
+    );
     changes
 }
 

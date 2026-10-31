@@ -125,8 +125,16 @@ impl Outcomes {
             _ => true,
         })
     }
+    /// 敵の観測で在席、Fabricの戦闘終了猶予を通った通知で不在。途中の空配列は更新しない。
+    pub(crate) fn hostile_presence(event: &GameEvent) -> Option<bool> {
+        if remaining(event) {
+            Some(true)
+        } else {
+            (event.event.name == EventName::CombatEnded).then_some(false)
+        }
+    }
     pub fn clear_confirmed(event: &GameEvent) -> bool {
-        event.event.name == EventName::CombatEnded && !remaining(event)
+        Self::hostile_presence(event) == Some(false)
     }
     fn record(&mut self, outcomes: &[HostileOutcome]) {
         for outcome in outcomes {
