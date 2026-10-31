@@ -261,9 +261,7 @@ async fn acceptance_image_java_protocol_to_rust_receipt_preserves_three_states()
             let mut data = dialogue.data.lock().unwrap();
             let session = data.sessions.get_mut("s").unwrap();
             assert!(
-                session
-                    .visual
-                    .receive(&event.command_results[0], Utc::now())
+                receive_java_result(session, &event.command_results[0], scenario, "synthetic")
             );
             assert!(
                 session.visual.latest.is_some(),
@@ -305,6 +303,7 @@ async fn acceptance_image_java_protocol_to_rust_receipt_preserves_three_states()
 fn java_event(input: &Value) -> crate::events::GameEvent {
     use std::io::Write;
     use std::process::{Command, Stdio};
+    let started = Instant::now();
     let mut child = Command::new("python3")
         .arg(concat!(
             env!("CARGO_MANIFEST_DIR"),
@@ -322,12 +321,40 @@ fn java_event(input: &Value) -> crate::events::GameEvent {
         .write_all(input.to_string().as_bytes())
         .unwrap();
     let output = child.wait_with_output().unwrap();
+    if std::env::var("DOGIDO_ACCEPTANCE_TIMING").as_deref() == Ok("1") {
+        eprint!("{}", String::from_utf8_lossy(&output.stderr));
+        eprintln!("IMAGE_TIMING {}", json!({
+            "stage":"java_event", "scenario":input["scenario"],
+            "image_kind":if input.get("before_path").is_some() {"stored_png"} else {"synthetic"},
+            "subprocess_ms":started.elapsed().as_secs_f64()*1000.0,
+        }));
+    }
     assert!(
         output.status.success(),
         "Java境界: {}",
         String::from_utf8_lossy(&output.stderr)
     );
     crate::events::GameEvent::parse(serde_json::from_slice(&output.stdout).unwrap()).unwrap()
+}
+
+// 見込み: Javaの準備時間と受信時の期限残量を記録すれば、画像欠損と期限切れを区別できる。
+// 合格条件は既存assertのまま。実時刻・本体の期限・画像を変えず、テストの受信結果だけ計測する。
+fn receive_java_result(session: &mut Session, result: &AdapterCommandResult, scenario: &str, image_kind: &str) -> bool {
+    let now = Utc::now();
+    let pending = session.visual.pending.as_ref().map(|p| (p.issued, p.expires));
+    let started = Instant::now();
+    let acknowledged = session.visual.receive(result, now);
+    if std::env::var("DOGIDO_ACCEPTANCE_TIMING").as_deref() == Ok("1") {
+        eprintln!("IMAGE_TIMING {}", json!({
+            "stage":"rust_receive", "scenario":scenario, "image_kind":image_kind,
+            "receive_ms":started.elapsed().as_secs_f64()*1000.0,
+            "command_age_ms":pending.map(|(issued,_)| (now-issued).num_milliseconds()),
+            "deadline_remaining_ms":pending.map(|(_,expires)| (expires-now).num_milliseconds()),
+            "request_expired":pending.map(|(_,expires)| now>=expires),
+            "acknowledged":acknowledged, "image_kept":session.visual.latest.is_some(),
+        }));
+    }
+    acknowledged
 }
 
 // 見込み: 矛盾した比較情報を拒否すれば、誤った参照やマスで変化を説明しない。合格: 参照・時刻・ID・hash・状態・範囲・重複・無判定マスの各不正で画像保持なし。確認範囲: 実Rust受信、Javaの計測精度はgolden照合で別確認。
@@ -466,7 +493,7 @@ async fn acceptance_image_both_model_routes_send_one_current_image_and_one_compa
         let (normal, action) = {
             let mut data = d.data.lock().unwrap();
             let s = data.sessions.get_mut("s").unwrap();
-            s.visual.receive(&received.command_results[0], Utc::now());
+            receive_java_result(s, &received.command_results[0], scenario, "stored_png");
             let image = &s.visual.latest.as_ref().expect("実画像を保持").image;
             assert_eq!(json!(image.scene_comparison)["status"], status);
             assert_eq!(

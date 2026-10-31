@@ -1,8 +1,8 @@
-name: CI
+name: Image CI timing
 
 on:
   push:
-    branches: ["**"]
+    branches: ["codex/ci-image-timing-20261031"]
 
 permissions:
   contents: read
@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   rust:
-    name: Rust tests
+    name: Image tests only
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -29,34 +29,16 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends libgoogle-gson-java
-      # cargo.shが既存のrust-toolchain.tomlとCargo.lockを使用する。
-      - name: Test all Rust targets
+      # 計測用ブランチだけのCI。本体の時間制限と試験のassertは変えない。
+      - name: Build Rust library tests
+        run: /usr/bin/time -p ./dogido-rust/cargo.sh test --lib --locked --no-run
+      - name: Measure the two Java to Rust image tests
         env:
           DOGIDO_ACCEPTANCE_GSON: /usr/share/java/gson.jar
-        run: ./dogido-rust/cargo.sh test --all-targets --locked
-
-  helpers:
-    name: Python and library tests
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          lfs: true
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: "3.11"
-      - name: Bootstrap installer and install test dependencies
+          DOGIDO_ACCEPTANCE_TIMING: '1'
         run: |
-          python -m venv .venv
-          .venv/bin/python -m dogido_server.tls_security --bootstrap
-          .venv/bin/python -m pip --disable-pip-version-check install -e '.[dev]' numpy==2.2.6
-      - name: Test Python helpers
-        run: .venv/bin/python -m pytest -q tests dogido-rust/tests/python/test_*.py
-      - name: Test library models
-        run: node --test tools/dogido-library/*.test.cjs
-      - name: Check shell syntax
-        run: |
-          sh -n scripts/check_uv.sh
-          bash -n scripts/setup_echo_capture.sh
+          /usr/bin/time -p ./dogido-rust/cargo.sh test --lib --locked -- \
+            --exact \
+            dialogue::visual_runtime::acceptance_image::acceptance_image_java_protocol_to_rust_receipt_preserves_three_states \
+            dialogue::visual_runtime::acceptance_image::acceptance_image_both_model_routes_send_one_current_image_and_one_comparison \
+            --nocapture
