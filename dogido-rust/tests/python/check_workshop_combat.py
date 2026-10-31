@@ -78,7 +78,7 @@ def drive(send, sid, condition, timeout=8):
 
 
 def enter(send, rows, sid):
-    send(sid, visual_threats=[MOB], combat={"combat_active_hint": True})
+    send(sid, visual_threats=[MOB], combat={"combat_active_hint": True, "player_engaged": True})
     wait_for(lambda: any(r["playback_status"] == "completed" and r.get("combat_actions") for r in rows(sid)))
 
 
@@ -121,7 +121,7 @@ def main():
             wait_for(lambda: hud(sid)["state"] == "closed")
             wait_for(lambda: row(base, turn, {"started"}))
             (folder / "player_mode").write_text("ok")
-            send(sid, visual_threats=[{**MOB, "type": "enderman"}], combat={"combat_active_hint": True})
+            send(sid, visual_threats=[{**MOB, "type": "enderman"}], combat={"combat_active_hint": True, "player_engaged": True})
             wait_for(lambda: row(base, turn, {"waiting_for_warning"}))
             end(send, rows, sid)
             drive(send, sid, lambda: row(base, turn, {"completed"}))
@@ -226,7 +226,7 @@ def main():
         r = drive(send, sid, lambda: next((r for r in actions(rows, sid, "workshop_resume") if r["playback_status"] == "started"), None))
         assert session(base, sid)["workshop_followup"] == "discussion"
         (folder / "player_mode").write_text("ok")
-        send(sid, visual_threats=[{**MOB, "entity_id": "z2"}], combat={"combat_active_hint": True})
+        send(sid, visual_threats=[{**MOB, "entity_id": "z2"}], combat={"combat_active_hint": True, "player_engaged": True})
         wait_for(lambda: row(base, r["turn_id"], {"cancelled"}))
         assert hud(sid)["state"] == "danger" and hud(sid)["canonical_lines"] == LINES
         assert not any(h["text"] == "句の話に戻る。" for h in session(base, sid)["history"])
@@ -253,13 +253,13 @@ def main():
     with fixture(combat_settings=SETTINGS) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         sid = ready(base, send, rows)
         (folder / "player_mode").write_text("slow")
-        send(sid, visual_threats=[MOB], combat={"combat_active_hint": True})
+        send(sid, visual_threats=[MOB], combat={"combat_active_hint": True, "player_engaged": True})
         warning = wait_for(lambda: next((r for r in rows(sid) if r.get("combat_actions") and r["playback_status"] == "started"), None))
         turn = classified_input(base, sid, "終了")
         classified = classifier_requests(control)
         assert row(base, warning["turn_id"], {"started"}) and hud(sid)["state"] == "danger"
         (folder / "player_mode").write_text("ok")
-        drive(lambda s: send(s, visual_threats=[MOB], combat={"combat_active_hint": True}), sid,
+        drive(lambda s: send(s, visual_threats=[MOB], combat={"combat_active_hint": True, "player_engaged": True}), sid,
               lambda: row(base, warning["turn_id"], {"completed"}))
         assert hud(sid)["state"] == "danger" and row(base, turn, {"waiting_for_warning"})
         end(send, rows, sid)
@@ -298,7 +298,7 @@ def main():
         sid = ready(base, send, rows)
         enter(send, rows, sid)
         for text in ["いい句だね", "終了しないよ", "『終了』って言っただけ", "終了"]:
-            send(sid, visual_threats=[MOB], combat={"combat_active_hint":True})
+            send(sid, visual_threats=[MOB], combat={"combat_active_hint":True,"player_engaged":True})
             rejected_normal_input(base, sid, text)
             assert hud(sid)["state"] == "danger"
         classified = classifier_requests(control)

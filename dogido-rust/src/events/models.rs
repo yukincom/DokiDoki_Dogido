@@ -524,6 +524,9 @@ pub struct CombatState {
     /// adapterの戦闘追跡または現在の敵視覚・聴覚が示す継続候補。Rustの最終戦況とは別。
     #[serde(default)]
     pub combat_active_hint: Option<bool>,
+    /// 敵が本人を狙った、または本人が敵を攻撃してから既存の戦闘終了まで。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub player_engaged: Option<bool>,
     /// 確認済み死亡・爆散の記録。Noneは未送信、Some([])は送信された空リスト。
     #[serde(default)]
     pub hostile_outcomes: Option<Vec<HostileOutcome>>,

@@ -720,12 +720,15 @@ MISS・空気のときは **フィールド自体を省略**する。
       "evidence": "server_death_event"
     }
   ],
-  "combat_active_hint": true
+  "combat_active_hint": true,
+  "player_engaged": true
 }
 ```
 
 ### 方針
 
+- `player_engaged` は敵が本人を狙ったか、本人が敵を攻撃した後、既存の戦闘終了までtrue。川柳はこの値で中断する。敵の視認・音・被弾だけでも立ち得る `combat_active_hint` は戦況の観測に使う。
+- 敵AIの攻撃対象は統合サーバーでホスト本人について取得する。クライアントだけで外部サーバーに参加した場合、通常の敵AIの攻撃対象は取得できない。近接攻撃は本人の敵への攻撃操作、飛び道具は本人を攻撃者とする命中通知から取る。
 - 生データだけでなく、状態機械がすぐ使える集約値も持たせてよい
 - `hostile_scan_distance` は通常敵の索敵半径、`hostiles_within_scan_ground` はその範囲内の地上系敵数。範囲付き集計には両方を送る。集計がない場合は現在の視認から数え、固定30ブロックの値へ読み替えない
 - `hostile_outcomes` は、追跡中の個体について実際の死亡またはクリーパー爆発を観測した結果。一覧要素は `entity_id / type / outcome / evidence`
@@ -890,7 +893,8 @@ MISS・空気のときは **フィールド自体を省略**する。
     "recent_hostile_audio_ms": 220,
     "hostiles_within_7": 1,
     "hostiles_within_10": 1,
-    "combat_active_hint": true
+    "combat_active_hint": true,
+    "player_engaged": false
   }
 }
 ```

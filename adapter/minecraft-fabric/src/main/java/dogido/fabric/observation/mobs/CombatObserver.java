@@ -49,6 +49,7 @@ public final class CombatObserver {
         double scanDistance = Math.max(this.maxThreatDistance, this.visibleThreatDistance);
         json.addProperty("hostile_scan_distance", round(scanDistance));
         json.addProperty("hostiles_within_scan_ground", countGroundThreatsWithin(threats, scanDistance));
+        json.addProperty("player_engaged", this.threatObserver.playerEngaged());
         json.addProperty("combat_active_hint", this.threatObserver.combatActive() || !threats.isEmpty() || !audioThreats.isEmpty());
         int nearbyExperienceOrbCount = frame.countEntities(player.getBoundingBox().expand(24.0, 12.0, 24.0), null, 0, "experience_orb");
         json.addProperty("nearby_experience_orb_count", nearbyExperienceOrbCount);

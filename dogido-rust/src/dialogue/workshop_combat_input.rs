@@ -18,7 +18,11 @@ pub(super) struct Pending {
 }
 
 pub(super) fn allowed(s: &Session) -> bool {
-    fresh(s) || super::workshop_focus::owns_input(s)
+    if super::workshop_focus::active(s) && !s.preview {
+        super::workshop_focus::owns_input(s)
+    } else {
+        fresh(s)
+    }
 }
 
 impl Dialogue {

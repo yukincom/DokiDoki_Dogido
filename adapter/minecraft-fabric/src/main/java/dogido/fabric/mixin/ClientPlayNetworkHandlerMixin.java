@@ -22,6 +22,12 @@ abstract class ClientPlayNetworkHandlerMixin {
         DogidoClientAdapter.recordEntitySoundPacket(packet);
     }
 
+    @Inject(method = "onEntityDamage", at = @At("TAIL"))
+    private void dogido$onEntityDamage(net.minecraft.network.packet.s2c.play.EntityDamageS2CPacket packet, CallbackInfo ci) {
+        var handler = (ClientPlayNetworkHandler)(Object)this;
+        DogidoClientAdapter.recordEntityDamage(packet, handler.getWorld());
+    }
+
     @Inject(method = "onExplosion", at = @At("HEAD"))
     private void dogido$onExplosion(ExplosionS2CPacket packet, CallbackInfo ci) {
         DogidoClientAdapter.recordExplosionPacket(packet);

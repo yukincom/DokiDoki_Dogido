@@ -19,7 +19,7 @@ def held(base, turn):
 
 
 def start_enemy(send, sid, number=1):
-    send(sid, visual_threats=[{**MOB, "entity_id": f"z{number}"}], combat={"combat_active_hint": True})
+    send(sid, visual_threats=[{**MOB, "entity_id": f"z{number}"}], combat={"combat_active_hint": True, "player_engaged": True})
 
 
 def finish_enemy(send, sid):

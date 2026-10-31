@@ -11,6 +11,7 @@ use crate::{
 pub(super) fn clear_for_resume(s: &Session) -> bool {
     !s.preview
         && fresh(s)
+        && super::workshop_focus::quiet_observation(s)
         // 敵との戦闘後の安堵は待つ。暗さだけのalertには句の復帰を妨げさせない。
         && (s.mode == Mode::Normal || s.mode == Mode::Alert && super::workshop_focus::quiet(s))
         && s.latest.as_ref().is_some_and(|e| {

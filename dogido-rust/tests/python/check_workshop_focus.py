@@ -145,7 +145,7 @@ def main():
         install(control, lambda text, prompt, n: step(text))
         sid = ready(base, send, rows, body=True)
         (folder / "player_mode").write_text("slow")
-        send(sid, visual_threats=[MOB], combat={"combat_active_hint": True})
+        send(sid, visual_threats=[MOB], combat={"combat_active_hint": True, "player_engaged": True})
         warning = wait_for(lambda: next((r for r in rows(sid) if r.get("combat_actions") and r["playback_status"] == "started"), None))
         send(sid)
         assert row(base, warning["turn_id"], {"started"}), rows(sid)

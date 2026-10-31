@@ -20,7 +20,7 @@ fn paused(f: &Fixture, clear: bool) {
     s.chat_allowed = clear;
     s.received = Some(Instant::now());
     let mut event = empty_event("試験");
-    event["combat"] = json!({"combat_active_hint":!clear});
+    event["combat"] = json!({"combat_active_hint":!clear,"player_engaged":!clear});
     s.latest = Some(crate::events::GameEvent::parse(event).unwrap());
     s.haiku.workshop.as_mut().unwrap().pause(Instant::now());
 }

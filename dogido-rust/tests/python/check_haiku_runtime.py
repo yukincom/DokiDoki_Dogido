@@ -195,12 +195,15 @@ def main():
 
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         gate.clear(); sid = register(base, preview=False, body=True); send(sid); wait_for(drafting.is_set)
+        # 見込み: 生成中に敵対音通知が届いても同じ句を完成させる。合格: 生成1回、保存1件、相談が開く。モデルは模擬。
         send(sid, event={"name": "hostile_audio_detected", "source_kind": "auditory", "priority_hint": "background", "certainty": "high"},
+             combat={"combat_active_hint": True, "player_engaged": False},
              auditory_threats=[{"label": "zombie", "source_id": "sound-z", "spoken_name_allowed": True}])
-        wait_for(lambda: any(r["playback_status"] == "completed" and r.get("combat_actions") for r in rows(sid)))
-        gate.set(); wait_for(lambda: "python_worker_stopped" in log.read_text())
-        assert not stored(sid) and hud(sid)["state"] == "closed"
-        passed.append("partial_hostile_audio_cancels_and_warning_precedes_late_model")
+        gate.set()
+        wait_for(lambda: any(r["turn_id"].endswith(":poem") and r["playback_status"] == "completed" for r in rows(sid)))
+        assert checks["drafts"] == 1 and len(wait_for(lambda: stored(sid))) == 1
+        assert hud(sid)["state"] == "open"
+        passed.append("partial_hostile_audio_preserves_the_same_poem")
 
     with fixture(max_regeneration_rounds=2) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         checks["fail"] = True; sid = register(base, preview=False, body=True); send(sid)
@@ -254,8 +257,8 @@ def main():
                 wait_for(lambda: any(r["turn_id"].endswith(":poem") and r["playback_status"] == "completed" for r in rows(sid)))
                 assert not stored(sid), "fixture must actually block the append"
                 assert hud(sid)["state"] == "open"
-                # 一時データ採取では視認だけでworkshopを止めない。明示戦闘で割り込みを検査する。
-                send(sid, combat={"combat_active_hint": True},
+                # 見込み: 保存開始後に本人の交戦を観測すると川柳を中断する。既に始まった追記は保持する。
+                send(sid, combat={"combat_active_hint": True, "player_engaged": True},
                      visual_threats=[{"type": "zombie", "entity_id": "z", "distance": 6,
                       "direction": {"horizontal": "front", "cardinal": "north"}}])
                 wait_for(lambda: any(r.get("combat_actions") and r["playback_status"] == "completed" for r in rows(sid)))

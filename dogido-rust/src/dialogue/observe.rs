@@ -186,10 +186,7 @@ impl Dialogue {
                             .is_some_and(|a| a.iter().any(environment_runtime::dark_audio)),
                 );
             }
-            if recent
-                && warnings::interruption_reason(&event).is_some()
-                && !workshop_focus::owns_input(&d.sessions[session_id])
-            {
+            if recent && (workshop_focus::engaged(&event) || event.event.name == EventName::PlayerDied) {
                 Self::cancel_haiku(&mut d, session_id, "current_threat");
             }
             self.tick_workshop(&mut d, session_id);
@@ -264,14 +261,7 @@ impl Dialogue {
                     super::combat_runtime::DecisionContext {
                         input: None,
                         reason: warnings::interruption_reason(&event),
-                        combat_priority: recent
-                            && (workshop_focus::hostile(&event)
-                                || matches!(
-                                    event.event.name,
-                                    EventName::HostileDefeated
-                                        | EventName::CreeperDetonated
-                                        | EventName::CombatEnded
-                                )),
+                        combat_priority: workshop_focus::engaged(&event),
                     },
                 );
                 self.process_environment(&mut d, &mut jobs, session_id, now, combat_priority);

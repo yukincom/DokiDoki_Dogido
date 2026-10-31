@@ -35,6 +35,24 @@ class ThreatObserverTest {
             new MobClassifier(), bosses, () -> {}, tick::get);
     }
 
+    // 視認だけでは本人の交戦を立てない。AIの攻撃対象か本人の攻撃が届いた後だけ、既存の終了猶予まで保持。
+    // 模擬tickで戦闘台帳の開始・保持・終了を確認。MinecraftのAI・攻撃packetはこの試験の範囲外。
+    @Test void playerEngagementIsIndependentOfMerePresenceAndEndsWithCombat() {
+        var visible = List.of(threat(ENEMY_A, true));
+        observer.updateCombatTracking(visible, List.of());
+        assertTrue(observer.combatActive());
+        assertFalse(observer.playerEngaged());
+        observer.observePlayerEngagement();
+        assertTrue(observer.playerEngaged());
+        tick.addAndGet(3);
+        assertFalse(observer.shouldSendCombatEnded(List.of(), List.of(), false));
+        assertTrue(observer.playerEngaged());
+        tick.incrementAndGet();
+        assertTrue(observer.shouldSendCombatEnded(List.of(), List.of(), false));
+        observer.endCombat();
+        assertFalse(observer.playerEngaged());
+    }
+
     @Test void newEnemyUsesInnerBoundaryAndSixConsecutiveTicks() {
         for (double distance : new double[] {15.99, 16.00, 16.01}) {
             tick.set(100);

@@ -61,6 +61,8 @@ public final class ThreatObserver {
     private long lastExplosionObservedTick = -1000;
     private long lastCombatSignalTick = -1000;
     private boolean combatActive = false;
+    // 本人が関わった戦闘だけを、既存の戦闘終了猶予まで保持する。
+    private boolean playerEngaged;
     private float lastHealth = 20.0f;
 
     private final Settings settings;
@@ -96,7 +98,18 @@ public final class ThreatObserver {
     public long lastVisualObservedTick() { return this.lastVisualThreatObservedTick; }
     public long lastExplosionObservedTick() { return this.lastExplosionObservedTick; }
     public boolean combatActive() { return this.combatActive; }
-    public void endCombat() { this.combatActive = false; }
+    public boolean playerEngaged() { return this.playerEngaged; }
+
+    public void observePlayerEngagement() {
+        this.playerEngaged = true;
+        this.combatActive = true;
+        this.lastCombatSignalTick = this.tickSource.getAsLong();
+    }
+
+    public void endCombat() {
+        this.combatActive = false;
+        this.playerEngaged = false;
+    }
     public void resetHealth() { this.lastHealth = 20.0f; }
 
     public void resetObservationTimes() {
@@ -104,7 +117,7 @@ public final class ThreatObserver {
         this.lastVisualThreatObservedTick = -1000;
         this.lastExplosionObservedTick = -1000;
         this.lastCombatSignalTick = -1000;
-        this.combatActive = false;
+        endCombat();
     }
 
     public void resetTracking() {
@@ -242,7 +255,7 @@ public final class ThreatObserver {
             || isThreatCandidateEntity(entity);
     }
 
-    private boolean isThreatCandidateEntity(Entity entity) {
+    public static boolean isThreatCandidateEntity(Entity entity) {
         if (!(entity instanceof LivingEntity living) || !living.isAlive()) {
             return false;
         }

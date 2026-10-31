@@ -206,15 +206,15 @@ impl Dialogue {
         }
         s.mode = decision.mode;
         s.chat_allowed = decision.chat_allowed;
-        if super::workshop_focus::quiet(s) && !decision.dimension_changed {
+        let poem_continues = s.haiku.foreground() && super::workshop_focus::quiet_observation(s);
+        if poem_continues && !decision.dimension_changed {
             // mode/観測は更新し続けるが、環境由来のpanicや予兆では相談を奪わない。
             // 敵離脱後のpause中も同じ。撃破・爆散・安堵の実結果は復帰の前に配送する。
-            decision
-                .actions
-                .retain(|a| super::workshop_focus::combat_completion(a.kind));
+            let resuming = s.haiku.workshop.as_ref().is_some_and(|w| w.combat_paused());
+            decision.actions.retain(|a| resuming && super::workshop_focus::combat_completion(a.kind));
             if decision.actions.is_empty() {
                 decision.stop_audio = false;
-                if super::workshop_focus::owns_input(s) {
+                if !resuming {
                     decision.chat_allowed = true;
                 }
             }
@@ -223,7 +223,7 @@ impl Dialogue {
         let defer_relief = s.warning.as_ref().is_some_and(warnings::Active::finishing)
             && !decision.actions.is_empty()
             && decision.actions.iter().all(|a| a.kind == "aftermath");
-        if !decision.chat_allowed
+        if (combat_priority && s.haiku.foreground()) || !decision.chat_allowed
             || !decision.actions.is_empty()
             || decision.stop_audio
             || decision.dimension_changed
@@ -237,7 +237,9 @@ impl Dialogue {
             if combat_priority && !decision.dimension_changed && !hold_workshop {
                 self.mark_workshop_combat_priority(d, sid);
             }
-            Self::cancel_haiku(d, sid, reason.unwrap_or("combat_priority"));
+            if !poem_continues || decision.dimension_changed {
+                Self::cancel_haiku(d, sid, reason.unwrap_or("combat_priority"));
+            }
             let s = &d.sessions[sid];
             let ordinary = d.rows.iter().any(|r| {
                 r["session_id"] == sid

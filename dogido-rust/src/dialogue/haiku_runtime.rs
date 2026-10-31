@@ -144,34 +144,25 @@ impl State {
         self.active.is_some() || self.workshop.as_ref().is_some_and(Workshop::is_open)
     }
 }
-fn safe(s: &Session, allow_scanned_hostiles: bool) -> bool {
-    let scanned_hostiles = allow_scanned_hostiles
-        && s.latest
-            .as_ref()
-            .is_some_and(super::workshop_focus::scanned_hostiles_only);
-    let mode_safe = s.mode == crate::combat::model::Mode::Normal
-        || scanned_hostiles && s.mode != crate::combat::model::Mode::Aftermath;
-    // combat_runtimeは視認由来のpanicでもchat_allowedをfalseにする。
-    // 採取中だけ、最新観測が視認／スキャンだけなら観測鮮度を保ったまま発句を継続する。
-    let observation_safe = fresh(s) || scanned_hostiles && observation_fresh(s);
-    let event_safe = |e: &crate::events::GameEvent| {
-        warnings::interruption_reason(e).is_none()
-            || allow_scanned_hostiles && super::workshop_focus::scanned_hostiles_only(e)
-    };
-    !s.preview
+fn safe(s: &Session) -> bool {
+    use crate::combat::{model::Mode, outcomes::Outcomes};
+    // 敵の観測による警戒だけを発句の妨げから外す。暗所単独などの既存の開始条件は保つ。
+    let combat_observation = s.latest.iter().chain(&s.audio_latest).any(|e| {
+        Outcomes::hostile_presence(e).is_some() || warnings::interruption_reason(e).is_some()
+    });
+    let ordinary = s.mode == Mode::Normal && s.chat_allowed && !s.foreground.combat_active;
+    let finishing = s.mode == Mode::Aftermath && s.haiku.active.is_some();
+    (ordinary || combat_observation || finishing)
+        && !s.preview
         && !s.foreground.game_paused
         && s.warning.is_none()
         && s.pending_warning.is_none()
-        && observation_safe
-        && mode_safe
-        && (!s.foreground.combat_active || scanned_hostiles)
-        && s.latest.as_ref().is_some_and(event_safe)
-        && s.audio_latest.as_ref().is_none_or(event_safe)
+        && super::workshop_focus::quiet_observation(s)
 }
-fn current(d: &Data, sid: &str, job: &str, allow_scanned_hostiles: bool) -> bool {
+fn current(d: &Data, sid: &str, job: &str) -> bool {
     !d.stopped
         && d.sessions.get(sid).is_some_and(|s| {
-            safe(s, allow_scanned_hostiles)
+            safe(s)
                 && s.haiku
                     .active
                     .as_ref()
@@ -251,12 +242,15 @@ impl Dialogue {
         };
         let now = Instant::now();
         let observed = observation_fresh(s);
-        let workshop_quiet = super::workshop_focus::quiet(s);
+        let pause = if observed && s.latest.is_some() {
+            !super::workshop_focus::quiet_observation(s)
+        } else {
+            s.mode != crate::combat::model::Mode::Normal || !s.chat_allowed
+        };
         let h = &mut s.haiku;
         if let Some(w) = h.workshop.as_mut() {
             let before = (w.is_open(), w.combat_paused());
-            if !workshop_quiet && (s.mode != crate::combat::model::Mode::Normal || !s.chat_allowed)
-            {
+            if pause {
                 w.pause(now);
             }
             if w.combat_paused()
@@ -336,10 +330,7 @@ impl Dialogue {
         let now = self.clock.elapsed().as_millis() as u64;
         s.foreground.clock.start(now);
         let casual = s.foreground.route == crate::foreground::Route::Casual;
-        if !safe(
-            s,
-            super::workshop_focus::TEMPORARY_ALLOW_SCANNED_HOSTILES_FOR_SENRYU_COLLECTION,
-        ) || s.foreground.route.blocks_haiku()
+        if !safe(s) || s.foreground.route.blocks_haiku()
             || s.haiku.foreground()
             || s.cancel.is_some()
             || s.warning.is_some()
@@ -420,12 +411,7 @@ impl Dialogue {
                 r["session_id"] == sid && r["turn_id"] == turn && r["playback_status"] == "started"
             });
         if !completed_owned
-            && !current(
-                &d,
-                sid,
-                job,
-                super::workshop_focus::TEMPORARY_ALLOW_SCANNED_HOSTILES_FOR_SENRYU_COLLECTION,
-            )
+            && !current(&d, sid, job)
         {
             return false;
         }
@@ -744,12 +730,7 @@ impl Dialogue {
             let mut jobs = self.jobs.lock().unwrap();
             let mut d = self.data.lock().unwrap();
             ensure!(
-                current(
-                    &d,
-                    sid,
-                    job,
-                    super::workshop_focus::TEMPORARY_ALLOW_SCANNED_HOSTILES_FOR_SENRYU_COLLECTION,
-                ),
+                current(&d, sid, job),
                 "haiku superseded before commit"
             );
             let s = d.sessions.get_mut(sid).unwrap();
@@ -830,7 +811,7 @@ impl Dialogue {
             loop {
                 tokio::select! {_=bridge::cancelled(&mut monitor_cancel)=>break,_=tokio::time::sleep(Duration::from_millis(100))=>{
                     let mut d=owner.data.lock().unwrap();
-                    if (!current(&d,&monitor_sid,&monitor_job,super::workshop_focus::TEMPORARY_ALLOW_SCANNED_HOSTILES_FOR_SENRYU_COLLECTION) || began.elapsed()>=Duration::from_millis(owner.config.haiku.job_timeout_ms))
+                    if (!current(&d,&monitor_sid,&monitor_job) || began.elapsed()>=Duration::from_millis(owner.config.haiku.job_timeout_ms))
                         && !d.rows.iter().any(|r| r["session_id"] == monitor_sid && r["haiku_job_id"] == monitor_job && r["playback_status"] == "started") {
                         if d.sessions.get(&monitor_sid).is_some_and(|s|s.haiku.active.as_ref().is_some_and(|a|a.id==monitor_job)) { Self::cancel_haiku(&mut d,&monitor_sid,"stale_or_expired"); } break;
                     }
@@ -974,6 +955,30 @@ mod completion_tests {
         assert_eq!(d.data.lock().unwrap().rows[0]["delivery_confirmed"], true);
         Dialogue::cancel_haiku(&mut d.data.lock().unwrap(), "s", "manual_interrupt");
         assert!(!d.haiku_row("s", "job", "preface", "旧結果", PlaybackStatus::Completed));
+        d.shutdown().await;
+    }
+
+    // 模擬Fabric→進行中の自動発句。視認・鳴き声では同じjobが生き、本人の交戦が届くと取消信号が立つ。
+    // 句の生成や実音声は起動せず、観測受付と発句workerの取消境界を確かめる。
+    #[tokio::test]
+    async fn ongoing_poem_continues_until_player_engages() {
+        let mut config = DialogueConfig::default();
+        config.haiku.enabled = false;
+        config.haiku.memory_enabled = false;
+        let d = Dialogue::new(config).unwrap();
+        d.register("s", "試験", false);
+        let (tx, rx) = watch::channel(false);
+        d.data.lock().unwrap().sessions.get_mut("s").unwrap().haiku.active =
+            Some(Active { id: "poem".into(), cancel: tx });
+        for (i, engaged) in [false, true].into_iter().enumerate() {
+            let mut raw = super::super::empty_event("試験");
+            raw["sequence"] = json!(i + 1);
+            raw["visual_threats"] = json!([{"type":"skeleton","distance":6}]);
+            raw["auditory_threats"] = json!([{"label":"zombie","source_id":"z"}]);
+            raw["combat"] = json!({"combat_active_hint":true,"player_engaged":engaged});
+            d.observe("s", crate::events::GameEvent::parse(raw).unwrap(), None);
+            assert_eq!(*rx.borrow(), engaged);
+        }
         d.shutdown().await;
     }
 

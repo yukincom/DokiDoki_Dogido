@@ -32,6 +32,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
+import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
+import net.minecraft.network.packet.s2c.play.EntityDamageS2CPacket;
+import net.minecraft.server.world.ServerWorld;
+import net.minecraft.util.ActionResult;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
@@ -92,6 +97,9 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private Object displayConnection;
     private String displayThreatSignature = "";
     private boolean wasDead = false;
+    // tickNewAiは統合サーバー側。clientへ渡すのはホストを狙ったワールドだけ。
+    private final AtomicReference<ServerWorld> hostTargetWorld = new AtomicReference<>();
+    private boolean reportedEngaged;
     private PlayerObserver playerObserver;
     private WorldObserver worldObserver;
     private SoundObserver soundObserver;
@@ -168,6 +176,12 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         ClientPlayerBlockBreakEvents.AFTER.register((world, player, pos, state) -> {
             this.worldObserver.rememberBlockBreak(state, this.tickCounter);
         });
+        AttackEntityCallback.EVENT.register((player, world, hand, entity, hit) -> {
+            if (world.isClient() && !player.isSpectator() && ThreatObserver.isThreatCandidateEntity(entity)) {
+                this.threatObserver.observePlayerEngagement();
+            }
+            return ActionResult.PASS;
+        });
         ServerLivingEntityEvents.AFTER_DEATH.register((entity, damageSource) -> {
             Entity attacker = damageSource.getAttacker();
             UUID playerAttackerUuid = attacker instanceof ServerPlayerEntity
@@ -198,6 +212,26 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             return;
         }
         instance.soundObserver.onEntitySoundPacket(packet);
+    }
+
+    public static void recordMobTarget(ServerPlayerEntity target) {
+        var world = target.getEntityWorld();
+        var host = world.getServer().getHostProfile();
+        var adapter = INSTANCE;
+        if (adapter != null && host != null && target.getUuid().equals(host.id())) {
+            adapter.hostTargetWorld.set(world);
+        }
+    }
+
+    // 飛び道具も、サーバーが通知した攻撃者と実際の命中対象で扱う。
+    public static void recordEntityDamage(EntityDamageS2CPacket packet, ClientWorld world) {
+        var adapter = INSTANCE;
+        var player = MinecraftClient.getInstance().player;
+        if (adapter != null && player != null && player.getEntityWorld() == world
+                && packet.sourceCauseId() == player.getId()
+                && ThreatObserver.isThreatCandidateEntity(world.getEntityById(packet.entityId()))) {
+            adapter.threatObserver.observePlayerEngagement();
+        }
     }
 
     public static void recordExplosionPacket(ExplosionS2CPacket packet) {
@@ -320,7 +354,13 @@ public final class DogidoClientAdapter implements ClientModInitializer {
                 newHostileDefeats.add(outcome);
             }
         }
-        boolean captureNearbyKinds = this.eventClient.consumeFreshSnapshotRequest() || shouldSendSnapshot();
+        var targetWorld = this.hostTargetWorld.getAndSet(null);
+        if (targetWorld != null && client.getServer() == targetWorld.getServer()
+                && world.getRegistryKey().equals(targetWorld.getRegistryKey())) {
+            this.threatObserver.observePlayerEngagement();
+        }
+        boolean engagementStarted = this.threatObserver.playerEngaged() && !this.reportedEngaged;
+        boolean captureNearbyKinds = this.eventClient.consumeFreshSnapshotRequest() || shouldSendSnapshot() || engagementStarted;
         WorldObservationFrame worldFrame = this.eventCapture.frame(player, world, captureNearbyKinds);
         this.bossObserver.observeWardenSpecialSetups(player, worldFrame, threats);
         this.bossObserver.observeTrackedWardenDefeat(world);
@@ -417,7 +457,9 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             ? this.eventClient.currentSequence() : this.eventClient.currentSequence() + 1;
         boolean displayDanger = deadNow || this.threatObserver.combatActive() || !visibleThreats.isEmpty() || !audioThreats.isEmpty()
             || this.tickCounter - this.threatObserver.lastDamageTick() <= this.config.combatEndedQuietTicks;
-        this.workshopHud.danger(displayDanger, displayDangerChanged, displayBarrier);
+        boolean engaged = this.threatObserver.playerEngaged();
+        this.workshopHud.danger(deadNow || engaged, engaged != this.reportedEngaged || deadNow, displayBarrier);
+        this.reportedEngaged = engaged;
         this.characterHud.danger(displayDanger, displayDangerChanged, displayBarrier);
         // 発話の対象IDを現在の同じcollectorで照合する。固定警告にはplayer側で実視認した敵も使う。
         var gazeTargets=new java.util.ArrayList<>(this.bodySenses.speechTargets());
@@ -434,6 +476,8 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     }
 
     private void resetTransientState() {
+        this.hostTargetWorld.set(null);
+        this.reportedEngaged = false;
         if (this.bodySenses != null) this.bodySenses.reset();
         this.bodyObservation = null;
         this.bodyAutonomy = null;
@@ -473,6 +517,8 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     }
 
     private void resetThreatStateForDimensionChange() {
+        this.hostTargetWorld.set(null);
+        this.reportedEngaged = false;
         this.ambientMobObserver.resetRangeTracking();
         this.worldObserver.resetRangeTracking();
         this.worldObserver.resetPortalTracking();
