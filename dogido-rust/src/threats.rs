@@ -96,6 +96,13 @@ static CATALOG: LazyLock<Catalog> = LazyLock::new(|| {
     serde_json::from_str(include_str!("threat_catalog.json")).expect("checked catalog")
 });
 
+/// 戦闘カタログの遠隔敵分類。
+pub(crate) fn is_ranged(kind: &str) -> bool {
+    CATALOG
+        .ranged
+        .contains(kind.strip_prefix("minecraft:").unwrap_or(kind))
+}
+
 pub fn identity(t: &VisualThreat) -> String {
     t.entity_id
         .as_ref()
@@ -368,7 +375,8 @@ impl Policy {
             .iter()
             .filter(|t| {
                 let id = identity(t);
-                !daylight_water_survivor(t, e)
+                !is_ranged(&t.r#type)
+                    && !daylight_water_survivor(t, e)
                     && t.distance.is_some_and(|d| d <= 3.0)
                     && !self.seen.contains_key(&id)
                     && !self.commented.contains_key(&id)
@@ -397,7 +405,8 @@ impl Policy {
         known
             && e.visual_threats.iter().any(|t| {
                 let id = identity(t);
-                !daylight_water_survivor(t, e)
+                !is_ranged(&t.r#type)
+                    && !daylight_water_survivor(t, e)
                     && t.distance.is_some_and(|d| d <= 3.0)
                     && !self.seen.contains_key(&id)
                     && !self.commented.contains_key(&id)
@@ -603,7 +612,8 @@ impl Policy {
         s: &Settings,
     ) -> Option<Warning> {
         let key = identity(t);
-        if self.commented_recent(&key, now, s)
+        if is_ranged(&t.r#type)
+            || self.commented_recent(&key, now, s)
             || !elapsed(
                 now,
                 self.heard.get(&key).copied(),

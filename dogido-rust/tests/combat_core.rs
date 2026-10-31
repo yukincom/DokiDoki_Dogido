@@ -1,3 +1,4 @@
+//! 模擬観測と時計で、戦闘判断が選んだ発話・会話可否・中断指定を検査する。実音声・実機は対象外。
 use dogido_rust::{
     combat::{
         core::Engine,
@@ -42,6 +43,80 @@ fn tick(engine: &mut Engine, e: &GameEvent, at: u64) -> dogido_rust::combat::cor
     )
 }
 
+// 見込み: 視認中は経過時間や方位で再通知せず、同種でも別IDなら知らせる。
+// 合格: 模擬の完全観測・部分通知で各IDに短い発話1件、悲鳴・停止なし。完全観測から消えた後だけ再び対象になる。
+#[test]
+fn ranged_sighting_tracks_individuals_across_time_direction_and_partial_audio() {
+    use dogido_rust::combat::{core::Decision, model::Scope};
+    let notice = |d: Decision, id: &str| {
+        assert!(d.chat_allowed && !d.stop_audio);
+        let [speech] = &d.actions[..] else {
+            panic!("expected one notice: {:?}", d.actions)
+        };
+        assert_eq!(speech.kind, "ranged_sighting");
+        assert!(matches!(&speech.scope, Scope::Visual(ids) if ids == &[id]));
+        assert_eq!(speech.text, "スケルトンおるで。");
+        assert!(!speech.interrupt && speech.cue_id.is_none() && speech.leaf.is_none());
+    };
+    let mut engine = Engine::default();
+    let a = event(json!([visual("skeleton", "a", 2.0)]), json!([]));
+    notice(tick(&mut engine, &a, 0), "a");
+    let turned = changed(&a, |v| {
+        v["visual_threats"][0]["direction"]["horizontal"] = "back".into()
+    });
+    let partial = event(json!([]), json!([sound("elsewhere")]));
+    assert!(
+        engine
+            .observe(
+                &partial,
+                500,
+                false,
+                false,
+                &Settings::default(),
+                &threats::Settings::default()
+            )
+            .actions
+            .is_empty()
+    );
+    assert!(tick(&mut engine, &turned, 180_000).actions.is_empty());
+    let two = changed(&turned, |v| {
+        v["visual_threats"]
+            .as_array_mut()
+            .unwrap()
+            .push(visual("skeleton", "b", 6.0))
+    });
+    notice(tick(&mut engine, &two, 180_001), "b");
+    assert!(tick(&mut engine, &two, 360_000).actions.is_empty());
+    let only_b = event(json!([visual("skeleton", "b", 6.0)]), json!([]));
+    assert!(tick(&mut engine, &only_b, 361_000).actions.is_empty());
+    notice(tick(&mut engine, &two, 362_000), "a");
+}
+
+// 見込み: 導火が先なら遠隔敵の初回を消費しない。交戦中も同じ遠隔敵だけを時間で読み直さない。
+// 合格: 模擬戦闘で導火→ガストの一言→発話なし。IDのない視認・音だけでは初回通知を作らない。
+#[test]
+fn ranged_sighting_yields_to_fuse_and_requires_a_visual_id() {
+    let mut engine = Engine::default();
+    let ghast = engaged(event(json!([visual("ghast", "g", 12.0)]), json!([])));
+    let fused = changed(&ghast, |v| {
+        let mut creeper = visual("creeper", "c", 4.0);
+        creeper["fuse_active"] = true.into();
+        v["visual_threats"].as_array_mut().unwrap().push(creeper);
+    });
+    assert_eq!(tick(&mut engine, &fused, 0).actions[0].kind, "creeper_fuse");
+    let d = tick(&mut engine, &ghast, 1000);
+    assert_eq!(d.actions.len(), 1);
+    assert_eq!(d.actions[0].text, "ガストおるで。");
+    assert!(!d.stop_audio);
+    assert!(tick(&mut engine, &ghast, 180_000).actions.is_empty());
+    let no_id = changed(&ghast, |v| {
+        v["visual_threats"][0]["entity_id"] = Value::Null
+    });
+    assert!(tick(&mut engine, &no_id, 181_000).actions.is_empty());
+    let heard = event(json!([]), json!([{"label":"skeleton","source_id":"s"}]));
+    assert!(tick(&mut engine, &heard, 182_000).actions.is_empty());
+}
+
 #[test]
 fn burning_start_waits_for_current_speech_and_survives_partial_events() {
     let mut engine = Engine::default();
@@ -52,7 +127,7 @@ fn burning_start_waits_for_current_speech_and_survives_partial_events() {
         tick(&mut engine, &seen, 0)
             .actions
             .iter()
-            .any(|a| a.kind == "visual_hostile")
+            .any(|a| a.kind == "ranged_sighting")
     );
     let burning = changed(&seen, |v| v["visual_threats"][0]["on_fire"] = true.into());
     // 実機で発見音声の終了133ms前に燃焼が始まった順序を再現する。

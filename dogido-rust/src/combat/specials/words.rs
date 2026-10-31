@@ -40,11 +40,7 @@ pub(super) fn is_flying(k: &str) -> bool {
     )
 }
 pub(super) fn is_ranged(k: &str) -> bool {
-    THREATS["ranged"]
-        .as_array()
-        .expect("ranged catalog")
-        .iter()
-        .any(|x| x.as_str() == Some(norm(k).as_str()))
+    crate::threats::is_ranged(&norm(k))
 }
 pub(super) fn is_neutral(k: &str) -> bool {
     NEUTRAL["items"].get(norm(k)).is_some()

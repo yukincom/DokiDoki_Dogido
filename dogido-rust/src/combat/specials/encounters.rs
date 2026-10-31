@@ -1,6 +1,27 @@
 use super::*;
 
 impl Specials {
+    /// 完全観測の個体IDだけを使う。他の警告に譲った個体は次の観測でも候補に残す。
+    pub fn ranged_sighting(&self, e: &GameEvent) -> Option<Speech> {
+        let (target, id) = e
+            .visual_threats
+            .iter()
+            .filter(|t| is_ranged(&t.r#type))
+            .filter_map(|t| {
+                Some((
+                    t,
+                    t.entity_id.as_deref().filter(|id| !id.trim().is_empty())?,
+                ))
+            })
+            .filter(|(_, id)| !self.ranged_announced.contains(*id))
+            .min_by(|(a, _), (b, _)| distance_order(a, b))?;
+        Some(Speech::visual(
+            RANGED_SIGHTING,
+            format!("{}おるで。", label(&target.r#type)),
+            vec![id.to_owned()],
+        ))
+    }
+
     pub fn rear_ambush(
         &mut self,
         e: &GameEvent,
@@ -99,10 +120,12 @@ impl Specials {
             .visual_threats
             .iter()
             .filter(|t| {
-                matches!(
-                    t.direction.horizontal,
-                    Some(H::Front | H::FrontLeft | H::FrontRight)
-                ) && t.distance.is_some_and(|d| d <= 4.0)
+                !is_ranged(&t.r#type)
+                    && matches!(
+                        t.direction.horizontal,
+                        Some(H::Front | H::FrontLeft | H::FrontRight)
+                    )
+                    && t.distance.is_some_and(|d| d <= 4.0)
                     && self.fresh_visual.contains(&identity(t))
                     && !Self::water_survivor(e, t)
                     && elapsed(

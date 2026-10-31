@@ -13,7 +13,7 @@ use super::{
     model::{Mode, Scope, Settings, Speech, elapsed},
     outcomes::Outcomes,
     queries,
-    specials::Specials,
+    specials::{RANGED_SIGHTING, Specials},
 };
 use crate::{
     events::{EventName, GameEvent, HorizontalDirection as H},
@@ -197,9 +197,9 @@ impl Engine {
             && !recent_damage
             && e.combat.player_engaged != Some(true)
             && !e.visual_threats.iter().any(|t| {
-                super::specials::has_dedicated_warning(&t.r#type)
+                super::specials::has_dedicated_warning(&e, t)
                     || t.fuse_active == Some(true)
-                    || t.approaching && rear_near(t, s)
+                    || t.approaching && !threats::is_ranged(&t.r#type) && rear_near(t, s)
             });
         if complete {
             self.partial_danger = false;
@@ -303,7 +303,9 @@ impl Engine {
                 self.deliver(&e, now, speech, &mut d);
             }
         }
-        d.presence_only &= d.actions.is_empty() && !dimension_changed && !self.partial_danger;
+        d.presence_only &= d.actions.iter().all(|a| a.kind == RANGED_SIGHTING)
+            && !dimension_changed
+            && !self.partial_danger;
         if died || end && !presence_ended {
             self.presence_only_encounter = None;
         } else if !end && (contact || recent_damage || explicit) {
@@ -522,6 +524,7 @@ impl Engine {
         }
         if let Some(body) = body {
             if !routine
+                && body.kind != RANGED_SIGHTING
                 && body.cue_id.is_none()
                 && body.visual_plan.is_none()
                 && self.mode != Mode::SuppressedPanic
@@ -675,6 +678,13 @@ impl Engine {
             {
                 return Some(speech);
             }
+        }
+        if complete
+            && !routine
+            && e.visual_threats
+                .iter()
+                .any(|t| !threats::is_ranged(&t.r#type))
+        {
             if !self.stalled_ids.is_empty()
                 && self.stalled_since.is_some_and(|at| {
                     now.saturating_sub(at) >= s.ms("stalled_visual_comment_delay_ms")
@@ -703,6 +713,12 @@ impl Engine {
             {
                 return Some(from_warning(plan));
             }
+        }
+        if complete
+            && self.mode != Mode::SuppressedPanic
+            && let Some(speech) = self.specials.ranged_sighting(e)
+        {
+            return Some(speech);
         }
         if !matches!(
             e.player.dimension.as_deref().unwrap_or(""),
@@ -734,6 +750,9 @@ impl Engine {
             self.policy.mark_heard(ids, now);
         }
         if let Scope::Visual(ids) = &speech.scope {
+            if speech.kind == RANGED_SIGHTING {
+                self.specials.ranged_announced.extend(ids.iter().cloned());
+            }
             let single = if ids.len() == 1 {
                 e.visual_threats
                     .iter()

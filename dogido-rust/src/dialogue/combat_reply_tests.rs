@@ -83,6 +83,73 @@ async fn combat_presence_allows_new_conversation_and_does_not_cancel_active_repl
     dialogue.shutdown().await;
 }
 
+// 見込み: 遠隔敵の発見は生成中・再生中・次入力へ引き継いだ再生を遮らない。
+// 合格: 模擬観測を実セッションに入れ、元返答が完了するまで通知は保留。残っていれば一件だけ配送、いなくなればゼロ。実音声は使わない。
+#[tokio::test]
+async fn ranged_sighting_waits_for_reply_completion_and_drops_a_departed_target() {
+    for (stage, preserved, leaves) in [
+        ("generating", false, false),
+        ("started", false, true),
+        ("started", true, false),
+    ] {
+        let mut config = DialogueConfig {
+            audio_enabled: false,
+            llm_enabled: false,
+            ..DialogueConfig::default()
+        };
+        config.haiku.enabled = false;
+        config.haiku.memory_enabled = false;
+        let dialogue = Dialogue::new(config).unwrap();
+        dialogue.register("s", "試験", true);
+        active_reply(&dialogue, stage);
+        if preserved {
+            super::super::reply_output::preserve(&mut dialogue.data.lock().unwrap(), "s");
+        }
+        let mut frame = empty_event("試験");
+        frame["visual_threats"] = json!([{"type":"skeleton","entity_id":"s1","distance":2}]);
+        for seq in 1..=2 {
+            frame["sequence"] = json!(seq);
+            dialogue.observe("s", GameEvent::parse(frame.clone()).unwrap(), None);
+            let d = dialogue.data.lock().unwrap();
+            let s = &d.sessions["s"];
+            assert_eq!(d.rows[0]["playback_status"], stage);
+            assert!(s.warning.is_none() && s.reply_queue.is_empty());
+            assert!(s.chat_allowed && !s.foreground.combat_active);
+            assert_eq!(
+                s.pending_warning.as_ref().unwrap()[0].kind,
+                "ranged_sighting"
+            );
+        }
+        if leaves {
+            frame["sequence"] = json!(3);
+            frame["visual_threats"] = json!([]);
+            dialogue.observe("s", GameEvent::parse(frame).unwrap(), None);
+        }
+        assert!(dialogue.update(
+            "s",
+            "question",
+            7,
+            Status::Completed,
+            Some(&json!({"text":"返答の最後。"}))
+        ));
+        {
+            let mut jobs = dialogue.jobs.lock().unwrap();
+            let mut d = dialogue.data.lock().unwrap();
+            dialogue.start_pending(&mut d, &mut jobs, "s");
+            assert_eq!(d.rows[0]["playback_status"], "completed");
+            assert!(d.sessions["s"].pending_warning.is_none());
+            assert_eq!(
+                d.rows
+                    .iter()
+                    .filter(|r| r["combat_actions"][0]["kind"] == "ranged_sighting")
+                    .count(),
+                usize::from(!leaves)
+            );
+        }
+        dialogue.shutdown().await;
+    }
+}
+
 #[tokio::test]
 async fn relief_and_defeat_wait_for_the_ordinary_reply_even_with_old_interrupt_flag() {
     for kind in ["aftermath", "hostile_defeated"] {

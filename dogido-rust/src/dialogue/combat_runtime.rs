@@ -1,7 +1,7 @@
 //! 戦闘判断と現在の会話配送を照合し、緊急警告・非緊急発話の開始順を決める。
 //! 未配送の通常入力はreply_queueへ預け、取消・警告jobの発行を同じsessionロック下で行う。
 use super::{Data, Dialogue, warnings};
-use crate::combat::{core::Decision, model::Speech};
+use crate::combat::{core::Decision, model::Speech, specials::RANGED_SIGHTING};
 use std::sync::Arc;
 use tokio::task::JoinHandle;
 
@@ -224,7 +224,7 @@ impl Dialogue {
             && !decision.actions.is_empty()
             && decision.actions.iter().all(|a| a.kind == "aftermath");
         if (combat_priority && s.haiku.foreground()) || !decision.chat_allowed
-            || !decision.actions.is_empty()
+            || !decision.presence_only && !decision.actions.is_empty()
             || decision.stop_audio
             || decision.dimension_changed
         {
@@ -299,6 +299,13 @@ impl Dialogue {
     ) {
         let s = d.sessions.get_mut(sid).unwrap();
         if s.warning.is_some() || jobs.len() >= 16 {
+            return;
+        }
+        if !s.reply_outputs.is_empty()
+            && s.pending_warning.as_ref().is_some_and(|actions| {
+                actions.iter().any(|a| a.kind == RANGED_SIGHTING)
+            })
+        {
             return;
         }
         if s.cancel.is_some()

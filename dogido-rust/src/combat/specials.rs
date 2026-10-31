@@ -21,9 +21,20 @@ use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet};
 use words::*;
 
-/// 専用の視認警告を持つ種類。鳴き声だけでは発見としない。
-pub(super) fn has_dedicated_warning(kind: &str) -> bool {
-    is_ranged(kind) || is_boss(kind) || is_flying(kind)
+pub(crate) const RANGED_SIGHTING: &str = "ranged_sighting";
+
+/// 遠隔敵の姿だけなら通常会話を続ける。燃焼や日中の水・雨には既存の専用反応がある。
+pub(super) fn has_dedicated_warning(e: &GameEvent, t: &VisualThreat) -> bool {
+    is_boss(&t.r#type)
+        || if is_ranged(&t.r#type) {
+            t.on_fire
+                || daylight(e)
+                    && burns_in_daylight(&t.r#type)
+                    && (t.in_water
+                        || matches!(e.world.weather, Some(Weather::Rain | Weather::Thunder)))
+        } else {
+            is_flying(&t.r#type)
+        }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -57,6 +68,7 @@ pub struct Specials {
     // 発話待ちでも保持し、完全観測で燃焼が続いている個体だけを候補にする。
     pending_burning: HashSet<String>,
     water_handled: HashSet<String>,
+    pub(super) ranged_announced: HashSet<String>,
     last_water_at: Option<u64>,
     last_rain_at: Option<u64>,
     last_burning_at: Option<u64>,
@@ -197,6 +209,7 @@ impl Specials {
                 .iter()
                 .filter(|t| {
                     is_flying(&t.r#type)
+                        && !is_ranged(&t.r#type)
                         && t.distance
                             .is_some_and(|d| d <= s.number("hostile_query_distance"))
                 })
@@ -218,6 +231,7 @@ impl Specials {
             self.burning_ids = burning;
             let current_ids: HashSet<_> = e.visual_threats.iter().map(identity).collect();
             self.water_handled.retain(|id| current_ids.contains(id));
+            self.ranged_announced.retain(|id| current_ids.contains(id));
             let effects: HashSet<_> = e
                 .player
                 .active_status_effects
