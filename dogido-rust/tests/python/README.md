@@ -14,3 +14,5 @@ python dogido-rust/tests/python/check_workshop_interpretation.py
 ```
 
 HTTPテストには準備済みのRustバイナリが必要です。既存の実行条件・CLI引数は各ファイルを参照してください。
+
+テスト用の一時フォルダを新設・改名するときは、小文字の英数字と `_` で用途を表し、ランダムな末尾も `_` で区切ります（例: `dogido_group_warnings_<乱数>`）。

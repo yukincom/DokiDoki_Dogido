@@ -13,7 +13,7 @@ ROOT=Path(__file__).resolve().parents[2]
 
 def main():
     passed=[]
-    with tempfile.TemporaryDirectory(prefix='dogido-group-warnings-') as temp, dependencies() as (dep,control,seen):
+    with tempfile.TemporaryDirectory(prefix='dogido_group_warnings_') as temp, dependencies() as (dep,control,seen):
         folder=Path(temp); cues=folder/'cues'
         # 実音声を読まないplayerで順序と取消を確認する。
         for name in ['mob/zombie.mp3','mob/skeleton.mp3','common/counts/1.mp3','common/counts/2.mp3','common/counts/3.mp3','common/phrases/orude.mp3','panic/freesound_community-male-gasp-1-7183.mp3']:
@@ -21,10 +21,9 @@ def main():
         player=folder/'player'
         player.write_text(f'''#!{sys.executable}
 from pathlib import Path
-import sys,time
+import json,sys,time
 root=Path(__file__).parent
-with (root/'played').open('a') as f:f.write(sys.argv[1]+'\\n')
-with (root/'rates').open('a') as f:f.write(' '.join(sys.argv[1:])+'\\n')
+with (root/'played.jsonl').open('a') as f:f.write(json.dumps(sys.argv[1:])+'\\n')
 p=root/'slow'
 time.sleep(2 if p.exists() else .08)
 '''); player.chmod(0o700)
@@ -41,7 +40,10 @@ time.sleep(2 if p.exists() else .08)
             def warnings(sid):return [r for r in snapshot(base)['utterances'] if r['session_id']==sid and r['category']=='callout']
             def fresh():return register(base,preview=False)
             def close(sid):request(base,'/api/v1/adapter-sessions/'+sid,method='DELETE')
-            def played():return (folder/'played').read_text().splitlines() if (folder/'played').exists() else []
+            def playback_args():
+                log = folder/'played.jsonl'
+                return [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
+            def played():return [args[0] for args in playback_args()]
 
             sid=fresh(); before=len(played()); calls=len(seen)
             send(sid,['zombie','zombie','skeleton'])
@@ -51,12 +53,13 @@ time.sleep(2 if p.exists() else .08)
             for _ in range(4):send(sid,['zombie','zombie','skeleton'],reverse=True,direction='right',distance=18)
             wait_for(lambda:row(base,wt,{'completed'}))
             assert len(warnings(sid))==1 and len(seen)==calls
-            assert [str(Path(p).relative_to(cues)) for p in played()[before:]]==[
+            plays = playback_args()[before:]
+            assert [str(Path(args[0]).relative_to(cues)) for args in plays]==[
                 'panic/freesound_community-male-gasp-1-7183.mp3','mob/zombie.mp3','common/counts/2.mp3',
                 'mob/skeleton.mp3','common/counts/1.mp3','common/phrases/orude.mp3']
-            rate_lines = (folder/'rates').read_text().splitlines()
-            assert all('-r 1.15 -q 1' in line for line in rate_lines if '/mob/' in line or '/common/' in line), rate_lines
-            assert all('-r' not in line for line in rate_lines if '/panic/' in line), rate_lines
+            # 模擬playerの第1引数は音源パス。悲鳴には速度指定がなく、続く警告断片だけが1.15倍速になる。
+            assert '-r' not in plays[0][1:], plays[0]
+            assert all(args[1:] == ['-r', '1.15', '-q', '1'] for args in plays[1:]), plays
             passed.append('group_fragments_order_no_tts_llm_reorder_or_direction_restart');close(sid)
 
             # 一片不足なら前半断片を鳴らさず、本文すべてをTTSに戻す。
