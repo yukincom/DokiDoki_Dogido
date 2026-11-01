@@ -104,6 +104,11 @@ pub(super) fn ordinary(
             .is_none_or(|c| c.prediction.label == crate::request_classifier::Label::NotTarget)
 }
 
+pub(super) fn allows_operation(c: &crate::request_classifier::Classification) -> bool {
+    use crate::request_classifier::{Label, Mode};
+    c.mode == Mode::Normal && !matches!(c.prediction.label, Label::NotTarget | Label::EnemyInformation)
+}
+
 fn combat_delivery(s: &Session) -> bool {
     s.warning.as_ref().is_some_and(|w| {
         w.actions
@@ -117,79 +122,29 @@ fn combat_delivery(s: &Session) -> bool {
 }
 
 impl Dialogue {
-    /// 緊急警告で取り消す直前に、まだ届いていない通常返答の元入力を保持する。
-    /// ACK確認と同じdataロック下で判定するため、表示済みの回答を再送へ戻さない。
-    pub(super) fn retain_interrupted_reply(&self, d: &mut Data, sid: &str) {
-        let Some(s) = d.sessions.get_mut(sid) else {
-            return;
-        };
-        if s.cancel.is_none() {
-            return;
-        }
-        let Some(row) = d
-            .rows
-            .iter_mut()
-            .find(|r| r["session_id"] == sid && r["turn_id"] == s.current_turn)
-        else {
-            return;
-        };
-        if row["combat_resumable"] != true
-            || row["delivery_confirmed"] == true
-            || !row["horse_command_id"].is_null()
-            || s.reply_queue
-                .iter()
-                .any(|p| row["turn_id"] == p.request.turn)
-        {
-            return;
-        }
-        let request = Request {
-            turn: s.current_turn.clone(),
-            text: row["player_input_text"].as_str().unwrap_or("").into(),
-            source: row["source"].as_str().unwrap_or("text").into(),
-            input_at: row["input_at_ms"].as_u64().unwrap_or(0),
-            record_private: row["workshop_record_private"] == true,
-            classification: serde_json::from_value(row["request_classification"].clone()).ok(),
-            binding: s
-                .request_classification
-                .binding(
-                    s.input_generation,
-                    row["player_input_text"].as_str().unwrap_or(""),
-                    row["source"].as_str().unwrap_or("text"),
-                )
-                .cloned()
-                .or_else(|| super::request_runtime::Binding::capture(s)),
-        };
-        let audit = super::workshop_record::Attempt::new(
-            row["workshop_state_before"].clone(),
-            super::workshop_record::Input {
-                raw: request.text.clone(),
-                semantic: row["interpreted_player_input_text"]
-                    .as_str()
-                    .map(str::to_owned),
-                private: request.record_private,
-                epoch: row["epoch"].as_u64(),
-            },
-        );
-        // 新しい待機入力の受付時に進行中の一件も上限へ数え、ここへ戻す枠を確保する。
-        s.reply_queue.push_front(Pending {
-            request,
-            audit,
-            ready: true,
-            dispatch_input: false,
-            cancel: watch::channel(false).0,
-        });
-        row["resolution"] = "reply_interrupted".into();
-        s.delivery.forget_reply(&s.current_turn);
+    // 背後接近・導火と重なった分類待ちや配送途中の質問を終端する。先に確定して待っていた入力は保持する。
+    pub(super) fn interrupt_reply_inputs(&self, d: &mut Data, sid: &str) {
+        Self::cancel_request_classification(d, sid);
+        self.cancel_queued_inputs(d, sid, "urgent_combat_warning", true);
     }
 
     pub(super) fn cancel_reply_queue(&self, d: &mut Data, sid: &str, reason: &str) {
         Self::cancel_request_classification(d, sid);
         super::reply_output::cancel(d, sid, reason, false);
+        if let Some(s) = d.sessions.get_mut(sid) { s.body_requests.cancel(); }
+        self.cancel_queued_inputs(d, sid, reason, false);
+    }
+
+    fn cancel_queued_inputs(&self, d: &mut Data, sid: &str, reason: &str, keep_ready: bool) {
         let Some(s) = d.sessions.get_mut(sid) else {
             return;
         };
-        s.input_generation = s.input_generation.wrapping_add(1);
-        s.body_requests.cancel();
+        // 取消済みの会話分類がロック外から戻る隙間を閉じる。実行中の支援操作の世代は変えない。
+        if !keep_ready || s.reply_checked.as_ref().is_some_and(|c| c.original.is_some())
+            || s.request_classification.conversation_checked(s.input_generation)
+        {
+            s.input_generation = s.input_generation.wrapping_add(1);
+        }
         let after = super::workshop_record::state(s.haiku.workshop.as_ref());
         let mut cancelled = Vec::new();
         if let Some(checked) = s.reply_checked.take()
@@ -197,7 +152,12 @@ impl Dialogue {
         {
             cancelled.push((original.turn, checked.audit));
         }
-        for pending in s.reply_queue.drain(..) {
+        let queue = std::mem::take(&mut s.reply_queue);
+        for pending in queue {
+            if keep_ready && pending.ready {
+                s.reply_queue.push_back(pending);
+                continue;
+            }
             let _ = pending.cancel.send(true);
             cancelled.push((pending.request.turn, Some(pending.audit)));
         }
@@ -231,7 +191,8 @@ impl Dialogue {
             .get(sid)
             .is_some_and(super::workshop_reply::retained);
         let s = d.sessions.get_mut(sid)?;
-        if !dispatch_input
+        let urgent = super::combat_runtime::interrupting_warning(s);
+        if !urgent && !dispatch_input
             && (super::workshop_focus::quiet(s)
                 || s.reply_checked
                     .as_ref()
@@ -239,6 +200,15 @@ impl Dialogue {
                 || (ready(s) && !warning_blocks_input(s) && s.reply_queue.is_empty()))
         {
             return None;
+        }
+        if urgent {
+            if let Some(c) = super::request_runtime::classification(s, text, source) {
+                if allows_operation(c) { return None; }
+                return Some(json!({"accepted":false,"reason":"urgent_combat_warning"}));
+            }
+            if !self.config.request_classifier.enabled() {
+                return Some(json!({"accepted":false,"reason":"urgent_combat_warning"}));
+            }
         }
         // 分類済み・戦闘解除待ちの予約枠も合わせて上限9件。先に受けた入力を守る。
         if occupied_slots(s) >= 9 {
@@ -302,6 +272,7 @@ impl Dialogue {
                 instance,
                 retain_conversation,
                 dispatch_input,
+                urgent,
             )
             .await;
         }));
@@ -321,6 +292,7 @@ impl Dialogue {
         instance: String,
         retain_conversation: bool,
         dispatch_input: bool,
+        urgent: bool,
     ) {
         // 危険中も依頼の種類だけはCPUで判定する。操作・知識回答・音声はここでは行わない。
         let classified = if self.config.request_classifier.enabled()
@@ -340,6 +312,9 @@ impl Dialogue {
         };
         let result = if let Err(error) = classified {
             Err(error)
+        } else if urgent {
+            // 通常質問はここで終端する。BERTが識別した身体・支援操作だけ既存の即時受付へ渡す。
+            Ok(json!({"knowledge_query":false}))
         } else if dispatch_input {
             // 戦闘で保持した川柳返答への追加入力は、同じ相談の再開境界へ戻す。
             Ok(json!({"knowledge_query":true}))
@@ -387,6 +362,7 @@ impl Dialogue {
                 .binding
                 .as_ref()
                 .is_some_and(|binding| !binding.current(s));
+            let dropped = urgent && !request.classification.as_ref().is_some_and(allows_operation);
             let retained = if *cancel.borrow() || stale {
                 None
             } else {
@@ -395,14 +371,14 @@ impl Dialogue {
                     .ok()
                     .and_then(|r| r["knowledge_query"].as_bool())
                     .map(|knowledge| {
-                        knowledge
+                        !urgent && (knowledge
                             || retain_conversation
-                                && ordinary(s, &request.text, request.classification.as_ref())
+                                && ordinary(s, &request.text, request.classification.as_ref()))
                     })
             };
             tracing::info!(event="reply_input_routed",session_id=sid,turn_id=request.turn,
                 retained=?retained,queue_size=s.reply_queue.len());
-            let forward = retained == Some(false) && generation == s.input_generation;
+            let forward = !dropped && retained == Some(false) && generation == s.input_generation;
             if retained == Some(true) {
                 s.reply_queue[index].ready = true;
             } else {
@@ -426,12 +402,14 @@ impl Dialogue {
                 row["classifier_mode"] = json!(request.binding.as_ref().map(|b| b.mode));
                 row["playback_status"] = match retained {
                     Some(true) => "waiting_for_warning",
+                    Some(false) if dropped => "cancelled",
                     Some(false) => "not_selected",
                     None if stale => "cancelled",
                     None => "failed",
                 }
                 .into();
                 row["resolution"] = match retained {
+                    Some(false) if dropped => "urgent_combat_warning",
                     Some(true) => "reply_queued",
                     Some(false) if forward => "other_input",
                     Some(false) => "superseded_input",
@@ -872,7 +850,7 @@ mod tests {
             let mut d = dialogue.data.lock().unwrap();
             d.sessions.get_mut("s").unwrap().pending_warning =
                 Some(vec![crate::combat::model::Speech::new(
-                    "creeper_fuse",
+                    "visual_hostile",
                     "危ない！",
                 )]);
         }
@@ -954,7 +932,7 @@ mod tests {
             }
             let instance = f.d.data.lock().unwrap().sessions["s"].instance_id.clone();
             f.d.clone()
-                .classify_reply_input("s".into(), request, 1, rx, audit, instance, false, false)
+                .classify_reply_input("s".into(), request, 1, rx, audit, instance, false, false, false)
                 .await;
             let rows = f.records().await;
             assert_eq!(rows.len(), 1, "{rows:?}");

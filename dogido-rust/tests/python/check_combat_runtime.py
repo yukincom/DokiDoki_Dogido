@@ -168,15 +168,21 @@ time.sleep(float((root/'delay').read_text()))
             sid=register(base,preview=False,body=True)
             send(sid)
             (folder/"delay").write_text(".7")
-            send(sid,name="threat_approaching",mobs=[mob(distance=2,direction="back")])
-            warning=wait_for(lambda:next((r for r in rows(sid) if r["playback_status"]=="started"),None))
+            question = say(sid,"ドギド、一緒に歩こう。")["turn_id"]
+            wait_for(lambda:row(base,question,{"started"}))
+            send(sid,name="threat_approaching",mobs=[mob(distance=2,direction="back",approaching=True)])
+            warning=wait_for(lambda:next((r for r in rows(sid) if r["playback_status"]=="started"
+                and any(a["kind"].startswith("ushiro_") for a in r.get("combat_actions",[]))),None))
+            assert row(base,question,{"cancelled"})
+            # 模擬HTTP・再生。警告中の質問は終端し、警告完了後の新しい質問だけに回答する。
             got=say(sid,"ゾンビどこ？")
-            assert got["queued"],got
+            wait_for(lambda:row(base,got["turn_id"],{"cancelled"}))
             send(sid)
-            answer=wait_for(lambda:done(sid,"ゾンビどこ？"))
-            assert "見当たらへん" in answer["text"],answer
-            assert row(base,warning["turn_id"],{"completed"})
-            passed.append("queued_question_survives_prior_warning_target_disappearance")
+            wait_for(lambda:row(base,warning["turn_id"],{"completed"}))
+            assert row(base,question,{"cancelled"}) and not done(sid,"ゾンビどこ？")
+            say(sid,"ゾンビどこ？")
+            assert "見当たらへん" in wait_for(lambda:done(sid,"ゾンビどこ？"))["text"]
+            passed.append("rear_warning_discards_overlap_then_accepts_new_question")
             close(sid);(folder/"delay").write_text(".06")
 
             sid=register(base,preview=False,body=True)
@@ -243,7 +249,7 @@ time.sleep(float((root/'delay').read_text()))
             sound=[{"label":"zombie","source_id":"unseen","spoken_name_allowed":True}]
             send(sid,audio=sound,combat={"player_engaged":True},world={"sky_visible":False,"ceiling_height":2,"enclosure_score":.8})
             wait_for(lambda:llm_calls()>before_leaf)
-            send(sid,name="threat_approaching",mobs=[mob(distance=2,direction="back")],audio=sound,
+            send(sid,name="threat_approaching",mobs=[mob(distance=2,direction="back",approaching=True)],audio=sound,
                  world={"sky_visible":False,"ceiling_height":2,"enclosure_score":.8})
             answer=wait_for(lambda:done(sid))
             assert "うしろ" in answer["text"],answer

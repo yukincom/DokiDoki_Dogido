@@ -351,43 +351,34 @@ fn flying_prefers_above_excludes_dragon_and_partial_events_do_not_rearm() {
     assert!(p.flying(&far, 0, true, &s).is_none());
 }
 
+// 模擬完全観測。背後へ迫る敵は悲鳴待ちでも一度だけ知らせる。同じ位置の連続観測・正面・遠方は知らせない。
 #[test]
-fn rear_requires_exact_event_back_melee_range_and_global_cooldown() {
+fn rear_approach_is_immediate_once_per_encounter_even_without_a_cue() {
     let s = Settings::default();
     let mut p = Specials::default();
     let e = change(&event(&["zombie"]), |v| {
-        v["event"]["name"] = "threat_approaching".into();
         v["visual_threats"][0]["distance"] = 3.0.into();
-        v["visual_threats"][0]["direction"]["horizontal"] = "back".into();
+        v["visual_threats"][0]["approaching"] = true.into();
+        v["visual_threats"][0]["direction"]["horizontal"] = "back_left".into();
     });
     for invalid in [
-        change(&e, |v| v["event"]["name"] = "status_snapshot".into()),
-        change(&e, |v| {
-            v["visual_threats"][0]["direction"]["horizontal"] = "back_left".into()
-        }),
+        change(&e, |v| v["visual_threats"][0]["approaching"] = false.into()),
+        change(&e, |v| v["visual_threats"][0]["direction"]["horizontal"] = "front".into()),
         change(&e, |v| v["visual_threats"][0]["distance"] = 3.1.into()),
-        change(&e, |v| v["visual_threats"][0]["type"] = "skeleton".into()),
     ] {
         observe(&mut p, &invalid, 0);
         assert!(p.rear_ambush(&invalid, 0, true, &s).is_none());
     }
     observe(&mut p, &e, 1);
     let first = p.rear_ambush(&e, 1, true, &s).unwrap();
+    assert!(first.interrupt && first.text.ends_with("うしろ！うしろ〜！"));
     assert_eq!(first.cue_id, Some("ushiro_scream"));
-    assert!(first.text.ends_with("うしろ！うしろ〜！"));
-    assert_eq!(first.protect_ms, 2000);
-    let another = change(&e, |v| {
-        v["visual_threats"][0]["entity_id"] = "second".into()
-    });
-    observe(&mut p, &another, 60000);
-    assert!(p.rear_ambush(&another, 60000, true, &s).is_none());
-    observe(&mut p, &another, 60001);
-    assert!(
-        p.rear_ambush(&another, 60001, false, &s)
-            .unwrap()
-            .cue_id
-            .is_none()
-    );
+    observe(&mut p, &e, 60001);
+    assert!(p.rear_ambush(&e, 60001, true, &s).is_none());
+    let other = change(&e, |v| v["visual_threats"][0]["entity_id"] = "other".into());
+    observe(&mut p, &other, 60002);
+    let next = p.rear_ambush(&other, 60002, false, &s).unwrap();
+    assert!(next.interrupt && next.cue_id.is_none());
 }
 
 #[test]
@@ -403,6 +394,7 @@ fn classic_sha1_matches_known_vectors_and_reaction_seed() {
         v["event"]["name"] = "threat_approaching".into();
         v["visual_threats"][0]["distance"] = 2.0.into();
         v["visual_threats"][0]["direction"]["horizontal"] = "back".into();
+        v["visual_threats"][0]["approaching"] = true.into();
         v["meta"]["call_name"] = "太郎".into();
     });
     let mut classic = 0;

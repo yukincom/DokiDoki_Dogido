@@ -383,7 +383,7 @@ async fn danger_queue_keeps_both_questions_and_replays_without_reclassification(
         .get_mut("s")
         .unwrap()
         .pending_warning = Some(vec![crate::combat::model::Speech::new(
-        "creeper_fuse",
+        "visual_hostile",
         "危ない！",
     )]);
     let a = f.d.submit(Some("s"), "剣の耐久値は？", "text");
@@ -417,6 +417,25 @@ async fn danger_queue_keeps_both_questions_and_replays_without_reclassification(
     assert_eq!(f.row(&a["turn_id"])["resolution"], "reply_resumed");
     assert_eq!(f.row(&b["turn_id"])["resolution"], "reply_resumed");
     assert_eq!(f.inputs().len(), 2);
+    f.finish().await;
+}
+
+// 模擬BERTが導火の終了後に知識質問を分類しても、その入力は一度の分類で終端し、再送・生成しない。
+#[tokio::test]
+async fn question_received_during_fuse_is_not_replayed_after_classification() {
+    let f = Fixture::new(0, 0.1, false);
+    f.d.data.lock().unwrap().sessions.get_mut("s").unwrap().pending_warning =
+        Some(vec![crate::combat::model::Speech::new("creeper_fuse", "危ない！")]);
+    let input = f.d.submit(Some("s"), "枕詞って何？", "text");
+    f.d.data.lock().unwrap().sessions.get_mut("s").unwrap().pending_warning = None;
+    f.idle().await;
+    f.d.resume_reply_input("s");
+    let row = f.row(&input["turn_id"]);
+    assert_eq!(row["playback_status"], "cancelled");
+    assert_eq!(row["resolution"], "urgent_combat_warning");
+    assert!(row["forwarded_input"].is_null());
+    assert_eq!(f.inputs().len(), 1);
+    assert!(f.d.data.lock().unwrap().sessions["s"].reply_queue.is_empty());
     f.finish().await;
 }
 
@@ -927,7 +946,7 @@ async fn queued_normal_input_is_cancelled_when_workshop_opens() {
         .get_mut("s")
         .unwrap()
         .pending_warning = Some(vec![crate::combat::model::Speech::new(
-        "creeper_fuse",
+        "visual_hostile",
         "危ない！",
     )]);
     let a = f.d.submit(Some("s"), "同じ話", "text");

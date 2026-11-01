@@ -72,6 +72,7 @@ pub struct Specials {
     last_water_at: Option<u64>,
     last_rain_at: Option<u64>,
     last_burning_at: Option<u64>,
+    rear_announced: HashSet<String>,
     last_rear_at: Option<u64>,
     screamed: HashMap<String, u64>,
     mass_latched: bool,
@@ -230,6 +231,8 @@ impl Specials {
                 .extend(burning.difference(&self.burning_ids).cloned());
             self.burning_ids = burning;
             let current_ids: HashSet<_> = e.visual_threats.iter().map(identity).collect();
+            self.rear_announced.retain(|id| e.visual_threats.iter().any(|t|
+                super::core::rear_near(t, s) && identity(t) == *id));
             self.water_handled.retain(|id| current_ids.contains(id));
             self.ranged_announced.retain(|id| current_ids.contains(id));
             let effects: HashSet<_> = e

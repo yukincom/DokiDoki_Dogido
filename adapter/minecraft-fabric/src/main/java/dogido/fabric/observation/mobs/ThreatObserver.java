@@ -62,6 +62,8 @@ public final class ThreatObserver {
     private final Deque<ExplosionObservation> recentExplosionObservations = new ArrayDeque<>();
     private final Map<UUID, Long> lineOfSightStartedTicks = new HashMap<>();
     private final Map<UUID, Long> confirmedVisibleTicks = new HashMap<>();
+    private Set<UUID> rearApproaches = Set.of();
+    private Set<UUID> activeFuses = Set.of();
     private long lastDamageTick = -1000;
     private long lastVisualThreatObservedTick = -1000;
     private long lastExplosionObservedTick = -1000;
@@ -144,6 +146,8 @@ public final class ThreatObserver {
     }
 
     public void resetTracking() {
+        this.rearApproaches = Set.of();
+        this.activeFuses = Set.of();
         this.lastThreatDistances.clear();
         this.lastThreatSeenTicks.clear();
         this.lineOfSightStartedTicks.clear();
@@ -427,6 +431,19 @@ public final class ThreatObserver {
         return true;
     }
 
+    /** 開始と解除をそのtickの既存snapshotへ載せる。発話・重複判定はRustが所有する。 */
+    public boolean urgentObservationChanged(List<ThreatObservation> threats) {
+        Set<UUID> rear = new HashSet<>(), fuses = new HashSet<>();
+        for (ThreatObservation threat : threats) {
+            if (threat.isRearThreat() && threat.approaching()) rear.add(threat.uuid());
+            if (threat.fuseActive()) fuses.add(threat.uuid());
+        }
+        boolean changed = !this.rearApproaches.equals(rear) || !this.activeFuses.equals(fuses);
+        this.rearApproaches = rear;
+        this.activeFuses = fuses;
+        return changed;
+    }
+
     public List<ThreatObservation> filterVisibleThreats(List<ThreatObservation> threats) {
         // 現在の走査から消えた個体は保持しない。再登場は内側から確認し直す。
         Set<UUID> observed = threats.stream().map(ThreatObservation::uuid).collect(Collectors.toSet());
@@ -458,7 +475,7 @@ public final class ThreatObserver {
         if (threat.lineOfSight()) {
             this.lineOfSightStartedTicks.putIfAbsent(id, this.tickSource.getAsLong());
             long visibleFor = this.tickSource.getAsLong() - this.lineOfSightStartedTicks.getOrDefault(id, this.tickSource.getAsLong());
-            boolean immediate = threat.distance() <= this.settings.panicDistance() || threat.isRearThreat();
+            boolean immediate = threat.distance() <= this.settings.panicDistance() || threat.isRearThreat() || threat.fuseActive();
             if (immediate || immediateForVisibleCluster || visibleFor >= this.settings.visualConfirmTicks()) {
                 this.confirmedVisibleTicks.put(id, this.tickSource.getAsLong());
                 return true;

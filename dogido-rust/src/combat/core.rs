@@ -202,7 +202,7 @@ impl Engine {
             && !e.visual_threats.iter().any(|t| {
                 super::specials::has_dedicated_warning(&e, t)
                     || t.fuse_active == Some(true)
-                    || t.approaching && !threats::is_ranged(&t.r#type) && rear_near(t, s)
+                    || t.approaching && rear_near(t, s)
             });
         if complete {
             self.partial_danger = false;
@@ -584,14 +584,14 @@ impl Engine {
             return Some(from_warning(plan));
         }
         let cue = self.policy.cue_allowed(e, now, ws);
+        if complete && let Some(rear) = self.specials.rear_ambush(e, now, cue, s) {
+            return Some(rear);
+        }
         if busy {
             if !complete {
                 return None;
             }
-            let mut urgent = self.specials.rear_ambush(e, now, cue, s).or_else(|| {
-                self.specials
-                    .front_ambush(e, now, self.dark_push_active, occluded(e), cue, s)
-            });
+            let mut urgent = self.specials.front_ambush(e, now, self.dark_push_active, occluded(e), cue, s);
             if urgent.is_none() && !routine {
                 urgent = self.policy.close_ambush(e, now, ws).map(from_warning);
             }
@@ -627,10 +627,7 @@ impl Engine {
             return Some(speech);
         }
         if complete {
-            if let Some(speech) = self.specials.rear_ambush(e, now, cue, s).or_else(|| {
-                self.specials
-                    .front_ambush(e, now, self.dark_push_active, occluded(e), cue, s)
-            }) {
+            if let Some(speech) = self.specials.front_ambush(e, now, self.dark_push_active, occluded(e), cue, s) {
                 return Some(speech);
             }
             if !routine
@@ -866,7 +863,7 @@ impl Engine {
         }
     }
 }
-fn rear_near(t: &crate::events::VisualThreat, s: &Settings) -> bool {
+pub(super) fn rear_near(t: &crate::events::VisualThreat, s: &Settings) -> bool {
     matches!(
         t.direction.horizontal,
         Some(H::Back | H::BackLeft | H::BackRight)

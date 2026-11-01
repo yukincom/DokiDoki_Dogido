@@ -92,6 +92,7 @@ pub(super) fn active_applicable(
 
 fn workshop_blocked(action: &Speech, session: &Session) -> bool {
     action.kind != "player_hazard"
+        && !super::combat_runtime::interrupts_reply(action)
         && super::workshop_focus::active(session)
         && (matches!(
             action.delivery,

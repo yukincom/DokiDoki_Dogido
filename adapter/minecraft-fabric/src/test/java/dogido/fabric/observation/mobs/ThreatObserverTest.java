@@ -314,6 +314,25 @@ class ThreatObserverTest {
         assertTrue(observer.playerEngaged());
     }
 
+    // 見込み: 既定の周期途中でも背後接近・導火の開始と解除を送れる。模擬個体とtickだけで確認。
+    // 合格: 同じ継続中はfalse、正面／背面の点火はいずれも実視認の最初のtickからtrue。
+    @Test void urgentEdgesRequestFreshSnapshotWithoutWaitingForARegularScan() {
+        for (String direction : List.of("front", "back")) {
+            var fuse = new ThreatObservation(ENEMY_A,"creeper",9,direction,"south","same",
+                false,false,true,false,false,0,0,9,20,false,true,null,null);
+            var frame = observer.filterVisibleThreats(List.of(fuse));
+            assertEquals(List.of(fuse), frame);
+            assertTrue(observer.urgentObservationChanged(frame));
+            assertFalse(observer.urgentObservationChanged(frame));
+            assertTrue(observer.urgentObservationChanged(List.of()));
+        }
+        var rear = new ThreatObservation(ENEMY_B,"zombie",2,"back_right","south","same",
+            true,true,true,false,false,0,0,2,20,false,false,null,null);
+        assertTrue(observer.urgentObservationChanged(List.of(rear)));
+        assertFalse(observer.urgentObservationChanged(List.of(rear)));
+        assertTrue(observer.urgentObservationChanged(List.of()));
+    }
+
     @Test void quietBoundaryEndsCombatOnlyAfterTheLastSignal() {
         observer.updateCombatTracking(List.of(threat(UUID.randomUUID(), true)), List.of());
         assertTrue(observer.combatActive());

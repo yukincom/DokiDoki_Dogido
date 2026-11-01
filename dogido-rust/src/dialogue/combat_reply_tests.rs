@@ -171,26 +171,33 @@ async fn relief_and_defeat_wait_for_the_ordinary_reply_even_with_old_interrupt_f
     }
 }
 
+// 模擬sessionで生成中・再生中に両種の警告を注入。本文を止め、警告完了後もその質問と同時入力を再送しない。
 #[tokio::test]
-async fn repeated_urgent_interrupt_keeps_one_original_question_for_each_delivery_stage() {
-    for stage in ["generating", "queued", "started"] {
-        let dialogue = fixture();
-        active_reply(&dialogue, stage);
-        apply(&dialogue, vec![urgent()]);
-        apply(&dialogue, vec![urgent()]);
-        {
+async fn rear_and_fuse_discard_interrupted_and_overlapping_inputs() {
+    for kind in ["ushiro_classic", "ushiro_named", "creeper_fuse"] {
+        for stage in ["generating", "started"] {
+            let dialogue = fixture();
+            active_reply(&dialogue, stage);
+            let mut warning = Speech::new(kind, "危ない！");
+            warning.interrupt = true;
+            apply(&dialogue, vec![warning]);
+            for source in ["voice", "text"] {
+                let other = dialogue.submit(Some("s"), "いま何が見える？", source);
+                assert_eq!(other["reason"], "urgent_combat_warning");
+            }
+            {
+                let mut d = dialogue.data.lock().unwrap();
+                assert!(d.sessions["s"].cancel.is_none());
+                assert_eq!(d.rows[0]["playback_status"], "cancelled");
+                Dialogue::cancel_warning(&mut d, "s", "test_warning_finished");
+            }
+            dialogue.resume_reply_input("s");
             let d = dialogue.data.lock().unwrap();
-            let s = &d.sessions["s"];
-            assert!(s.cancel.is_none());
-            assert_eq!(s.reply_queue.len(), 1);
-            let retained = &s.reply_queue[0].request;
-            assert_eq!(retained.turn, "question");
-            assert_eq!(retained.text, "ここは何バイオーム？");
-            assert_eq!(retained.source, "voice");
-            assert_eq!(retained.input_at, 17);
-            assert_eq!(d.rows[0]["playback_status"], "cancelled");
+            assert!(d.sessions["s"].reply_queue.is_empty() && d.sessions["s"].cancel.is_none());
+            assert_eq!(d.rows[0]["epoch"], 7);
+            drop(d);
+            dialogue.shutdown().await;
         }
-        dialogue.shutdown().await;
     }
 }
 
@@ -258,74 +265,24 @@ async fn issued_operation_is_never_retained_as_an_unanswered_question() {
 }
 
 #[tokio::test]
-async fn resumed_question_has_new_display_and_epoch_and_rejects_old_callbacks() {
+async fn interrupted_question_rejects_late_playback_and_display() {
+    // 模擬音声・表示。割込み前に作られた表示IDや音声完了が遅れて届いても返答を確定しない。
     let dialogue = fixture();
     active_reply(&dialogue, "started");
     dialogue.enable_text_delivery("s", Some(true));
-    let old_display = {
+    let display = {
         let mut d = dialogue.data.lock().unwrap();
-        Dialogue::publish_text(
-            &mut d,
-            "s",
-            "question",
-            super::super::text_delivery::Kind::Reply {
-                epoch: 7,
-                result: json!({"text":"古い返答。"}),
-            },
-        )
-        .unwrap()
+        Dialogue::publish_text(&mut d, "s", "question",
+            super::super::text_delivery::Kind::Reply { epoch: 7, result: json!({"text":"古い返答。"}) }).unwrap()
     };
     apply(&dialogue, vec![urgent()]);
+    dialogue.acknowledge_display("s", &[display]);
+    assert!(!dialogue.update("s", "question", 7, Status::Completed, Some(&json!({"text":"古い返答。"}))));
     {
-        let mut d = dialogue.data.lock().unwrap();
-        Dialogue::cancel_warning(&mut d, "s", "test_warning_finished");
-    }
-    dialogue.resume_reply_input("s");
-    let epoch = {
         let d = dialogue.data.lock().unwrap();
-        let row = &d.rows[0];
-        assert_eq!(row["turn_id"], "question");
-        assert_eq!(row["input_at_ms"], 17);
-        assert!(row["display_id"].is_null());
-        assert_eq!(row["text"], "");
-        row["epoch"].as_u64().unwrap()
-    };
-    assert!(epoch > 7);
-    assert!(!dialogue.update(
-        "s",
-        "question",
-        7,
-        Status::Completed,
-        Some(&json!({"text":"古い返答。"}))
-    ));
-    dialogue.acknowledge_display("s", std::slice::from_ref(&old_display));
-    let result = json!({"text":"今の返答やで。"});
-    assert!(dialogue.update("s", "question", epoch, Status::Queued, Some(&result)));
-    let new_display = {
-        let mut d = dialogue.data.lock().unwrap();
+        assert_eq!(d.rows[0]["playback_status"], "cancelled");
         assert_ne!(d.rows[0]["delivery_confirmed"], true);
-        Dialogue::publish_text(
-            &mut d,
-            "s",
-            "question",
-            super::super::text_delivery::Kind::Reply { epoch, result },
-        )
-        .unwrap()
-    };
-    assert_ne!(new_display, old_display);
-    dialogue.acknowledge_display("s", &[new_display.clone(), new_display]);
-    {
-        let d = dialogue.data.lock().unwrap();
-        assert_eq!(d.rows[0]["delivery_confirmed"], true);
-        assert_eq!(
-            d.sessions["s"]
-                .history
-                .rows()
-                .iter()
-                .filter(|r| r["turn_id"] == "question:reply")
-                .count(),
-            1
-        );
+        assert!(!d.sessions["s"].history.rows().iter().any(|r| r["turn_id"] == "question:reply"));
     }
     dialogue.shutdown().await;
 }

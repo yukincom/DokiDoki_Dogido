@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""戦闘中の会話と緊急警告後の回答を、隔離HTTP・模擬LLM/TTS/playerで検証する。"""
+"""戦闘中の会話と即時警告で中断した入力を、隔離HTTP・模擬LLM/TTS/playerで検証する。"""
 from contextlib import contextmanager
 from datetime import datetime, timezone
 import json
@@ -148,30 +148,22 @@ def main():
             second_text = "ドギド、この先も一緒に行こか？"
             second = say(base, sid, second_text)
             assert second["queued"] and second["reason"] == "reply_input_routing", second
-            duplicate = say(base, sid, first_text)
-            assert duplicate["deduplicated"] and duplicate["turn_id"] == first, duplicate
+            # 模擬LLMの生成中に点火。割り込まれた質問と警告中の新しい発言は、解除後にも履歴・再生成に戻らない。
+            dropped = wait_for(lambda: row(base, second["turn_id"], {"cancelled"}))
+            assert dropped["resolution"] == "urgent_combat_warning" and not dropped.get("forwarded_input"), dropped
             (folder / "player_mode").write_text("ok")
-            send(sid, visual_threats=[creeper], combat={"combat_active_hint": True},
-                 world={"biome": "minecraft:desert", "sky_visible": True,
-                        "ceiling_height": 20, "weather": "clear", "time_phase": "morning"})
             gate.set()
-            resumed = wait_for(lambda: row(base, first, {"completed"}), timeout=10)
-            following = wait_for(lambda: row(base, second["turn_id"], {"completed"}), timeout=10)
-            assert resumed["epoch"] > first_epoch and resumed["resolution"] == "reply_resumed", resumed
-            assert resumed["completed_at"] < following["completed_at"]
-            assert row(base, warning["turn_id"], {"completed"})
-            assert session(base, sid)["foreground"]["combat_active"]
-            assert len(prompts) == 3, prompts
-            current_prompt = "\n".join(m["content"] for m in prompts[1]["messages"])
-            assert "敵がおるときも、プレイヤーとの会話に応じてな。注意が必要な状況なら、回答に短く注意を自然に含めてな。変化がない注意は繰り返さんでええで。" in current_prompt
-            assert "desert" in current_prompt or "砂漠" in current_prompt, current_prompt
-            assert f"プレイヤー: {first_text}" not in current_prompt, current_prompt
+            wait_for(lambda: row(base, warning["turn_id"], {"completed"}))
+            for _ in range(3):
+                send(sid)
+            assert row(base, first, {"cancelled"})["epoch"] == first_epoch
+            assert len(prompts) == 1, prompts
             history = session(base, sid)["history"]
-            for turn in [first, second["turn_id"]]:
-                assert sum(r["turn_id"] == turn + ":reply" for r in history) == 1, history
-            assert not any(r.get("text") == "質問への返事その1やで。" for r in history)
-            passed.append("urgent_warning_retains_original_question_and_resumes_fifo_during_combat")
-            passed.append("resumption_refreshes_observation_and_discards_late_cancelled_generation")
+            assert not any(r.get("turn_id") in {first + ":reply", second["turn_id"] + ":reply"} for r in history)
+            fresh = say(base, sid, second_text)["turn_id"]
+            assert fresh != second["turn_id"] and wait_for(lambda:row(base, fresh, {"completed"}))
+            assert len(prompts) == 2
+            passed.append("fuse_drops_interrupted_generation_and_overlap_then_accepts_a_fresh_question")
         finally:
             gate.set()
 
@@ -222,13 +214,15 @@ def main():
                 else:
                     wait_for(lambda: row(base, turn, {"cancelled"}))
                     gate.set()
-                    result = wait_for(lambda: row(base, turn, {"completed"}))
-                    assert result["delivery_confirmed"] and result["resolution"] == "reply_resumed", result
-                    assert len(calls) == 2
+                    wait_for(lambda: any(r["playback_status"] == "completed" and any(
+                        a["kind"] == "creeper_fuse" for a in r.get("combat_actions", [])) for r in rows(sid)))
+                    send(sid)
+                    assert row(base, turn, {"cancelled"})
+                    assert len(calls) == 1
                     assert not any(c.get("tools") for c in calls), calls
                     assert not any(r.get("horse_command_id") for r in rows(sid))
                 passed.append("bert_recall_keeps_single_selection_through_urgent_warning" if operation
-                              else "bert_not_target_conversation_with_horse_capability_resumes_after_warning")
+                              else "ordinary_question_with_horse_capability_is_discarded_on_fuse")
             finally:
                 gate.set()
     print(json.dumps({"passed": len(passed), "cases": passed,

@@ -1,14 +1,18 @@
 //! 戦闘判断と現在の会話配送を照合し、緊急警告・非緊急発話の開始順を決める。
-//! 未配送の通常入力はreply_queueへ預け、取消・警告jobの発行を同じsessionロック下で行う。
+//! 取消・警告jobの発行と、同時入力を保留できるかの判定を同じsessionロック下で行う。
 use super::{Data, Dialogue, warnings};
 use crate::combat::{core::Decision, model::Speech, specials::RANGED_SIGHTING};
 use std::sync::Arc;
 use tokio::task::JoinHandle;
 
-/// 戦闘配送の割込み指定から、通常回答を中断する緊急警告だけを選ぶ。
-/// 撃破・安堵の割込み指定はworkshop等の既存配送用で、通常の質問には割り込まない。
-fn interrupts_reply(action: &Speech) -> bool {
-    action.interrupt && !matches!(action.kind, "aftermath" | "hostile_defeated")
+/// プレイヤー入力を止める二つの例外。悲鳴と台詞を別actionで配送しても同じ警告として扱う。
+pub(super) fn interrupts_reply(action: &Speech) -> bool {
+    matches!(action.kind, "ushiro_classic" | "ushiro_named" | "creeper_fuse")
+        || action.cue_id == Some("ushiro_scream")
+}
+pub(super) fn interrupting_warning(s: &super::Session) -> bool {
+    s.warning.iter().flat_map(|w| &w.actions)
+        .chain(s.pending_warning.iter().flatten()).any(interrupts_reply)
 }
 /// 戦闘判断を適用する入力と、会話中断の理由・優先度。
 pub(super) struct DecisionContext<'a> {
@@ -218,7 +222,7 @@ impl Dialogue {
         }
         if poem_continues && !decision.dimension_changed {
             // mode/観測は更新し続けるが、環境由来のpanicや予兆では相談を奪わない。
-            decision.actions.retain(|a| resuming && super::workshop_focus::combat_completion(a.kind));
+            decision.actions.retain(|a| interrupts_reply(a) || resuming && super::workshop_focus::combat_completion(a.kind));
             if decision.actions.is_empty() {
                 decision.stop_audio = false;
                 if !resuming {
@@ -258,13 +262,13 @@ impl Dialogue {
                 decision.dimension_changed || decision.actions.iter().any(|a| a.kind == "death");
             // 通常会話の割込みは、既存警告が持つ緊急性で決める。
             // 敵が居続けるフレームや撃破後の安堵だけでは質問を取り消さない。
+            if urgent && !reset {
+                self.interrupt_reply_inputs(d, sid);
+            }
             if urgent || reset {
                 super::reply_output::cancel(d, sid, reason.unwrap_or("combat_priority"), !reset);
             }
             if !ordinary || urgent || reset || input.is_some() {
-                if ordinary && urgent && !reset && input.is_none() {
-                    self.retain_interrupted_reply(d, sid);
-                }
                 if !hold_workshop {
                     Self::cancel_chat(d, sid, reason.unwrap_or("combat_priority"));
                 }
@@ -315,11 +319,11 @@ impl Dialogue {
         {
             return;
         }
-        if s.cancel.is_some()
+        if (s.cancel.is_some() || !s.reply_outputs.is_empty())
             && !super::workshop_reply::paused(s)
             && s.pending_warning.as_ref().is_some_and(|actions| {
                 actions.iter().all(|a| {
-                    a.delivery == crate::combat::model::Delivery::Combat && !interrupts_reply(a)
+                    a.delivery == crate::combat::model::Delivery::Combat && !interrupts_reply(a) && a.kind != "death"
                 })
             })
         {

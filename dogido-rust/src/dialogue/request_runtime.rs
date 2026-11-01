@@ -157,6 +157,9 @@ impl State {
             .filter(|(g, _, result)| *g == generation && result.matches(text, source))
             .map(|(_, binding, _)| binding)
     }
+    pub fn conversation_checked(&self, generation: u64) -> bool {
+        self.checked.as_ref().is_some_and(|(g, _, c)| *g == generation && !super::reply_queue::allows_operation(c))
+    }
     pub fn restore(
         &mut self,
         generation: u64,

@@ -375,12 +375,14 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             }
         }
         boolean engagementStarted = this.threatObserver.playerEngaged() && !this.reportedEngaged;
-        boolean captureNearbyKinds = this.eventClient.consumeFreshSnapshotRequest() || shouldSendSnapshot() || engagementStarted;
+        List<ThreatObservation> visibleThreats = this.threatObserver.filterVisibleThreats(threats);
+        boolean urgentChange = this.threatObserver.urgentObservationChanged(visibleThreats);
+        boolean captureNearbyKinds = this.eventClient.consumeFreshSnapshotRequest() || shouldSendSnapshot()
+            || engagementStarted || urgentChange;
         WorldObservationFrame worldFrame = this.eventCapture.frame(player, world, captureNearbyKinds);
         this.bossObserver.observeWardenSpecialSetups(player, worldFrame, threats);
         this.bossObserver.observeTrackedWardenDefeat(world);
         this.bossObserver.observeTrackedDragonDefeat(world);
-        List<ThreatObservation> visibleThreats = this.threatObserver.filterVisibleThreats(threats);
         Map<UUID, SoundObservationPolicy.Point> currentSoundSources = this.soundObserver.currentSoundSources(world);
         List<AudioThreatObservation> audioThreats = this.soundObserver.scanAuditoryThreats(player, currentSoundSources);
         List<AudioThreatObservation> ambientSounds = this.soundObserver.scanAmbientSounds(player, currentSoundSources);

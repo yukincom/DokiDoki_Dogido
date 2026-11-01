@@ -29,28 +29,20 @@ impl Specials {
         allow_cue: bool,
         s: &Settings,
     ) -> Option<Speech> {
-        if e.event.name != EventName::ThreatApproaching
-            || !elapsed(now, self.last_rear_at, s.ms("ushiro_comment_cooldown_ms"))
-        {
+        if !matches!(e.event.name, EventName::ThreatApproaching | EventName::StatusSnapshot) {
             return None;
         }
-        let target = e
-            .visual_threats
-            .iter()
-            .filter(|t| {
-                !is_ranged(&t.r#type)
-                    && t.direction.horizontal == Some(H::Back)
-                    && t.distance
-                        .is_some_and(|d| d <= s.number("rear_warning_distance"))
-                    && elapsed(
-                        now,
-                        self.screamed.get(&identity(t)).copied(),
-                        s.ms("hostile_comment_cooldown_ms"),
-                    )
-            })
+        let target = e.visual_threats.iter()
+            .filter(|t| t.approaching && super::super::core::rear_near(t, s)
+                && !self.rear_announced.contains(&identity(t)))
             .min_by(distance_order)?;
-        self.last_rear_at = Some(now);
-        if allow_cue {
+        self.rear_announced.insert(identity(target));
+        // 悲鳴の間隔は保つ。別の敵が背後へ迫ったときの警告本文は待たせない。
+        let scream = allow_cue
+            && elapsed(now, self.last_rear_at, s.ms("ushiro_comment_cooldown_ms"))
+            && elapsed(now, self.screamed.get(&identity(target)).copied(), s.ms("hostile_comment_cooldown_ms"));
+        if scream {
+            self.last_rear_at = Some(now);
             self.screamed.insert(identity(target), now);
         }
         let name = call_name(e, s);
@@ -89,9 +81,9 @@ impl Specials {
             vec![identity(target)],
         );
         speech.protect_ms = 2000;
-        if allow_cue {
+        speech.interrupt = true;
+        if scream {
             speech.cue_id = Some("ushiro_scream");
-            speech.interrupt = true;
         }
         Some(speech)
     }

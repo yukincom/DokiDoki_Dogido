@@ -260,6 +260,13 @@ impl Dialogue {
                 json!({"accepted":false,"reason":"fresh_safe_snapshot_required"})
             };
         }
+        if !quiet && super::combat_runtime::interrupting_warning(s)
+            && (!self.config.request_classifier.enabled()
+                || super::request_runtime::classification(s, text, source)
+                    .is_some_and(|c| !super::reply_queue::allows_operation(c)))
+        {
+            return json!({"accepted":false,"reason":"urgent_combat_warning"});
+        }
         if !quiet
             && self.config.request_classifier.enabled()
             && let Some(binding) = super::request_runtime::Binding::capture(s)

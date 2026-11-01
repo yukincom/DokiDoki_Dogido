@@ -510,6 +510,7 @@ fn busy_leaf_is_preempted_by_new_rear_enemy_only_once() {
             v["event"]["name"] = "threat_approaching".into();
             v["event"]["source_kind"] = "visual".into();
             v["visual_threats"][0]["direction"]["horizontal"] = "back".into();
+            v["visual_threats"][0]["approaching"] = true.into();
         },
     );
     let d = engine.observe(
