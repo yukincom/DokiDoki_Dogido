@@ -261,10 +261,11 @@ async fn acceptance_image_java_protocol_to_rust_receipt_preserves_three_states()
         {
             let mut data = dialogue.data.lock().unwrap();
             let session = data.sessions.get_mut("s").unwrap();
+            // Java起動の所要時間を撮影命令の期限に含めず、撮影から1秒後の受信を検証する。
             assert!(
                 session
                     .visual
-                    .receive(&event.command_results[0], Utc::now())
+                    .receive(&event.command_results[0], now + chrono::Duration::seconds(1))
             );
             assert!(
                 session.visual.latest.is_some(),
@@ -495,7 +496,8 @@ async fn acceptance_image_both_model_routes_send_one_current_image_and_one_compa
         let (normal, action) = {
             let mut data = d.data.lock().unwrap();
             let s = data.sessions.get_mut("s").unwrap();
-            s.visual.receive(&received.command_results[0], Utc::now());
+            // 期限そのものの検査はvisual_runtimeの単体試験に任せる。
+            s.visual.receive(&received.command_results[0], now + chrono::Duration::seconds(1));
             let image = &s.visual.latest.as_ref().expect("実画像を保持").image;
             assert_eq!(json!(image.scene_comparison)["status"], status);
             assert_eq!(
