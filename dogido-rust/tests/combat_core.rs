@@ -22,6 +22,13 @@ fn visual(kind: &str, id: &str, d: f64) -> Value {
 fn sound(id: &str) -> Value {
     json!({"label":"zombie","source_id":id,"spoken_name_allowed":true,"direction":{"horizontal":"right"},"distance_band":"close"})
 }
+fn rear_creeper(kind: &str, id: &str, fuse: bool) -> Value {
+    let mut t = visual(kind, id, 2.0);
+    t["direction"]["horizontal"] = "back_left".into();
+    t["approaching"] = true.into();
+    t["fuse_active"] = fuse.into();
+    t
+}
 fn changed(e: &GameEvent, f: impl FnOnce(&mut Value)) -> GameEvent {
     let mut v = serde_json::to_value(e).unwrap();
     f(&mut v);
@@ -536,6 +543,51 @@ fn busy_leaf_is_preempted_by_new_rear_enemy_only_once() {
             .actions
             .is_empty()
     );
+}
+
+// 模擬観測。背後接近が先なら名前／志村の警告が出て、同じ個体の点火がその最中でも割り込む。
+// 合格: 「うしろ」→導火の順で、導火後の観測には「うしろ」の本文も悲鳴もない。
+#[test]
+fn rear_approach_before_fuse_keeps_both_warnings_in_order() {
+    let mut engine = Engine::default();
+    let frame = |fuse| event(json!([rear_creeper("creeper", "a", fuse)]), json!([]));
+    let rear = tick(&mut engine, &frame(false), 0);
+    assert!(rear.stop_audio && rear.actions.iter().any(|a| a.text.ends_with("うしろ！うしろ〜！")));
+    let fuse = engine.observe(&frame(true), 50, true, true, &Settings::default(), &threats::Settings::default());
+    assert!(fuse.stop_audio && fuse.actions.len() == 1 && fuse.actions[0].kind == "creeper_fuse");
+    assert_no_rear(&tick(&mut engine, &frame(true), 100));
+}
+
+fn assert_no_rear(d: &dogido_rust::combat::core::Decision) {
+    assert!(d.actions.iter().all(|a| !a.kind.starts_with("ushiro_") && a.cue_id != Some("ushiro_scream")), "{:?}", d.actions);
+}
+
+// 模擬戦闘。導火済みの個体への「うしろ」は、接近が続いても、視界を出て戻っても重ねない。
+// 合格: 同時なら導火だけ。再点火の警告と、別個体への「うしろ」はともに残る。実音声は対象外。
+#[test]
+fn fuse_suppresses_only_its_own_creepers_later_rear_warning() {
+    use dogido_rust::combat::model::Scope;
+    for kind in ["creeper", "charged_creeper"] {
+        let mut engine = Engine::default();
+        let lit = rear_creeper(kind, "a", true);
+        let off = rear_creeper(kind, "a", false);
+        let mut at = 0;
+        let mut next = |mobs| {
+            at += 50;
+            tick(&mut engine, &event(mobs, json!([])), at)
+        };
+        let first = next(json!([lit]));
+        assert!(first.stop_audio && first.actions.len() == 1 && first.actions[0].kind == "creeper_fuse");
+        assert_no_rear(&next(json!([lit])));
+        next(json!([]));
+        assert_no_rear(&next(json!([off])));
+        let relit = next(json!([lit]));
+        assert_eq!(relit.actions[0].kind, "creeper_fuse");
+        let other = next(json!([lit, rear_creeper(kind, "b", false)]));
+        let rear = other.actions.iter().filter(|a| a.kind.starts_with("ushiro_")).collect::<Vec<_>>();
+        assert_eq!(rear.len(), 1);
+        assert!(matches!(&rear[0].scope, Scope::Visual(ids) if ids == &["b"]));
+    }
 }
 #[test]
 fn stale_visuals_and_transient_sonic_observation_are_not_refreshed_by_partial() {

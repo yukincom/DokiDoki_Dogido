@@ -47,8 +47,8 @@ mod tests {
     use crate::events::GameEvent;
     use serde_json::json;
 
-    // 模擬Fabric→実際の川柳受付。見る・聞く・別の敵同士の交戦では同じ句を続け、
-    // 本人の交戦で中断する。視覚・音が空の交戦も取りこぼさない。実機の攻撃対象取得は別確認。
+    // 模擬Fabric→川柳受付。視認・鳴き声・背後接近・点火だけでは相談を止めず、本人の交戦で止める。
+    // 合格: 交戦通知まで相談は開いたまま。視覚・音が空でも交戦通知で中断する。実機のAIは対象外。
     #[tokio::test]
     async fn only_player_engagement_pauses_the_open_workshop() {
         let f = fixture();
@@ -60,21 +60,20 @@ mod tests {
             .get_mut("s")
             .unwrap()
             .preview = false;
-        for (index, (seen, heard, engaged)) in [
-            (true, false, false),
-            (false, true, false),
-            (false, false, true),
+        for (index, (visual, heard, engaged)) in [
+            (json!([{"type":"zombie","distance":2}]), false, false),
+            (json!([]), true, false),
+            (json!([{"type":"creeper","entity_id":"c","distance":2,"approaching":true,
+                "direction":{"horizontal":"back"}}]), false, false),
+            (json!([{"type":"creeper","entity_id":"c","distance":2,"fuse_active":true}]), false, false),
+            (json!([]), false, true),
         ]
         .into_iter()
         .enumerate()
         {
             frame["sequence"] = json!(index + 1);
             frame["observed_at"] = json!(chrono::Utc::now());
-            frame["visual_threats"] = if seen {
-                json!([{"type":"zombie","distance":2}])
-            } else {
-                json!([])
-            };
+            frame["visual_threats"] = visual;
             frame["auditory_threats"] = if heard {
                 json!([{"label":"zombie","source_id":"z"}])
             } else {

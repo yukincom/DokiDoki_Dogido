@@ -73,6 +73,8 @@ pub struct Specials {
     last_rain_at: Option<u64>,
     last_burning_at: Option<u64>,
     rear_announced: HashSet<String>,
+    // 導火を警告した個体ID。交戦中の消火・向き変更・一時的な視界外では解除しない。
+    pub(super) fuse_warned: HashSet<String>,
     last_rear_at: Option<u64>,
     screamed: HashMap<String, u64>,
     mass_latched: bool,
@@ -280,6 +282,7 @@ impl Specials {
     }
 
     fn reset_combat(&mut self) {
+        self.fuse_warned.clear();
         self.boss_seen.clear();
         self.last_sonic_at = None;
         self.warden_attack = false;

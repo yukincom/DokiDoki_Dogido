@@ -759,14 +759,19 @@ impl Engine {
             if speech.kind == RANGED_SIGHTING {
                 self.specials.ranged_announced.extend(ids.iter().cloned());
             }
-            let single = if ids.len() == 1 {
+            let target = if ids.len() == 1 {
                 e.visual_threats
                     .iter()
                     .find(|t| threats::identity(t) == ids[0])
-                    .map(|t| t.r#type.as_str())
             } else {
                 None
             };
+            if speech.kind == "creeper_fuse"
+                && let Some(id) = target.and_then(|t| t.entity_id.as_ref()).filter(|id| !id.is_empty())
+            {
+                self.specials.fuse_warned.insert(id.clone());
+            }
+            let single = target.map(|t| t.r#type.as_str());
             if speech.kind == "daylight_water" {
                 let survivors = e
                     .visual_threats

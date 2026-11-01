@@ -151,9 +151,13 @@ def main():
             # 模擬LLMの生成中に点火。割り込まれた質問と警告中の新しい発言は、解除後にも履歴・再生成に戻らない。
             dropped = wait_for(lambda: row(base, second["turn_id"], {"cancelled"}))
             assert dropped["resolution"] == "urgent_combat_warning" and not dropped.get("forwarded_input"), dropped
+            # 背後へ回った同じ個体で、配送中の導火警告を「うしろ」で止めない。模擬再生で元の警告だけが完了する。
+            send(sid, visual_threats=[{**creeper, "direction": {"horizontal": "back"}, "approaching": True}],
+                 combat={"combat_active_hint": True})
             (folder / "player_mode").write_text("ok")
             gate.set()
             wait_for(lambda: row(base, warning["turn_id"], {"completed"}))
+            assert not any(a["kind"].startswith("ushiro_") for r in rows(sid) for a in r.get("combat_actions", []))
             for _ in range(3):
                 send(sid)
             assert row(base, first, {"cancelled"})["epoch"] == first_epoch

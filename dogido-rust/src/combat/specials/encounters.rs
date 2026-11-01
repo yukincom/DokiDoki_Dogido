@@ -34,7 +34,8 @@ impl Specials {
         }
         let target = e.visual_threats.iter()
             .filter(|t| t.approaching && super::super::core::rear_near(t, s)
-                && !self.rear_announced.contains(&identity(t)))
+                && !self.rear_announced.contains(&identity(t))
+                && t.entity_id.as_ref().is_none_or(|id| !self.fuse_warned.contains(id)))
             .min_by(distance_order)?;
         self.rear_announced.insert(identity(target));
         // 悲鳴の間隔は保つ。別の敵が背後へ迫ったときの警告本文は待たせない。

@@ -43,7 +43,8 @@ class ThreatObserverTest {
         observer.updateCombatTracking(visible, List.of());
         assertTrue(observer.combatActive());
         assertFalse(observer.playerEngaged());
-        observer.observePlayerEngagement();
+        observer.recordServerTarget(null, ENEMY_A);
+        observer.applyServerObservations(null, UUID.randomUUID());
         assertTrue(observer.playerEngaged());
         tick.addAndGet(3);
         assertFalse(observer.shouldSendCombatEnded(List.of(), List.of(), false));
@@ -52,6 +53,8 @@ class ThreatObserverTest {
         assertTrue(observer.shouldSendCombatEnded(List.of(), List.of(), false));
         observer.endCombat();
         assertFalse(observer.playerEngaged());
+        observer.observePlayerAttack(ENEMY_B);
+        assertTrue(observer.playerEngaged());
     }
 
     @Test void newEnemyUsesInnerBoundaryAndSixConsecutiveTicks() {
