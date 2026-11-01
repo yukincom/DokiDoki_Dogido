@@ -713,6 +713,35 @@ async fn moving_or_non_adjacent_heat_does_not_interrupt_the_recall_reply() {
     }
 }
 
+// 見込み: 身体の視認が一時失効しても、プレイヤー側で確定した撃破は次の会話で扱える。
+// 合格: 模擬撃破の再送と戦闘終了を経ても事実が各1件、身体の感覚は未取得のまま。
+#[tokio::test]
+async fn player_combat_changes_survive_unavailable_body_senses() {
+    let d = server();
+    let permit = d.serial.acquire().await.unwrap();
+    for (sequence, name) in [(1, "status_snapshot"), (2, "hostile_defeated"), (3, "combat_ended")] {
+        let raw = edit(event(sequence, sequence as u64, 23.0), |v| {
+            v["body_observation"] = json!({"version":3,"status":"unavailable","reason":"unloaded"});
+            v["event"]["name"] = json!(name);
+            if sequence == 1 {
+                v["visual_threats"] = json!([{"type":"zombie","entity_id":"z"}]);
+            } else {
+                v["combat"] = json!({"hostile_outcomes":[{"type":"zombie","entity_id":"z","outcome":"player_kill","evidence":"server_death_event"}]});
+            }
+        });
+        d.observe("s", raw.clone(), None);
+        if sequence == 3 {
+            let c = capture(&d, &raw).context.world_context.unwrap();
+            assert_eq!(c.observations["sensory_status"], "unavailable");
+            let facts: Vec<_> = c.changes.iter().map(|c| (c.kind.as_str(), c.now["fact"].as_str())).collect();
+            assert_eq!(facts, [("player_hostile_defeated", Some("プレイヤーがゾンビを倒した")),
+                ("player_hostiles_cleared", Some("どうやら敵が周囲からいなくなったようだ"))]);
+        }
+    }
+    drop(permit);
+    d.shutdown().await;
+}
+
 // 見込み: 敵を見聞きした戦闘だけが、不在の変化を一度残す。合格: 空の部分通知・撃破・被弾だけでは出ず、再発見で古い差分を消す。
 // 確認範囲: 模擬Fabricイベント→通常会話と周期の気づきの材料。実機の距離判定・モデルの発話は対象外。
 #[tokio::test]

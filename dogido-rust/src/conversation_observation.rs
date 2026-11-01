@@ -194,11 +194,15 @@ fn quantity(value: &crate::events::NearbyQuantity) -> Value {
 }
 
 pub(crate) const PLAYER_HOSTILES_CLEARED: &str = "player_hostiles_cleared";
+pub(crate) const PLAYER_HOSTILE_DEFEATED: &str = "player_hostile_defeated";
 
 /// Session-owned changes since the last completed decision, not a second memory store.
 #[derive(Default)]
 pub struct State {
     player_hostiles_observed: bool,
+    player_dimension: Option<String>,
+    // プレイヤーの明示戦闘結果は、身体感覚の一時失効では消さない。
+    player_changes: Vec<Change>,
     body_context: Option<crate::body::contracts::Context>,
     current: Option<Context>,
     considered: u64,
@@ -220,6 +224,9 @@ impl State {
                 .map_or(self.considered, |c| c.revision);
             *self = Self {
                 body_context: origin.context.clone(),
+                player_hostiles_observed: self.player_hostiles_observed,
+                player_dimension: self.player_dimension.take(),
+                player_changes: std::mem::take(&mut self.player_changes),
                 considered: revision,
                 ..Self::default()
             };
@@ -258,7 +265,6 @@ impl State {
         next.revision = self.considered;
         if let Some(previous) = &self.current {
             if previous.observations["dimension"] != next.observations["dimension"] {
-                self.player_hostiles_observed = false;
                 next.revision = previous.revision.saturating_add(1);
                 self.considered = previous.revision;
                 self.current = Some(next);
@@ -369,39 +375,78 @@ impl State {
         self.current = Some(next);
     }
     /// プレイヤー周辺の戦闘観測はドギド自身の視覚・聴覚とは別。距離・解除時間の再判定はしない。
-    pub(crate) fn observe_player_combat(&mut self, event: &GameEvent) {
+    pub(crate) fn observe_player_combat(
+        &mut self,
+        event: &GameEvent,
+        defeats: Vec<String>,
+        workshop_changes: Option<&mut Vec<Change>>,
+    ) {
         let Some(context) = &mut self.current else {
             return;
         };
+        if let Some(dim) = &event.player.dimension {
+            if self.player_dimension.as_ref().is_some_and(|previous| previous != dim) {
+                self.player_hostiles_observed = false;
+                self.player_changes.clear();
+            }
+            self.player_dimension = Some(dim.clone());
+        }
         let died = event.event.name == crate::events::EventName::PlayerDied;
         let present = if died { Some(false) } else {
             crate::combat::outcomes::Outcomes::hostile_presence(event)
         };
-        let Some(present) = present else { return };
-        let was_present = std::mem::replace(&mut self.player_hostiles_observed, present);
-        if present || died {
-            context.changes.retain(|c| c.kind != PLAYER_HOSTILES_CLEARED);
-        } else if was_present {
+        // 中断中の事実はその句の再開判断だけが受け取る。周期の気づきと二重に配送しない。
+        if present == Some(true) || died {
+            self.player_changes.retain(|c| c.kind != PLAYER_HOSTILES_CLEARED);
+        }
+        let changes = workshop_changes.unwrap_or(&mut self.player_changes);
+        let cleared = present.is_some_and(|present| {
+            std::mem::replace(&mut self.player_hostiles_observed, present) && !present && !died
+        });
+        if present == Some(true) || died {
+            changes.retain(|c| c.kind != PLAYER_HOSTILES_CLEARED);
+        }
+        let mut append = |kind: &str, before: Value, fact: &str| {
+            // 生成や相談が長く保留されても、古い撃破だけを押し出し、他の差分を保つ。
+            if kind == PLAYER_HOSTILE_DEFEATED
+                && changes.iter().filter(|c| c.kind == kind).count() >= 32
+                && let Some(oldest) = changes.iter().position(|c| c.kind == kind)
+            {
+                changes.remove(oldest);
+            }
             context.revision = context.revision.saturating_add(1);
-            context.changes.push(Change {
-                kind: PLAYER_HOSTILES_CLEARED.into(),
-                before: json!(true),
-                now: json!({"scope":"プレイヤーの周囲","fact":"どうやら敵が周囲からいなくなったようだ"}),
+            changes.push(Change {
+                kind: kind.into(),
+                before,
+                now: json!({"scope":"プレイヤーの周囲","fact":fact}),
                 observed_at: event.observed_at.to_rfc3339(),
                 revision: context.revision,
             });
+        };
+        for fact in defeats {
+            append(PLAYER_HOSTILE_DEFEATED, Value::Null, &fact);
+        }
+        if event.ended_by_last_kill() && !cleared {
+            append("combat_ended", Value::Null, "プレイヤーと交戦していた最後の敵が倒れ、戦闘が終わった");
+        }
+        if cleared {
+            append(PLAYER_HOSTILES_CLEARED, json!(true), "どうやら敵が周囲からいなくなったようだ");
         }
     }
     pub fn context(&self) -> Option<Context> {
         self.current.clone().map(|mut c| {
             c.changes.retain(|c| c.revision > self.considered);
+            c.changes.extend(self.player_changes.iter().cloned());
+            c.changes.sort_by_key(|change| change.revision);
             c
         })
     }
     pub fn considered(&mut self, revision: u64) {
         // Only a version actually offered to this decision can be acknowledged.
         if let Some(current) = &self.current {
-            self.considered = self.considered.max(revision.min(current.revision));
+            let offered = revision.min(current.revision);
+            self.considered = self.considered.max(offered);
+            self.player_changes.retain(|change| change.revision > offered);
         }
     }
 }

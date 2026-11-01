@@ -21,7 +21,7 @@
 - 遮蔽された近距離 hostile を `hostile_audio_detected` として送信
 - 実近接源・hotbar・現在バイオーム・温度・天候から各匂いの種類と強度を解決し、`smell_observation.components` として送信
 - プレイヤー死亡時の `player_died` 送信
-- 戦闘収束時の `combat_ended` 送信
+- 戦闘収束時の `combat_ended` 送信。シングルで最後の交戦相手の撃破を確認した場合は、警戒時間を待たず、この通知に撃破も載せる。
 - game-event応答の型付き `select_hotbar` command受信
 - command ID・期限・slot・期待itemをMinecraftメインスレッドで再検証し、選択slotだけを変更
 - 実行結果をserverがackするまで後続イベントへ再送。受理したHTTP応答のJSONとACK集合は一度だけ解析し、各命令protocolで共有する。命令固有の検査と実行直前の接続・期限確認は各担当で行う（[処理共有](../../docs/2026-10-27-processing-dedup-plan.md)）
@@ -57,7 +57,7 @@
 ドギドは左下・右向き。画面幅の9%、左余白2.5%、下余白4%で、ゆっくり上下する。
 作者制作の太線原画 `Dogido_nomal.png` / `Dogido_nomal_close.png` を無加工で使用し、通常顔4.5秒・閉じ目140ミリ秒で瞬きする。コードやCSSでの左右反転・左右対称化は行わない。
 ドギド一枚はサーバーなしでも表示する。
-川柳の取り合わせ・本句・修正案の生成中だけ作者の `thinking/` の原画10枚を重ねた考え顔に切り替え、生成終了（失敗を含む）で読み上げ用の通常顔へ戻る。workshopが開いているだけでは考え顔にしない。表示状態は既存の掛け軸snapshotから約400ms周期で取得。切断・古い情報・危険・ワールド変更時は通常顔へ戻す。
+川柳の取り合わせ・本句・修正案の生成中だけ作者の `thinking/` の原画10枚を重ねた考え顔に切り替え、生成終了（失敗を含む）で読み上げ用の通常顔へ戻る。workshopが開いているだけでは考え顔にしない。表示状態は会話と掛け軸を含む同じsnapshotから約400ms周期で取得。切断・古い情報・危険・ワールド変更時は通常顔へ戻す。
 考え顔は通常と同じ幅9%・左下基準で1210×1400の縦横比を維持。考え顔の上下浮遊は7.6秒周期（通常顔は3.8秒）。ボディ5枚を960msずつ1→2→3→4→5→4→3→2の順で往復、尻尾2枚を位相1050ms付き3300ms、黒目2枚を右5400ms→左4200ms→右7200ms→左4800msで独立切替。`thinking_face.png`の眉・白目・頬・口・手は固定。原画の反転・変形・描き直しはせず、旧変形メッシュは使用しない。`motion off`では体1・尾1・右目線の静止画にする。考え顔の閉眼原画はないため、通常顔の閉眼画像を流用しない。
 F1、メニュー、インベントリ、チャット入力中は両方隠れる。
 
@@ -141,7 +141,7 @@ F1、メニュー、インベントリ、チャット入力中は両方隠れる
 
 - `dogido-server` を先に起動する
 - この mod は `POST /api/v1/adapter-sessions` と `POST /api/v1/game-events` を使う
-- 掛け軸は `GET /api/v1/haiku-workshop/snapshot?session_id=...` を約400ms間隔で非同期取得する。取得失敗・不正応答・3秒以上の未受信では即非表示にする。別のMinecraft接続ではsessionを作り直し、旧ワールドの句を引き継がない。同じ接続のディメンション移動はsessionを維持する。
+- 掛け軸と会話本文は `GET /api/v1/rust-dialogue/snapshot?session_id=...` で一緒に取得する。戦闘後の再開は、発話なら同じ描画で本文と句を表示し、沈黙なら句だけを戻す。取得失敗・不正応答・3秒以上の未受信では即非表示にする。別のMinecraft接続ではsessionを作り直し、旧ワールドの句を引き継がない。同じ接続のディメンション移動はsessionを維持する。
 - 観測capabilityと `client.hotbar.select.v1` の実行capabilityは分けてsession登録する
 - server再起動でsession IDが失効した場合は `409 unknown_session_id` を受けて自動再登録する。serverだけの再起動でMinecraftを再起動する必要はない
 - 支援commandはheartbeatではなくgame-event応答で受ける。任意のMinecraftコマンド文字列は実行しない

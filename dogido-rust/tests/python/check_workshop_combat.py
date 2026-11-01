@@ -3,8 +3,10 @@
 from datetime import datetime, timedelta, timezone
 from contextlib import contextmanager
 import json
+import threading
 import time
-from check_dialogue import register, request, row, submit, wait_for
+from check_dialogue import acknowledge, register, request, row, submit, wait_for
+from check_environment_reactions import reaction_context
 from check_haiku_runtime import fixture as haiku_fixture, LINES
 from request_classifier_fixture import mock_request_classifier
 from check_workshop_runtime import ready, session, install, step
@@ -84,12 +86,111 @@ def enter(send, rows, sid):
 
 def end(send, rows, sid, outcome=None):
     payload = [] if outcome is None else [{"entity_id": "z1", "type": "zombie", "outcome": outcome, "evidence": "server_death_event"}]
-    send(sid, event=event("combat_ended"), combat={"hostile_outcomes": payload, "hostiles_within_scan_ground": 0})
-    return wait_for(lambda: next((r for r in actions(rows, sid, "aftermath") if r["playback_status"] == "completed"), None))
+    return send(sid, event=event("combat_ended"), combat={"hostile_outcomes": payload, "hostiles_within_scan_ground": 0})
 
 
 def returned(send, rows, sid, count=1):
     return drive(send, sid, lambda: next((r for r in actions(rows, sid, "workshop_resume")[count-1:] if r["playback_status"] == "completed"), None))
+
+
+def resume_changes(incoming):
+    context = reaction_context(incoming)
+    if context:
+        changes = context["world_context"]["changes"]
+        if any(c["kind"] == "workshop_resume" for c in changes):
+            return changes
+    return None
+
+
+# 見込み: 再開と戦闘結果を一回の発話判断に渡し、決着時に同じ句を戻す。
+# 合格: 模擬LLM待機中はHUDがdangerで本文なし。speakは本文とHUD、silentはHUDだけ復帰。実画面・実音声は使わない。
+def check_resume_decision(decision, *, final_kill=False, bystander=False):
+    with fixture(combat_settings=SETTINGS) as (base, _, _, control, seen, _, _, _, send, hud, rows, stored, folder):
+        sid = register(base, preview=False, voice_enabled=True, body=True)
+        drive(send, sid, lambda: any(r["turn_id"].endswith(":poem") and r["playback_status"] == "completed" for r in rows(sid)))
+        # 初回発句の表示を確定し、復帰メッセージの表示・履歴と混同しない。
+        for item in rows(sid):
+            if item.get("display_id") and not item.get("text_displayed"):
+                acknowledge(base, sid, item)
+        original, pinned = stored(sid), hud(sid)
+        entered, release = threading.Event(), threading.Event()
+        original_handler = control["structured_handler"]
+        offers = []
+        spoken = "落ち着いたし、さっきの句に戻ろか。"
+
+        def choose(incoming):
+            changes = resume_changes(incoming)
+            if changes is None:
+                return original_handler(incoming)
+            offers.append(changes)
+            entered.set()
+            release.wait(timeout=12)
+            return {"action":decision, "speech":spoken if decision == "speak" else ""}
+
+        control["structured_handler"] = choose
+        enter(send, rows, sid)
+        outcome = {"entity_id":"z1","type":"zombie","outcome":"player_kill","evidence":"server_death_event"}
+        if final_kill:
+            # 単独の終了通知に実撃破を同梱。直前の被弾や交戦外の敵がいても、
+            # 次のsnapshotを送る前に元の句と戦闘結果の判断を一度開始する。模擬HTTP・模擬LLM。
+            nearby = [{**MOB, "entity_id":"other", "distance":15}] if bystander else []
+            send(sid, event=event("combat_ended"), visual_threats=nearby, combat={
+                "player_engaged":False, "combat_active_hint":bystander, "recent_damage_ms":250,
+                "last_opponent_defeated":True, "hostile_outcomes":[outcome],
+                "hostiles_within_scan_ground":len(nearby)})
+        else:
+            for _ in range(2):
+                send(sid, event=event("hostile_defeated"), combat={"hostile_outcomes":[outcome]})
+            assert not actions(rows, sid, "workshop_resume") and hud(sid)["state"] == "danger"
+            end(send, rows, sid, "player_kill")
+        try:
+            if final_kill:
+                assert entered.wait(timeout=2), "combined event alone must start the decision"
+            else:
+                drive(send, sid, entered.is_set)
+            for _ in range(3):
+                send(sid)
+            snapshot = request(base, "/api/v1/rust-dialogue/snapshot?session_id=" + sid)
+            assert snapshot["workshop"]["state"] == "danger"
+            pending = [r for r in snapshot["utterances"] if any(a["kind"] == "workshop_resume" for a in r.get("combat_actions", []))]
+            assert len(pending) == 1 and not pending[0].get("display_id") and not pending[0]["text"], pending
+            kinds = [c["kind"] for c in offers[0]]
+            if bystander:
+                assert "player_hostiles_cleared" not in kinds, offers
+            for kind in ("player_hostile_defeated", "combat_ended" if bystander else "player_hostiles_cleared", "workshop_resume"):
+                assert kinds.count(kind) == 1, offers
+            assert "ゾンビ" in json.dumps(next(c["now"] for c in offers[0] if c["kind"] == "player_hostile_defeated"), ensure_ascii=False)
+        finally:
+            release.set()
+
+        def published_resume():
+            snapshot = request(base, "/api/v1/rust-dialogue/snapshot?session_id=" + sid)
+            result = next((r for r in snapshot["utterances"] if any(
+                a["kind"] == "workshop_resume" for a in r.get("combat_actions", []))), None)
+            if result and (result.get("display_id") or result["playback_status"] == "not_selected"):
+                assert snapshot["workshop"]["state"] == "open", snapshot["workshop"]
+                return result
+        result = wait_for(published_resume)
+        if decision == "speak":
+            assert result["text"] == spoken and result.get("display_id"), result
+            acknowledge(base, sid, result)
+            wait_for(lambda: row(base, result["turn_id"], {"completed"}))
+            assert sum(h["role"] == "assistant" and h["turn_id"] == result["turn_id"] + ":reply"
+                       for h in session(base, sid)["history"]) == 1
+        else:
+            assert result["playback_status"] == "not_selected" and not result.get("display_id") and not result["text"], result
+            assert not any(h["role"] == "assistant" and h.get("turn_id") == result["turn_id"] + ":reply"
+                           for h in session(base, sid)["history"])
+        scope = result["combat_actions"][0]["scope"]["targets"]
+        assert scope["id"] == pinned["workshop_id"] and scope["version"] == pinned["workshop_version"], scope
+        after = hud(sid)
+        assert all(after[key] == pinned[key] for key in ("workshop_id","canonical_lines","pending_lines")), after
+        for _ in range(4):
+            send(sid)
+        assert len(offers) == 1 and len(actions(rows, sid, "workshop_resume")) == 1
+        assert not actions(rows, sid, "hostile_defeated") and not actions(rows, sid, "aftermath")
+        assert session(base, sid)["workshop_followup"] == "discussion"
+        assert stored(sid) == original and not revisions(folder, sid)
 
 
 def main():
@@ -130,29 +231,13 @@ def main():
             assert hud(sid)["state"] == "closed" and not actions(rows, sid, "workshop_resume")
             assert len(calls) == 0 and stored(sid) == original and not revisions(folder, sid)
             passed.append("bert_close_resumes_ack_without_reopening_or_regenerating:" + text)
-    with fixture(combat_settings=SETTINGS) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
-        sid = ready(base, send, rows); original = stored(sid)
-        enter(send, rows, sid)
-        assert hud(sid)["state"] == "danger"
-        aftermath = end(send, rows, sid, "player_kill")
-        llm_before = len([x for x in seen if x["path"] == "/v1/chat/completions"])
-        r = returned(send, rows, sid)
-        assert "倒せた" in r["text"] and r["text"].endswith("\n".join(LINES)) and "続ける？" not in r["text"], r
-        assert datetime.fromisoformat(r["created_at"]) >= datetime.fromisoformat(aftermath["completed_at"])
-        assert session(base, sid)["workshop_followup"] == "discussion"
-        history = session(base, sid)["history"]
-        # 前置き・固定警告・復帰案内も、実再生が終われば共通履歴に残る。
-        for spoken in [aftermath, r]:
-            matching = [h for h in history if h["role"] == "assistant" and h["turn_id"] == spoken["turn_id"] + ":reply"]
-            assert len(matching) == 1 and " ".join(matching[0]["text"].split()) == " ".join(spoken["text"].split()), history
-        assert sum(h["text"] == "句の話に戻る。" for h in history) == 1, history
-        assert not session(base, sid)["workshop_history"]
-        assert not any(item["role"] == "assistant" and "\n".join(LINES) in item["text"] for item in history)
-        for _ in range(3): send(sid)
-        assert len(actions(rows, sid, "workshop_resume")) == 1
-        assert stored(sid) == original and not revisions(folder, sid)
-        assert len([x for x in seen if x["path"] == "/v1/chat/completions"]) == llm_before
-        passed.append("aftermath_then_one_resume_notice_returns_to_discussion_without_confirmation_model")
+    for choice in ("speak", "silent"):
+        check_resume_decision(choice)
+        passed.append("one_decision_restores_pinned_poem:" + choice)
+
+    for choice, bystander in (("silent", False), ("speak", True)):
+        check_resume_decision(choice, final_kill=True, bystander=bystander)
+        passed.append("final_kill_and_resume_in_one_decision:" + choice)
 
     with fixture(combat_settings=SETTINGS) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         install(control, lambda text, prompt, n: edit(text))
@@ -163,9 +248,11 @@ def main():
         r = finish(base, send, sid, "上五を『さくらいろ』にして")
         assert r["workshop_outcome"] == "pending_save_failed", r
         revision_path.rmdir()
+        pinned = hud(sid)
         enter(send, rows, sid); end(send, rows, sid)
         r = returned(send, rows, sid)
-        assert "離れられた" in r["text"] and "さくらいろ" in r["text"] and "倒" not in r["text"], r
+        assert r["playback_status"] == "completed" and hud(sid)["state"] == "open", r
+        assert r["combat_actions"][0]["scope"]["targets"]["version"] == pinned["workshop_version"], r
         assert hud(sid)["canonical_lines"] == LINES and hud(sid)["pending_lines"][0] == "さくらいろ"
         calls = install(control, lambda text, prompt, n: step(text,"ask", speech="残った案を採用するか、破棄するか教えてな。"))
         r = finish(base, send, sid, "もういい")
@@ -209,15 +296,17 @@ def main():
         enter(send, rows, sid); end(send, rows, sid, "player_kill")
         (folder / "player_mode").write_text("fail")
         r = drive(send, sid, lambda: next((r for r in actions(rows, sid, "workshop_resume") if r["playback_status"] == "failed"), None))
-        assert session(base, sid)["workshop_followup"] == "discussion" and hud(sid)["state"] == "danger"
-        assert not any(h["text"] == "句の話に戻る。" for h in session(base, sid)["history"])
-        for _ in range(4): send(sid)
-        assert len(actions(rows, sid, "workshop_resume")) == 1
+        # 再開後の音声配送が失敗しても、同じ戦闘結果の発話判断をやり直さない。
+        assert hud(sid)["state"] == "open" and hud(sid)["canonical_lines"] == LINES
+        assert not any(h.get("turn_id") == r["turn_id"] + ":reply" and h["role"] == "assistant"
+                       for h in session(base, sid)["history"])
         (folder / "player_mode").write_text("ok")
-        r = returned(send, rows, sid, count=2)
-        assert "倒せた" in r["text"] and session(base, sid)["workshop_followup"] == "discussion"
+        for _ in range(22):
+            send(sid); time.sleep(.1)
+        assert len(actions(rows, sid, "workshop_resume")) == 1
+        assert len([x for x in seen if x["path"] == "/v1/chat/completions" and resume_changes(x["body"])]) == 1
         assert not revisions(folder, sid)
-        passed.append("failed_resume_keeps_pin_and_reason_and_retries_after_backoff")
+        passed.append("failed_playback_does_not_repeat_resume_decision")
 
     with fixture(combat_settings=SETTINGS) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         sid = ready(base, send, rows)
@@ -229,10 +318,12 @@ def main():
         send(sid, visual_threats=[{**MOB, "entity_id": "z2"}], combat={"combat_active_hint": True, "player_engaged": True})
         wait_for(lambda: row(base, r["turn_id"], {"cancelled"}))
         assert hud(sid)["state"] == "danger" and hud(sid)["canonical_lines"] == LINES
-        assert not any(h["text"] == "句の話に戻る。" for h in session(base, sid)["history"])
+        assert not any(h.get("turn_id") == r["turn_id"] + ":reply" and h["role"] == "assistant"
+                       for h in session(base, sid)["history"])
         send(sid, event=event("combat_ended"), combat={"hostile_outcomes": [], "hostiles_within_scan_ground": 0})
         r = returned(send, rows, sid, count=2)
-        assert "倒せた" not in r["text"] and "離れられた" in r["text"], r
+        offers = [changes for x in seen if x["path"] == "/v1/chat/completions" and (changes := resume_changes(x["body"]))]
+        assert len(offers) == 2 and not any(c["kind"] == "player_hostile_defeated" for c in offers[-1]), offers
         passed.append("new_threat_cancels_notice_and_discards_previous_victory_reason")
 
     with fixture(combat_settings=SETTINGS) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
@@ -244,11 +335,11 @@ def main():
         install(control, lambda text, prompt, n: step(text,"show_current"))
         shown = finish(base, send, sid, "今の句")
         assert shown["text"] == "\n".join(LINES)
-        assert row(base, r["turn_id"], {"completed"})
+        assert row(base, r["turn_id"], {"cancelled"})
         assert session(base, sid)["workshop_followup"] == "discussion"
         for _ in range(3): send(sid)
         assert len(actions(rows, sid, "workshop_resume")) == 1
-        passed.append("new_question_waits_for_notice_then_uses_current_poem_without_repeating_notice")
+        passed.append("new_question_consumes_notice_then_uses_current_poem_without_repeating_notice")
 
     with fixture(combat_settings=SETTINGS) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         sid = ready(base, send, rows)

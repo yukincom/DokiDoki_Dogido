@@ -207,10 +207,17 @@ impl Dialogue {
         s.mode = decision.mode;
         s.chat_allowed = decision.chat_allowed;
         let poem_continues = s.haiku.foreground() && super::workshop_focus::quiet_observation(s);
+        let resuming = s.haiku.workshop.as_ref().is_some_and(|w| w.combat_paused());
+        if resuming && !decision.dimension_changed {
+            // 確定結果を復帰時の changes として一度だけ提示する。戦闘中の危険警告は先に通す。
+            let previous_len = decision.actions.len();
+            decision.actions.retain(|a| !matches!(a.kind, "aftermath" | "hostile_defeated"));
+            if previous_len > 0 && decision.actions.is_empty() {
+                decision.stop_audio = false;
+            }
+        }
         if poem_continues && !decision.dimension_changed {
             // mode/観測は更新し続けるが、環境由来のpanicや予兆では相談を奪わない。
-            // 敵離脱後のpause中も同じ。撃破・爆散・安堵の実結果は復帰の前に配送する。
-            let resuming = s.haiku.workshop.as_ref().is_some_and(|w| w.combat_paused());
             decision.actions.retain(|a| resuming && super::workshop_focus::combat_completion(a.kind));
             if decision.actions.is_empty() {
                 decision.stop_audio = false;

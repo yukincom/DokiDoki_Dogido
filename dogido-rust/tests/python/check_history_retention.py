@@ -58,11 +58,9 @@ def main():
         for _ in range(12):
             send(sid, visual_threats=[MOB], combat={"combat_active_hint": True})
         compare(completed_rows, danger=True, retained=10)
-        aftermath = end(send, rows, sid)
-        # The delivered aftermath is current conversation material, not a user/reply pair.
-        assert aftermath["playback_status"] == "completed" and aftermath["text"]
-        completed_rows.append({"turn_id": aftermath["turn_id"] + ":reply",
-                               "role": "assistant", "text": aftermath["text"]})
+        end(send, rows, sid)
+        # 安堵の固定音声はない。戦闘終了後の履歴には実際に届いた警告と会話だけが残る。
+        assert not any(a["kind"] == "aftermath" for r in rows(sid) for a in r.get("combat_actions", []))
         compare(completed_rows, retained=10, remaining=3)
         for i, text in enumerate(["ドギド、一段落したね", "ドギド、落ち着いたね", "さっきの話の続き"]):
             _, prompts = say(text, retain_seed=i < 2, remaining=2 - i)

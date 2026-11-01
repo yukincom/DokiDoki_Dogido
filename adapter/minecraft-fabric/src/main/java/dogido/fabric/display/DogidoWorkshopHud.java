@@ -47,12 +47,13 @@ public final class DogidoWorkshopHud {
     public void reset() { state.reset(); }
     public void synchronizeAfter(long sequence) { state.synchronizeAfter(sequence); }
     public void danger(boolean danger, boolean changed, long sequence) { state.danger(danger, changed, sequence, now()); }
-    public void receive(WorkshopDisplayPayload.Snapshot snapshot) {
+    public boolean receive(WorkshopDisplayPayload.Snapshot snapshot) {
         boolean cue = state.receive(snapshot, now());
         MinecraftClient client = MinecraftClient.getInstance();
         if (cue && enabled && sound && client.world != null && client.currentScreen == null && !client.options.hudHidden) {
             client.getSoundManager().play(PositionedSoundInstance.ui(SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(), 1.8f, 0.15f));
         }
+        return snapshot != null && state.showing() && state.displayed() == snapshot;
     }
 
     private static int color(int rgb, float alpha) {

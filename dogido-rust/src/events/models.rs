@@ -527,6 +527,9 @@ pub struct CombatState {
     /// 敵が本人を狙った、または本人が敵を攻撃してから既存の戦闘終了まで。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub player_engaged: Option<bool>,
+    /// 統合サーバーが本人の撃破と、他に交戦中の敵がいないことを同時に確認した。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_opponent_defeated: Option<bool>,
     /// 確認済み死亡・爆散の記録。Noneは未送信、Some([])は送信された空リスト。
     #[serde(default)]
     pub hostile_outcomes: Option<Vec<HostileOutcome>>,

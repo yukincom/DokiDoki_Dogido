@@ -1,7 +1,6 @@
 //! 戦闘中に保持した句を戻す理由。発話・モデル・保存は持たない。
 use crate::events::{EventName, GameEvent, HostileOutcomeOutcome as Outcome};
 use serde::Serialize;
-use std::time::Instant;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -40,27 +39,26 @@ impl Reason {
             None
         }
     }
-    pub fn prompt(self, verse: &str) -> String {
-        let lead = match self {
-            Self::Victory => "やったな。倒せたみたいや。",
-            Self::Detonated => "うわぁ、クリーパー爆発したな。びっくりしたわ。",
-            Self::Explosion => "うわっ、爆発で敵が倒れたみたいやな。",
-            Self::Defeated => "敵は倒れたみたいやな。",
-            Self::Escaped => "ひとまず離れられたみたいやな。",
-            Self::Safe => "落ち着いたみたいやな。",
-        };
-        format!("{lead}中断してた句はこれやで。\n{verse}")
-    }
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct Recovery {
     pub reason: Option<Reason>,
-    pub announcing: bool,
-    pub retry_at: Option<Instant>,
+    pub(crate) generating: bool,
+    pub(crate) ended_by_last_kill: bool,
+    pub(crate) changes: Vec<crate::conversation_observation::Change>,
 }
 impl Recovery {
     pub fn observe(&mut self, event: &GameEvent) {
+        if event.ended_by_last_kill() {
+            self.ended_by_last_kill = true;
+            self.reason = Some(Reason::Victory);
+            return;
+        }
+        if event.combat.player_engaged == Some(true) || event.event.name == EventName::PlayerDied {
+            self.ended_by_last_kill = false;
+        }
+        if self.ended_by_last_kill { return; }
         if !event.visual_threats.is_empty() || !event.auditory_threats.is_empty() {
             self.reason = None;
         } else if let Some(reason) = Reason::observed(event) {
@@ -132,6 +130,5 @@ mod tests {
             )),
             Some(Reason::Victory)
         );
-        assert!(!Reason::Escaped.prompt("さくらのは").contains("倒"));
     }
 }

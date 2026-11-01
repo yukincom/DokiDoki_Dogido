@@ -22,7 +22,7 @@ class BodySpeechGazeTest {
             for (String ref : references) { var row=new JsonObject();row.addProperty("observer","body");row.addProperty("kind",ref.startsWith("sound:") ? "sound" : "entity");row.addProperty("id",ref.substring(ref.indexOf(':')+1));targets.add(row); }
             request.add("targets",targets);
         }
-        return new DialoguePayload.Snapshot(new DialoguePayload.Scope("s","instance"),voice,"v",true,List.of(),request);
+        return new DialoguePayload.Snapshot(new DialoguePayload.Scope("s","instance"),voice,"v",true,List.of(),request,null);
     }
     private BodySpeechGaze.Target target(String kind,String id,double x) { return new BodySpeechGaze.Target("body",kind,id,new Vec3d(x,64,4)); }
     @Test void pinsOneObservedIndividualUntilEndAndNeverSubstitutesAnother() {

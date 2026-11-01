@@ -42,6 +42,15 @@ pub struct GameEvent(
 );
 
 impl GameEvent {
+    pub(crate) fn ended_by_last_kill(&self) -> bool {
+        self.event.name == EventName::CombatEnded
+            && self.combat.last_opponent_defeated == Some(true)
+            && self.combat.player_engaged == Some(false)
+            && self.combat.hostile_outcomes.as_ref().is_some_and(|outcomes|
+                outcomes.iter().any(|o| o.outcome == HostileOutcomeOutcome::PlayerKill
+                    && o.evidence == HostileOutcomeEvidence::ServerDeathEvent))
+    }
+
     /// 撮影待機へ画像を渡した後、観測の複製・保持から一時画像だけを解放する。
     pub(crate) fn discard_command_images(&mut self) {
         for result in &mut self.0.command_results { result.body_view = None; }

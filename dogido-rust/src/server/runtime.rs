@@ -122,14 +122,18 @@ impl Published {
         })
     }
 
+    pub fn workshop_sequence(&self, session_id: &str) -> Option<u64> {
+        self.sessions.get(session_id).map(|s| s.last_sequence.unwrap_or(0))
+    }
+
     pub fn workshop(&self, session_id: &str) -> Option<Value> {
-        let session = self.sessions.get(session_id)?;
+        let sequence = self.workshop_sequence(session_id)?;
         if let Some(dialogue) = &self.dialogue {
-            return dialogue.workshop_snapshot(session_id, session.last_sequence.unwrap_or(0));
+            return dialogue.workshop_snapshot(session_id, sequence);
         }
         Some(json!({
             "schema_version": 1, "session_id": session_id, "revision": self.hud_revision,
-            "observed_sequence": session.last_sequence.unwrap_or(0), "workshop_id": null,
+            "observed_sequence": sequence, "workshop_id": null,
             "state": "closed", "character_state": "normal", "canonical_lines": [],
             "pending_lines": [], "editing": false, "selected_line": null,
         }))

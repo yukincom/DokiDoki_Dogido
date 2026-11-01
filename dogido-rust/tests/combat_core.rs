@@ -267,6 +267,36 @@ fn quiet_needs_three_commands_and_resets_only_after_aftermath() {
     assert_eq!(tick(&mut engine, &empty, 25000).mode, Mode::Normal);
     assert_eq!(engine.shut_up_count, 0);
 }
+// 本人が交戦した後も、通常の撃破・安堵は確認した事実だけを渡す。実音声を使わず、
+// 同種の別個体、同一個体の再送、終了だけで届く死因を通し、発話・音声停止・材料の宛先を検査する。
+#[test]
+fn ordinary_defeat_and_relief_leave_conversation_open_and_report_each_new_outcome() {
+    let mut engine = Engine::default();
+    let fight = engaged(event(json!([visual("zombie", "first", 4.0)]), json!([])));
+    assert_eq!(tick(&mut engine, &fight, 0).mode, Mode::Panic);
+
+    let result = |id: &str, kind: &str, cause: &str| {
+        json!({"entity_id":id,"type":kind,"outcome":cause,"evidence":"server_death_event"})
+    };
+    let defeat = |name: &str, outcomes: Value| changed(&event(json!([]), json!([])), |v| {
+        v["event"]["name"] = name.into();
+        v["combat"] = json!({"hostile_outcomes":outcomes});
+    });
+    let first = result("first", "zombie", "player_kill");
+    let immediate = tick(&mut engine, &defeat("hostile_defeated", json!([first, first])), 1000);
+    assert!(immediate.actions.is_empty() && !immediate.stop_audio && immediate.chat_allowed);
+    assert_eq!(engine.take_defeat_changes(), ["プレイヤーがゾンビを倒した"]);
+    let end = defeat("combat_ended", json!([first, result("second", "zombie", "other_death"),
+        result("third", "skeleton", "explosion_death")]));
+    let relief = tick(&mut engine, &end, 2500);
+    assert_eq!(relief.mode, Mode::Aftermath);
+    assert!(relief.actions.is_empty() && !relief.stop_audio && relief.chat_allowed);
+    assert_eq!(engine.take_defeat_changes(), ["ゾンビが倒れた", "スケルトンが爆発で倒れた"]);
+    assert!(engine.take_defeat_changes().is_empty());
+    assert!(tick(&mut engine, &end, 3000).actions.is_empty());
+    assert!(engine.take_defeat_changes().is_empty());
+}
+
 #[test]
 fn sound_partial_does_not_clear_visual_or_rearm_fuse() {
     let mut engine = Engine::default();

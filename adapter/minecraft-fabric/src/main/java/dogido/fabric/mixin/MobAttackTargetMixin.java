@@ -13,8 +13,9 @@ abstract class MobAttackTargetMixin {
     // AIが判断した攻撃対象を読む。新しい敵走査は行わない。
     @Inject(method = "tickNewAi", at = @At("TAIL"))
     private void dogido$observeTarget(CallbackInfo ci) {
-        if (((MobEntity)(Object)this).getTarget() instanceof ServerPlayerEntity player) {
-            DogidoClientAdapter.recordMobTarget(player);
+        MobEntity mob = (MobEntity)(Object)this;
+        if (mob.getTarget() instanceof ServerPlayerEntity player) {
+            DogidoClientAdapter.recordMobTarget(player, mob.getUuid());
         }
     }
 }

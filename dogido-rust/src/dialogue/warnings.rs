@@ -1,7 +1,6 @@
 //! パワーのある実行環境のため、繊細なコントロールは不要。会話のテンポを止める処理を入れるな。
 //! 一つの戦闘判断から選ばれた音声を、同じ取消所有権で順に配送する。
-use super::{Data, Dialogue, Session, bridge, id, observation_fresh};
-use super::{PlaybackStatus, workshop_combat_runtime::NoticeEnd};
+use super::{Data, Dialogue, PlaybackStatus, Session, bridge, id, observation_fresh};
 use crate::{
     combat::model::{Delivery, Scope, Speech},
     events::GameEvent,
@@ -463,12 +462,7 @@ impl Dialogue {
                     s.ambient.end_rain_after_attention(window);
                 }
                 if let Scope::Workshop { id, version } = &a.scope {
-                    let end = if matches!(reason, "new_player_input" | "manual_interrupt") {
-                        NoticeEnd::Consumed
-                    } else {
-                        NoticeEnd::Retry
-                    };
-                    super::workshop_combat_runtime::finish_notice(s, id, *version, end);
+                    super::workshop_combat_runtime::cancel_notice(s, id, *version, reason);
                 }
             }
             let _ = w.cancel.send(true);
@@ -606,9 +600,6 @@ impl Dialogue {
         }
         if current {
             let reaction = d.rows.iter().find(|r| r["turn_id"] == turn).cloned();
-            let notice_delivered = reaction
-                .as_ref()
-                .is_some_and(|r| r["notice_delivered"] == true);
             let s = d.sessions.get_mut(sid).unwrap();
             if let Some(row) = reaction {
                 let outcomes = row["model_reaction_outcomes"].as_array();
@@ -659,13 +650,9 @@ impl Dialogue {
                 s.haiku.last_activity = Instant::now();
             }
             if status.ends_playback() || status == PlaybackStatus::NotSelected {
-                if !notice_delivered && let Some((id, version)) = notice {
-                    super::workshop_combat_runtime::finish_notice(
-                        s,
-                        &id,
-                        version,
-                        NoticeEnd::Retry,
-                    );
+                if let Some((id, version)) = notice {
+                    // 通信の取消等で採用に至らなかった予約だけを解く。採用済みは復帰したまま。
+                    super::workshop_combat_runtime::cancel_notice(s, &id, version, "delivery_ended");
                 }
                 super::body_interest_runtime::finish(s, turn);
                 s.warning = None;
@@ -718,12 +705,12 @@ impl Dialogue {
                     scope["targets"]["version"].as_u64()?,
                 ))
             });
-        if text
-            && notice.as_ref().is_some_and(|(id, version)| {
-                !super::workshop_combat_runtime::applicable(s, id, *version)
-            })
-            && row["delivery_confirmed"] != true
-        {
+        // 公開済みの遅延ACKは同じ復帰世代だけに受け取る。次の戦闘の同じ句・版とは区別する。
+        if notice.as_ref().is_some_and(|(id, version)| {
+            !s.haiku.workshop.as_ref().is_some_and(|w| w.open && !w.combat_paused()
+                && w.hud_id == *id && w.version == *version
+                && Some(w.input_boundary) == row["workshop_resume_boundary"].as_u64())
+        }) && row["delivery_confirmed"] != true {
             return false;
         }
         if row["delivery_confirmed"] != true {
@@ -742,17 +729,8 @@ impl Dialogue {
                 s.conversation_observation.considered(revision);
             }
         }
-        let terminal = matches!(
-            row["playback_status"].as_str(),
-            Some("completed" | "audio_disabled" | "failed")
-        );
         let mut notice_delivered = row["notice_delivered"] == true;
-        if terminal
-            && !notice_delivered
-            && let Some((id, version)) = notice
-            && super::workshop_combat_runtime::applicable(s, &id, version)
-        {
-            super::workshop_combat_runtime::finish_notice(s, &id, version, NoticeEnd::Completed);
+        if !notice_delivered && let Some((id, _)) = notice {
             self.share_story(
                 sid,
                 s,
@@ -916,9 +894,12 @@ impl Dialogue {
                     let result=if let Some(image)=action.image.as_deref() {
                         super::reaction_runtime::render_image(config,&self.reading_dictionary,&self.llm,&input,&mut cancel,Some(image)).await
                     } else {bridge::render(config,&self.reading_dictionary,&self.llm,input,&mut cancel).await};
+                    anyhow::ensure!(!*cancel.borrow(),"cancelled");
+                    let mut d=self.data.lock().unwrap();
                     if crate::reaction_leaf::is_model_reaction(action) {
-                        anyhow::ensure!(!*cancel.borrow(),"cancelled");
-                        let mut d=self.data.lock().unwrap();
+                        // 取消と新しい警告が先にロックを取った場合、その警告には触らない。
+                        anyhow::ensure!(!d.stopped && d.sessions.get(&sid).and_then(|s| s.warning.as_ref())
+                            .is_some_and(|w| w.turn == turn), "cancelled");
                         // An already returned silent choice consumes this opportunity
                         // even if its old bearing fails the check below.
                         Self::remember_environment_outcome(&mut d,&turn,result.as_ref().ok());
@@ -932,12 +913,21 @@ impl Dialogue {
                             super::body_interest_runtime::apply(s, &turn, result.as_ref().ok(), self.clock.elapsed().as_millis() as u64);
                         }
                     }
+                    // 同じロック内で復帰世代・行・表示IDを確定する。後続の配送はこの決定を変えない。
+                    let resumed = if let Scope::Workshop { id, version } = &action.scope {
+                        let s = d.sessions.get_mut(&sid).ok_or_else(|| anyhow::anyhow!("session closed"))?;
+                        let boundary = super::workshop_combat_runtime::resume(s, id, *version)
+                            .ok_or_else(|| anyhow::anyhow!("workshop resume cancelled"))?;
+                        if let Some(row) = d.rows.iter_mut().find(|r| r["turn_id"] == turn) {
+                            row["workshop_resume_boundary"] = boundary.into();
+                        }
+                        true
+                    } else { false };
                     match result {
                         Ok(result)=>{
                             anyhow::ensure!(!*cancel.borrow(),"cancelled");
                             text=result["spoken_text"].as_str().unwrap_or(&text).to_owned();
                             rendered[index].text=result["text"].as_str().unwrap_or(&action.text).to_owned();
-                            let mut d=self.data.lock().unwrap();
                             if let Some(row)=d.rows.iter_mut().find(|r|r["turn_id"]==turn){
                                 row["text"]=display_text(&rendered).into();
                                 row["combat_actions"]=json!(rendered);
@@ -945,6 +935,11 @@ impl Dialogue {
                                 if let Some(reports)=result["llm_reports"].as_array(){row["llm_reports"].as_array_mut().unwrap().extend(reports.iter().cloned());}
                             }
                             d.revision+=1;
+                            if resumed && result["environment_reaction_outcome"] != "silent" {
+                                anyhow::ensure!(result["environment_reaction_outcome"] == "speak" && !rendered[index].text.trim().is_empty(),
+                                    "workshop resume: {}", result["environment_reaction_outcome"]);
+                                Self::publish_text(&mut d, &sid, &turn, super::text_delivery::Kind::Warning);
+                            }
                             if result["environment_reaction_outcome"] == "silent" || result["reaction_leaf_outcome"] == "silent" { continue; }
                         }
                         Err(e) if *cancel.borrow()=>return Err(e),
@@ -952,7 +947,6 @@ impl Dialogue {
                             tracing::warn!(event="combat_leaf_fallback",kind=leaf.kind,error=%e);
                             if crate::reaction_leaf::is_model_reaction(action) {
                                 rendered[index].text=action.text.clone();
-                                let mut d=self.data.lock().unwrap();
                                 let key=if leaf.kind == crate::environment::reaction::KIND { "environment_reaction_outcome" } else { "reaction_leaf_outcome" };
                                 Self::remember_environment_outcome(&mut d,&turn,Some(&json!({key:"generation_error"})));
                                 if let Some(row)=d.rows.iter_mut().find(|r|r["turn_id"]==turn) {
@@ -961,6 +955,7 @@ impl Dialogue {
                                 }
                                 d.revision+=1;
                             }
+                            if resumed { return Err(e); }
                         }
                     }
                 }
@@ -1001,8 +996,13 @@ impl Dialogue {
         if !*cancel.borrow() && !matches!(result, Ok(PlaybackStatus::NotSelected)) {
             let published = {
                 let mut d = self.data.lock().unwrap();
-                Self::publish_text(&mut d, &sid, &turn, super::text_delivery::Kind::Warning)
-                    .is_some()
+                // 再開本文の公開はHUD復帰時の一回だけ。ここでは文字のみ配送のACKを待つ。
+                if let Some(row) = d.rows.iter().find(|r| r["turn_id"] == turn
+                    && r["workshop_resume_boundary"].is_u64()) {
+                    row["display_id"].is_string()
+                } else {
+                    Self::publish_text(&mut d, &sid, &turn, super::text_delivery::Kind::Warning).is_some()
+                }
             };
             if published && !self.output_config(&sid).audio_enabled {
                 self.wait_for_text(&sid, &turn, &mut cancel).await;

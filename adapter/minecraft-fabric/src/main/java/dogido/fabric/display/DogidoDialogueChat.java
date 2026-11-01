@@ -21,18 +21,18 @@ public final class DogidoDialogueChat {
     private final DogidoDialogueClient dialogue;
     private final DialogueDisplayState state = new DialogueDisplayState();
     private final Predicate<Boolean> saveVoiceEnabled;
-    private final java.util.function.Consumer<DialoguePayload.Snapshot> speechObserver;
+    private final Predicate<DialoguePayload.Snapshot> applyDisplay;
     private CompletableFuture<DialoguePayload.Acknowledgement> acknowledgement;
 
-    private DogidoDialogueChat(DogidoEventClient events, Predicate<Boolean> saveVoiceEnabled, java.util.function.Consumer<DialoguePayload.Snapshot> speechObserver) {
+    private DogidoDialogueChat(DogidoEventClient events, Predicate<Boolean> saveVoiceEnabled, Predicate<DialoguePayload.Snapshot> applyDisplay) {
         this.events = events;
         this.dialogue = new DogidoDialogueClient(events);
         this.saveVoiceEnabled = saveVoiceEnabled;
-        this.speechObserver = speechObserver;
+        this.applyDisplay = applyDisplay;
     }
 
-    public static DogidoDialogueChat register(DogidoEventClient events, Predicate<Boolean> saveVoiceEnabled, java.util.function.Consumer<DialoguePayload.Snapshot> speechObserver) {
-        DogidoDialogueChat chat = new DogidoDialogueChat(events, saveVoiceEnabled,speechObserver);
+    public static DogidoDialogueChat register(DogidoEventClient events, Predicate<Boolean> saveVoiceEnabled, Predicate<DialoguePayload.Snapshot> applyDisplay) {
+        DogidoDialogueChat chat = new DogidoDialogueChat(events, saveVoiceEnabled, applyDisplay);
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
             dispatcher.register(literal("dogido")
                 .executes(context -> chat.usage())
@@ -59,8 +59,10 @@ public final class DogidoDialogueChat {
         if (context == null) return;
         this.dialogue.poll(context.session(), snapshot -> {
             if (!isCurrent(context)) return;
-            this.speechObserver.accept(snapshot);
-            this.state.receive(snapshot, DogidoDialogueChat::insert);
+            // HUDと返答は同じsnapshotを一つのゲームスレッド呼出しで適用する。
+            boolean workshopShown = this.applyDisplay.test(snapshot);
+            if (snapshot == null) return;
+            this.state.receive(snapshot, workshopShown, DogidoDialogueChat::insert);
             flushAcknowledgements(context);
         });
     }

@@ -32,6 +32,7 @@ pub struct Outcomes {
     announced: HashSet<String>,
     announcement_order: VecDeque<String>,
     notes: Vec<String>,
+    defeat_changes: Vec<String>,
     name_tracker: names::Tracker,
 }
 impl Default for Outcomes {
@@ -42,6 +43,13 @@ impl Default for Outcomes {
 
 fn normalized(value: &str) -> &str {
     value.strip_prefix("minecraft:").unwrap_or(value).trim()
+}
+// 戦闘終了でボス固有の確認を待つ種類。通常の撃破事実へまとめない。
+fn boss(kind: &str) -> bool {
+    matches!(normalized(kind), "warden" | "ender_dragon" | "wither")
+}
+fn ordinary_defeat(outcome: &HostileOutcome) -> bool {
+    outcome.outcome != Outcome::CreeperDetonation && !boss(&outcome.r#type)
 }
 fn outcome_key(outcome: &HostileOutcome) -> String {
     outcome.entity_id.trim().to_owned()
@@ -96,12 +104,17 @@ impl Outcomes {
             announced: HashSet::new(),
             announcement_order: VecDeque::new(),
             notes: Vec::new(),
+            defeat_changes: Vec::new(),
             name_tracker: names::Tracker::default(),
         }
     }
     /// 会話文脈への採用・保存は実行層が決める。ここではコードで確認した短い事実だけ。
     pub fn take_notes(&mut self) -> Vec<String> {
         std::mem::take(&mut self.notes)
+    }
+    /// 今回初めて確認した通常敵の死亡を、個体IDを含まない会話材料として一度だけ返す。
+    pub fn take_defeat_changes(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.defeat_changes)
     }
     /// Drain exactly the last observe's name update, once. Not presence/death credit.
     pub fn take_name_updates(&mut self) -> crate::chat_observation::NameOutcomeUpdate {
@@ -116,7 +129,7 @@ impl Outcomes {
     pub fn has_boss_context(&self) -> bool {
         self.last_hostiles
             .iter()
-            .any(|h| matches!(h.kind.as_str(), "warden" | "ender_dragon" | "wither"))
+            .any(|h| boss(&h.kind))
     }
     pub fn boss_defeat_confirmed(&self, event: &GameEvent) -> bool {
         self.last_hostiles.iter().all(|h| match h.kind.as_str() {
@@ -155,6 +168,13 @@ impl Outcomes {
                 Outcome::ExplosionDeath => format!("{name}が爆発で倒れた"),
                 Outcome::OtherDeath => format!("{name}が倒れた"),
             };
+            if ordinary_defeat(outcome) {
+                self.defeat_changes.push(if outcome.outcome == Outcome::PlayerKill {
+                    format!("プレイヤーが{note}")
+                } else {
+                    note.clone()
+                });
+            }
             if !self.notes.contains(&note) {
                 self.notes.push(note);
             }
@@ -180,6 +200,7 @@ impl Outcomes {
     }
     /// full/partialに関係なく現在の明示観測だけを受ける。空の部分イベントで記憶を消さない。
     pub fn observe(&mut self, event: &GameEvent, _now_ms: u64) -> Option<Speech> {
+        self.defeat_changes.clear();
         self.name_tracker.observe(event);
         if !event.visual_threats.is_empty() {
             self.last_hostiles = event
@@ -244,18 +265,22 @@ impl Outcomes {
         }
         if !matches!(
             event.event.name,
-            EventName::HostileDefeated | EventName::CreeperDetonated
+            EventName::HostileDefeated | EventName::CreeperDetonated | EventName::CombatEnded
         ) {
             return None;
         }
-        let all = self.fresh_outcomes(event);
-        let outcomes: Vec<_> = all
-            .into_iter()
-            .filter(|o| {
-                (o.outcome == Outcome::CreeperDetonation)
-                    == (event.event.name == EventName::CreeperDetonated)
-            })
-            .collect();
+        let mut outcomes = self.fresh_outcomes(event);
+        if event.event.name == EventName::CombatEnded {
+            // 残敵や後続のボス確認を待っている間でも、この通知だけで届いた通常敵の事実は記録する。
+            outcomes.retain(ordinary_defeat);
+            self.record(&outcomes);
+            return None;
+        }
+        outcomes.retain(|o| {
+            (o.outcome == Outcome::CreeperDetonation) == (event.event.name == EventName::CreeperDetonated)
+        });
+        self.record(&outcomes);
+        outcomes.retain(|o| !ordinary_defeat(o));
         if outcomes.is_empty() {
             return None;
         }
@@ -300,7 +325,6 @@ impl Outcomes {
             };
             ("hostile_defeated", text)
         };
-        self.record(&outcomes);
         let mut speech = Speech::new(kind, text);
         speech.interrupt = true;
         Some(speech)
@@ -325,8 +349,8 @@ impl Outcomes {
         let outcomes = self.fresh_outcomes(event);
         let mut leaf = None;
         let text = if let Some(kind) = boss_kind {
-            catalog::text("boss", &[&kind, "defeated"])
-        } else {
+            Some(catalog::text("boss", &[&kind, "defeated"]))
+        } else if boss || outcomes.iter().any(|o| !ordinary_defeat(o)) {
             let outcome = if outcomes.iter().any(|o| {
                 o.outcome == Outcome::CreeperDetonation
                     && normalized(&o.r#type) == "charged_creeper"
@@ -379,9 +403,11 @@ impl Outcomes {
                 details: json!({"player_name":call_name(event, &self.default_call_name),"hostiles":hostiles,"health_state":health,
                 "hostile_clear_confirmed":clear,"remaining_hostiles":if clear {Some(0)} else {None},"combat_outcome":outcome}),
             });
-            fallback
+            Some(fallback)
+        } else {
+            None
         };
-        if outcomes.is_empty() && !self.last_hostiles.is_empty() {
+        if outcomes.is_empty() && self.defeat_changes.is_empty() && !self.last_hostiles.is_empty() {
             let mut names = Vec::new();
             for hostile in &self.last_hostiles {
                 let name = label(&hostile.kind);
@@ -394,7 +420,7 @@ impl Outcomes {
         }
         self.record(&outcomes);
         self.last_hostiles.clear();
-        let mut speech = Speech::new("aftermath", text);
+        let mut speech = Speech::new("aftermath", text?);
         speech.leaf = leaf;
         speech.interrupt = event.event.name == EventName::CombatEnded || boss;
         speech.protect_ms = if boss { 2500 } else { 0 };
@@ -482,17 +508,14 @@ mod tests {
             json!({"hostile_outcomes":[dead.clone()]}),
             json!({}),
         );
-        assert!(
-            state
-                .observe(&defeat, 1)
-                .unwrap()
-                .text
-                .contains("クリーパー倒れた")
-        );
+        // 同じ個体の再送と終了通知は新しい撃破にならず、本人の手柄にもならない。
+        assert!(state.observe(&defeat, 1).is_none());
+        assert_eq!(state.take_defeat_changes(), ["クリーパーが倒れた"]);
+        assert!(state.take_defeat_changes().is_empty());
         assert!(state.observe(&defeat, 2).is_none());
-        let speech = state.aftermath(&end(json!([dead])), 3).unwrap();
-        assert!(speech.text.contains("気配は遠のいた"));
-        assert_eq!(speech.leaf.unwrap().details["hostiles"], json!([]));
+        assert!(state.take_defeat_changes().is_empty());
+        assert!(state.aftermath(&end(json!([dead])), 3).is_none());
+        assert!(state.take_defeat_changes().is_empty());
         state.observe(
             &event(
                 "status_snapshot",
@@ -503,11 +526,8 @@ mod tests {
             ),
             4,
         );
-        let speech = state.aftermath(&end(json!([])), 5).unwrap();
-        assert_eq!(
-            speech.leaf.unwrap().details["hostiles"],
-            json!(["エンダーマン"])
-        );
+        assert!(state.aftermath(&end(json!([])), 5).is_none());
+        assert_eq!(state.take_notes(), ["クリーパーが倒れた", "エンダーマンと交戦した"]);
     }
     #[test]
     fn death_removes_only_the_matching_id_and_keeps_unidentified_same_species() {
@@ -539,28 +559,27 @@ mod tests {
     }
     #[test]
     fn outcome_evidence_drives_credit_and_claim_validation() {
-        for (result, expected) in [
-            ("player_kill", "player_kill"),
-            ("other_death", "hostile_defeated"),
-            ("explosion_death", "explosion_death"),
-            ("creeper_detonation", "creeper_detonated"),
+        // 確認した原因は区別し、通常の撃破・離脱は発話にしない。模擬結果だけを使う。
+        for (result, expected, fact) in [
+            ("player_kill", "player_kill", "プレイヤーがクリーパーを倒した"),
+            ("other_death", "hostile_defeated", "クリーパーが倒れた"),
+            ("explosion_death", "explosion_death", "クリーパーが爆発で倒れた"),
         ] {
             let mut state = Outcomes::default();
-            let leaf = state
-                .aftermath(&end(json!([outcome("creeper", "c1", result)])), 0)
-                .unwrap()
-                .leaf
-                .unwrap();
-            assert_eq!(leaf.details["combat_outcome"], expected);
-            assert_eq!(leaf.details["remaining_hostiles"], 0);
-            assert_eq!(
-                claim_conflicts(expected, "よう倒したな！"),
-                result != "player_kill"
-            );
+            let end = end(json!([outcome("creeper", "c1", result)]));
+            assert!(state.observe(&end, 0).is_none());
+            assert!(state.aftermath(&end, 0).is_none());
+            assert_eq!(state.take_defeat_changes(), [fact]);
+            assert_eq!(claim_conflicts(expected, "よう倒したな！"), result != "player_kill");
         }
         let mut state = Outcomes::default();
-        let speech = state.aftermath(&end(Value::Null), 0).unwrap();
-        assert_eq!(speech.leaf.unwrap().details["combat_outcome"], "disengaged");
+        let blast = end(json!([outcome("creeper", "c1", "creeper_detonation")]));
+        assert!(state.observe(&blast, 0).is_none());
+        let leaf = state.aftermath(&blast, 0).unwrap().leaf.unwrap();
+        assert_eq!(leaf.details["combat_outcome"], "creeper_detonated");
+        assert_eq!(leaf.details["remaining_hostiles"], 0);
+        assert!(state.take_defeat_changes().is_empty());
+        assert!(state.aftermath(&end(Value::Null), 1).is_none());
         assert!(claim_conflicts("disengaged", "敵が倒れたな"));
         assert!(!claim_conflicts("hostile_defeated", "敵が倒れたな"));
     }
@@ -663,11 +682,8 @@ mod tests {
             ),
             0,
         );
-        let speech = state.aftermath(&end(json!([])), 1).unwrap();
-        assert_eq!(
-            speech.leaf.unwrap().details["hostiles"],
-            json!(["スパイダー"])
-        );
+        assert!(state.aftermath(&end(json!([])), 1).is_none());
+        assert!(state.take_defeat_changes().is_empty());
         assert_eq!(state.take_notes(), ["スパイダーと交戦した"]);
     }
 }

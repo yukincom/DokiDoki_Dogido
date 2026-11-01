@@ -14,9 +14,9 @@ public final class DialoguePayload {
 
     public record Scope(String sessionId, String instance) {}
     public record Row(String turnId, String source, String playerInput, String displayId, String text,
-                      String playbackStatus) {}
+                      String playbackStatus, String resumeWorkshopId) {}
     public record Snapshot(Scope scope, boolean voiceEnabled, String voiceGeneration, boolean textEnabled,
-                           List<Row> rows, JsonObject bodyGaze) {}
+                           List<Row> rows, JsonObject bodyGaze, WorkshopDisplayPayload.Snapshot workshop) {}
     public record Reply(boolean accepted, String reason, Boolean voiceEnabled, String voiceGeneration) {
         public static Reply failure(String reason) { return new Reply(false, reason, null, ""); }
     }
@@ -51,24 +51,46 @@ public final class DialoguePayload {
             if (separateTranscriptions) {
                 for (JsonElement element : session.getAsJsonArray("voice_inputs")) {
                     JsonObject input = element.getAsJsonObject();
-                    rows.add(new Row(identifier(input, "input_id"), "voice", optionalString(input, "text"), "", "", "recognized"));
+                    rows.add(new Row(identifier(input, "input_id"), "voice", optionalString(input, "text"), "", "", "recognized", null));
                 }
             }
+            JsonElement workshop = json.get("workshop");
             for (JsonElement element : json.getAsJsonArray("utterances")) {
                 JsonObject row = element.getAsJsonObject();
                 if (!sessionId.equals(optionalString(row, "session_id"))) continue;
                 String instance = optionalString(row, "session_instance");
                 if (!instance.isEmpty() && !instance.equals(scope.instance())) continue;
+                JsonObject resume = resumeTarget(row);
+                String resumeId = resume == null ? null : identifier(resume, "id");
+                String display = optionalString(row, "display_id");
+                if (resumeId != null && workshop instanceof JsonObject hud && hud.has("workshop_boundary")
+                        && (!row.has("workshop_resume_boundary")
+                            || row.get("workshop_resume_boundary").getAsLong() != hud.get("workshop_boundary").getAsLong()
+                            || resume.get("version").getAsLong() != hud.get("workshop_version").getAsLong())) {
+                    display = "";
+                }
                 rows.add(new Row(optionalString(row, "turn_id"), separateTranscriptions ? "" : optionalString(row, "source"),
-                    optionalString(row, "player_input_text"), optionalString(row, "display_id"),
-                    optionalString(row, "text"), optionalString(row, "playback_status")));
+                    optionalString(row, "player_input_text"), display,
+                    optionalString(row, "text"), optionalString(row, "playback_status"), resumeId));
             }
             return new Snapshot(scope, bool(session, "voice_enabled"), identifier(session, "voice_generation"),
                 bool(session, "text_enabled"), List.copyOf(rows),
-                session.get("body_gaze") == null || session.get("body_gaze").isJsonNull() ? null : session.getAsJsonObject("body_gaze"));
+                session.get("body_gaze") == null || session.get("body_gaze").isJsonNull() ? null : session.getAsJsonObject("body_gaze"),
+                workshop == null || workshop.isJsonNull() ? null : WorkshopDisplayPayload.parse(workshop.toString(), sessionId));
         } catch (RuntimeException invalid) {
             return null;
         }
+    }
+
+    private static JsonObject resumeTarget(JsonObject row) {
+        if (!(row.get("combat_actions") instanceof com.google.gson.JsonArray)) return null;
+        for (JsonElement item : row.getAsJsonArray("combat_actions")) {
+            var action = item.getAsJsonObject();
+            if ("workshop_resume".equals(optionalString(action, "kind"))) {
+                return action.getAsJsonObject("scope").getAsJsonObject("targets");
+            }
+        }
+        return null;
     }
 
     public static Reply reply(String body) {

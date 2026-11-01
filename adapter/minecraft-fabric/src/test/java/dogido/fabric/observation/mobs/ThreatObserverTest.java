@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+// 模擬tickと個体IDで戦闘の開始・継続・終了を検査する。実ゲームのAIや描画は動かさない。
 class ThreatObserverTest {
     private static final UUID ENEMY_A = UUID.fromString("00000000-0000-0000-0000-00000000000a");
     private static final UUID ENEMY_B = UUID.fromString("00000000-0000-0000-0000-00000000000b");
@@ -274,6 +275,43 @@ class ThreatObserverTest {
         assertThrows(UnsupportedOperationException.class, () -> observer.outcomes().clear());
         observer.clearCombatOutcomeObservations();
         assertTrue(observer.outcomes().isEmpty());
+    }
+
+    // 片方が見えなくても先に攻撃した敵は残る。最後の一体のサーバー死亡だけが同じtickの終了を許す。
+    // 合格: 一体目はfalse、二体目はtrue、記録には両方の撃破があり、再配送では再終了しない。
+    @Test void onlyTheFinalConfirmedKillEndsWithoutWaitingForQuietTicks() {
+        UUID player = UUID.randomUUID();
+        observer.observePlayerAttack(ENEMY_A);
+        observer.observePlayerAttack(ENEMY_B);
+        observer.recordServerDeath(null, ENEMY_A, player, false, "zombie", true);
+        assertFalse(observer.applyServerObservations(null, player));
+        assertTrue(observer.playerEngaged());
+        tick.incrementAndGet();
+        observer.recordServerDeath(null, ENEMY_B, player, false, "skeleton", true);
+        assertTrue(observer.applyServerObservations(null, player));
+        observer.finishConfirmedKill();
+        assertFalse(observer.playerEngaged());
+        assertEquals(List.of(ENEMY_A, ENEMY_B), observer.outcomes().stream()
+            .map(HostileOutcomeObservation::entityUuid).toList());
+        observer.clearCombatOutcomeObservations();
+        observer.recordServerDeath(null, ENEMY_B, player, false, "skeleton", true);
+        assertFalse(observer.applyServerObservations(null, player));
+        assertTrue(observer.outcomes().isEmpty());
+    }
+
+    // サーバーで別の敵が本人を狙っている場合・撃破後に新たに狙われた場合には、姿がなくても即時終了しない。
+    // クライアントの死亡描画だけでも終了しない。検査するのは受信順と判断で、実機のAIは対象外。
+    @Test void otherAttackerOrUnconfirmedDeathCannotEndCombatEarly() {
+        UUID player = UUID.randomUUID();
+        observer.recordServerTarget(null, ENEMY_A);
+        observer.recordServerDeath(null, ENEMY_A, player, false, "zombie", false);
+        assertFalse(observer.applyServerObservations(null, player));
+        observer.recordHostileOutcome(ENEMY_B, "skeleton", "other_death", "client_death_state");
+        assertFalse(observer.applyServerObservations(null, player));
+        observer.recordServerDeath(null, ENEMY_B, player, false, "skeleton", true);
+        observer.recordServerTarget(null, UUID.randomUUID());
+        assertFalse(observer.applyServerObservations(null, player));
+        assertTrue(observer.playerEngaged());
     }
 
     @Test void quietBoundaryEndsCombatOnlyAfterTheLastSignal() {

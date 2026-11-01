@@ -25,7 +25,7 @@ public final class DialogueDisplayState {
     }
 
     /** Caller inserts into Minecraft chat on the game thread. Record the ID only after insertion returns. */
-    public synchronized void receive(DialoguePayload.Snapshot snapshot, Consumer<String> insert) {
+    public synchronized void receive(DialoguePayload.Snapshot snapshot, boolean workshopShown, Consumer<String> insert) {
         if (!snapshot.scope().equals(this.scope)) {
             reset();
             this.scope = snapshot.scope();
@@ -34,7 +34,9 @@ public final class DialogueDisplayState {
         // The server retains a bounded snapshot; keep only its IDs so a long session stays bounded.
         Set<String> displays = new HashSet<>();
         Set<String> transcriptions = new HashSet<>();
+        DialoguePayload.Row latestResume = null;
         for (DialoguePayload.Row row : snapshot.rows()) {
+            if (row.resumeWorkshopId() != null) latestResume = row;
             displays.add(row.displayId());
             transcriptions.add(row.turnId());
         }
@@ -48,6 +50,10 @@ public final class DialogueDisplayState {
                 insert.accept("[聞き取り] " + row.playerInput());
                 this.seenTranscriptions.add(row.turnId());
             }
+            // 保留中に再交戦した場合、古い句・古い復帰文を次の再開へ持ち越さない。
+            if (row.resumeWorkshopId() != null
+                    && (row != latestResume || !workshopShown || snapshot.workshop() == null
+                        || !row.resumeWorkshopId().equals(snapshot.workshop().workshopId()))) continue;
             if (snapshot.textEnabled() && !row.displayId().isBlank() && !row.text().isBlank()
                     && !this.seenDisplays.contains(row.displayId())) {
                 insert.accept("[ドギド] " + row.text());

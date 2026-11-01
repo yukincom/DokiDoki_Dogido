@@ -576,15 +576,24 @@ impl Dialogue {
         d.revision += 1;
     }
     pub fn snapshot(&self, selected: Option<&str>) -> Value {
+        self.snapshot_with_workshop(selected, None)
+    }
+
+    /// 選択sessionのHUDと本文を同じdataロックで投影する。sequenceはRuntimeの処理済みの値。
+    pub(crate) fn snapshot_with_workshop(&self, selected: Option<&str>, sequence: Option<u64>) -> Value {
         let d = self.data.lock().unwrap();
         let rows = d
             .rows
             .iter()
             .filter(|r| selected.is_none_or(|id| r["session_id"] == id))
             .collect::<Vec<_>>();
-        json!({"revision":d.revision,"phase":"dialogue","audio_enabled":self.config.audio_enabled,"llm_enabled":self.config.llm_enabled,
+        let mut snapshot = json!({"revision":d.revision,"phase":"dialogue","audio_enabled":self.config.audio_enabled,"llm_enabled":self.config.llm_enabled,
             "sessions":d.sessions.iter().map(|(id,s)|json!({"session_id":id,"session_instance":s.instance_id,"voice_enabled":s.delivery.voice_enabled,"voice_generation":request_runtime::voice_generation(s),"voice_inputs":s.delivery.voice_inputs,"text_enabled":s.delivery.enabled,"name":s.name,"status":s.status,"observation_mode":if s.preview{"none"}else{"minecraft"},"history":s.history.rows(),"history_retention":s.history.retention_status(),"foreground":s.foreground.snapshot(self.clock.elapsed().as_millis() as u64),"workshop_history":s.haiku.workshop.as_ref().map(|w| &w.dialogue),"workshop_followup":s.haiku.workshop.as_ref().map(|w| w.followup),"workshop_discussion_target":s.haiku.workshop.as_ref().and_then(|w| w.discussion_target.as_ref()),"state":s.mode,"chat_allowed":fresh(s),"horse_recall":horse_recall_runtime::snapshot(s),"body_observation":s.body_observation.project(Instant::now()),"body_probe":s.body_observation.diagnostic_sample(Instant::now()),"chat_image":json!({"enabled":self.config.chat_image.enabled,"wait_ms":self.config.chat_image.wait_ms,"state":s.visual.snapshot()}),"body_gaze":body_gaze_runtime::snapshot(s,&d.rows)})).collect::<Vec<_>>(),
-            "utterances":rows,"references":knowledge_display::collect(&rows)})
+            "utterances":rows,"references":knowledge_display::collect(&rows)});
+        if let Some((sid, sequence)) = selected.zip(sequence) {
+            snapshot["workshop"] = Self::workshop_snapshot_locked(&d, sid, sequence).unwrap_or(Value::Null);
+        }
+        snapshot
     }
     pub fn cancel_all(&self) {
         {

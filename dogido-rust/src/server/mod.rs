@@ -426,7 +426,11 @@ async fn chat_page() -> Html<&'static str> {
 }
 async fn chat_snapshot(State(state): State<AppState>, Query(q): Query<SnapshotQuery>) -> ApiReply {
     match &state.dialogue {
-        Some(d) => ApiReply::ok(d.snapshot(q.session_id.as_deref())),
+        Some(d) => {
+            let selected = q.session_id.as_deref();
+            let sequence = selected.and_then(|id| state.view().workshop_sequence(id));
+            ApiReply::ok(d.snapshot_with_workshop(selected, sequence))
+        }
         None => ApiReply::unsupported("player_dialogue"),
     }
 }

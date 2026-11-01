@@ -14,7 +14,7 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 import net.minecraft.client.MinecraftClient;
 
-/** One snapshot poll, with an ordered ACK/input/voice lane independent of the workshop HUD. */
+/** One poll for dialogue and workshop display, with an ordered ACK/input/voice lane. */
 public final class DogidoDialogueClient {
     public record Operation(DialoguePayload.Acknowledgement acknowledgement, DialoguePayload.Reply reply) {}
     private final DogidoEventClient events;
@@ -38,7 +38,7 @@ public final class DogidoDialogueClient {
                     ? DialoguePayload.snapshot(response.body(), ref.sessionId()) : null;
                 MinecraftClient.getInstance().execute(() -> {
                     try {
-                        if (snapshot != null && this.events.isCurrent(ref) && generation == this.pollGeneration.get()) {
+                        if (this.events.isCurrent(ref) && generation == this.pollGeneration.get()) {
                             handler.accept(snapshot);
                         }
                     } finally {

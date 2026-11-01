@@ -27,17 +27,22 @@ final class WorkshopDisplayState {
         if (snapshot == null) { unavailable(); return false; }
         if (latest != null && snapshot.sessionId().equals(latest.sessionId())
                 && snapshot.revision() < latest.revision()) return false;
+        // 戦闘で隠れた同じ句を戻すときはメッセージの描画と同じフレームに見せる。
+        boolean resuming = !showing() && displayed != null && snapshot.state().equals("open")
+            && Objects.equals(displayed.workshopId(), snapshot.workshopId());
         boolean cue = latest != null && Objects.equals(latest.workshopId(), snapshot.workshopId())
             && snapshot.editing() && (!latest.editing() || !Objects.equals(latest.selectedLine(), snapshot.selectedLine()));
         latest = snapshot;
         lastReceivedMs = now;
         update(now);
-        if (cue && target == 1) { from = 1; transitionMs = now; }
+        if ((cue || resuming) && target == 1) { from = 1; transitionMs = now; }
         return cue && target == 1;
     }
 
     void danger(boolean danger, boolean changed, long sequence, long now) {
         boolean entering = danger && !localDanger;
+        // 危険中に届いたopenをローカル解除だけで先に描画せず、次の会話snapshotまで待つ。
+        if (localDanger && !danger) latest = null;
         localDanger = danger;
         if (danger && (entering || changed)) {
             // A new observation invalidates any older server permission to resume.

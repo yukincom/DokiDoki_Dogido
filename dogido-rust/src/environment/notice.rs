@@ -132,7 +132,8 @@ pub fn changes(previous: &Snapshot, current: &Context) -> Vec<Change> {
             .changes
             .iter()
             .filter(|c| {
-                c.kind == crate::conversation_observation::PLAYER_HOSTILES_CLEARED
+                matches!(c.kind.as_str(), crate::conversation_observation::PLAYER_HOSTILES_CLEARED
+                    | crate::conversation_observation::PLAYER_HOSTILE_DEFEATED)
                     && c.revision > previous.revision
             })
             .cloned(),

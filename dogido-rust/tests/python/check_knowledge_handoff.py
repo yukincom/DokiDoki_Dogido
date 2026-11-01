@@ -159,13 +159,12 @@ def main():
         request(base, "/api/v1/rust-dialogue/interrupt", {"session_id":sid})
         assert all(row(base, t, {"cancelled"}) for t in turns)
         (folder / "player_mode").write_text("ok")
-        aftermath = end(send, rows, sid)
+        end(send, rows, sid)
         for _ in range(5): send(sid); time.sleep(.1)
         assert all(row(base, t, {"cancelled"}) for t in turns)
-        # 取消した質問は履歴に入れず、実再生済みの安堵だけを記録する。
-        assert session(base, sid)["history"] == [{"turn_id": aftermath["turn_id"] + ":reply",
-            "role": "assistant", "text": aftermath["text"]}]
-        passed.append("bounded_queue_cancels_questions_and_keeps_only_completed_aftermath_history")
+        # 戦闘終了は変化として伝える。取り消した質問と発話していない安堵を会話履歴に入れない。
+        assert not session(base, sid)["history"]
+        passed.append("bounded_queue_cancels_questions_without_creating_an_aftermath_reply")
         request(base, "/api/v1/adapter-sessions/" + sid, method="DELETE")
 
         sid = register(base, preview=False, body=True); send(sid)

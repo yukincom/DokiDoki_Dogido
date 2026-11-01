@@ -188,10 +188,9 @@ fn names_survive_combat_filtering_without_changing_speech_and_do_not_wait_for_af
         "hostile_defeated",
         json!({"combat":{"hostile_outcomes":[outcome("z","zombie","player_kill")]}}),
     );
-    assert_eq!(
-        outcomes.observe(&killed, 1000).unwrap().kind,
-        "hostile_defeated"
-    );
+    // 撃破の材料は旧発話フィルタで失われず、爆散ですでに更新済みの名前を再登録しない。
+    assert!(outcomes.observe(&killed, 1000).is_none());
+    assert_eq!(outcomes.take_defeat_changes(), ["プレイヤーがゾンビを倒した"]);
     empty(outcomes.take_name_updates());
     let end = frame(
         2000,
@@ -201,6 +200,7 @@ fn names_survive_combat_filtering_without_changing_speech_and_do_not_wait_for_af
     assert!(outcomes.observe(&end, 2000).is_none());
     assert_eq!(outcomes.take_name_updates().confirmed_types, ["witch"]);
     assert!(outcomes.aftermath(&end, 2000).is_none());
+    assert_eq!(outcomes.take_defeat_changes(), ["ウィッチが倒れた"]);
     empty(outcomes.take_name_updates());
 }
 #[test]
@@ -250,7 +250,9 @@ fn pending_snapshot_is_not_a_queue_and_long_session_cannot_replay_evicted_combat
         "hostile_defeated",
         json!({"combat":{"hostile_outcomes":[outcome("id0","zombie","player_kill")]}}),
     );
-    assert!(o.observe(&replay, 5000).is_some()); // existing 4096-entry combat behavior is untouched
+    assert!(o.observe(&replay, 5000).is_none());
+    // 既存の戦闘結果の台帳は4096件。名前の寿命は別で、古い再送では更新しない。
+    assert_eq!(o.take_defeat_changes(), ["プレイヤーがゾンビを倒した"]);
     empty(o.take_name_updates());
     o.observe(
         &frame(

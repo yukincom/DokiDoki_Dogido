@@ -286,7 +286,10 @@ impl Dialogue {
         }
     }
     pub fn workshop_snapshot(&self, sid: &str, sequence: u64) -> Option<Value> {
-        let d = self.data.lock().unwrap();
+        Self::workshop_snapshot_locked(&self.data.lock().unwrap(), sid, sequence)
+    }
+
+    pub(super) fn workshop_snapshot_locked(d: &Data, sid: &str, sequence: u64) -> Option<Value> {
         let s = d.sessions.get(sid)?;
         let mode = serde_json::to_value(s.mode).unwrap();
         // HUDのdangerは句の中断表示。環境だけのalert/panicを持ち込まない。
@@ -311,6 +314,10 @@ impl Dialogue {
             } else {
                 "danger".into()
             };
+        }
+        if let Some(w) = s.haiku.workshop.as_ref().filter(|w| w.open) {
+            hud["workshop_version"] = w.version.into();
+            hud["workshop_boundary"] = w.input_boundary.into();
         }
         hud["revision"] = d.revision.into();
         Some(hud)

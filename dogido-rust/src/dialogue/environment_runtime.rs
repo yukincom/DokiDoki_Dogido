@@ -187,6 +187,49 @@ fn focus(
     }
 }
 
+/// 川柳の再開には、同じ戦闘で保留した事実と画面に戻す句を一度の speak/silent 判断へ渡す。
+pub(super) fn prepare_workshop_resume(s: &Session, speech: &mut Speech) {
+    let w = s.haiku.workshop.as_ref().expect("resuming workshop");
+    let lines = w.pending.as_ref().map_or(&w.current_lines, |p| &p.lines);
+    let mut context = super::body_runtime::context(s).unwrap_or_default();
+    context.changes.extend(w.recovery.changes.iter().cloned());
+    let at = s.latest.as_ref().expect("fresh resume observation").observed_at.to_rfc3339();
+    let revision = context.revision;
+    let change = |kind: &str, now| crate::conversation_observation::Change {
+        kind: kind.into(), before: serde_json::Value::Null, now,
+        observed_at: at.clone(), revision,
+    };
+    use crate::workshop_combat::Reason;
+    let outcome = match w.recovery.reason {
+        Some(Reason::Victory | Reason::Explosion | Reason::Defeated)
+            if w.recovery.changes.iter().any(|c| c.kind == crate::conversation_observation::PLAYER_HOSTILE_DEFEATED) => None,
+        Some(Reason::Victory) => Some("敵の撃破が確認された"),
+        Some(Reason::Detonated) => Some("クリーパーが爆発した"),
+        Some(Reason::Explosion) => Some("敵が爆発で倒れた"),
+        Some(Reason::Defeated) => Some("敵が倒れた"),
+        _ => None,
+    };
+    if !w.recovery.changes.iter().any(|c| c.kind == crate::conversation_observation::PLAYER_HOSTILES_CLEARED || c.kind == "combat_ended") {
+        // 敵の不在を実測していない場合は、解除済みの警戒だけを伝える。
+        context.changes.push(change("combat_ended", json!({"scope":"プレイヤーの周囲","fact":"戦闘後の警戒が解けた"})));
+    }
+    if let Some(fact) = outcome {
+        context.changes.push(change("combat_result", json!({"scope":"プレイヤーの周囲","fact":fact})));
+    }
+    context.changes.push(change("workshop_resume", json!({
+        "fact":"警戒が解け、中断していた同じ川柳の相談を再開する",
+        "verse":crate::workshop_edit::surface(lines), "version":w.version,
+        "pending":w.pending.is_some()
+    })));
+    speech.leaf = Some(crate::combat::model::LeafRequest {
+        kind: crate::environment::reaction::KIND.into(),
+        temperature: 0.65,
+        details: json!({"reaction_context":{"topic":"workshop_resume",
+            "observations":{}, "properties":{}, "world_context":context,
+            "recent":{"conversation":s.model_history()}}}),
+    });
+}
+
 /// 環境判断の全観測・変化・履歴を一箇所で組み立て、生成直前にも更新する。
 /// 静止画像は同じ入力へ添える。周期通知の比較差分とrevisionは保持し、未提示の差分の消費を防ぐ。
 pub(super) fn refresh_dialogue_context(s: &Session, actions: &mut [Speech]) -> bool {
@@ -200,6 +243,10 @@ pub(super) fn refresh_dialogue_context(s: &Session, actions: &mut [Speech]) -> b
             }
         }
         if !crate::reaction_leaf::is_model_reaction(action) {
+            continue;
+        }
+        // 再開材料は対象の句・版に固定済み。別の周期の差分や画像へ付け替えない。
+        if action.kind == "workshop_resume" {
             continue;
         }
         super::visual_runtime::attach_latest(s, action);

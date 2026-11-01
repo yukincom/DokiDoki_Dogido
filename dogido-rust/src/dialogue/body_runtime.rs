@@ -58,7 +58,14 @@ pub(super) fn context_for(s: &Session, event: &GameEvent) -> Context {
     let c = if origin.available {
         s.conversation_observation.context().unwrap_or_default()
     } else {
-        Context::default()
+        let recorded = s.conversation_observation.context().unwrap_or_default();
+        Context {
+            revision: recorded.revision,
+            changes: recorded.changes.into_iter().filter(|c| matches!(c.kind.as_str(),
+                crate::conversation_observation::PLAYER_HOSTILE_DEFEATED |
+                crate::conversation_observation::PLAYER_HOSTILES_CLEARED)).collect(),
+            ..Context::default()
+        }
     };
     let snapshot = s.chat_observation.snapshot_body(event, &super::chat_context::CatalogLabels);
     let mut c = with_context(c, event)

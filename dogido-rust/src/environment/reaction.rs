@@ -269,7 +269,7 @@ impl Prepared {
         ensure!(
             matches!(
                 context.get("topic").and_then(Value::as_str),
-                Some("surroundings" | "thunder" | "smell" | "place" | "reassurance" | "danger")
+                Some("surroundings" | "thunder" | "smell" | "place" | "reassurance" | "danger" | "workshop_resume")
             ),
             "unknown reaction topic"
         );

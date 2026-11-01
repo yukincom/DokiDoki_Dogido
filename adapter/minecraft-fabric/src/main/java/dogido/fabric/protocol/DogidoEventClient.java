@@ -6,7 +6,6 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import dogido.fabric.DogidoBuildInfo;
 import dogido.fabric.horse_recall.HorseRecallProtocol;
-import dogido.fabric.protocol.WorkshopDisplayPayload;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -69,7 +68,6 @@ public final class DogidoEventClient {
     private java.util.UUID lastPlayerUuid;
     private boolean bodySupported;
     private volatile String lastPlayerName = "unknown";
-    private final AtomicBoolean displayRequestInFlight = new AtomicBoolean();
     private final AtomicLong worldEpoch = new AtomicLong();
     private final AtomicBoolean registrationInFlight = new AtomicBoolean();
     private volatile long nextRegistrationNanos;
@@ -245,32 +243,6 @@ public final class DogidoEventClient {
                 });
         } catch (RuntimeException error) {
             this.logger.warn("Dogido session close failed: {}", error.getMessage());
-        }
-    }
-
-    public void pollWorkshopDisplay(Consumer<WorkshopDisplayPayload.Snapshot> handler) {
-        SessionRef ref = currentSession();
-        if (ref == null || !this.displayRequestInFlight.compareAndSet(false, true)) return;
-        String requestSession = ref.sessionId();
-        try {
-            HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(this.config.serverBaseUrl
-                + "/api/v1/haiku-workshop/snapshot?session_id="
-                + java.net.URLEncoder.encode(requestSession, java.nio.charset.StandardCharsets.UTF_8)))
-                .timeout(Duration.ofSeconds(3)).GET();
-            if (this.config.hasAuthToken()) request.header("Authorization", "Bearer " + this.config.authToken);
-            this.httpClient.sendAsync(request.build(), HttpResponse.BodyHandlers.ofString())
-                .whenComplete((response, error) -> {
-                    WorkshopDisplayPayload.Snapshot snapshot = error == null && response.statusCode() == 200
-                        ? WorkshopDisplayPayload.parse(response.body(), requestSession) : null;
-                    MinecraftClient.getInstance().execute(() -> {
-                        // Check again on the render/game thread, after any leave/rejoin or recovery.
-                        if (isCurrent(ref)) handler.accept(snapshot);
-                    });
-                    this.displayRequestInFlight.set(false);
-                });
-        } catch (RuntimeException error) {
-            this.displayRequestInFlight.set(false);
-            handler.accept(null);
         }
     }
 

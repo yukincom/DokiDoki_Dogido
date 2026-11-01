@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -37,7 +38,8 @@ time.sleep(float((root/'delay').read_text()))
 ''')
         player.chmod(0o700)
         (folder / "delay").write_text(".06")
-        with running(ROOT / "target/debug/dogido-rust", folder, dep, player=player, extra_args=classifier_args,
+        binary = Path(os.environ.get("DOGIDO_RUST_BINARY", ROOT / "target/debug/dogido-rust"))
+        with running(binary, folder, dep, player=player, extra_args=classifier_args,
                      combat_settings={"aftermath_time_ms": 0}) as (base, process, log):
             seq = 0
             def send(sid, *, name="status_snapshot", mobs=(), audio=(), combat=None, player_state=None, world=None):
@@ -110,19 +112,15 @@ time.sleep(float((root/'delay').read_text()))
                 sid = register(base, preview=False, body=True)
                 send_wire(sid, "inner")
                 assert not any(r.get("combat_actions") for r in rows(sid))
-                # このケースは本人の交戦後の安堵と、新たな導火による割り込みを検査する。
+                # 模擬Fabricで交戦終了後に導火。固定の安堵を挟まず、緊急警告は単独で配送する。
                 send(sid, mobs=[mob(distance=6)], combat={"player_engaged":True})
                 wait_for(lambda: done(sid))
-                (folder / "delay").write_text("5")
                 send_wire(sid, "ended")
-                old = wait_for(lambda: next((r for r in rows(sid) if r["playback_status"] == "started"
-                    and any(a["kind"] == "aftermath" for a in r.get("combat_actions", []))), None))
-                (folder / "delay").write_text(".06")
                 send(sid, name="threat_approaching", mobs=[mob("creeper", "new-creeper", 3, fuse_active=True)],
                      combat={"combat_active_hint": True})
-                wait_for(lambda: row(base, old["turn_id"], {"cancelled"}))
                 wait_for(lambda: done(sid, kind="creeper_fuse"))
-                passed.append("new_creeper_cancels_playing_aftermath_and_warns")
+                assert not any(a["kind"] == "aftermath" for r in rows(sid) for a in r.get("combat_actions", []))
+                passed.append("new_creeper_after_quiet_combat_end_still_warns")
                 close(sid)
                 control["leaf"] = previous_leaf
 
@@ -218,19 +216,25 @@ time.sleep(float((root/'delay').read_text()))
             wait_for(lambda:done(sid))
             before=llm_calls()
             outcome={"entity_id":"z","type":"zombie","outcome":"player_kill","evidence":"server_death_event"}
-            send(sid,name="hostile_defeated",combat={"hostile_outcomes":[outcome]})
-            answer=wait_for(lambda:done(sid,kind="hostile_defeated"))
-            assert "倒した" in answer["text"],answer
-            send(sid,name="hostile_defeated",combat={"hostile_outcomes":[outcome]})
-            assert len([r for r in rows(sid) if any(a["kind"]=="hostile_defeated" for a in r.get("combat_actions",[]))])==1
+            # 撃破の重複通知と終了時の再掲。実HTTPで固定発話ゼロ、次の会話入力で撃破・不在が各1件。
+            for _ in range(2):
+                send(sid,name="hostile_defeated",combat={"hostile_outcomes":[outcome]})
+            send(sid,name="combat_ended",combat={"hostile_outcomes":[outcome],"hostiles_within_scan_ground":0})
+            send(sid)
             assert llm_calls()==before
-            control["leaf"]="ゾンビを倒したで！ようやったな！"
-            send(sid,name="combat_ended",combat={"hostile_outcomes":[],"hostiles_within_scan_ground":0})
-            answer=wait_for(lambda:done(sid,kind="aftermath"))
-            assert "倒した" not in answer["text"],answer
-            assert llm_calls()>before
-            assert answer.get("llm_reports"),answer
-            passed.append("explicit_kill_once_and_aftermath_leaf_cannot_invent_another_kill")
+            assert not any(a["kind"] in {"aftermath","hostile_defeated"}
+                           for r in rows(sid) for a in r.get("combat_actions",[])), rows(sid)
+            say(sid, "さっきはどうだった？")
+            wait_for(lambda:done(sid, "さっきはどうだった？"))
+            chat = [r["body"] for r in seen if r["path"] == "/v1/chat/completions"][-1]
+            prompt = "\n".join(m["content"] for m in chat["messages"])
+            current, _ = json.JSONDecoder().raw_decode(prompt.split("【現在の環境観測と変化（会話履歴とは別）】\n", 1)[1])
+            changes = current["changes"]
+            defeated = [c["now"] for c in changes if c["kind"] == "player_hostile_defeated"]
+            assert len(defeated) == 1 and "ゾンビ" in json.dumps(defeated, ensure_ascii=False), changes
+            assert sum(c["kind"] == "player_hostiles_cleared" for c in changes) == 1, changes
+            assert not any(c["kind"] == "workshop_resume" for c in changes)
+            passed.append("ordinary_defeat_and_clear_are_once_only_changes_for_next_chat")
             close(sid)
 
             sid=register(base,preview=False,body=True)

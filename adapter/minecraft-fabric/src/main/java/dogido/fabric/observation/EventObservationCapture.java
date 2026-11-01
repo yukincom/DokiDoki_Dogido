@@ -210,13 +210,16 @@ public final class EventObservationCapture {
         ClientPlayerEntity player,
         ClientWorld world,
         WorldObservationFrame worldFrame,
-        List<AmbientMobObservation> ambientMobs
+        List<ThreatObservation> threats, List<AudioThreatObservation> sounds,
+        List<AmbientMobObservation> ambientMobs, boolean lastOpponentDefeated
     ) {
         EventJsonBuilder root = baseEnvelope("combat_ended", "system", "normal", "high", worldFrame);
-        root.visualThreats(List.of());
-        root.auditoryThreats(List.of());
+        root.visualThreats(threats);
+        root.auditoryThreats(sounds);
         root.passiveMobs(ambientMobs);
-        root.combat(this.combatObserver.buildCombat(player, world, worldFrame, List.of(), List.of()));
+        JsonObject combat = this.combatObserver.buildCombat(player, world, worldFrame, threats, sounds);
+        if (lastOpponentDefeated) combat.addProperty("last_opponent_defeated", true);
+        root.combat(combat);
         root.meta(EventJsonBuilder.buildMeta(null));
         return root.finish();
     }

@@ -86,11 +86,8 @@ def main():
         # 5秒以上ずれた観測から、声の原因を推定しない。
         scream(base, sid)
         send(sid, observed_at=(datetime.now(timezone.utc)-timedelta(seconds=6)).isoformat(), visual_threats=[MOB])
-        previous = {r["turn_id"] for r in rows(sid)}
         end(send, rows, sid)
-        wait_for(lambda: any(r["turn_id"] not in previous and r["playback_status"] == "completed"
-                            and any(a["kind"] == "aftermath" for a in r.get("combat_actions", []))
-                            for r in rows(sid)))
+        assert not actions(rows, sid, "aftermath")
         send(sid)
         turn = submit(base, sid, "きょうの音数を教えて。その後")
         wait_for(lambda: row(base, turn, {"completed"}))

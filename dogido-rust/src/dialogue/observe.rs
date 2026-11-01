@@ -141,6 +141,7 @@ impl Dialogue {
             // 同じ受信・同じロック内の判断では、受理済み身体の時点を一度固定する。
             // environment_latestは部分通知を補った別入力なので、下で独立に投影する。
             let senses = super::body_runtime::event(s, &event);
+            let mut projected = false;
             if recent {
                 s.environment_latest = Some(environment_runtime::context(s, &event, complete));
                 let (boss, ominous) = s.combat.environmental_presence(now, &self.config.combat);
@@ -161,12 +162,7 @@ impl Dialogue {
                         Ok(context) => {
                             let context = super::body_runtime::with_context(context, &current);
                             s.conversation_observation.observe(context);
-                            s.conversation_observation.observe_player_combat(&event);
-                            s.conversation_observation.sample_notice(
-                                now,
-                                self.config.combat.ms("surroundings_notice_interval_ms"),
-                                event.event.name == EventName::StatusSnapshot,
-                            );
+                            projected = true;
                         }
                         Err(error) => {
                             tracing::warn!(event="conversation_observation_rejected",session_id,%error)
@@ -207,13 +203,24 @@ impl Dialogue {
                     &self.config.combat,
                     &self.config.warnings,
                 );
+                let defeats = s.combat.take_defeat_changes();
+                if projected {
+                    let reserved = s.haiku.workshop.as_mut().filter(|w| w.combat_paused())
+                        .map(|w| &mut w.recovery.changes);
+                    s.conversation_observation.observe_player_combat(&event, defeats, reserved);
+                    s.conversation_observation.sample_notice(
+                        now,
+                        self.config.combat.ms("surroundings_notice_interval_ms"),
+                        event.event.name == EventName::StatusSnapshot,
+                    );
+                }
                 let names = s.combat.take_name_updates();
                 s.chat_observation.observe_body(
                     &senses,
                     &names,
                     &chat_context::CatalogLabels,
                 );
-                let conversation_threat = !decision.presence_only
+                let conversation_threat = !event.ended_by_last_kill() && !decision.presence_only
                     && warnings::interruption_reason(&event).is_some()
                     && !workshop_focus::owns_input(s);
                 if event.event.name == EventName::PlayerDied

@@ -110,6 +110,9 @@ impl Engine {
     pub fn take_notes(&mut self) -> Vec<String> {
         self.outcomes.take_notes()
     }
+    pub fn take_defeat_changes(&mut self) -> Vec<String> {
+        self.outcomes.take_defeat_changes()
+    }
     /// 今回の明示戦闘結果から得た対象名の更新を取り出す。次のobserve前に一度だけ消費する。
     pub fn take_name_updates(&mut self) -> crate::chat_observation::NameOutcomeUpdate {
         self.outcomes.take_name_updates()
@@ -259,13 +262,18 @@ impl Engine {
                 | EventName::CreeperDetonated
                 | EventName::CombatEnded
         );
+        let quiet_result = matches!(event.event.name, EventName::HostileDefeated | EventName::CombatEnded)
+            && immediate.is_none()
+            && !self.outcomes.has_boss_context()
+            && !recent_damage
+            && (routine || !contact);
         let mut d = Decision {
             mode: self.mode,
             actions: vec![],
             stop_audio: false,
             chat_allowed: (routine || !matches!(self.mode, Mode::Panic | Mode::SuppressedPanic))
                 && !self.partial_danger
-                && (!explicit || presence_ended)
+                && (!explicit || presence_ended || quiet_result)
                 && (complete
                     || self
                         .latest_full_at
@@ -287,6 +295,7 @@ impl Engine {
             if let Some(speech) = self.outcomes.aftermath(&e, now) {
                 d.actions.push(speech);
                 d.stop_audio = clear;
+                d.chat_allowed &= !quiet_result;
             }
         } else if self.mode != Mode::Aftermath && (!explicit || end && !presence_ended) {
             for speech in self.select(
