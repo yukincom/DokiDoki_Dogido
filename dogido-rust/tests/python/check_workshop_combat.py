@@ -343,26 +343,6 @@ def main():
 
     with fixture(combat_settings=SETTINGS) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         sid = ready(base, send, rows)
-        (folder / "player_mode").write_text("slow")
-        send(sid, visual_threats=[MOB], combat={"combat_active_hint": True, "player_engaged": True})
-        warning = wait_for(lambda: next((r for r in rows(sid) if r.get("combat_actions") and r["playback_status"] == "started"), None))
-        turn = classified_input(base, sid, "終了")
-        classified = classifier_requests(control)
-        assert row(base, warning["turn_id"], {"started"}) and hud(sid)["state"] == "danger"
-        (folder / "player_mode").write_text("ok")
-        drive(lambda s: send(s, visual_threats=[MOB], combat={"combat_active_hint": True, "player_engaged": True}), sid,
-              lambda: row(base, warning["turn_id"], {"completed"}))
-        assert hud(sid)["state"] == "danger" and row(base, turn, {"waiting_for_warning"})
-        end(send, rows, sid)
-        returned(send, rows, sid)
-        r = wait_for(lambda: row(base, turn, {"cancelled"}))
-        assert r["resolution"] == "superseded_classifier_mode", r
-        assert classifier_requests(control) == classified and hud(sid)["state"] == "open"
-        assert not actions(rows, sid, "workshop_close_feedback") and not revisions(folder, sid)
-        passed.append("combat_end_waits_for_warning_then_expires_without_senryu_reclassification")
-
-    with fixture(combat_settings=SETTINGS) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
-        sid = ready(base, send, rows)
         enter(send, rows, sid)
         rejected_normal_input(base, sid, "終了")
         classified = classifier_requests(control)

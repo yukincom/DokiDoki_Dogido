@@ -786,6 +786,8 @@ mod tests {
         dialogue.shutdown().await;
     }
 
+    // 交戦中、発話前に3体が2体へ減ったら、待機中の3体の警告を取り消し、最新の2体だけを伝える。
+    // 模擬観測と表示確認で、3体の行は表示に出ず、2体の台詞だけが届くことを検査する。実画面・実音声は対象外。
     #[tokio::test]
     async fn pending_group_uses_latest_composition_after_queue_saturation() {
         let dialogue = Dialogue::new(DialogueConfig {
@@ -794,10 +796,12 @@ mod tests {
         })
         .unwrap();
         dialogue.register("s", "試験", false);
+        dialogue.enable_text_delivery("s", Some(false));
         let event = |sequence, types: &[&str]| {
             GameEvent::parse(json!({"schema_version":"2026-05-24","adapter":"fixture",
                 "observed_at":chrono::Utc::now(),"sequence":sequence,
                 "event":{"name":"status_snapshot","source_kind":"system","priority_hint":"background","certainty":"high"},
+                "combat":{"player_engaged":true},
                 "visual_threats":types.iter().enumerate().map(|(i,t)| json!({"type":t,"entity_id":format!("{t}{i}"),
                     "distance":8.2,"direction":{"horizontal":"front"}})).collect::<Vec<_>>()
             })).unwrap()
@@ -812,7 +816,9 @@ mod tests {
                     &dialogue.config.warnings,
                 )
                 .unwrap();
+            assert_eq!(plan.text, "ゾンビ3体おるで。");
             Dialogue::queue_actions(&mut d, "s", &[warnings::from_warning(plan)], None);
+            assert_eq!(d.rows.back().unwrap()["playback_status"], "queued");
             // 発声前の待機中は、最新の個体数・構成へ更新する。
         }
         for _ in 0..16 {
@@ -830,6 +836,7 @@ mod tests {
         partial["event"]["name"] = "hostile_audio_detected".into();
         partial["event"]["source_kind"] = "auditory".into();
         partial["auditory_threats"] = json!([{"label":"zombie"}]);
+        partial["combat"] = json!({"player_engaged":true});
         dialogue.observe("s", GameEvent::parse(partial).unwrap(), None);
         {
             let d = dialogue.data.lock().unwrap();
@@ -848,11 +855,28 @@ mod tests {
             let _ = job.await;
         }
         dialogue.observe("s", event(5, &["zombie"; 2]), None);
-        let view = dialogue.snapshot(None);
+        let view = tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            loop {
+                let view = dialogue.snapshot(Some("s"));
+                if view["utterances"][1]["display_id"].is_string() {
+                    break view;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("最新の群れ警告が表示用に配送される");
         let rows = view["utterances"].as_array().unwrap();
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0]["playback_status"], "cancelled");
+        assert_eq!(rows[0]["warning"]["text"], "ゾンビ3体おるで。");
+        assert!(rows[0]["display_id"].is_null());
         assert_eq!(rows[1]["text"], "ひいっ！ ゾンビ2体おるで。");
+        let display = rows[1]["display_id"].as_str().unwrap().to_owned();
+        assert_eq!(
+            dialogue.acknowledge_display("s", std::slice::from_ref(&display))["displayed"],
+            json!([display])
+        );
         dialogue.shutdown().await;
     }
 
