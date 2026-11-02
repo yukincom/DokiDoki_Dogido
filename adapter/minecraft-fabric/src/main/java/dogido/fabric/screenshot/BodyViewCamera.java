@@ -19,6 +19,7 @@ public final class BodyViewCamera extends Camera {
         eye=new Vec3d(MathHelper.lerp(bodyDelta,body.lastRenderX,body.getX()),
             MathHelper.lerp(bodyDelta,body.lastRenderY,body.getY())+body.getStandingEyeHeight(),
             MathHelper.lerp(bodyDelta,body.lastRenderZ,body.getZ()));
+        // 撮影時の身体の水平向き。時系列フレームの方位は、この値を使ってプレイヤーや首の向きと区別する。
         viewYaw=MathHelper.lerpAngleDegrees(bodyDelta,body.lastBodyYaw,body.bodyYaw);
         viewPitch=body.getLerpedPitch(bodyDelta);
     }

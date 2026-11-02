@@ -1,5 +1,5 @@
 //! 通常会話へ一度だけ添えるPNGと撮影情報を検査する。
-//! 入力はbase64・画像hash・寸法・撮影情報、出力は検証結果と本文を含まない説明だけ。
+//! PNG・ハッシュ・寸法は受信照合に使う。時系列フレーム仕様ではこの診断情報をモデル本文に含めない。
 //! 撮影の受付世代・鮮度・保持期限は呼出側が所有し、この型を履歴や保存JSONへ変換しない。
 use anyhow::{Result, ensure};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
@@ -99,7 +99,7 @@ impl Attachment {
         Ok(())
     }
 
-    /// 検証済みの撮影情報だけを今回のuser本文へ添える。人格指示・現在性の推定は加えない。
+    /// 現行の単一画像用。時系列フレームへの切替時にこのJSONを外し、受信検証は維持する。
     pub fn metadata_text(&self) -> String {
         format!(
             "image_observation: {}",

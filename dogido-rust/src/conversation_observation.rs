@@ -57,7 +57,7 @@ impl Context {
                 change.before = body_facts::position(&change.before);
                 change.now = body_facts::position(&change.now);
             } else if change.kind == "body_view" {
-                // 比較元の撮影識別は内部だけで持つ。位置・明暗の本文はAttachmentが一度だけ添える。
+                // 撮影識別は内部用。フレーム化でもこの通知にマスの説明や撮影台帳を重ねない。
                 change.before = Value::Null;
                 change.now = json!({"changed":true});
             } else if change.kind == "body_player_visibility" {

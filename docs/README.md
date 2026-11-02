@@ -14,7 +14,8 @@ DokiDoki Dogido の設計・仕様ドキュメントです。
 | [川柳WSのモデル出力の受信と適用](rust-workshop-validation.md) | BERT・LLMの解釈、原文記録、対象・版・取消・保存の役割と確認状況 |
 | [旧実装・後方互換経路の削除](2026-10-24-legacy-path-removal.md) | 削除範囲、現行契約、検証結果 |
 | [../dev_tools/README.md](../dev_tools/README.md) | 表示プレビュー・音声診断・対話評価・独立試作 |
-| [通常会話のドギド視点画像](2026-10-21-chat-image.md) | 一枚撮影・192px・同時生成・一時画像の保持 |
+| [視覚入力の時系列フレーム仕様](2026-11-02-vision-frames.md) | 比較元と今回の画像、身体の向き、PLAYER枠、旧処理の削除・置換一覧（決定仕様） |
+| [通常会話のドギド視点画像](2026-10-21-chat-image.md) | 従来の撮影・192px・一時画像の保持 |
 | [Minecraftのテキスト会話](2026-10-09-minecraft-text-dialogue.md) | `/dogido`、音声の切替、表示確認の仕様と確認状況 |
 | [2026-10-11の全体検査](2026-10-11-checkpoint-verification.md) | コミット整理前の成功・失敗内訳と実機確認報告 |
 | [実機チェック](../dogido-rust/manual-dialogue-check.md) | 起動条件、最初の一巡、個別の確認、結果の記録 |

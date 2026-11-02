@@ -312,7 +312,7 @@ fn add_tools(
 }
 
 /// 既存の文字列メッセージは変更せず、送信用JSONの最後のuserだけを画像付きcontentへ変える。
-/// 先行する会話・system・assistantはそのままにし、画像の意味判断はこの層で行わない。
+/// 現行は一枚。時系列化ではこの同じ要求に比較元→今回の順で添え、別の生成は呼ばない。
 fn request_with_image(
     input: &GenerationRequest,
     image: Option<&crate::chat_image::Attachment>,

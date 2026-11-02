@@ -1,4 +1,4 @@
-//! 一枚の撮影に結び付く8×6比較結果。コード用の参照情報とモデル向けの説明を分ける。
+//! Fabricが選んだ比較元と変化の有無を照合する。マスは内部計測であり、画像には描かれない。
 use anyhow::{Result, ensure};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, VecDeque};
@@ -60,7 +60,7 @@ impl SceneComparison {
         }
         Ok(())
     }
-    /// 既存Attachmentから一度だけ使う。差分の強度・割合や内部の参照IDは説明へ混ぜない。
+    /// 従来の単一画像用の差分説明。時系列フレームではマスを文章化せず、実際の前後画像を見せる。
     pub fn description(&self) -> String {
         match self.status {
             ComparisonStatus::NotCompared => return "画像は取得したが、比較できていない".into(),

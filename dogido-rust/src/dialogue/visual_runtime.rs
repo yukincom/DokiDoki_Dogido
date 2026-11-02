@@ -1,5 +1,5 @@
 //! 停止時・明示注視後の身体画像を既存game-eventsで受け取る。明示撮影は移動と並行し、撮影後の一枚を返答まで保持する。
-//! 撮影・比較はFabric、発話機会・取消・身体世代の照合はRust。画像本文は履歴や保存JSONに入れない。
+//! Fabricが比較元を選び、Rustが画像の世代・寿命を管理する。現行は最新の一枚。時系列化では比較元に一致する受理済み画像だけを対にする。
 use super::{Dialogue, Session, bridge, chat_context};
 use crate::{body::contracts::Context, chat_image::Attachment, events::{AdapterCommandResult, AdapterCommandResultStatus as Status}};
 use chrono::{DateTime, Utc};

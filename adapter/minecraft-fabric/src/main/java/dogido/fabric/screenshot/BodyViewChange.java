@@ -11,7 +11,7 @@ import java.util.Arrays;
 import java.util.List;
 
 /** 同じ身体世代・地点・画面比率の4枚前と、枠なし原画像の8×6マスを比較する。
- * 未比較も無変化も画像を保持する。意味・対象名・新規発話の可否は計測しない。
+ * マスはコードが変化の有無を測るために使う。時系列入力の前画像は、ここで選んだreferenceに対応する。
  */
 final class BodyViewChange {
     enum Status { NOT_COMPARED, UNCHANGED, CHANGED }

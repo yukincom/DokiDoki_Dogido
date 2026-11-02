@@ -38,7 +38,7 @@ session内に、同時に一つだけforeground routeを置く。
 - 通常会話の本文履歴は約20ターンを保持し、古い10ターンずつを冒険のあらすじへ圧縮する（[旅の記録](2026-10-26-journey-records.md)）。
 - 雑談後の友好・中立Mobコメントは `DOGIDO_CONVERSATION_AMBIENT_MUTE_MS`（既定30秒）で再開する。会話保持の5分期限は維持し、入力待ち・危険・同種Mobのクールダウンは別に検査する。
 - 詩・Minecraftの正本DB検索は既存workerで行い、通常会話は `player_chat` の一回生成へ渡す。
-- モブの有無・数・方向の質問は、[11月2日の決定仕様](2026-11-02-senryu-materials-mob-chat-edit-input.md)では通常会話へ一度だけ渡す（実装待ち）。危険警告・世界操作・所持品の定型照会・明示知識DB・workshop入力は各担当に残す。
+- モブの有無・数・方向の質問は、[11月2日の決定仕様](2026-11-02-senryu-materials-mob-chat-edit-input.md)では通常会話へ一度だけ渡す。危険警告・世界操作・所持品の定型照会・明示知識DB・workshop入力は各担当に残す。
 - 入力受付では未完了jobの上限を検査し、満杯なら `input_queue_full` を返す。警告で待つ通常会話・知識質問は別に最大9件（再開予約と中断に備えた進行中の一件を含む）で、満杯なら `reply_queue_full`。現行受付は [入力API](adapter-api.md#21-post-apiv1player-input) を参照。
 
 ### 撤去済みの履歴: 学習中の突然の別話題
