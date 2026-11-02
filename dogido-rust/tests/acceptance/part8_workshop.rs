@@ -181,7 +181,11 @@ fn consultation(
     let frame = json!({"workshop":view,"text":text,"phase":"decide","turn_steps":[],"observation":null,
         "allowed_actions":allowed});
     let details = workshop_projection::details_for(&frame).unwrap();
-    let messages = prompt::prepare(&json!({"details":details}), None).unwrap();
+    let messages = if matches!(classified, Some(ClassifiedWorkshop::Change(_))) {
+        prompt::prepare_player_edit(&details).unwrap()
+    } else {
+        prompt::prepare(&json!({"details":details}), None).unwrap()
+    };
     (details, messages)
 }
 fn labelled_pair(value: &Value, label: &str, text: &str) -> bool {

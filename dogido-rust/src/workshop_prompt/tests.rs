@@ -375,3 +375,69 @@ fn automatic_combat_resume_does_not_publish_confirmation_actions() {
     }
     assert!(ASSETS["extras"].get("resume").is_none());
 }
+
+// 見込み: 具体変更では相談全文と句・案が残れば、直接指定と文脈依存の選択をモデルへ渡せる。
+// 合格: 三場面の本文・順序・対象・案を完全保持し出典と不要な説明を除く。モデルの選択と保存は対象外。
+#[test]
+fn classified_edit_preserves_context_for_direct_single_and_ambiguous_requests() {
+    for (request, dialogue, candidate) in [
+        (
+            "暗闇の絵を暗闇のに",
+            "プレイヤー: 洞窟、暗いね\nドギド: 明かりが頼りやな。".to_owned(),
+            Value::Null,
+        ),
+        (
+            "それにして",
+            "プレイヤー: 上五を暗闇のにしたらどう？\nドギド: 余韻が残るな。".to_owned(),
+            json!({"proposal":{"line_index":0,"replacement_text":"暗闇の"}}),
+        ),
+        (
+            "それにして",
+            format!(
+                "プレイヤー: 洞窟、暗いね\nドギド: {}\nプレイヤー: 暗闇の、か、暗い道、はどう？\nドギド: 二つあるな。",
+                "長い相談も保持する。".repeat(80)
+            ),
+            Value::Null,
+        ),
+    ] {
+        let context = json!({
+            "current_verse":[{"line_name":"上の句","text":"暗闇の絵"},{"line_name":"中の句","text":"松明ひとつ"},{"line_name":"下の句","text":"そばにおる"}],
+            "pending_verse":[{"line_name":"上の句","text":"暗闇の"},{"line_name":"中の句","text":"松明ひとつ"},{"line_name":"下の句","text":"そばにおる"}],
+            "discussion_target":{"line_index":0,"line_id":"line_1","line_text":"暗闇の絵"},
+            "conversation_candidate":candidate,"current_player_idea":null,"recent_dialogue":dialogue,
+            "source_atoms":[{"text":"除く元材料"}],"saved_line_sources":[{"provenance":"除く出典"}],"interpretation":"除く発句解釈"
+        });
+        let details = json!({"workshop_context":context,"player_text":request,"original_player_text":format!("原文{request}")});
+        let before = details.clone();
+        let prepared = prepare_player_edit(&details).unwrap();
+        let messages = prepared["messages"].as_array().unwrap();
+        assert_eq!(messages.len(), 2);
+        let input: Value = serde_json::from_str(messages[1]["content"].as_str().unwrap()).unwrap();
+        for key in [
+            "current_verse",
+            "pending_verse",
+            "discussion_target",
+            "conversation_candidate",
+            "current_player_idea",
+            "recent_dialogue",
+        ] {
+            assert_eq!(input[key], context[key], "{key}");
+        }
+        assert_eq!(input["player_text"], request);
+        assert_eq!(
+            input["original_player_text"],
+            details["original_player_text"]
+        );
+        assert_eq!(input.as_object().unwrap().len(), 8);
+        let system = messages[0]["content"].as_str().unwrap();
+        for unused in [
+            "inspect_verse",
+            "accept_pending",
+            "propose_revision",
+            "clear_lessons",
+        ] {
+            assert!(!system.contains(unused));
+        }
+        assert_eq!(details, before);
+    }
+}

@@ -422,27 +422,6 @@ impl Dialogue {
                     }
                     let (mut prepared, details) =
                         prepare_consultation(helper, &mut editing, &mut frame).await?;
-                    if let Some(assets) =
-                        input.get("text_workshop_prompt").filter(|v| v.is_object())
-                    {
-                        let projection = json!({"details":details});
-                        prepared =
-                            prompt::prepare_with_assets(&projection, frame.get("retry"), assets)?;
-                    }
-                    prepared["messages"]
-                        .as_array_mut()
-                        .context("workshop messages")?
-                        .push(json!({
-                        "role":"user", "content":CONVERSATION_PROTOCOL}));
-                    prepared["messages"].as_array_mut().unwrap().push(json!({"role":"user",
-                        "content":"差し替え案への感想を相談するだけならrespond/askとline_proposalで返してな。指定語への変更依頼は、今回toolsにあるときだけstage_player_editのfunction callで渡す。確認のあと『うん、変えて』のように案を省略した返事は、stage_conversation_candidateが今回のaction一覧にある場合だけ、現在のconversation_candidateを選んでな。置換語は保持された一案から使う。evidenceを添えるなら今回の返事をどう解釈したか記録してな。"}));
-                    if let Some(classified) = classified {
-                        prepared["messages"]
-                            .as_array_mut()
-                            .unwrap()
-                            .push(json!({"role":"user",
-                            "content":classified.instruction(lines)}));
-                    }
                     // 一turnのnative toolは一件まで。結果後の返答では追加呼出しを止める。
                     let allow_tool_call = tool_messages.is_empty();
                     let tool_definitions = tools::definitions_for_target(
@@ -453,36 +432,61 @@ impl Dialogue {
                         },
                         classified_line,
                     );
-                    if allow_tool_call && !tool_definitions.is_empty() {
-                        let mut instruction = String::from(
-                            "function callは今回toolsにあるもの一件だけを呼べる。toolsにない操作は選ばず、respond/explain/askの本文JSONで相談を続けてな。本文JSONのactionでtoolを代用せんといてな。",
-                        );
-                        if allowed.contains(&"inspect") {
-                            instruction
-                                .push_str("本人から尋ねられた読み方・保存材料の参照はinspect_verseや。編集の前提確認には使わへん。");
+                    if matches!(classified, Some(ClassifiedWorkshop::Change(_))) {
+                        prepared = prompt::prepare_player_edit(&details)?;
+                    } else {
+                        if let Some(assets) =
+                            input.get("text_workshop_prompt").filter(|v| v.is_object())
+                        {
+                            let projection = json!({"details":details});
+                            prepared =
+                                prompt::prepare_with_assets(&projection, frame.get("retry"), assets)?;
                         }
-                        if allowed.contains(&"stage_player_edit") {
-                            instruction.push_str("stage_player_editの対象行と元句はコードが補完する。今回の指定語か、今回選ばれた同じ対象行のconversation_candidateを反映し、replacement_textへ変更後の一行全体を返してな。部分変更でも残す言葉を含め、旧語や差分は返さへん。元の行と同じか違うかはコードが比較する。音声認識の誤りや表記の違いは解釈してええで。変更内容が分からんときは新しく作らずaskで尋ねてな。evidenceは解釈の記録で、原文との文字列一致は求めへん。");
-                        }
-                        instruction.push_str("本文JSONは会話の返答と、本文JSONで使えるaction一覧の処理に使う。tool呼出し時は本文の返事を付けず結果を待つ。コードが対象へ差分を適用し、保存結果を返すで。");
-                        let system = prepared["messages"][0]["content"].as_str().unwrap_or("");
-                        prepared["messages"][0]["content"] =
-                            format!("{system}\n{instruction}").into();
-                    } else if !allow_tool_call {
-                        let system = prepared["messages"][0]["content"].as_str().unwrap_or("");
-                        prepared["messages"][0]["content"] = format!("{system}\nこのターンのtoolは実行済みや。追加のfunction callはせず、返された実検査結果を使い、今回の本文JSONのaction一覧から会話の返答を選んでな。").into();
-                    }
-                    if input.get("text_workshop_prompt").is_some() {
-                        prepared["messages"].as_array_mut().unwrap().push(json!({"role":"user",
-                            "content":"ここはテキスト相談室。採用した変更はコードが句集へ保存する。保存や採用の成否を先回りして言わず、コードの実行結果に従ってな。"}));
-                    }
-                    if !tool_definitions.is_empty() {
-                        // 補助指示を本人の発話と取り違えないよう、今回入力を最後に置く。
                         prepared["messages"]
                             .as_array_mut()
-                            .unwrap()
-                            .push(json!({"role":"user",
-                            "content":format!("今回のプレイヤー発話: {text}")}));
+                            .context("workshop messages")?
+                            .push(json!({
+                            "role":"user", "content":CONVERSATION_PROTOCOL}));
+                        prepared["messages"].as_array_mut().unwrap().push(json!({"role":"user",
+                            "content":"差し替え案への感想を相談するだけならrespond/askとline_proposalで返してな。指定語への変更依頼は、今回toolsにあるときだけstage_player_editのfunction callで渡す。確認のあと『うん、変えて』のように案を省略した返事は、stage_conversation_candidateが今回のaction一覧にある場合だけ、現在のconversation_candidateを選んでな。置換語は保持された一案から使う。evidenceを添えるなら今回の返事をどう解釈したか記録してな。"}));
+                        if let Some(classified) = classified {
+                            prepared["messages"]
+                                .as_array_mut()
+                                .unwrap()
+                                .push(json!({"role":"user",
+                                "content":classified.instruction(lines)}));
+                        }
+                        if allow_tool_call && !tool_definitions.is_empty() {
+                            let mut instruction = String::from(
+                                "function callは今回toolsにあるもの一件だけを呼べる。toolsにない操作は選ばず、respond/explain/askの本文JSONで相談を続けてな。本文JSONのactionでtoolを代用せんといてな。",
+                            );
+                            if allowed.contains(&"inspect") {
+                                instruction
+                                    .push_str("本人から尋ねられた読み方・保存材料の参照はinspect_verseや。編集の前提確認には使わへん。");
+                            }
+                            if allowed.contains(&"stage_player_edit") {
+                                instruction.push_str("stage_player_editの対象行と元句はコードが補完する。今回の指定語か、今回選ばれた同じ対象行のconversation_candidateを反映し、replacement_textへ変更後の一行全体を返してな。部分変更でも残す言葉を含め、旧語や差分は返さへん。元の行と同じか違うかはコードが比較する。音声認識の誤りや表記の違いは解釈してええで。変更内容が分からんときは新しく作らずaskで尋ねてな。evidenceは解釈の記録で、原文との文字列一致は求めへん。");
+                            }
+                            instruction.push_str("本文JSONは会話の返答と、本文JSONで使えるaction一覧の処理に使う。tool呼出し時は本文の返事を付けず結果を待つ。コードが対象へ差分を適用し、保存結果を返すで。");
+                            let system = prepared["messages"][0]["content"].as_str().unwrap_or("");
+                            prepared["messages"][0]["content"] =
+                                format!("{system}\n{instruction}").into();
+                        } else if !allow_tool_call {
+                            let system = prepared["messages"][0]["content"].as_str().unwrap_or("");
+                            prepared["messages"][0]["content"] = format!("{system}\nこのターンのtoolは実行済みや。追加のfunction callはせず、返された実検査結果を使い、今回の本文JSONのaction一覧から会話の返答を選んでな。").into();
+                        }
+                        if input.get("text_workshop_prompt").is_some() {
+                            prepared["messages"].as_array_mut().unwrap().push(json!({"role":"user",
+                                "content":"ここはテキスト相談室。採用した変更はコードが句集へ保存する。保存や採用の成否を先回りして言わず、コードの実行結果に従ってな。"}));
+                        }
+                        if !tool_definitions.is_empty() {
+                            // 補助指示を本人の発話と取り違えないよう、今回入力を最後に置く。
+                            prepared["messages"]
+                                .as_array_mut()
+                                .unwrap()
+                                .push(json!({"role":"user",
+                                "content":format!("今回のプレイヤー発話: {text}")}));
+                        }
                     }
                     let request = GenerationRequest {
                         schema_version: 1,
