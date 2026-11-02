@@ -64,7 +64,7 @@ impl RigLlm {
         Ok(self.complete(input, &[], &[], false, None, false).await?.0)
     }
 
-    /// 検証した画像一枚を同じ会話・環境反応の要求へ添え、一回だけ送信する。
+    /// 照合済みの時系列画像を同じ会話・環境反応の要求へ添え、一回だけ送信する。
     /// 不正画像・通信失敗でも画像なしの再送はせず、画像本文を結果やログへ戻さない。
     pub async fn generate_with_image(
         &self,
@@ -311,37 +311,8 @@ fn add_tools(
     }
 }
 
-/// 既存の文字列メッセージは変更せず、送信用JSONの最後のuserだけを画像付きcontentへ変える。
-/// 現行は一枚。時系列化ではこの同じ要求に比較元→今回の順で添え、別の生成は呼ばない。
-fn request_with_image(
-    input: &GenerationRequest,
-    image: Option<&crate::chat_image::Attachment>,
-) -> Result<CompletionRequest> {
-    let mut request = to_rig_request(input);
-    if let Some(image) = image {
-        ensure!(
-            matches!(input.kind.as_str(), "player_chat" | "environment_reaction")
-                || crate::reaction_leaf::KINDS.contains(&input.kind.as_str()),
-            "chat_image_wrong_generation_kind"
-        );
-        image.validate()?;
-        let index = input
-            .messages
-            .iter()
-            .rposition(|message| message.role == Role::User)
-            .context("chat_image_user_message_missing")?;
-        let text = format!(
-            "{}\n\n{}",
-            input.messages[index].content,
-            image.metadata_text()
-        );
-        request.additional_params.as_mut().unwrap()["messages"][index]["content"] = json!([
-            {"type":"text","text":text},
-            {"type":"image_url","image_url":{"url":image.data_url()}},
-        ]);
-    }
-    Ok(request)
-}
+mod image;
+use image::request_with_image;
 
 fn to_rig_request(input: &GenerationRequest) -> CompletionRequest {
     let chat_history = input
@@ -537,6 +508,7 @@ mod tests {
         assert!(!request.record_telemetry_content);
     }
 
+    // 見込み: 画像は最後のuserだけに付く。合格: 元の会話は不変で、今回はPNG一枚と実在する枠説明だけ。確認範囲: 送信用JSON、実モデルは対象外。
     #[test]
     fn image_changes_only_last_user_and_keeps_source_messages_unchanged() {
         let input = chat_request();
@@ -551,16 +523,17 @@ mod tests {
         }
         assert_eq!(messages[3]["role"], "user");
         let content = messages[3]["content"].as_array().unwrap();
-        assert_eq!(content.len(), 2);
+        assert_eq!(content.len(), 3);
         assert_eq!(content[0]["type"], "text");
         assert_eq!(
             content[0]["text"],
-            format!("今回の質問\n\n{}", image.metadata_text())
+            "今回の質問"
         );
         assert_eq!(
-            content[1],
+            content[2],
             json!({"type":"image_url", "image_url":{"url":image.data_url()}})
         );
+        assert_eq!(content[1]["text"], "緑のPLAYER枠はプレイヤーの位置やで");
         assert_eq!(json!(input.messages), original);
         assert_eq!(parameters["stream"], false);
         assert_eq!(parameters["chat_template_kwargs"]["enable_thinking"], false);

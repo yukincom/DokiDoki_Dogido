@@ -30,6 +30,9 @@ pub fn look_player_contract() -> &'static str {
 pub fn chat_image() -> &'static str {
     TEXT["chat_image"].as_str().unwrap()
 }
+pub fn chat_image_sequence() -> &'static str {
+    TEXT["chat_image_sequence"].as_str().unwrap()
+}
 pub fn grounding() -> &'static str {
     TEXT["grounding"].as_str().unwrap()
 }

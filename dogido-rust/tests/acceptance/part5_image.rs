@@ -431,16 +431,29 @@ fn acceptance_image_invalid_comparison_preserves_only_current_png() {
     }
 }
 
-// 見込み: 本体の一画像経路を通せば、比較の説明を重ねず同じ画像を通常・環境で使える。合格: 三状態各2要求に現在PNG1枚、照合済みの比較だけ説明1回、参照は内部に保持。確認範囲: 実画像→Java→Rust→模擬HTTP。無変化時の環境契機と全応答は固定、意味理解は未判定。
+// 見込み: Dの同じ照合結果を三経路に渡せば、比較元欠落も含め必要な1〜2枚だけが同じ一回生成へ届く。
+// 合格: 通常・先行音声・環境の実HTTP要求で枚数と順序、相対時刻・枠・共通文を照合。画像側の台帳なし。Java入力と返答は固定、実Gemma・発声は別確認。
 #[tokio::test]
-async fn acceptance_image_both_model_routes_send_one_current_image_and_one_comparison() {
+async fn acceptance_image_three_routes_send_verified_frames_in_one_generation() {
     let wire_fixture = JavaWireFixture::compile();
     let sent = Arc::new(std::sync::Mutex::new(Vec::<Value>::new()));
     let recorded = sent.clone();
     let app = axum::Router::new().route("/v1/chat/completions", axum::routing::post(move |axum::Json(v): axum::Json<Value>| {
+        let streaming = v["stream"] == true;
         recorded.lock().unwrap().push(v);
-        async { axum::Json(json!({"id":"fixture","object":"chat.completion","created":0,"model":"fixture",
-            "choices":[{"index":0,"message":{"role":"assistant","content":"{\"action\":\"silent\",\"speech\":\"\"}"},"finish_reason":"stop"}]})) }
+        async move {
+            use axum::response::IntoResponse;
+            if streaming {
+                let chunk = json!({"id":"fixture","object":"chat.completion.chunk","created":0,"model":"fixture",
+                    "choices":[{"index":0,"delta":{"role":"assistant","content":"{\"action\":\"silent\",\"speech\":\"\"}"},"finish_reason":null}]});
+                let end = json!({"id":"fixture","object":"chat.completion.chunk","created":0,"model":"fixture",
+                    "choices":[{"index":0,"delta":{},"finish_reason":"stop"}]});
+                ([("content-type", "text/event-stream")], format!("data: {chunk}\n\ndata: {end}\n\ndata: [DONE]\n\n")).into_response()
+            } else {
+                axum::Json(json!({"id":"fixture","object":"chat.completion","created":0,"model":"fixture",
+                    "choices":[{"index":0,"message":{"role":"assistant","content":"{\"action\":\"silent\",\"speech\":\"\"}"},"finish_reason":"stop"}]})).into_response()
+            }
+        }
     }));
     let socket = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let llm = crate::llm::RigLlm::new(
@@ -460,18 +473,19 @@ async fn acceptance_image_both_model_routes_send_one_current_image_and_one_compa
         ("unknown", "not_compared"),
         ("unchanged", "unchanged"),
         ("changed", "changed"),
+        ("missing", "not_compared"),
     ] {
         let (d, source) = server();
         let now = Utc::now();
         let input = {
             let data = d.data.lock().unwrap();
             let s = &data.sessions["s"];
-            json!({"commands":s.visual.commands(now),"event":s.latest,"captured_at":now,"scenario":scenario,
+            json!({"commands":s.visual.commands(now),"event":s.latest,"captured_at":now,"scenario":if scenario == "missing" {"changed"} else {scenario},
                 "before_path":base.join(if scenario == "unchanged" {"after-native.png"} else {"before-native.png"}),
                 "after_path":base.join("after-native.png")})
         };
         let received = wire_fixture.event(&input);
-        let past = if scenario == "unknown" { VecDeque::new() } else { wire_fixture.previous_captures(&input, now) };
+        let past = if matches!(scenario, "unknown" | "missing") { VecDeque::new() } else { wire_fixture.previous_captures(&input, now) };
         let (normal, action) = {
             let mut data = d.data.lock().unwrap();
             let s = data.sessions.get_mut("s").unwrap();
@@ -479,17 +493,16 @@ async fn acceptance_image_both_model_routes_send_one_current_image_and_one_compa
             // 期限そのものの検査はvisual_runtimeの単体試験に任せる。
             s.visual.receive(&received.command_results[0], now + chrono::Duration::seconds(1));
             let image = &s.visual.latest.as_ref().expect("実画像を保持").image;
-            assert_eq!(json!(image.scene_comparison)["status"], status);
-            assert_eq!(
+            if scenario != "missing" { assert_eq!(json!(image.scene_comparison)["status"], status); assert_eq!(
                 json!(image.scene_comparison),
                 json!(serde_json::from_value::<crate::chat_image::SceneComparison>(received.command_results[0].body_view.as_ref().unwrap().0["scene_comparison"].clone()).unwrap())
-            );
+            ); }
             match (&image.frames, scenario) {
                 (ComparedFrames::Changed { previous }, "changed") => {
                     assert_eq!(previous.sha256, image.scene_comparison.as_ref().unwrap().reference.as_ref().unwrap().sha256);
                     assert_ne!(previous.png_base64, image.current.png_base64);
                 }
-                (ComparedFrames::Unchanged, "unchanged") | (ComparedFrames::NotCompared, "unknown") => {}
+                (ComparedFrames::Unchanged, "unchanged") | (ComparedFrames::NotCompared, "unknown" | "missing") => {}
                 _ => panic!("{scenario}: 比較元の実画像と今回画像を照合"),
             }
             let native = chat_context::capture(
@@ -539,9 +552,18 @@ async fn acceptance_image_both_model_routes_send_one_current_image_and_one_compa
             .expect("同じ現在画像")
             .image;
         assert_eq!(image.sha256, action.image.as_ref().unwrap().sha256);
-        super::super::chat_leaf_runtime::render_image(normal, &llm, &mut cancel, Some(&image))
+        super::super::chat_leaf_runtime::render_image(normal.clone(), &llm, &mut cancel, Some(&image))
             .await
             .unwrap();
+        {
+            let mut data = d.data.lock().unwrap();
+            let session = data.sessions.get_mut("s").unwrap();
+            session.delivery.enabled = true;
+            session.delivery.voice_enabled = true;
+            data.rows.push_back(json!({"session_id":"s","turn_id":"acceptance-turn","epoch":7,"playback_status":"generating"}));
+        }
+        let stream = super::super::speech_stream_runtime::Source::new(&d, "s", "acceptance-turn", 7).unwrap();
+        stream.render(normal, &llm, Some(&image), vec![], Value::Null, &mut cancel).await.unwrap();
         let config = super::super::DialogueConfig {
             model: "fixture".into(),
             reading_engine: "off".into(),
@@ -560,8 +582,8 @@ async fn acceptance_image_both_model_routes_send_one_current_image_and_one_compa
         .unwrap();
         {
             let mut requests = sent.lock().unwrap();
-            assert_eq!(requests.len(), 2, "各経路一回だけ送信");
-            for (route, request) in ["normal", "environment"].into_iter().zip(requests.iter()) {
+            assert_eq!(requests.len(), 3, "各経路一回だけ送信");
+            for (route, request) in ["normal", "stream", "environment"].into_iter().zip(requests.iter()) {
                 let messages = request["messages"].as_array().unwrap();
                 let images: Vec<_> = messages
                     .iter()
@@ -569,14 +591,30 @@ async fn acceptance_image_both_model_routes_send_one_current_image_and_one_compa
                     .flatten()
                     .filter(|part| part["type"] == "image_url")
                     .collect();
-                assert_eq!(images.len(), 1);
-                assert_eq!(
-                    images[0]["image_url"]["url"],
-                    format!("data:image/png;base64,{}", image.png_base64)
-                );
-                let text = messages.last().unwrap()["content"][0]["text"]
-                    .as_str()
-                    .unwrap();
+                let expected: Vec<_> = match &image.frames {
+                    ComparedFrames::Changed { previous } => vec![previous.as_ref(), image.current.as_ref()],
+                    _ => vec![image.current.as_ref()],
+                };
+                assert_eq!(images.len(), expected.len(), "{scenario}/{route}");
+                for (part, frame) in images.iter().zip(&expected) {
+                    assert_eq!(part["image_url"]["url"], frame.data_url());
+                }
+                assert_eq!(request["stream"], route == "stream");
+                let content = messages.last().unwrap()["content"].as_array().unwrap();
+                let image_text = content.iter().skip(1).filter_map(|part| part["text"].as_str()).collect::<Vec<_>>().join("\n");
+                assert_eq!(image_text.matches("変わった").count(), usize::from(status == "changed"));
+                assert_eq!(image_text.matches("変わらない").count(), usize::from(status == "unchanged"));
+                assert_eq!(image_text.matches("景色は古い順").count(), usize::from(status == "changed"));
+                assert_eq!(image_text.matches("緑のPLAYER枠").count(), expected.iter().filter(|frame| frame.has_player_box()).count());
+                if status == "changed" {
+                    let labels: Vec<_> = content.iter().enumerate().filter(|(_,part)| part["type"] == "image_url")
+                        .map(|(index,_)| content[index-1]["text"].as_str().unwrap().lines().next().unwrap()).collect();
+                    // Java fixtureは1秒刻みの4枚前。実際の4秒間隔を送り、周期既定値で置き換えない。
+                    assert_eq!(labels, ["00:00", "00:04"]);
+                }
+                for forbidden in ["image_observation", "sha256", "captured_at", "annotation_status", "capture_id", "image/png", "横8", "行目", "scene_comparison"] {
+                    assert!(!image_text.contains(forbidden), "{scenario}/{route}: {forbidden}");
+                }
                 let all_text = messages
                     .iter()
                     .flat_map(|m| match &m["content"] {
@@ -590,19 +628,8 @@ async fn acceptance_image_both_model_routes_send_one_current_image_and_one_compa
                     })
                     .collect::<Vec<_>>()
                     .join("\n");
-                assert_eq!(all_text.matches("image_observation: ").count(), 1);
-                let (context, metadata) = text.split_once("\n\nimage_observation: ").unwrap();
-                let metadata: Value = serde_json::from_str(metadata).unwrap();
-                match status {
-                    "changed" => assert_eq!(metadata["scene_comparison"], "変わった"),
-                    "unchanged" => assert_eq!(metadata["scene_comparison"], "変化がない"),
-                    _ => assert!(metadata.get("scene_comparison").is_none()),
-                }
-                if let Some(description) = metadata["scene_comparison"].as_str() {
-                    assert_eq!(all_text.matches(&json!(description).to_string()).count(), 1);
-                }
-                assert!(!context.contains("scene_comparison"));
-                assert!(!all_text.contains("view_00000000-0000-0000-0000-000000000100"));
+                assert!(!all_text.contains("image_observation:"));
+                assert!(!all_text.contains("画像を横8×縦6"));
                 for forbidden in [
                     "pixel_mean_difference",
                     "pixel_changed_fraction",
@@ -623,7 +650,7 @@ async fn acceptance_image_both_model_routes_send_one_current_image_and_one_compa
                     let dir = std::path::PathBuf::from(dir);
                     std::fs::create_dir_all(&dir).unwrap();
                     std::fs::write(
-                        dir.join(format!("part5-{status}-{route}.json")),
+                        dir.join(format!("part5-{scenario}-{route}.json")),
                         serde_json::to_vec_pretty(request).unwrap(),
                     )
                     .unwrap();

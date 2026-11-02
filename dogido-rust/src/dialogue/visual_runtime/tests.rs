@@ -202,7 +202,7 @@ async fn image_notice_refreshes_all_current_facts_and_history_in_the_common_cont
     }
 }
 
-// 見込み: 環境判断へ一枚と共通観測を渡し、モデルが選んだ沈黙を受け取れる。合格: HTTP要求一件に画像・天候・匂い・履歴・共有指示が揃いsilentになる。確認範囲: 固定応答。実モデルの判断は未検査。
+// 見込み: 変化の前後画像を既存の環境判断一回へ載せられる。合格: 同じ要求に前後画像と変化一文、撮影台帳なし。観測・返答は固定、Gemmaの判断は対象外。
 #[tokio::test]
 async fn existing_environment_model_gets_one_image_request_and_can_select_silence() {
     let sent=Arc::new(std::sync::Mutex::new(Vec::<Value>::new()));let recorded=sent.clone();
@@ -221,13 +221,13 @@ async fn existing_environment_model_gets_one_image_request_and_can_select_silenc
     let result=super::super::reaction_runtime::render_image(&config,&super::super::tts_runtime::Dictionary::default(),&llm,&input,&mut cancel,action.image.as_deref()).await.unwrap();
     assert_eq!(result["environment_reaction_outcome"],"silent");assert!(!result.to_string().contains(PNG));
     let requests=sent.lock().unwrap();assert_eq!(requests.len(),1);
-    assert_eq!(requests[0]["messages"].as_array().unwrap().last().unwrap()["content"][1]["image_url"]["url"],format!("data:image/png;base64,{PNG}"));
+    assert_eq!(requests[0]["messages"].as_array().unwrap().last().unwrap()["content"].as_array().unwrap().last().unwrap()["image_url"]["url"],format!("data:image/png;base64,{PNG}"));
     assert!(requests[0]["messages"][0]["content"].as_str().unwrap().contains(crate::companion_prompt::chat_image()));
     let content = &requests[0]["messages"].as_array().unwrap().last().unwrap()["content"];
-    let (context, metadata) = content[0]["text"].as_str().unwrap().split_once("\n\nimage_observation: ").unwrap();
-    let context: Value = serde_json::from_str(context).unwrap();
-    let metadata: Value = serde_json::from_str(metadata).unwrap();
-    assert_eq!(metadata["captured_at"], action.image.as_ref().unwrap().captured_at);
+    let context: Value = serde_json::from_str(content[0]["text"].as_str().unwrap()).unwrap();
+    let image_text = content.as_array().unwrap().iter().skip(1).filter_map(|p| p["text"].as_str()).collect::<Vec<_>>().join("\n");
+    assert!(!image_text.contains("image_observation"));
+    assert_eq!(image_text.matches("変わった").count(), 1);
     let observations = &context["world_context"]["observations"];
     assert_eq!(observations["nearby_mob_types"][0]["id"], "turtle");
     assert_eq!(observations["nearby_mob_types"][0]["quantity"], 3);
@@ -368,8 +368,9 @@ async fn unchanged_image_is_attached_to_periodic_and_ordinary_decisions_without_
     let requests=sent.lock().unwrap(); assert_eq!(requests.len(),4);
     for request in requests.iter() {
         let content=&request["messages"].as_array().unwrap().last().unwrap()["content"];
-        assert_eq!(content[1]["image_url"]["url"],format!("data:image/png;base64,{PNG}"));
-        assert!(content[0]["text"].as_str().unwrap().contains("変化がない"));
+        assert_eq!(content.as_array().unwrap().last().unwrap()["image_url"]["url"],format!("data:image/png;base64,{PNG}"));
+        assert_eq!(content.as_array().unwrap().iter().filter(|part| part["type"] == "image_url").count(), 1);
+        assert!(content.as_array().unwrap().iter().any(|part| part["text"] == "変わらない"));
         assert!(request["messages"][0]["content"].as_str().unwrap().contains(crate::companion_prompt::chat_image()));
     }
     http.abort();

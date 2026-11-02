@@ -277,18 +277,12 @@ async fn look_success_continues_once_with_a_new_image_or_only_acknowledges_on_ti
             if deliver_image {
                 let content = &sent[0]["messages"].as_array().unwrap().last().unwrap()["content"];
                 assert_eq!(
-                    content[1]["image_url"]["url"],
+                    content.as_array().unwrap().last().unwrap()["image_url"]["url"],
                     format!("data:image/png;base64,{PNG}")
                 );
                 let facts = content[0]["text"].as_str().unwrap();
                 assert!(facts.contains("あの木を見て") && facts.contains("向きへの変更を完了した"));
-                assert!(
-                    facts.contains(
-                        image.body_view.as_ref().unwrap().0["captured_at"]
-                            .as_str()
-                            .unwrap()
-                    )
-                );
+                assert!(!facts.contains("image_observation:"));
             }
         }
         d.shutdown().await;
