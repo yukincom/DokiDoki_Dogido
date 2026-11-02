@@ -371,6 +371,7 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
     };
     f.insert("weather_block", weather);
     f.insert("time_block", time);
+    // モデルには今回の問いに必要な観測だけを渡す。内部更新番号や無関係な村人の日課は観測台帳に留める。
     let world_block = if d["world_context"].is_object() {
         let mut world = d["world_context"].clone();
         let knowledge = world
@@ -457,6 +458,7 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
             );
         }
     }
+    // 種類の辞書描写は必要な回に一度だけ。system・user・観測に同じ説明を重ねない。
     let descriptions = text(d, "named_entity_description_hints", "");
     let individuals = text(d, "named_mob_context", "");
     if !individuals.is_empty() {

@@ -99,7 +99,7 @@ impl Attachment {
         Ok(())
     }
 
-    /// 現行の単一画像用。時系列フレームへの切替時にこのJSONを外し、受信検証は維持する。
+    /// 現行の単一画像用。時系列化ではこのJSONを外す。出力に不要なハッシュ・撮影時刻は受信検証だけに使う。
     pub fn metadata_text(&self) -> String {
         format!(
             "image_observation: {}",

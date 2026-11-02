@@ -246,6 +246,7 @@ impl Prepared {
             .context("reaction context")?
             .clone();
         let mut context = context;
+        // モデルに渡すコピーには今回の反応・操作に必要な情報だけを載せる。撮影ID・絶対時刻・処理番号は内部照合用。
         // 保存行の複製だけを通常会話と同じ表示へ投影する。
         if let Some(conversation) = context.get_mut("recent")
             .and_then(|recent| recent.get_mut("conversation"))
