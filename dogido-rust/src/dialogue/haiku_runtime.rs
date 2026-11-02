@@ -115,6 +115,7 @@ impl Routes {
 struct Observation {
     event: GameEvent,
     runtime: RuntimeSnapshot,
+    recent_observation_atoms: Vec<haiku::SourceAtom>,
 }
 
 pub(super) struct Active {
@@ -365,7 +366,9 @@ impl Dialogue {
             return;
         }
         let runtime = s.haiku_context.clone();
-        let observation = Observation { event, runtime };
+        let snapshot = s.chat_observation.snapshot_body(&event, &super::chat_context::CatalogLabels);
+        let recent_observation_atoms = haiku::preparation::observations::recent_atoms(&event, &snapshot);
+        let observation = Observation { event, runtime, recent_observation_atoms };
         let completed = if casual {
             s.haiku.material_turns.iter().cloned().collect()
         } else {
@@ -666,6 +669,7 @@ impl Dialogue {
             lessons,
             completed_turns: completed,
             dialogue_material: None,
+            recent_observation_atoms: observation.recent_observation_atoms,
         })?;
         let mut backend = LiveBackend {
             helper,

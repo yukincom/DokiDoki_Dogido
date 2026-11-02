@@ -166,6 +166,13 @@ pub(super) fn seed(
     spoken: Option<&str>,
 ) -> Map<String, Value> {
     let mut out = Map::new();
+    out.insert(
+        "material_input_snapshot".into(),
+        json!({
+            "observed_at":event.observed_at,"hotbar":event.player.hotbar,
+            "offered_source_atoms":context.source_atoms
+        }),
+    );
     let interpretation = interpretation.map(str::to_owned).or_else(|| {
         if scene.found && !strip(&scene.spoken_text()).is_empty() {
             Some(scene.spoken_text())
@@ -354,4 +361,39 @@ pub(super) fn attach_links(materials: &mut Map<String, Value>, verse: &str) {
     if !links.is_empty() {
         materials.insert("fragment_links".into(), links.into());
     }
+}
+
+/// 配送済み直近3往復の有界本文で話題になった種類を、目撃と別の会話出典へ残す。
+pub(super) fn conversation_mob_atoms(turns: &[Value]) -> Result<Vec<SourceAtom>> {
+    let mut atoms = vec![];
+    for (id, player) in completed_player_turns(turns)? {
+        let dogido = turns
+            .iter()
+            .rev()
+            .find(|turn| turn["turn_id"] == id)
+            .and_then(|turn| turn["dogido_text"].as_str())
+            .map(|s| clean(s, 160))
+            .unwrap_or_default();
+        for kind in crate::chat_catalog::catalog().all_mob_entries().keys() {
+            if !crate::mob_identity::species_mentioned(kind, &player)
+                && !crate::mob_identity::species_mentioned(kind, &dogido)
+            {
+                continue;
+            }
+            let label = crate::mob_identity::species_label(kind);
+            let reference = format!("dialogue:{id}:mob:{kind}");
+            atoms.push(SourceAtom {
+                atom_id: reference.clone(),
+                source_ref: reference,
+                text: format!("配送済みの会話で{label}が話題になった。現在の視認とは別の会話材料"),
+                field_path: "mob_topic".into(),
+                observation_role: "player_dialogue_attributed".into(),
+                kind: "dialogue_material".into(),
+                claim_class: "factual".into(),
+                claim_scopes: vec!["player_reported_context".into()],
+                basis_atom_ids: vec![],
+            });
+        }
+    }
+    Ok(atoms)
 }

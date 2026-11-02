@@ -20,6 +20,7 @@ use serde_json::{Map, Value, json};
 use std::future::Future;
 pub mod fallback;
 mod materials;
+pub mod observations;
 #[path = "preparation/selection.rs"]
 mod preface_selection;
 pub use materials::dialogue_material;
@@ -64,6 +65,8 @@ pub struct Start {
     #[serde(default)]
     pub completed_turns: Vec<Value>,
     pub dialogue_material: Option<Value>,
+    #[serde(default)]
+    pub recent_observation_atoms: Vec<SourceAtom>,
 }
 /// captureの結果。通常は見どころ抽出request、モデル無効時はfixed_textを呼び手へ返す。
 #[derive(Clone, Debug, Serialize)]
@@ -231,7 +234,7 @@ impl Preparation {
         }
         let primary_event = super::companions::primary_event(&start.event, &topics);
         let world = crate::world_catalog::catalog();
-        let context = selection::capture(
+        let mut context = selection::capture(
             &primary_event,
             RuntimeRead {
                 current_structure: start.runtime.current_structure.as_deref(),
@@ -243,6 +246,17 @@ impl Preparation {
             world,
             &readings,
         )?;
+        context.source_atoms = merge_source_atoms(&[
+            context.source_atoms.clone(),
+            observations::current_atoms(&primary_event),
+            start.recent_observation_atoms,
+            materials::conversation_atoms(&dialogue),
+            if start.dialogue_material.is_none() {
+                materials::conversation_mob_atoms(&start.completed_turns)?
+            } else {
+                vec![]
+            },
+        ]);
         let mut job = Self {
             stage: Stage::Context,
             event: primary_event,
@@ -258,7 +272,7 @@ impl Preparation {
             fixed_text: None,
         };
         let request = if job.settings.llm_enabled {
-            Some(job.request("haiku_irony", job.context.irony_details()))
+            Some(job.request("haiku_irony", job.preface_details()))
         } else {
             job.fixed_text = Some(fallback::fixed_text(&job.event));
             job.seed(Irony::default(), None);
@@ -271,6 +285,16 @@ impl Preparation {
             fixed_text: job.fixed_text.clone(),
         };
         Ok((job, output))
+    }
+    fn preface_details(&self) -> Map<String, Value> {
+        let mut details = self.context.irony_details();
+        details.insert(
+            "preface_material_candidates".into(),
+            preface_selection::prompt_rows(&preface_selection::candidates(
+                &self.context.source_atoms,
+            )),
+        );
+        details
     }
     fn request(&self, kind: &str, details: Map<String, Value>) -> StructuredRequest {
         StructuredRequest {
@@ -324,13 +348,8 @@ impl Preparation {
         let spoken = compose_inspiration_speech(irony.found, &irony.description);
         self.seed(irony, Some(&spoken));
         self.stage = Stage::Inspiration;
-        let mut details = self.context.scene_details(Some(&self.irony));
-        details.insert(
-            "preface_material_candidates".into(),
-            preface_selection::prompt_rows(&preface_selection::candidates(
-                &self.context.source_atoms,
-            )),
-        );
+        let mut details = self.preface_details();
+        details.insert("irony".into(), json!(self.irony));
         Ok(InspirationOutput {
             text: if self.irony.found {
                 strip(&self.irony.description).into()

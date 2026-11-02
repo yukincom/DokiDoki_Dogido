@@ -13,17 +13,7 @@ pub fn constraint_details(
     lessons: &[Value],
 ) -> Option<Value> {
     let families = RULES["noun_families"].as_array().expect("noun families");
-    let held = strip(
-        event
-            .player
-            .held_item
-            .as_deref()
-            .unwrap_or("")
-            .rsplit(':')
-            .next()
-            .unwrap_or(""),
-    )
-    .to_lowercase();
+    let held = normalize_id(selection::hotbar_held(event));
     let mut selected = vec![];
     let mut keys = HashSet::new();
     for family in families {

@@ -115,7 +115,19 @@ fn distance_cmp(a: Option<f64>, b: Option<f64>) -> std::cmp::Ordering {
 }
 /// 所持数の多い順、同数ならID順へ揃える。所持品の近い二品・異なる一品を選ぶ際の同点順になる。
 fn sorted_inventory(event: &GameEvent) -> Vec<(&String, &i64)> {
-    let mut values: Vec<_> = event.inventory.iter().collect();
+    let mut values: Vec<_> = event
+        .player
+        .hotbar
+        .iter()
+        .flat_map(|h| &h.slots)
+        .filter(|slot| slot.count > 0)
+        .filter_map(|slot| {
+            slot.item_id
+                .as_ref()
+                .filter(|id| !normalize_id(id).is_empty() && normalize_id(id) != "air")
+                .map(|id| (id, &slot.count))
+        })
+        .collect();
     values.sort_by(|a, b| b.1.cmp(a.1).then(a.0.cmp(b.0)));
     values
 }
@@ -481,7 +493,7 @@ pub fn capture(
     let tensions = tensions(
         event,
         world,
-        &world.item_label(event.player.held_item.as_deref()),
+        &poem.label,
         &poem.label,
         &passive,
         &nearby,
@@ -723,11 +735,17 @@ fn features(
                 1
             } else if row.key.starts_with("mob_") {
                 2
-            } else if matches!(row.key.as_str(), "biome" | "biome_group" | "trait_1" | "structure" | "climate") {
+            } else if matches!(
+                row.key.as_str(),
+                "biome" | "biome_group" | "trait_1" | "structure" | "climate"
+            ) {
                 3
             } else if row.key.starts_with("dropped_") {
                 4
-            } else if row.key == "held_item" || row.key == "pocket_item" || row.key.starts_with("inventory_") {
+            } else if row.key == "held_item"
+                || row.key == "pocket_item"
+                || row.key.starts_with("inventory_")
+            {
                 6
             } else {
                 5

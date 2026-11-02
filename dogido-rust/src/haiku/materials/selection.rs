@@ -1,6 +1,5 @@
 //! 手持ち・所持品・周辺観測を、句に使う少数の表示名へ選び直す。
-//! 現行の持ち物選択は全所持品を参照する。11月2日仕様では、道具の代わりも含めて
-//! 空でないホットバー枠だけを候補とし、景色・生き物との取り合わせに使う（移行前）。
+//! 道具の代わりも含めて空でないホットバー枠だけを候補とする。
 use super::*;
 /// 句の手もと材料一品。sourceはhand（実際の手持ち）かpocket（所持品からの選択）を区別する。
 #[derive(Clone, Debug, Serialize)]
@@ -138,35 +137,29 @@ pub fn pocket_weight(id: &str, count: i64) -> i64 {
     6 + count.clamp(0, 4)
 }
 /// 道具以外の手持ちはそのまま返し、道具なら非道具の所持品から主材料を一品選ぶ。
-/// inventory_orderは受信JSONに現れた全キーを一度ずつ含む必要がある。同じ表示名の候補を最初の一品へまとめるため。
-/// 候補なしなら実際の手持ちへ戻る。道具以外を持つ経路では所持品順の検査自体を省く。
+/// 選択中の空でない枠を手持ちとし、道具の代わりも同じhotbar内から選ぶ。
 pub fn poem_item(
     event: &GameEvent,
     world: &WorldCatalog,
-    inventory_order: &[String],
+    _inventory_order: &[String],
 ) -> Result<PoemItem> {
-    let held = event.player.held_item.as_deref().unwrap_or("");
+    let held = hotbar_held(event);
     let fallback = PoemItem {
         id: normalize_id(held),
-        label: world.item_label(Some(held)),
+        label: if held.is_empty() {
+            String::new()
+        } else {
+            world.item_label(Some(held))
+        },
         source: "hand".into(),
     };
     if !is_work_tool(held) {
         return Ok(fallback);
     }
-    let valid = inventory_order.len() == event.inventory.len()
-        && inventory_order.iter().collect::<HashSet<_>>().len() == inventory_order.len()
-        && inventory_order
-            .iter()
-            .all(|id| event.inventory.contains_key(id));
-    anyhow::ensure!(
-        valid,
-        "inventory order must contain every observed key exactly once"
-    );
     let mut scored = Vec::<(i64, String, String)>::new();
     let mut seen = HashSet::new();
-    for id in inventory_order {
-        let count = event.inventory[id];
+    for (id, count) in sorted_inventory(event) {
+        let count = *count;
         if count <= 0 || is_work_tool(id) {
             continue;
         }
@@ -243,21 +236,10 @@ pub fn inventory_values(
     world: &WorldCatalog,
     entries: &impl Entries,
 ) -> InventorySelection {
-    let held = strip(
-        event
-            .player
-            .held_item
-            .as_deref()
-            .unwrap_or("")
-            .rsplit(':')
-            .next()
-            .unwrap_or(""),
-    )
-    .to_lowercase();
     let mut seen = HashSet::new();
     let mut candidates = Vec::new();
     for (order, (id, count)) in sorted_inventory(event).into_iter().enumerate() {
-        if *count <= 0 || strip(id.rsplit(':').next().unwrap_or("")).to_lowercase() == held {
+        if *count <= 0 {
             continue;
         }
         let label = world.item_label(Some(id));
@@ -280,6 +262,7 @@ pub fn inventory_values(
             items: candidates.into_iter().map(|c| c.label).collect(),
         };
     }
+    let items = candidates.iter().map(|c| c.label.clone()).collect();
     let mut best: Option<(usize, i128, i128)> = None;
     let mut pair = (0, 1);
     for left in 0..candidates.len() - 1 {
@@ -313,10 +296,6 @@ pub fn inventory_values(
     let far_item = outlier
         .map(|i| candidates[i].label.clone())
         .unwrap_or_default();
-    let mut items = close_pair.clone();
-    if !far_item.is_empty() {
-        items.push(far_item.clone());
-    }
     InventorySelection {
         close_pair,
         far_item,
@@ -371,4 +350,20 @@ pub fn dropped_items(event: &GameEvent, world: &WorldCatalog) -> Vec<String> {
         }
     }
     values
+}
+
+/// 欠測・全枠空では手持ちや全inventoryから補わない。
+pub(super) fn hotbar_held(event: &GameEvent) -> &str {
+    event
+        .player
+        .hotbar
+        .as_ref()
+        .and_then(|bar| {
+            bar.slots
+                .iter()
+                .find(|slot| slot.slot == bar.selected_slot && slot.count > 0)
+        })
+        .and_then(|slot| slot.item_id.as_deref())
+        .filter(|id| !normalize_id(id).is_empty() && normalize_id(id) != "air")
+        .unwrap_or("")
 }

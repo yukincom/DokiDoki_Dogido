@@ -2,12 +2,13 @@ use super::*;
 use serde_json::Map;
 #[test]
 fn unchanged_prepare_kinds_match_canonical_helper_messages() {
+    // 発句の入力契約は更新済み。前置きと選択の共通材料はhaiku_preface_materialsで検査する。
     let fixtures: Value = serde_json::from_str(include_str!("fixtures.json")).unwrap();
     for (index, row) in fixtures.as_array().unwrap().iter().enumerate() {
         let request: StructuredRequest = serde_json::from_value(row["request"].clone()).unwrap();
         if matches!(
             request.kind.as_str(),
-            "haiku_line_grounding" | "haiku_draft" | "haiku_line_regeneration" | "haiku_scene"
+            "haiku_line_grounding" | "haiku_draft" | "haiku_line_regeneration" | "haiku_scene" | "haiku_irony"
         ) {
             continue;
         }

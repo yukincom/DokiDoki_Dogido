@@ -61,6 +61,12 @@ fn haiku_candidate_limit_keeps_visible_mobs_and_place_ahead_of_inventory() {
         let raw = edit(event(index as i64 + 1, 100 + index as u64, 23.0), |v| {
             v["player"]["held_item"] = json!("birch_door");
             v["inventory"] = json!({"birch_door": 1, "cobblestone": 64, "stick": 64, "bone": 32});
+            // 持ち物は発句時hotbarから受け取る。身体の観測と持ち物の優先関係を検査する。
+            v["player"]["hotbar"] = json!({"selected_slot":0,"slots":[
+                {"slot":0,"item_id":"birch_door","count":1},
+                {"slot":1,"item_id":"cobblestone","count":64},
+                {"slot":2,"item_id":"stick","count":64},
+                {"slot":3,"item_id":"bone","count":32}]});
             let senses = &mut v["body_observation"]["sample"]["senses"];
             senses["world"] = json!({"biome":"plains", "sky_visible":sky_visible, "weather":"clear", "time_phase":"day"});
             senses["nearby_resources"] = json!(["oak_log", "stone", "sand", "grass_block", "dirt", "cherry_leaves"]
@@ -304,6 +310,7 @@ async fn body_senses_feed_chat_smell_environment_and_haiku_without_player_fallba
         v["player"]["position"] = json!({"x":80,"y":120,"z":80});
         v["player"]["held_item"] = json!("torch");
         v["inventory"] = json!({"torch":3});
+        v["player"]["hotbar"] = json!({"selected_slot":0,"slots":[{"slot":0,"item_id":"torch","count":3}]});
         v["world"]["biome"] = json!("desert");
         v["passive_mobs"] = json!([{"type":"pig"}]);
         v["nearby_resources"] = json!([{"type":"block","name":"sand","distance":1}]);
@@ -837,6 +844,45 @@ async fn combat_ends_without_claiming_a_present_former_opponent_left() {
     let changes = capture(&d, &quiet).context.world_context.unwrap().changes;
     assert_eq!(changes.iter().filter(|c| c.kind == "combat_ended").count(), 1);
     assert!(!changes.iter().any(|c| c.kind == "player_hostiles_cleared"));
+    drop(permit);
+    d.shutdown().await;
+}
+
+// 見込み: 既存の身体台帳を使えば、視野を外したパンダを過去材料として保ち、身体失効後は持ち越さない。
+// 合格: Dialogueへ模擬観測を通し、現在視認なしで過去候補が一件残り、unavailable後は空になる。
+#[tokio::test]
+async fn haiku_recent_panda_uses_body_memory_and_disappears_when_body_is_unavailable() {
+    let d = server();
+    let permit = d.serial.acquire().await.unwrap();
+    let seen = edit(event(1, 100, 23.0), |v| {
+        v["body_observation"]["sample"]["senses"]["passive_mobs"] = json!([{"type":"panda"}]);
+    });
+    d.observe("s", seen, None);
+    let away = edit(event(2, 110, 23.0), |v| {
+        v["body_observation"]["sample"]["senses"]["passive_mobs"] = json!([]);
+    });
+    d.observe("s", away.clone(), None);
+    {
+        let data = d.data.lock().unwrap();
+        let s = &data.sessions["s"];
+        let sensory = super::event(s, &away);
+        let snapshot = s.chat_observation.snapshot_body(&sensory, &chat_context::CatalogLabels);
+        let atoms = crate::haiku::preparation::observations::recent_atoms(&sensory, &snapshot);
+        assert!(sensory.passive_mobs.is_empty());
+        assert_eq!(atoms.iter().filter(|a| a.text.contains("パンダ")).count(), 1);
+        assert!(atoms.iter().all(|a| a.observation_role == "recent_visual"));
+    }
+    let absent = edit(event(3, 120, 23.0), |v| {
+        v["body_observation"] = json!({"version":3,"status":"unavailable","reason":"unloaded"});
+    });
+    d.observe("s", absent.clone(), None);
+    {
+        let data = d.data.lock().unwrap();
+        let s = &data.sessions["s"];
+        let sensory = super::event(s, &absent);
+        let snapshot = s.chat_observation.snapshot_body(&sensory, &chat_context::CatalogLabels);
+        assert!(crate::haiku::preparation::observations::recent_atoms(&sensory, &snapshot).is_empty());
+    }
     drop(permit);
     d.shutdown().await;
 }

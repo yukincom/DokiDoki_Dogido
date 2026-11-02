@@ -44,7 +44,8 @@ pub(super) fn prompt_rows(groups: &[Material]) -> Value {
             .map(|g| json!({
                 "material_id":g.material_id,
                 "facts":g.atoms.iter().map(|a| json!({"text":a.text,
-                    "claim_class":a.claim_class,"claim_scopes":a.claim_scopes})).collect::<Vec<_>>()
+                    "claim_class":a.claim_class,"claim_scopes":a.claim_scopes,
+                    "observation_role":a.observation_role})).collect::<Vec<_>>()
             }))
             .collect::<Vec<_>>()
     )
