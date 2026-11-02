@@ -114,19 +114,49 @@ impl RigLlm {
         image: Option<&crate::chat_image::Attachment>,
         deltas: tokio::sync::mpsc::Sender<String>,
     ) -> Result<GenerationReport> {
-        use rig_core::streaming::RawStreamingChoice;
+        Ok(self.stream(input, image, &[], &[], false, deltas).await?.0)
+    }
+
+    /// 相談の同じ一要求をstreamで受け取る。道具の差分は発話へ送らず、完成した呼出しだけ返す。
+    pub(crate) async fn generate_stream_with_tools(
+        &self,
+        input: &GenerationRequest,
+        tools: &[Value],
+        tool_messages: &[Value],
+        allow_call: bool,
+        deltas: tokio::sync::mpsc::Sender<String>,
+    ) -> Result<(GenerationReport, Option<Value>)> {
+        self.stream(input, None, tools, tool_messages, allow_call, deltas)
+            .await
+    }
+
+    async fn stream(
+        &self,
+        input: &GenerationRequest,
+        image: Option<&crate::chat_image::Attachment>,
+        tools: &[Value],
+        tool_messages: &[Value],
+        allow_call: bool,
+        deltas: tokio::sync::mpsc::Sender<String>,
+    ) -> Result<(GenerationReport, Option<Value>)> {
+        use futures_util::StreamExt;
+        use rig_core::{completion::CompletionModel, streaming::StreamedAssistantContent};
         ensure!(self.enabled, "LLM disabled by configuration");
         input.validate()?;
-        let request = request_with_image(input, image)?;
+        let mut request = request_with_image(input, image)?;
+        add_tools(&mut request, tools, tool_messages, allow_call);
         let model = self.client.completion_model(&input.model);
         let start = Instant::now();
         let run = async {
-            let mut stream = model.raw_stream(request).await?;
+            // Rigが道具の引数を組み立てる。本文は差分のまま、呼出しは完成時に一度だけ受け取る。
+            let mut stream = model.stream(request).await?;
             let mut text = String::new();
             let mut terminal = None;
-            while let Some(event) = std::future::poll_fn(|cx| stream.as_mut().poll_next(cx)).await {
+            let mut calls = Vec::new();
+            while let Some(event) = stream.next().await {
                 match event? {
-                    RawStreamingChoice::Message(delta) => {
+                    StreamedAssistantContent::Text(part) => {
+                        let delta = part.text;
                         ensure!(
                             text.len().saturating_add(delta.len())
                                 <= stream_text_limit(input.max_tokens),
@@ -137,34 +167,54 @@ impl RigLlm {
                             deltas.send(delta).await.context("speech stream closed")?;
                         }
                     }
-                    RawStreamingChoice::FinalResponse(response) => terminal = Some(response),
-                    RawStreamingChoice::ToolCall(_) | RawStreamingChoice::ToolCallDelta { .. } => {
-                        bail!("unexpected tool call in ordinary speech")
+                    StreamedAssistantContent::Final(response) => terminal = Some(response.raw),
+                    StreamedAssistantContent::ToolCall { tool_call, .. } => {
+                        ensure!(!tools.is_empty(), "unexpected tool call in ordinary speech");
+                        calls.push(json!({
+                            "id": tool_call.provider.map(|id| id.call_id),
+                            "type": "function",
+                            "function": {
+                                "name": tool_call.function.name,
+                                "arguments": serde_json::to_string(&tool_call.function.arguments)?,
+                            }
+                        }));
+                    }
+                    StreamedAssistantContent::ToolCallDelta { .. } => {
+                        ensure!(!tools.is_empty(), "unexpected tool call in ordinary speech");
                     }
                     _ => {}
                 }
             }
             let terminal = terminal.context("LLM stream ended before completion")?;
+            let tool_message = (!calls.is_empty()).then(|| {
+                json!({
+                "role":"assistant","content":text,"tool_calls":calls})
+            });
+            if let Some(message) = &tool_message {
+                text = serde_json::to_string(message)?;
+            }
             ensure!(
                 !text.trim().is_empty(),
                 "chat_completions response content is empty"
             );
-            let terminal = serde_json::to_value(terminal)?;
-            Ok(GenerationReport {
-                schema_version: 1,
-                provider: "rig-core/openai-chat-completions".into(),
-                kind: input.kind.clone(),
-                requested_model: input.model.clone(),
-                response_model: terminal["model"].as_str().unwrap_or(&input.model).into(),
-                response_id: terminal["response_id"].as_str().unwrap_or("").into(),
-                elapsed_ms: start.elapsed().as_millis(),
-                generated: GeneratedText {
-                    text,
-                    finish_reason: terminal["finish_reason"].as_str().map(str::to_owned),
-                    completion_tokens: terminal["usage"]["completion_tokens"].as_u64(),
-                    prompt_tokens: terminal["usage"]["prompt_tokens"].as_u64(),
+            Ok((
+                GenerationReport {
+                    schema_version: 1,
+                    provider: "rig-core/openai-chat-completions".into(),
+                    kind: input.kind.clone(),
+                    requested_model: input.model.clone(),
+                    response_model: terminal["model"].as_str().unwrap_or(&input.model).into(),
+                    response_id: terminal["response_id"].as_str().unwrap_or("").into(),
+                    elapsed_ms: start.elapsed().as_millis(),
+                    generated: GeneratedText {
+                        text,
+                        finish_reason: terminal["finish_reason"].as_str().map(str::to_owned),
+                        completion_tokens: terminal["usage"]["completion_tokens"].as_u64(),
+                        prompt_tokens: terminal["usage"]["prompt_tokens"].as_u64(),
+                    },
                 },
-            })
+                tool_message,
+            ))
         };
         // 画像要求だけはproviderのTRACEから画像本文を除く。streamの読取り中も同じ購読を使う。
         let result = if image.is_some() {
@@ -197,15 +247,7 @@ impl RigLlm {
                 request.additional_params.as_mut().unwrap()["dogido_capture_full"] = true.into();
             }
         }
-        if !tools.is_empty() {
-            let params = request.additional_params.as_mut().unwrap();
-            params["tools"] = json!(tools);
-            params["tool_choice"] = if allow_call { "auto" } else { "none" }.into();
-            params["messages"]
-                .as_array_mut()
-                .unwrap()
-                .extend_from_slice(tool_messages);
-        }
+        add_tools(&mut request, tools, tool_messages, allow_call);
         let model = self.client.completion_model(&input.model);
         let start = Instant::now();
         let completion = model.raw_completion(request);
@@ -248,6 +290,24 @@ impl RigLlm {
             },
             tool_message,
         ))
+    }
+}
+
+/// 通常の完了とstreamの双方で、同じnative tool契約を送る。
+fn add_tools(
+    request: &mut CompletionRequest,
+    tools: &[Value],
+    messages: &[Value],
+    allow_call: bool,
+) {
+    if !tools.is_empty() {
+        let params = request.additional_params.as_mut().unwrap();
+        params["tools"] = json!(tools);
+        params["tool_choice"] = if allow_call { "auto" } else { "none" }.into();
+        params["messages"]
+            .as_array_mut()
+            .unwrap()
+            .extend_from_slice(messages);
     }
 }
 

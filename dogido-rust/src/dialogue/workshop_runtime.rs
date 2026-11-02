@@ -20,6 +20,14 @@ use anyhow::{Context, ensure};
 
 const CONVERSATION_PROTOCOL: &str = "現在の会話プロトコル: 現在句・未採用案・直近対話・discussion_targetを読み、次の返答またはfunction callをあなたが選ぶ。実行方法と可能な処理は、今回提示されたtoolsと本文JSONのaction一覧に従う。今回許可されている一手だけを選ぶ。対象行・具体変更・終了はBERTの分類結果をコードが渡すので再判定しない。終了を自分で選んだりclose_after_actionを追加しない。未採用案があり採否が不明な終了希望にはaskで採用か破棄かを確認する。採否の意思が明確ならaccept_pendingまたはreject_pendingを選ぶ。evidenceは任意の解釈メモ。コードは出力を受け取り、既知情報を補完して対象へ適用し、元句・版・保存結果を管理する。新しい対象を本人が指定するまではdiscussion_targetの行と語を保ち、話題が分かっているのに『どこを見たいか』を聞き直さない。意味・由来・連想は自由に話す。本人の依頼を解釈した語句を編集へ渡し、句の品質や表現の形式を実行の前提にしない。本人から読み方や保存材料を尋ねられて手元の情報で答えられないときだけ、inspect_verseで参照できる。function callでは本文の返事を付けず、propose_revisionのspeechも空文字列にして結果を待つ。ほかの本文JSONのactionでは、unrelatedを除いてspeechに自然な返事を入れる。採用の返事はコードが実行に成功してから再生する。まだ行っていない操作を別のactionのspeechで実行済みとは言わない。句本文はコードが付けるのでspeechに三行を再生成しない。acknowledge_meaningは納得への返事だけで、終了確認へ進めない。本人が話を続けている、訂正している、困っているだけなら、終了を勧めずその話に応じる。";
 
+/// 実行結果を待つ操作と、本文だけの会話を既存action契約で分ける。
+fn streams_workshop_speech(action: &str) -> bool {
+    matches!(
+        action,
+        "respond" | "explain" | "ask" | "compare" | "show_current" | "acknowledge_meaning"
+    )
+}
+
 /// 行3種・具体変更3種・終了はBERTへ変更済み。旧判定へ戻さない。
 /// 共通受付の一回の分類を使い、行の相談と具体的な置換を混同しない。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -112,10 +120,43 @@ impl Dialogue {
         let mut helper = Helper::start(&self.config.python, &script)?;
         let reply = super::workshop_story::Reply::default();
         let continuation = super::workshop_reply::Source::new(self, input, cancel);
-        let mut result = {
+        let streaming = continuation
+            .as_ref()
+            .and_then(|_| {
+                let d = self.data.lock().unwrap();
+                d.sessions
+                    .iter()
+                    .find(|(_, s)| s.current_turn == input["operation_id"])
+                    .map(|(sid, s)| (sid.clone(), s.epoch))
+            })
+            .map(|(sid, epoch)| {
+                let config = self.output_config(&sid);
+                (sid, epoch, config)
+            })
+            .filter(|(_, _, config)| config.audio_enabled && config.llm_enabled);
+        let mut result = if let Some((sid, epoch, config)) = streaming {
+            self.workshop_stream(
+                input,
+                &mut helper,
+                &reply,
+                continuation.as_ref().unwrap(),
+                permit,
+                &sid,
+                epoch,
+                &config,
+                cancel,
+            )
+            .await
+        } else {
             // 各モデル・辞書呼出しは既存の期限を持つ。戦闘保留の時間はturnの期限へ数えない。
-            let body =
-                self.workshop_body(input, &mut helper, &reply, continuation.as_ref(), permit);
+            let body = self.workshop_body(
+                input,
+                &mut helper,
+                &reply,
+                continuation.as_ref(),
+                permit,
+                None,
+            );
             let body = async {
                 if let Some(source) = &continuation {
                     source.during(permit, body).await?
@@ -167,6 +208,97 @@ impl Dialogue {
         result
     }
 
+    async fn workshop_stream(
+        &self,
+        input: &bridge::Input,
+        helper: &mut Helper,
+        reply: &super::workshop_story::Reply,
+        continuation: &super::workshop_reply::Source<'_>,
+        permit: &super::workshop_reply::Permit,
+        sid: &str,
+        epoch: u64,
+        config: &DialogueConfig,
+        cancel: &mut watch::Receiver<bool>,
+    ) -> Result<Value> {
+        let corrections = self.reading_overlay().await?;
+        super::speech_stream_runtime::run_pipeline(
+            config,
+            &self.reading_dictionary,
+            &self.audio,
+            &self.serial,
+            corrections,
+            crate::llm::stream_text_limit(420),
+            cancel,
+            || {
+                self.update(
+                    sid,
+                    input["operation_id"].as_str().unwrap_or(""),
+                    epoch,
+                    PlaybackStatus::Started,
+                    None,
+                );
+            },
+            |sink| async move {
+                self.workshop_body(
+                    input,
+                    helper,
+                    reply,
+                    Some(continuation),
+                    permit,
+                    Some(&sink),
+                )
+                .await
+            },
+            |mut result, sink| async move {
+                if result["output_suppressed"] == true || reply.interrupted() {
+                    return Ok((result, None));
+                }
+                let speech =
+                    if streams_workshop_speech(result["workshop_action"].as_str().unwrap_or("")) {
+                        let text = result["text"].as_str().unwrap_or("").to_owned();
+                        sink.validate_text(&text).await?;
+                        // 既存の保存順を保ち、後段でも同じ評価を重ねて保存しない。
+                        self.record_feedback(
+                            sid,
+                            epoch,
+                            input,
+                            &mut result,
+                            Some(continuation),
+                            permit,
+                        )
+                        .await;
+                        result["audio_streamed"] = true.into();
+                        ensure!(
+                            continuation.queue(permit, &result).await,
+                            "speech turn changed"
+                        );
+                        permit.release();
+                        Some(text)
+                    } else {
+                        ensure!(
+                            !sink.has_speech(),
+                            "workshop action changed after streamed speech"
+                        );
+                        None
+                    };
+                Ok((result, speech))
+            },
+            || {
+                if self.workshop_combat_priority(input) {
+                    permit.release();
+                    reply
+                        .interrupted
+                        .store(true, std::sync::atomic::Ordering::Relaxed);
+                    true
+                } else {
+                    false
+                }
+            },
+            Some(continuation),
+        )
+        .await
+    }
+
     async fn workshop_body(
         &self,
         input: &bridge::Input,
@@ -174,6 +306,7 @@ impl Dialogue {
         reply: &super::workshop_story::Reply,
         continuation: Option<&super::workshop_reply::Source<'_>>,
         permit: &super::workshop_reply::Permit,
+        stream: Option<&super::speech_stream_runtime::Sink>,
     ) -> Result<Value> {
         let mut editing = crate::workshop_editing::Engine::default();
         let text = input["text"].as_str().context("workshop input text")?;
@@ -370,7 +503,23 @@ impl Dialogue {
                     reply
                         .waiting_for_model
                         .store(true, std::sync::atomic::Ordering::Relaxed);
-                    let generated = if !tool_definitions.is_empty() {
+                    let generated = if let Some(stream) = stream {
+                        stream
+                            .generate(
+                                &self.llm,
+                                &request,
+                                None,
+                                &tool_definitions,
+                                &tool_messages,
+                                allow_tool_call,
+                                allowed
+                                    .iter()
+                                    .filter(|a| streams_workshop_speech(a))
+                                    .map(|a| (*a).to_owned())
+                                    .collect(),
+                            )
+                            .await
+                    } else if !tool_definitions.is_empty() {
                         self.llm
                             .generate_with_tools(
                                 &request,
@@ -394,6 +543,9 @@ impl Dialogue {
                             if reply.interrupted() || self.workshop_combat_priority(input) {
                                 return Ok(reply.result(input));
                             }
+                            if stream.is_some_and(|s| s.has_speech()) {
+                                return Err(error);
+                            }
                             reports.push(json!({"kind":request.kind,"error":error.to_string()}));
                             reason = "generation_error".into();
                             break;
@@ -407,6 +559,10 @@ impl Dialogue {
                         Some("length" | "max_tokens" | "MAX_TOKENS")
                     );
                     let native = tool_message.is_some();
+                    ensure!(
+                        !native || !stream.is_some_and(|s| s.has_speech()),
+                        "native tool after streamed speech"
+                    );
                     reports.push(serde_json::to_value(&report)?);
                     let tool_call = if truncated {
                         None
@@ -466,6 +622,11 @@ impl Dialogue {
                         }
                         break;
                     };
+                    ensure!(
+                        !stream.is_some_and(|s| s.has_speech())
+                            || streams_workshop_speech(payload["action"].as_str().unwrap_or("")),
+                        "workshop action changed after streamed speech"
+                    );
                     // 本文JSONに戻っても、検査・差し替え操作へは進めない。
                     // 本文を実行APIと取り違えず、同じAPI形式へ一度だけ訂正を求める。
                     if let Err(error) = tools::validate_transport(&payload, tool_call.as_ref()) {
@@ -896,21 +1057,23 @@ impl Dialogue {
         if reply.interrupted() || self.workshop_combat_priority(input) {
             return Ok(reply.result(input));
         }
-        let spoken =
-            if matches!(action.as_str(), "unrelated" | "clear_lessons") || speech.is_empty() {
-                String::new()
-            } else {
-                let response = helper
+        let spoken = if matches!(action.as_str(), "unrelated" | "clear_lessons")
+            || speech.is_empty()
+            || stream.is_some() && streams_workshop_speech(&action)
+        {
+            String::new()
+        } else {
+            let response = helper
                 .exchange(
                     json!({"op":"reading","text":speech,"reading_engine":self.config.reading_engine,
                 "reading_corrections":self.reading_overlay().await?}),
                 )
                 .await?;
-                response["spoken_text"]
-                    .as_str()
-                    .context("workshop reading result")?
-                    .to_owned()
-            };
+            response["spoken_text"]
+                .as_str()
+                .context("workshop reading result")?
+                .to_owned()
+        };
         Ok(
             json!({"text":speech,"spoken_text":spoken,"workshop_id":view["workshop_id"],
             "workshop_action":action,"workshop_version":view["version"],"workshop_proposed":proposed,"workshop_close_after":close_after,

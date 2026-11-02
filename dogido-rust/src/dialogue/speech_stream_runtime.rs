@@ -1,5 +1,5 @@
 //! パワーのある実行環境のため、繊細なコントロールは不要。会話のテンポを止める処理を入れるな。
-//! 通常返答の可視JSON本文を文ごとに読み補正・合成・再生へ渡す。
+//! 通常返答と川柳相談の可視JSON本文を文ごとに読み補正・合成・再生へ渡す。
 //! 一文先の音声と上限付き一返答の文字だけを待ち列に持ち、同じturnの取消・終端を所有する。辞書はDialogueが返答をまたいで共有する。
 //! 先に聞こえた文は取り消せない。生成の後半の失敗では全文を確定せず、受理済み全文の表示ACKは従来どおり扱う。
 use super::{
@@ -16,6 +16,9 @@ use tokio::{
     sync::{mpsc, oneshot, watch},
     time::{Duration, Instant},
 };
+
+mod pipeline;
+pub(super) use pipeline::{Sink, run as run_pipeline};
 
 #[derive(Clone)]
 pub(super) struct Source {
@@ -77,15 +80,21 @@ impl Source {
             &owner.audio,
             &owner.serial,
             llm,
-            SpeechInput { request: &request, image, corrections },
+            SpeechInput {
+                request: &request,
+                image,
+                corrections,
+            },
             cancel,
             || {
                 // 最初の実player起動時だけStartedへ進める。部分本文を表示ACKへ公開しない。
                 if owner.update(&self.sid, &self.turn, self.epoch, Status::Started, None) {
                     let mut data = owner.data.lock().unwrap();
                     let row = data.rows.iter().find(|r| r["turn_id"] == self.turn);
-                    let input_occurred_at = row.map_or(serde_json::Value::Null, |r| r["created_at"].clone());
-                    let text = row.and_then(|r| r["player_input_text"].as_str())
+                    let input_occurred_at =
+                        row.map_or(serde_json::Value::Null, |r| r["created_at"].clone());
+                    let text = row
+                        .and_then(|r| r["player_input_text"].as_str())
                         .unwrap_or("")
                         .to_owned();
                     if let Some(session) = data.sessions.get_mut(&self.sid).filter(|s| {
@@ -133,7 +142,11 @@ struct Prefix {
     sent: String,
 }
 impl Prefix {
+    #[cfg(test)]
     fn feed(&mut self, delta: &str) -> Result<Vec<String>> {
+        self.feed_actions(delta, &["speak".into()])
+    }
+    fn feed_actions(&mut self, delta: &str, actions: &[String]) -> Result<Vec<String>> {
         self.raw.push_str(delta);
         let mut raw = self.raw.trim();
         if raw.starts_with("```") {
@@ -145,13 +158,23 @@ impl Prefix {
         let Some(value) = chat_validation::complete_json(raw) else {
             return Ok(vec![]);
         };
-        if value["action"] != "speak" || confirmed_action(raw).as_deref() != Some("speak") {
+        let Some(action) = confirmed_action(raw) else {
+            return Ok(vec![]);
+        };
+        if value["action"] != action || !actions.contains(&action) {
             return Ok(vec![]);
         }
         let Some(text) = value["speech"].as_str() else {
             return Ok(vec![]);
         };
         self.take(text.trim_start(), false)
+    }
+    fn check_final(&self, text: &str) -> Result<()> {
+        ensure!(
+            text.starts_with(&self.sent) || self.sent.trim_end() == text,
+            "streamed speech changed after delivery"
+        );
+        Ok(())
     }
     fn take(&mut self, text: &str, flush: bool) -> Result<Vec<String>> {
         if flush && self.sent.trim_end() == text {
@@ -282,150 +305,91 @@ async fn pipeline(
     started: impl FnOnce(),
     ready: impl FnOnce(&chat_validation::Outcome, &[Value]) -> Result<()>,
 ) -> Result<Run> {
-    let SpeechInput { request, image, corrections } = input;
-    let (stop, stop_rx) = watch::channel(false);
-    // 空deltaは送らず、各要素は最低1 byte。LLM側で同じ総byte上限を守るため、
-    // 音声待ち中も一返答を受信でき、要素数も本文byte数もこの上限を越えない。
-    let (delta_tx, mut delta_rx) = mpsc::channel(crate::llm::stream_text_limit(request.max_tokens));
-    let (report_tx, report_rx) = oneshot::channel::<Run>();
-    let (audio_tx, audio_rx) = mpsc::channel(1);
-    let did_start = AtomicBool::new(false);
-    let audio_failed = AtomicBool::new(false);
-    let generate = async {
-        let mut abort = stop_rx.clone();
-        let report = tokio::select! { biased;
-            _ = bridge::cancelled(&mut abort) => Err(anyhow::anyhow!("cancelled")),
-            report = llm.generate_stream(request, image, delta_tx) => report,
-        };
-        let (output, reports) = match report {
-            Ok(report) => (
-                chat_validation::finish(Some(&report.generated.text)),
-                vec![serde_json::to_value(report)?],
-            ),
-            Err(error) => (
-                chat_validation::finish(None),
-                vec![serde_json::json!({"kind":"player_chat","error":error.to_string()})],
-            ),
-        };
-        // 最終JSONを検査するのはここ一度だけ。本文の受理と音声完了は分離する。
-        if output.action == "silent" {
-            let _ = stop.send(true);
-        } else if let Err(error) = ready(&output, &reports) {
-            let _ = stop.send(true);
-            return Err(error);
-        }
-        tracing::info!(event="chat_leaf",implementation="rust_stream",status=output.status,reason=?output.reason,attempts=1);
-        let run = Run {
-            output,
-            reports,
-            streamed: true,
-        };
-        let _ = report_tx.send(run.clone());
-        Ok::<_, anyhow::Error>(run)
-    };
-    let produce = async {
-        let mut abort = stop_rx.clone();
-        let mut reader = Reader::new(dictionary, corrections);
-        let mut prefix = Prefix::default();
-        let mut index = 0;
-        let work = async {
-            loop {
-                let next = tokio::select! { biased;
-                    _ = bridge::cancelled(&mut abort) => anyhow::bail!("cancelled"),
-                    next = delta_rx.recv() => next,
-                };
-                let Some(mut delta) = next else { break };
-                // 合成待ち中に届いた文字はまとめて読む。先頭文のための待機は足さず、
-                // 同じ蓄積JSONを待ち列の小片ごとに解析し直す処理を避ける。
-                while let Ok(next) = delta_rx.try_recv() {
-                    delta.push_str(&next);
-                }
-                send_sentences(
-                    config,
-                    audio,
-                    &mut reader,
-                    prefix.feed(&delta)?,
-                    &audio_tx,
-                    &mut abort,
-                    &mut index,
-                )
-                .await?;
-            }
-            let run = report_rx.await.context("LLM report missing")?;
-            if run.output.action != "silent" {
-                send_sentences(
-                    config,
-                    audio,
-                    &mut reader,
-                    prefix.take(&run.output.text, true)?,
-                    &audio_tx,
-                    &mut abort,
-                    &mut index,
-                )
-                .await?;
-            }
-            Ok::<_, anyhow::Error>(())
-        }
-        .await;
-        if work.is_err() {
-            if !*stop_rx.borrow() {
-                audio_failed.store(true, Ordering::SeqCst);
-            }
-            let _ = stop.send(true);
-        }
-        drop(audio_tx);
-        work
-    };
-    let play = async {
-        let mut abort = stop_rx.clone();
-        let _audio_permit = tokio::select! { biased;
-            _ = bridge::cancelled(&mut abort) => return Err(anyhow::anyhow!("cancelled")),
-            permit = serial.acquire() => permit.unwrap(),
-        };
-        let result = audio
-            .play_stream(config, audio_rx, &mut abort, || {
-                did_start.store(true, Ordering::SeqCst);
-                started();
-            })
-            .await;
-        if result.is_err() {
-            if !*stop_rx.borrow() {
-                audio_failed.store(true, Ordering::SeqCst);
-            }
-            let _ = stop.send(true);
-        }
-        result
-    };
-    let joined = async { tokio::join!(generate, produce, play) };
-    tokio::pin!(joined);
-    let (generated, produced, played) = tokio::select! { biased;
-        _ = bridge::cancelled(cancel) => { let _ = stop.send(true); joined.await },
-        result = &mut joined => result,
-    };
-    ensure!(
-        !*cancel.borrow() && cancel.has_changed().is_ok(),
-        "cancelled"
-    );
-    let run = generated?;
-    if run.output.action == "silent" {
-        ensure!(
-            !audio_failed.load(Ordering::SeqCst),
-            "speech audio pipeline failed"
-        );
-        ensure!(
-            !did_start.load(Ordering::SeqCst),
-            "speech stream failed after partial playback"
-        );
-    } else {
-        produced?;
-        played?;
-    }
-    Ok(run)
+    let SpeechInput {
+        request,
+        image,
+        corrections,
+    } = input;
+    run_pipeline(
+        config, dictionary, audio, serial, corrections,
+        crate::llm::stream_text_limit(request.max_tokens), cancel, started,
+        |sink| async move {
+            let report = sink.generate(llm, request, image, &[], &[], false, vec!["speak".into()]).await;
+            let (output, reports) = match report {
+                Ok((report, _)) => (
+                    chat_validation::finish(Some(&report.generated.text)),
+                    vec![serde_json::to_value(report)?],
+                ),
+                Err(error) => (
+                    chat_validation::finish(None),
+                    vec![serde_json::json!({"kind":"player_chat","error":error.to_string()})],
+                ),
+            };
+            Ok(Run { output, reports, streamed: true })
+        },
+        |run, sink| async move {
+            let speech = if run.output.action == "silent" { None } else {
+                sink.validate_text(&run.output.text).await?;
+                ready(&run.output, &run.reports)?;
+                Some(run.output.text.clone())
+            };
+            tracing::info!(event="chat_leaf",implementation="rust_stream",status=run.output.status,reason=?run.output.reason,attempts=1);
+            Ok((run, speech))
+        },
+        || false,
+        None,
+    ).await
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    // 見込み: 共通の本文抽出へ相談の会話actionを渡せば、一文目だけを先行できる。
+    // 合格: explainの確定文はJSON終端前に一件、編集actionと本文内の見かけのactionはゼロ。音声・通信はHTTP試験で確認。
+    #[test]
+    fn workshop_conversation_uses_same_prefix_without_reading_operation_speech() {
+        let actions = vec!["respond".to_owned(), "explain".to_owned()];
+        let mut prefix = Prefix::default();
+        assert_eq!(
+            prefix
+                .feed_actions(r#"{"action":"explain","speech":"ひとつめやで。"#, &actions)
+                .unwrap(),
+            vec!["ひとつめやで。"]
+        );
+        assert_eq!(
+            prefix
+                .feed_actions(r#"ふたつめやで。"}"#, &actions)
+                .unwrap(),
+            vec!["ふたつめやで。"]
+        );
+        assert!(
+            prefix
+                .take("ひとつめやで。ふたつめやで。", true)
+                .unwrap()
+                .is_empty()
+        );
+        let mut operation = Prefix::default();
+        assert!(
+            operation
+                .feed_actions(
+                    r#"{"action":"accept_pending","speech":"保存したで。"}"#,
+                    &actions
+                )
+                .unwrap()
+                .is_empty()
+        );
+        let mut quoted = Prefix::default();
+        assert!(
+            quoted
+                .feed_actions(
+                    r#"{"speech":"action=explain。","evidence":{"action":"explain"}}"#,
+                    &actions
+                )
+                .unwrap()
+                .is_empty()
+        );
+    }
+
     #[test]
     fn escaped_unicode_action_last_and_split_deltas_preserve_exact_speech() {
         for raw in [

@@ -133,33 +133,6 @@ impl Audio {
         result
     }
 
-    /// 生成中の確定文を一文分だけ受け取り、既存playerで順番に再生する。
-    /// チャネル終了だけで成功にせず、呼出側がLLMの終端と合わせて配送完了を確定する。
-    pub(super) async fn play_stream(
-        &self,
-        config: &DialogueConfig,
-        mut rx: mpsc::Receiver<(usize, Arc<Vec<u8>>)>,
-        cancel: &mut watch::Receiver<bool>,
-        started: impl FnOnce(),
-    ) -> Result<()> {
-        let mut started = Some(started);
-        loop {
-            let next = tokio::select! { biased;
-                _ = cancelled(cancel) => anyhow::bail!("cancelled"),
-                next = rx.recv() => next,
-            };
-            let Some((index, bytes)) = next else {
-                return Ok(());
-            };
-            self.play(config, &bytes, cancel, index, || {
-                if let Some(started) = started.take() {
-                    started();
-                }
-            })
-            .await?;
-        }
-    }
-
     pub(super) async fn prepare(
         &self,
         config: &DialogueConfig,
@@ -261,7 +234,7 @@ impl Audio {
         Ok(bytes)
     }
 
-    async fn play(
+    pub(super) async fn play(
         &self,
         config: &DialogueConfig,
         bytes: &[u8],

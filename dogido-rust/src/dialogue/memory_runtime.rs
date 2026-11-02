@@ -158,6 +158,12 @@ impl Dialogue {
         continuation: Option<&super::workshop_reply::Source<'_>>,
         permit: &super::workshop_reply::Permit,
     ) {
+        if matches!(
+            result["workshop_feedback_outcome"].as_str(),
+            Some("saved" | "save_failed")
+        ) {
+            return;
+        }
         let step = result["workshop_feedback"].clone();
         if !self.config.haiku.memory_enabled || crate::haiku_memory::feedback_kind(&step).is_none()
         {

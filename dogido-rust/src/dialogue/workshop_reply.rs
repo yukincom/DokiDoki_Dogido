@@ -224,6 +224,65 @@ impl<'a> Source<'a> {
         }
     }
 
+    /// streamで合成済みの一文を届ける。pauseでは同じ音声を保持し、未完了の文だけ再生し直す。
+    pub(super) async fn play_prepared(
+        &self,
+        config: &super::DialogueConfig,
+        bytes: &[u8],
+        index: usize,
+        cancel: &mut watch::Receiver<bool>,
+        started: impl FnOnce(),
+    ) -> Result<()> {
+        let permit = Permit::new(&self.owner.serial);
+        let mut started = Some(started);
+        loop {
+            tokio::select! { biased;
+                _ = bridge::cancelled(cancel) => bail!("cancelled"),
+                ready = self.ready(&permit) => ready?,
+            }
+            let mut pause = self.pause.clone();
+            if *pause.borrow_and_update() {
+                continue;
+            }
+            let (stop, mut audio_cancel) = watch::channel(false);
+            let playback = self
+                .owner
+                .audio
+                .play(config, bytes, &mut audio_cancel, index, || {
+                    if let Some(started) = started.take() {
+                        started();
+                    }
+                    // 文と文の間のpauseも、次の実player起動でStartedへ戻す。
+                    let resumed = self.owner.data.lock().unwrap().rows.iter().any(|row| {
+                        row["turn_id"] == self.turn
+                            && row["reply_delivery"] == "resumed_combat"
+                            && row["playback_status"] != "started"
+                    });
+                    if resumed {
+                        self.owner.update(
+                            &self.sid,
+                            &self.turn,
+                            self.epoch,
+                            crate::playback::Status::Started,
+                            None,
+                        );
+                    }
+                });
+            tokio::pin!(playback);
+            tokio::select! { biased;
+                _ = bridge::cancelled(cancel) => {
+                    let _ = stop.send(true); let _ = playback.await; bail!("cancelled");
+                },
+                changed = pause.changed() => {
+                    let _ = stop.send(true); let _ = playback.await;
+                    ensure!(changed.is_ok(), "closed workshop continuation");
+                    permit.release();
+                },
+                result = &mut playback => return result,
+            }
+        }
+    }
+
     /// 再生済み文の次から配送する。中断した文だけ文頭から読み直し、playerの回収後に枠を譲る。
     pub async fn speak(
         &self,

@@ -145,9 +145,17 @@ def dependencies():
                             self.wfile.write(("data: " + json.dumps(frame, ensure_ascii=False) + "\n\n").encode())
                             self.wfile.flush()
                         event({"reasoning_content":"この内容は発声しない。"})
-                        for index, chunk in enumerate(chunks):
+                        # 見込み: native toolも同じSSEへ載せれば、本文と引数の配送境界を検査できる。
+                        # 合格: 完成した呼出しのID・名前・引数を保ち、断片はケース指定で分割できる。LLMは固定。
+                        events = [{"content":chunk} for chunk in chunks if chunk is not None]
+                        calls = complete["message"].get("tool_calls", [])
+                        if calls:
+                            events.append({"tool_calls":[{"index":i, **call} for i, call in enumerate(calls)]})
+                        if controls.get("stream_events") is not None:
+                            events = controls["stream_events"](incoming, complete)
+                        for index, delta in enumerate(events):
                             if index == 1 and gate is not None: gate.wait(timeout=12)
-                            event({"content":chunk})
+                            event(delta)
                         if not controls.get("stream_truncate"):
                             event({}, finish=complete.get("finish_reason", "stop"), usage=response.get("usage"))
                             self.wfile.write(b"data: [DONE]\n\n"); self.wfile.flush()
