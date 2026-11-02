@@ -10,6 +10,105 @@ mod body_facts;
 pub(crate) mod hearing;
 pub(crate) mod subjects;
 
+/// Reuse catalogue-name extraction on the current turn. The existing mob-query
+/// route may also use the latest named completed line; an empty result must not
+/// be treated as evidence of absence.
+pub(crate) fn chat_topic_names(user: &str, history: &str, use_history: bool) -> Vec<String> {
+    let mut names = crate::chat_validation::mentioned(user);
+    if names.is_empty() && use_history {
+        for line in history.lines().rev() {
+            names = crate::chat_validation::mentioned(line);
+            if !names.is_empty() { break; }
+        }
+    }
+    names
+}
+
+pub(crate) fn chat_topic_mobs(user: &str, history: &str, use_history: bool) -> Vec<String> {
+    let mut ids = Vec::new();
+    for name in chat_topic_names(user, history, use_history) {
+        if let Some(entry) = crate::catalog_knowledge::mob(&name, None, false, "player_named")
+            && !ids.contains(&entry.id)
+        {
+            ids.push(entry.id);
+        }
+    }
+    ids
+}
+
+/// Narrow structured mob observations only when the existing name lookup found
+/// an unambiguous set of conversation subjects. Unknown hearing is preserved.
+pub(crate) fn select_chat_mobs(world: &mut Value, topics: &[String], combat: bool) {
+    if topics.is_empty() { return; }
+    let matches = |id: &str| {
+        let id = id.strip_prefix("minecraft:").unwrap_or(id);
+        topics.iter().any(|topic| topic == id)
+    };
+    if let Some(observations) = world.get_mut("observations").and_then(Value::as_object_mut) {
+        for (key, id_key) in [("nearby_mob_types", "id"), ("mob_states", "catalog_id")] {
+            if let Some(rows) = observations.get_mut(key).and_then(Value::as_array_mut) {
+                rows.retain(|row| row[id_key].as_str().is_none_or(&matches));
+            }
+        }
+        if !combat && let Some(rows) = observations.get_mut("visible_hostiles").and_then(Value::as_object_mut) {
+            rows.retain(|key, _| matches(key));
+        }
+        if let Some(sounds) = observations.get_mut("hearing").and_then(|v| v.get_mut("sounds")).and_then(Value::as_array_mut) {
+            sounds.retain(|sound| {
+                let kind = crate::chat_observation::resolve_mob(
+                    "", sound["sound_event"].as_str(), &crate::chat_observation::CatalogLabels);
+                kind.as_deref().is_none_or(&matches)
+            });
+        }
+    }
+    if let Some(changes) = world.get_mut("changes").and_then(Value::as_array_mut) {
+        changes.retain_mut(|change| match change["kind"].as_str() {
+            Some("mob_environment") => change["now"]["catalog_id"].as_str().is_none_or(&matches),
+            Some("nearby_mob_types") => {
+                for key in ["before", "now"] {
+                    if let Some(rows) = change[key].as_array_mut() {
+                        rows.retain(|row| row["id"].as_str().is_none_or(&matches));
+                    }
+                }
+                change["before"] != change["now"]
+            }
+            _ => true,
+        });
+    }
+}
+
+/// Strip bookkeeping only from the copy serialized for the model.
+pub(crate) fn strip_model_bookkeeping(value: &mut Value) {
+    match value {
+        Value::Object(object) => {
+            for key in ["observed_at", "captured_at", "capture_id", "motion_sequence", "revision"] {
+                object.shift_remove(key);
+            }
+            for child in object.values_mut() {
+                strip_model_bookkeeping(child);
+            }
+        }
+        Value::Array(rows) => {
+            for child in rows { strip_model_bookkeeping(child); }
+        }
+        _ => {}
+    }
+}
+
+/// Remove only the generated UTC prefix from normalized history rows; the
+/// speaker's own text, including any dates they mentioned, is unchanged.
+pub(crate) fn history_without_clock(history: &str) -> String {
+    history.lines().map(|line| {
+        let Some((clock, rest)) = line.strip_prefix('[').and_then(|line| line.split_once(" | ")) else {
+            return line.to_owned();
+        };
+        let valid = clock.strip_suffix(" UTC").is_some_and(|value| {
+            chrono::NaiveDateTime::parse_from_str(value, "%Y-%m-%d %H:%M:%S").is_ok()
+        });
+        if valid { format!("[{rest}") } else { line.to_owned() }
+    }).collect::<Vec<_>>().join("\n")
+}
+
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Context {

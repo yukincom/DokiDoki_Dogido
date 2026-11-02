@@ -230,6 +230,65 @@ pub(crate) fn refresh_danger(action: &mut Speech, event: &GameEvent) -> bool {
     true
 }
 
+// Exact structured subject values from the selected trigger and action options.
+fn mentions_value(value: &Value, needle: &str) -> bool {
+    match value {
+        Value::String(s) => s == needle || s.strip_prefix("minecraft:") == Some(needle),
+        Value::Array(rows) => rows.iter().any(|row| mentions_value(row, needle)),
+        Value::Object(fields) => fields.values().any(|row| mentions_value(row, needle)),
+        _ => false,
+    }
+}
+
+fn select_reaction_knowledge(context: &mut serde_json::Map<String, Value>) {
+    let history = context.get("recent").and_then(|recent| recent.get("conversation"))
+        .and_then(Value::as_str).unwrap_or("");
+    let subjects = json!({
+        "observations":context.get("observations"),
+        "properties":context.get("properties"),
+        "changes":context.get("world_context").and_then(|world| world.get("changes")),
+        "body_options":context.get("body_options"),
+        "history_topic_mobs":crate::conversation_observation::chat_topic_mobs("", history, true),
+    });
+    if let Some(world) = context.get_mut("world_context") {
+        if let Some(observations) = world.get_mut("observations").and_then(Value::as_object_mut) {
+            for (key, id_key) in [("nearby_mob_types", "id"), ("mob_states", "catalog_id")] {
+                if let Some(rows) = observations.get_mut(key).and_then(Value::as_array_mut) {
+                    rows.retain_mut(|row| {
+                        let relevant = [id_key, "label"].iter().filter_map(|key| row[*key].as_str())
+                            .any(|value| mentions_value(&subjects, value));
+                        if let Some(fields) = row.as_object_mut() { fields.shift_remove("subject"); }
+                        relevant
+                    });
+                    if rows.is_empty() { observations.shift_remove(key); }
+                }
+            }
+        }
+        if let Some(changes) = world.get_mut("changes").and_then(Value::as_array_mut) {
+            for change in changes.iter_mut().filter(|change| change["kind"] == "mob_environment") {
+                for key in ["before", "now"] {
+                    if let Some(fields) = change[key].as_object_mut() { fields.shift_remove("subject"); }
+                }
+            }
+        }
+    }
+    if let Some(entries) = context.get_mut("catalog_knowledge")
+        .and_then(|knowledge| knowledge.get_mut("entries"))
+        .and_then(Value::as_array_mut)
+    {
+        entries.retain(|entry| {
+            ["id", "label"].iter().filter_map(|key| entry[*key].as_str())
+                .any(|key| mentions_value(&subjects, key))
+                || entry["basis"].as_array().is_some_and(|basis| basis.iter().any(|v| v == "reaction_target"))
+        });
+        if entries.is_empty() { context.remove("catalog_knowledge"); }
+    }
+    let villager = crate::catalog_knowledge::mob("villager", None, false, "reaction_target");
+    if !villager.is_some_and(|entry| mentions_value(&subjects, &entry.id) || mentions_value(&subjects, &entry.label)) {
+        context.remove("villager_routines");
+    }
+}
+
 pub(crate) struct Prepared {
     pub request: GenerationRequest,
     fallback: String,
@@ -250,12 +309,25 @@ impl Prepared {
         // 保存行の複製だけを通常会話と同じ表示へ投影する。
         if let Some(conversation) = context.get_mut("recent")
             .and_then(|recent| recent.get_mut("conversation"))
-            && let Some(rows) = conversation.as_array()
         {
-            *conversation = crate::dialogue::history::History::lines_for(rows).into();
+            let history = conversation.as_array()
+                .map(|rows| crate::dialogue::history::History::lines_for(rows))
+                .or_else(|| conversation.as_str().map(str::to_owned));
+            if let Some(history) = history {
+                *conversation = crate::conversation_observation::history_without_clock(&history).into();
+            }
+        }
+        let has_image = context.remove("visual_capture").is_some();
+        if has_image
+            && let Some(changes) = context.get_mut("world_context")
+                .and_then(|world| world.get_mut("changes"))
+                .and_then(Value::as_array_mut)
+        {
+            changes.retain(|change| change["kind"] != "body_view");
         }
         crate::catalog_knowledge::separate(&mut context);
         crate::villager_routines::separate(&mut context);
+        select_reaction_knowledge(&mut context);
         if let Some(kind) = match context.get("topic").and_then(Value::as_str) {
             Some("thunder") => Some("thunder_reaction"),
             _ => None,
@@ -277,6 +349,9 @@ impl Prepared {
         if context.get("topic").and_then(Value::as_str) == Some("surroundings") {
             let shared = crate::reaction_leaf::context("surroundings_notice", &input["details"])?;
             context.insert("situation".into(), shared["situation"].clone());
+        }
+        for value in context.values_mut() {
+            crate::conversation_observation::strip_model_bookkeeping(value);
         }
         let smell_observed = context
             .get("world_context")

@@ -1081,6 +1081,8 @@ mod tests {
         assert!(!context.to_string().contains("rain_after_window"));
     }
 
+    // 見込み: 村人の話題では日課を保ち、無関係な周辺変化には載せない。
+    // 合格: 従来leafと会話では予定、周辺反応の構造変化では日課なし。観測消失後は両者ともなし。実モデルは対象外。
     #[test]
     fn villager_routine_reaches_chat_and_both_reaction_routes_then_disappears() {
         let d = Dialogue::new(DialogueConfig::default()).unwrap();
@@ -1135,10 +1137,11 @@ mod tests {
                 };
                 let body: serde_json::Value =
                     serde_json::from_str(&request.messages[1].content).unwrap();
-                assert_eq!(
-                    body["villager_routines"]["villagers"][0]["activity"],
-                    expected
-                );
+                if kind == "surroundings_notice" {
+                    assert!(body.get("villager_routines").is_none());
+                } else {
+                    assert_eq!(body["villager_routines"]["villagers"][0]["activity"], expected);
+                }
                 assert!(body["world_context"].get("villager_routines").is_none());
                 if expected == "sleep" && kind != "surroundings_notice" {
                     assert_eq!(
@@ -1172,6 +1175,8 @@ mod tests {
         assert!(!messages[1].content.contains("休息・睡眠の時間"));
     }
 
+    // 見込み: 共通台帳は保持し、周辺反応には今回の構造変化に関係する辞書だけ渡す。
+    // 合格: 他のleafは従来どおり、構造変化には無関係なウシや音の辞書なし。実モデルは対象外。
     #[test]
     fn authored_catalogue_survives_session_refresh_and_real_model_request_builders() {
         let d = Dialogue::new(DialogueConfig::default()).unwrap();
@@ -1247,6 +1252,11 @@ mod tests {
                     .get("catalog_knowledge")
                     .is_none()
             );
+            if kind == "surroundings_notice" {
+                assert!(model_context.get("catalog_knowledge").is_none());
+                assert_eq!(s.conversation_observation.context().unwrap(), original);
+                continue;
+            }
             let rows = model_context["catalog_knowledge"]["entries"]
                 .as_array()
                 .unwrap();

@@ -143,6 +143,7 @@ pub fn prepare(
         return Ok(Prepared::Knowledge);
     }
     let user = chat_catalog::strip(&input.semantic_text);
+    let topics = crate::conversation_observation::chat_topic_mobs(user, &context.history.conversation_history, false);
     let focused = individuals::focus(event, snapshot, context, user);
     let (event, snapshot, context) = focused
         .as_ref()
@@ -232,7 +233,19 @@ pub fn prepare(
             .chain(snapshot.current.hearing_types.iter().map(String::as_str)),
     );
     let mut observed = current::observed(event, &ids, context.current_structure.as_deref());
+    if !topics.is_empty() {
+        observed.retain(|row| {
+            chat_catalog::catalog().mob_entry(&row.entity_id).is_none()
+                || topics.contains(&chat_catalog::normalized_observation_id(&row.entity_id))
+        });
+    }
     observed.splice(0..0, individuals::current_observations(snapshot, user));
+    let passive: Vec<_> = snapshot.current.passive_types.iter()
+        .filter(|kind| topics.is_empty() || topics.contains(&chat_catalog::normalized_observation_id(kind)))
+        .cloned().collect();
+    let recent: Vec<_> = snapshot.recent.passive_sightings.iter()
+        .filter(|row| topics.is_empty() || topics.contains(&chat_catalog::normalized_observation_id(&row.mob_type)))
+        .cloned().collect();
     let observation = if context.workshop_open {
         look.clear();
         observed.clear();
@@ -241,9 +254,9 @@ pub fn prepare(
         current::observation(
             event,
             &threat,
-            &snapshot.current.passive_types,
+            &passive,
             &look,
-            &snapshot.recent.passive_sightings,
+            &recent,
         )
     };
     details.as_object_mut().unwrap().extend(

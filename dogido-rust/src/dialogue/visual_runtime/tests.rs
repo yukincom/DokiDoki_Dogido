@@ -202,7 +202,8 @@ async fn image_notice_refreshes_all_current_facts_and_history_in_the_common_cont
     }
 }
 
-// 見込み: 変化の前後画像を既存の環境判断一回へ載せられる。合格: 同じ要求に前後画像と変化一文、撮影台帳なし。観測・返答は固定、Gemmaの判断は対象外。
+// 見込み: 環境判断一回に前後画像と変化一文を渡し、必要な観測と履歴を保つ。
+// 合格: 模擬HTTP一件でsilent、カメ・天候・匂い・履歴を保持し、撮影台帳・内部revisionを送らない。実モデルは対象外。
 #[tokio::test]
 async fn existing_environment_model_gets_one_image_request_and_can_select_silence() {
     let sent=Arc::new(std::sync::Mutex::new(Vec::<Value>::new()));let recorded=sent.clone();
@@ -236,7 +237,7 @@ async fn existing_environment_model_gets_one_image_request_and_can_select_silenc
     assert_eq!(observations["body_observation"]["status"], "observed");
     let changes = context["world_context"]["changes"].as_array().unwrap();
     assert!(changes.iter().any(|c| c["kind"] == "weather"));
-    assert!(changes.iter().any(|c| c["kind"] == "body_view"));
+    assert!(!changes.iter().any(|c| c["kind"] == "body_view"));
     assert!(!changes.iter().any(|c| c["kind"] == "nearby_mob_types" || c["kind"] == "smell"));
     let history = context["recent"]["conversation"].as_str().unwrap();
     assert!(history.contains("ドギド: カメさん、砂浜でゆっくりしとるなぁ。"));
@@ -247,14 +248,17 @@ async fn existing_environment_model_gets_one_image_request_and_can_select_silenc
     let rule = "同じ意味合いの話をしたばかりだったら、黙ってな。プレイヤーはちゃんと聞いとるから大丈夫やで。";
     assert_eq!(requests[0]["messages"][0]["content"].as_str().unwrap().matches(rule).count(), 1);
     assert!(!context["situation"].as_str().unwrap().contains(rule));
-    assert_eq!(result["observation_revision"], context["world_context"]["revision"]);
+    assert!(context["world_context"].get("revision").is_none());
+    assert_eq!(result["observation_revision"], input["details"]["reaction_context"]["world_context"]["revision"]);
     assert!(!context.to_string().contains(PNG));
-    // 添付の有無で、共通の状況文・全観測・変化・履歴が削られない。
+    // 画像がない場合は変化通知を残し、それ以外の観測と履歴は変わらない。
     let mut without_image = input.clone();
     without_image["details"]["reaction_context"].as_object_mut().unwrap().remove("visual_capture");
     let plain = crate::environment::reaction::Prepared::new(&without_image, "fixture").unwrap();
     let plain: Value = serde_json::from_str(&plain.request.messages[1].content).unwrap();
-    for key in ["situation", "world_context", "recent"] { assert_eq!(context[key], plain[key]); }
+    for key in ["situation", "recent"] { assert_eq!(context[key], plain[key]); }
+    assert_eq!(context["world_context"]["observations"], plain["world_context"]["observations"]);
+    assert!(plain["world_context"]["changes"].as_array().unwrap().iter().any(|c| c["kind"] == "body_view"));
     http.abort();
 }
 // 見込み: 画像行動の選択肢に応じた契約を一回の応答へ添えられる。合格: HTTP要求一件、画像指示一回、inspect_image有効時だけ専用契約を含み固定body_actionを受理する。確認範囲: 模擬HTTP。

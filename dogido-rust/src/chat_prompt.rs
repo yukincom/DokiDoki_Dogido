@@ -48,6 +48,7 @@ const BOOL_FIELDS: &[&str] = &[
     "has_visual_threats",
     "danger_darkness_high",
     "asks_inventory",
+    "asks_mob_information",
     "include_sky_context",
     "world_observation_available",
 ];
@@ -306,7 +307,8 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
     };
     f.insert("inventory_rules", rules);
     f.insert("inventory_block", block);
-    let (rules, block) = pair("history", text(d, "conversation_history", ""), "history");
+    let history = crate::conversation_observation::history_without_clock(text(d, "conversation_history", ""));
+    let (rules, block) = pair("history", &history, "history");
     f.insert("history_rules", rules);
     f.insert("history_block", block);
     let (rules, block) = pair("digest", text(d, "event_digest", ""), "digest");
@@ -374,6 +376,38 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
     // モデルには今回の問いに必要な観測だけを渡す。内部更新番号や無関係な村人の日課は観測台帳に留める。
     let world_block = if d["world_context"].is_object() {
         let mut world = d["world_context"].clone();
+        crate::conversation_observation::strip_model_bookkeeping(&mut world);
+        let topics = crate::conversation_observation::chat_topic_mobs(
+            text(d, "user_text", ""), text(d, "conversation_history", ""), flag(d, "asks_mob_information"));
+        let topic_names = crate::conversation_observation::chat_topic_names(
+            text(d, "user_text", ""), text(d, "conversation_history", ""), flag(d, "asks_mob_information"));
+        let current_topics = crate::conversation_observation::chat_topic_mobs(
+            text(d, "user_text", ""), "", false);
+        crate::conversation_observation::select_chat_mobs(&mut world, &current_topics, flag(d, "combat_active"));
+        let named_description = serde_json::from_str::<Value>(text(d, "named_entity_description_hints", "")).ok();
+        if let Some(entries) = world.pointer_mut("/catalog_knowledge/entries").and_then(Value::as_array_mut) {
+            entries.retain(|entry| {
+                let duplicate = named_description.as_ref().is_some_and(|description| {
+                    entry["kind"] == description["kind"] && entry["id"] == description["id"]
+                });
+                let relevant = if topic_names.is_empty() {
+                    true
+                } else if entry["kind"] == "mob" {
+                    entry["id"].as_str().is_some_and(|id| topics.iter().any(|topic| topic == id))
+                } else {
+                    entry["label"].as_str().is_some_and(|label| topic_names.iter().any(|topic| topic == label))
+                };
+                relevant && !duplicate
+            });
+            if entries.is_empty() { world.as_object_mut().unwrap().shift_remove("catalog_knowledge"); }
+        }
+        let villager_topic = topics.iter().any(|topic| topic == "villager");
+        if !topic_names.is_empty() && !villager_topic {
+            world.as_object_mut().unwrap().shift_remove("villager_routines");
+            if let Some(changes) = world.get_mut("changes").and_then(Value::as_array_mut) {
+                changes.retain(|change| change["kind"] != "villager_routines");
+            }
+        }
         let knowledge = world
             .as_object_mut()
             .unwrap()
@@ -494,14 +528,7 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
     let out = vec![
         ChatMessage {
             role: Role::System,
-            content: if descriptions.is_empty() {
-                system
-            } else {
-                format!(
-                    "{}\n今回の話題の種類と辞書描写: {descriptions}。特徴を話す場合はこの描写に沿うこと。前の返答にあった別対象の描写を繰り返さない。これは種類の一般的な描写の参考であり、現在の視認・存在・行動は観測欄だけで判断する。",
-                    system
-                )
-            },
+            content: system,
         },
         ChatMessage {
             role: Role::User,
@@ -534,6 +561,8 @@ mod tests {
     use super::*;
     use serde_json::json;
     // 見込み: 共通聴覚へ移した後は旧音メモ入力を拒否し、新形式の固定要求を保てる。合格: 現行ケースは全文一致、廃止項目を持つケースはエラー。確認範囲: prompt構築だけ。実モデルの意味理解は未検査。
+    // 見込み: 話題を絞れない会話の材料は保ち、内部revisionを送信から除く。
+    // 合格: 固定入力からsystem/userが期待どおりになり、廃止された聴覚入力は拒否する。実モデルは対象外。
     #[test]
     fn initial_messages_match_fixture() {
         let fixture: Value =
@@ -657,6 +686,55 @@ mod tests {
             assert!(!messages[1].content.contains("会話planner"));
             assert!(!messages[1].content.contains("本人による会話の訂正"));
         }
+    }
+
+    // 見込み: 同じ観測でも話題を変えると、辞書と日課は関連するものだけを送る。
+    // 合格: パンダの辞書は1回、村人の日課は村人の質問だけ。過去の会話と診断用の元値は保持。
+    // 確認範囲: 構成済み材料から実際のメッセージまで。分類・画像・実モデルの返答は対象外。
+    #[test]
+    fn topic_projection_separates_dictionary_routine_and_bookkeeping() {
+        let panda = crate::catalog_knowledge::mob("panda", None, false, "visual").unwrap();
+        let villager = crate::catalog_knowledge::mob("villager", None, false, "visual").unwrap();
+        let world = json!({"observations":{"observed_at":"absolute-clock", "time_phase":"day"},
+            "revision":42, "changes":[{"kind":"villager_routines","before":null,"now":{},"observed_at":"absolute-clock","revision":42}],
+            "catalog_knowledge":{"usage":"general", "entries":[panda.clone(),villager]},
+            "villager_routines":{"basis":"schedule", "usage":"予定であり目撃ではない", "villagers":[]}});
+        let mut input = json!({"dialogue_choice":true,"user_text":"パンダはいる？",
+            "world_context":world,"conversation_history":"user: パンダがいたね",
+            "named_entity_description_hints":serde_json::to_string(&panda).unwrap()});
+        let original = input.clone();
+        let out = messages(&input).unwrap();
+        let combined = format!("{}\n{}", out[0].content, out[1].content);
+        assert_eq!(combined.matches("\"id\":\"panda\"").count(), 1);
+        assert!(!combined.contains("予定であり目撃ではない") && !combined.contains("absolute-clock"));
+        assert_eq!(input, original);
+        input["user_text"] = json!("さっきいたよね？");
+        input["asks_mob_information"] = json!(true);
+        input["named_entity_description_hints"] = json!("");
+        let follow = messages(&input).unwrap();
+        assert!(follow[1].content.contains("パンダがいたね"));
+        assert!(!follow[1].content.contains("予定であり目撃ではない"));
+        input["user_text"] = json!("村人はいま仕事の時間？");
+        input["asks_mob_information"] = json!(false);
+        let villager = messages(&input).unwrap();
+        assert!(villager[1].content.contains("予定であり目撃ではない"));
+        assert!(!villager[1].content.contains("\"id\": \"panda\""));
+        input["user_text"] = json!("子供たち、元気だね。");
+        input["conversation_history"] = json!("user: パンダはいる？");
+        let ordinary = messages(&input).unwrap();
+        assert!(ordinary[1].content.contains("予定であり目撃ではない"));
+    }
+
+    // 見込み: 履歴の管理用UTC時刻を外しても会話の内容と返答先は保てる。
+    // 合格: 先頭の機械時刻はなく、本人の発話中の日付と返答先は残る。確認範囲: 送信用本文。
+    #[test]
+    fn conversation_history_omits_machine_clock_but_keeps_user_text() {
+        let input = json!({"user_text":"そうやな", "conversation_history":
+            "[2026-11-02 08:00:00 UTC | 本人入力] プレイヤー: 11月2日に見たよ\n[2026-11-02 08:00:01 UTC | 返答 | 返答先: プレイヤー「11月2日に見たよ」] ドギド: そうやな"});
+        let text = &messages(&input).unwrap()[1].content;
+        assert!(!text.contains("2026-11-02 08:00:00 UTC") && !text.contains("2026-11-02 08:00:01 UTC"));
+        assert!(text.contains("[本人入力] プレイヤー: 11月2日に見たよ"));
+        assert!(text.contains("返答先: プレイヤー「11月2日に見たよ」"));
     }
 
     #[test]

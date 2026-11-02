@@ -47,6 +47,41 @@ fn outcome(prepared: &Prepared, speech: &str) -> (String, &'static str) {
     prepared.finish(Some(&generated(json!({"action":"speak","speech":speech}))))
 }
 
+// 見込み: 反応の変化と操作候補が辞書材料の対象を決め、撮影管理値は送られない。
+// 合格: パンダの変化でパンダだけ残り、村人の日課・画像の内部値・二重の画像変化は消える。
+// 確認範囲: 模擬反応から送信メッセージ。画像送信と実機の発話は別。
+#[test]
+fn reaction_request_keeps_trigger_knowledge_without_capture_bookkeeping() {
+    let panda = crate::catalog_knowledge::mob("panda", None, false, "visual").unwrap();
+    let villager = crate::catalog_knowledge::mob("villager", None, false, "visual").unwrap();
+    let input = json!({"kind":KIND,"model":"fixture","max_tokens":128,"fallback_text":"fallback",
+        "details":{"reaction_context":{"topic":"reassurance", "observations":{}, "properties":{},
+            "recent":{"conversation":"[2026-11-02 08:00:00 UTC | 本人入力] プレイヤー: 11月2日に見たよ"},
+            "visual_capture":{"capture_id":"capture-secret","captured_at":"clock","motion_sequence":8},
+            "world_context":{"revision":77,"observations":{"observed_at":"clock","mob_states":[
+                    {"catalog_id":"panda","subject":"panda-instance"},
+                    {"catalog_id":"villager","subject":"villager-instance"}]},
+                "changes":[{"kind":"mob_environment","now":{"catalog_id":"panda","subject":"panda-instance"},"observed_at":"clock","revision":77},
+                    {"kind":"body_view","now":{"changed":true},"observed_at":"clock","revision":77}],
+                "catalog_knowledge":{"usage":"general", "entries":[panda,villager]},
+                "villager_routines":{"usage":"unrelated routine"}}}}});
+    let original = input.clone();
+    let p = Prepared::new(&input, "fixture").unwrap();
+    let body: Value = serde_json::from_str(&p.request.messages[1].content).unwrap();
+    assert_eq!(body["catalog_knowledge"]["entries"].as_array().unwrap().len(), 1);
+    assert_eq!(body["catalog_knowledge"]["entries"][0]["id"], "panda");
+    assert!(body.get("villager_routines").is_none() && body.get("visual_capture").is_none());
+    assert_eq!(body["world_context"]["changes"].as_array().unwrap().len(), 1);
+    assert_eq!(body["world_context"]["observations"]["mob_states"].as_array().unwrap().len(), 1);
+    assert!(!p.request.messages[1].content.contains("panda-instance"));
+    assert!(!p.request.messages[1].content.contains("villager-instance"));
+    assert!(!p.request.messages[1].content.contains("clock"));
+    assert!(!p.request.messages[1].content.contains("2026-11-02 08:00:00 UTC"));
+    assert!(p.request.messages[1].content.contains("11月2日に見たよ"));
+    assert!(!p.request.messages[1].content.contains("revision"));
+    assert_eq!(input, original);
+}
+
 #[test]
 fn model_expression_is_not_limited_by_a_small_model_word_filter_or_character_ceiling() {
     let mut a = action("occluded_entry_no_light", json!({}));
