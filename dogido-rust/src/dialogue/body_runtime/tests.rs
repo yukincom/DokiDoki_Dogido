@@ -370,9 +370,6 @@ async fn body_senses_feed_chat_smell_environment_and_haiku_without_player_fallba
         let reply = super::super::warnings::answer_fixed_query(
             s,
             "この匂い何？",
-            "smell",
-            0,
-            &d.config.combat,
         );
         assert!(reply.text.contains("ゾンビ") && !reply.text.contains("パン"));
         let mut reaction = crate::combat::model::Speech::new("smell", "");
@@ -479,9 +476,6 @@ async fn body_senses_feed_chat_smell_environment_and_haiku_without_player_fallba
         let reply = super::super::warnings::answer_fixed_query(
             &data.sessions["s"],
             "この匂い何？",
-            "smell",
-            0,
-            &d.config.combat,
         );
         assert_eq!(reply.cue_id, Some("smell_unsupported"));
     }

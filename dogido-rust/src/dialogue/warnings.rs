@@ -800,7 +800,7 @@ impl Dialogue {
                 let mut resolved=actions;
                 if let Some(text)=input.as_deref().filter(|_|is_query(&resolved)) {
                     anyhow::ensure!(observation_fresh(s),"stale observation");
-                    resolved=vec![answer_fixed_query(s,text,resolved[0].kind,self.clock.elapsed().as_millis() as u64,&self.config.combat)];
+                    resolved=vec![answer_fixed_query(s,text)];
                     s.warning.as_mut().unwrap().actions=resolved.clone();
                     if let Some(row)=d.rows.iter_mut().find(|r|r["turn_id"]==turn){row["text"]=display_text(&resolved).into();row["combat_actions"]=json!(resolved);}
                 }
@@ -1051,33 +1051,15 @@ fn leaf_details_after_cue(action: &Speech, thunder_scream_completed: bool) -> Va
 }
 
 pub(super) fn is_query(actions: &[Speech]) -> bool {
-    actions.len() == 1 && matches!(actions[0].kind, "smell" | "mob_information")
+    actions.len() == 1 && actions[0].kind == "smell"
 }
 
-pub(super) fn answer_fixed_query(
-    session: &Session,
-    text: &str,
-    kind: &str,
-    now: u64,
-    _settings: &crate::combat::model::Settings,
-) -> Speech {
-    if kind == "smell" {
-        let raw = session
-            .environment_latest
-            .as_ref()
-            .or(session.latest.as_ref())
-            .expect("fresh query");
-        let event = super::body_runtime::event(session, raw);
-        let mut reply = session.ambient.smell_query_reply(&event, text);
-        reply.delivery = Delivery::PlayerReply;
-        return reply;
-    }
-    let raw = session.latest.as_ref().expect("fresh query");
+pub(super) fn answer_fixed_query(session: &Session, text: &str) -> Speech {
+    let raw = session.environment_latest.as_ref().or(session.latest.as_ref()).expect("fresh query");
     let event = super::body_runtime::event(session, raw);
-    session
-        .combat
-        .answer_classified_query(&event, text, now)
-        .unwrap_or_else(|| Speech::new("mob_information", "今は周りを確かめられへんわ。"))
+    let mut reply = session.ambient.smell_query_reply(&event, text);
+    reply.delivery = Delivery::PlayerReply;
+    reply
 }
 
 #[cfg(test)]

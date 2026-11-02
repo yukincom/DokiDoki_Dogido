@@ -141,13 +141,11 @@ async fn body(
                 json!({"op":"result","memory_query_requested":true,"memory_query":query,"llm_reports":[]}),
             );
         }
-        // 移行前はモブ情報も拒否している。11月2日仕様ではそのラベルを通常会話で受ける。
         // 剣の操作、完成句の保存・三行編集は既存の各経路が所有する。
         if context.requests_sword
             || context.asks_save_last_haiku
             || context.revised_haiku_text.is_some()
             || context.player_haiku_text.is_some()
-            || context.asks_mob_information
         {
             return Ok(json!({"op":"result","unsupported":"unexpected_route","llm_reports":[]}));
         }
@@ -286,6 +284,15 @@ async fn body(
                 let mut request = reply.request(&config.model, config.max_tokens)?;
                 if input.player_approach.is_some() {
                     super::body_request_runtime::prepare_player_approach(&mut request);
+                }
+                if context.asks_mob_information {
+                    tracing::info!(
+                        event = "mob_chat_request",
+                        turn_id = input["operation_id"].as_str(),
+                        image_attached = image.is_some(),
+                        captured_at = image.as_ref().map(|c| c.image.captured_at.as_str()),
+                        observation_revision = reply.details["world_context"]["revision"].as_u64(),
+                    );
                 }
                 let run = if let Some(stream) = input.speech_stream.as_ref()
                     && input["workshop_fallback"] != true

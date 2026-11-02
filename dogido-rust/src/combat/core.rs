@@ -12,7 +12,6 @@ use super::{
     catalog,
     model::{Mode, Scope, Settings, Speech, elapsed},
     outcomes::Outcomes,
-    queries,
     specials::{RANGED_SIGHTING, Specials},
 };
 use crate::{
@@ -59,7 +58,6 @@ pub struct Engine {
     stalled_ids: Vec<String>,
     stalled_since: Option<u64>,
     stalled_spoken: Option<u64>,
-    last_named: Option<(String, u64)>,
     dark_push_active: bool,
     dark_push_audio_active: bool,
     configured: bool,
@@ -86,7 +84,6 @@ impl Default for Engine {
             stalled_ids: vec![],
             stalled_since: None,
             stalled_spoken: None,
-            last_named: None,
             dark_push_active: false,
             dark_push_audio_active: false,
             configured: false,
@@ -116,22 +113,6 @@ impl Engine {
     /// 今回の明示戦闘結果から得た対象名の更新を取り出す。次のobserve前に一度だけ消費する。
     pub fn take_name_updates(&mut self) -> crate::chat_observation::NameOutcomeUpdate {
         self.outcomes.take_name_updates()
-    }
-    /// 移行前の定型応答を、発話直前の身体観測で再計算する。
-    pub fn answer_classified_query(
-        &self,
-        event: &GameEvent,
-        text: &str,
-        now: u64,
-    ) -> Option<Speech> {
-        queries::answer_classified(
-            event,
-            text,
-            self.last_named
-                .as_ref()
-                .map(|(kind, at)| (kind.as_str(), *at)),
-            now,
-        )
     }
     /// 受信済みの観測と呼び手の時計から、優先警告・会話可否・音声停止を決める。
     /// completeは全視認を含むかを示す。falseなら直近の視認を補い、観測省略を敵の不在と誤認しない。
@@ -167,7 +148,6 @@ impl Engine {
             self.stalled_ids.clear();
             self.stalled_since = None;
             self.stalled_spoken = None;
-            self.last_named = None;
             self.dark_push_active = false;
             self.dark_push_audio_active = false;
         }
@@ -340,34 +320,12 @@ impl Engine {
         s: &Settings,
         ws: &threats::Settings,
     ) -> Option<Decision> {
-        self.input_with_enemy_request(event, text, now, s, ws, false)
-    }
-    /// 移行前は分類済みのモブ質問もここで答える。11月2日仕様の通常会話への移管は
-    /// 質問だけを対象とし、quiet等の直接制御は引き続き戦闘側で扱う。
-    #[allow(clippy::too_many_arguments)]
-    pub fn input_with_enemy_request(
-        &mut self,
-        event: &GameEvent,
-        text: &str,
-        now: u64,
-        s: &Settings,
-        ws: &threats::Settings,
-        enemy_request: bool,
-    ) -> Option<Decision> {
-        let previous = self.mode;
-        let quiet = wants_quiet(text);
-        let query = if !quiet && enemy_request {
-            self.answer_classified_query(event, text, now)
-        } else {
-            None
-        };
-        if !quiet && query.is_none() {
+        if !wants_quiet(text) {
             return None;
         }
-        if quiet {
-            self.shut_up_count = self.shut_up_count.saturating_add(1);
-            self.mode = self.resolve_mode(event, now, s);
-        }
+        let previous = self.mode;
+        self.shut_up_count = self.shut_up_count.saturating_add(1);
+        self.mode = self.resolve_mode(event, now, s);
         let mut d = Decision {
             mode: self.mode,
             actions: vec![],
@@ -376,9 +334,7 @@ impl Engine {
             dimension_changed: false,
             presence_only: false,
         };
-        if let Some(speech) = query {
-            self.deliver(event, now, speech, &mut d);
-        } else if self.mode == Mode::SuppressedPanic && self.policy.cue_allowed(event, now, ws) {
+        if self.mode == Mode::SuppressedPanic && self.policy.cue_allowed(event, now, ws) {
             let (id, text) = if previous == Mode::SuppressedPanic {
                 ("suppressed_breath", "ハァハァ……")
             } else {
@@ -786,14 +742,12 @@ impl Engine {
                 self.policy.mark_commented(&survivors, now);
                 if e.visual_threats.len() >= 2 {
                     self.policy.mark_handled(&[], None, now);
-                    self.last_named = None;
                 }
             } else if matches!(
                 speech.kind,
                 "ushiro_named" | "ushiro_classic" | "stalled_visual" | "warp_mass_hostiles"
             ) {
                 self.policy.mark_handled(&[], None, now);
-                self.last_named = None;
             } else if speech.visual_plan.is_none()
                 && !matches!(
                     speech.kind,
@@ -802,26 +756,8 @@ impl Engine {
             {
                 self.policy.mark_handled(ids, single, now);
             }
-            if let Some(kind) = single
-                && !matches!(
-                    speech.kind,
-                    "daylight_water"
-                        | "daylight_rain"
-                        | "newly_burning_visual"
-                        | "combat_cue"
-                        | "ushiro_named"
-                        | "ushiro_classic"
-                        | "stalled_visual"
-                        | "warp_mass_hostiles"
-                )
-            {
-                self.last_named = Some((kind.to_owned(), now));
-            }
         }
         if let Some(plan) = &speech.visual_plan {
-            if !plan.hostile_type.is_empty() && !plan.text.is_empty() {
-                self.last_named = Some((plan.hostile_type.clone(), now));
-            }
             if plan.kind == "creeper_fuse" || plan.kind == "close_ambush" {
                 speech.interrupt = true;
             }

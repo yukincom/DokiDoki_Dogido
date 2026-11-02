@@ -79,13 +79,7 @@ impl Dialogue {
                 .as_ref()
                 .filter(|_| super::observation_fresh(s))
                 .map(|_| {
-                    vec![warnings::answer_fixed_query(
-                        s,
-                        text,
-                        s.warning.as_ref().unwrap().actions[0].kind,
-                        self.clock.elapsed().as_millis() as u64,
-                        &self.config.combat,
-                    )]
+                    vec![warnings::answer_fixed_query(s, text)]
                 })
         });
         let query_changed = query.is_some()
@@ -157,9 +151,6 @@ impl Dialogue {
                         vec![warnings::answer_fixed_query(
                             s,
                             s.pending_input.as_deref().unwrap(),
-                            pending[0].kind,
-                            self.clock.elapsed().as_millis() as u64,
-                            &self.config.combat,
                         )]
                     })
             } else {

@@ -95,13 +95,14 @@ pub(super) fn ordinary(
     text: &str,
     classification: Option<&crate::request_classifier::Classification>,
 ) -> bool {
+    use crate::request_classifier::Label;
     !super::workshop_focus::active(s)
         && crate::poem_input::parse(text, false).is_none()
         && !crate::haiku_memory::clear_requested(text)
         && !crate::haiku_memory::memory_candidate(text)
         && !crate::combat::core::wants_quiet(text)
         && classification
-            .is_none_or(|c| c.prediction.label == crate::request_classifier::Label::NotTarget)
+            .is_none_or(|c| matches!(c.prediction.label, Label::NotTarget | Label::EnemyInformation))
 }
 
 pub(super) fn allows_operation(c: &crate::request_classifier::Classification) -> bool {

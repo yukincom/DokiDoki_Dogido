@@ -3,6 +3,7 @@
 mod current;
 mod descriptions;
 mod individuals;
+pub(crate) mod mobs;
 mod travel;
 use crate::{
     chat_catalog, chat_hints,
@@ -45,6 +46,7 @@ pub struct PlayerInput {
     pub semantic_text: String,
     pub asks_inventory: bool,
     pub asks_about_sound: bool,
+    pub asks_mob_information: bool,
     pub knowledge_query_present: bool,
 }
 impl From<&crate::input_context::Context> for PlayerInput {
@@ -54,6 +56,7 @@ impl From<&crate::input_context::Context> for PlayerInput {
             semantic_text: value.interpreted_text.clone(),
             asks_inventory: value.asks_inventory,
             asks_about_sound: value.asks_about_sound,
+            asks_mob_information: value.asks_mob_information,
             knowledge_query_present: value.knowledge_query.is_some(),
         }
     }
@@ -144,12 +147,17 @@ pub fn prepare(
     }
     let user = chat_catalog::strip(&input.semantic_text);
     let topics = crate::conversation_observation::chat_topic_mobs(user, &context.history.conversation_history, false);
-    let focused = individuals::focus(event, snapshot, context, user);
+    // 数・方向の質問には、名前付き個体へ絞る前の身体の一覧を使う。
+    let focused = if input.asks_mob_information {
+        None
+    } else {
+        individuals::focus(event, snapshot, context, user)
+    };
     let (event, snapshot, context) = focused
         .as_ref()
         .map(|turn| (&turn.event, &turn.snapshot, &turn.context))
         .unwrap_or((event, snapshot, context));
-    if crate::environment::ambient::is_smell_query(user) {
+    if !input.asks_mob_information && crate::environment::ambient::is_smell_query(user) {
         return Ok(Prepared::Fixed(Fixed {
             text: crate::environment::ambient::current_smell_query_reply(event, user).text,
             reason: "current_smell",
@@ -176,6 +184,10 @@ pub fn prepare(
         &travel,
         (combat, visual, dark),
     )?;
+    if input.asks_mob_information {
+        details["observation_summary"] = mobs::observations(event, snapshot).into();
+        return Ok(Prepared::Reply(Reply { details }));
+    }
     let effective_visual = current::unique(
         event
             .visual_threats

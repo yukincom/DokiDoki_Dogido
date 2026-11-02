@@ -385,6 +385,9 @@ impl ChatObservationMemory {
             age(now, memo.seen_at_us) <= self.settings.player_chat_visual_retention_ms
         });
         for threat in &event.visual_threats {
+            if event.body_origin().is_some() && !crate::chat_materials::mobs::currently_visible(threat.environment.as_ref()) {
+                continue;
+            }
             let mob_type = normalize(&threat.r#type);
             if mob_type.is_empty() {
                 continue;

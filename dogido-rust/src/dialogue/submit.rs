@@ -453,6 +453,8 @@ impl Dialogue {
             .map(|raw| super::body_runtime::event(s, raw))
             && s.chat_allowed
             && !workshop_focus::active(s)
+            && !super::request_runtime::classification(s, text, source)
+                .is_some_and(|r| r.prediction.label == crate::request_classifier::Label::EnemyInformation)
             && let Some(mut speech) = s.ambient.smell_query(&event, text, now)
         {
             speech.delivery = crate::combat::model::Delivery::PlayerReply;
@@ -461,31 +463,12 @@ impl Dialogue {
             return json!({"accepted":true,"session_id":session_id,"reason":"smell_query"});
         }
         let s = d.sessions.get_mut(&session_id).unwrap();
-        let classified = super::request_runtime::classification(s, text, source).is_some_and(|r| {
-            r.prediction.label == crate::request_classifier::Label::EnemyInformation
-        });
-        if (quiet || classified || !workshop_focus::quiet(s))
-            && let Some(raw) = s.latest.clone()
-        {
-            // 移行前はモブ情報ラベルをここで定型応答へ渡す。11月2日仕様では質問だけを
-            // 通常会話へ移し、戦況判断と静粛の処理はここに残す。
-            let event = if classified && !quiet {
-                super::body_runtime::event(s, &raw)
-            } else {
-                raw
-            };
-            let decision = s.combat.input_with_enemy_request(
-                &event,
-                text,
-                self.clock.elapsed().as_millis() as u64,
-                &self.config.combat,
-                &self.config.warnings,
-                classified,
+        if quiet && let Some(event) = s.latest.clone() {
+            let decision = s.combat.input(
+                &event, text, self.clock.elapsed().as_millis() as u64,
+                &self.config.combat, &self.config.warnings,
             );
             if let Some(decision) = decision {
-                if crate::combat::core::wants_quiet(text) {
-                    self.cancel_reply_queue(&mut d, &session_id, "player_requested_quiet");
-                }
                 Self::cancel_chat(&mut d, &session_id, "combat_input");
                 self.apply_combat_decision(
                     &mut d,
