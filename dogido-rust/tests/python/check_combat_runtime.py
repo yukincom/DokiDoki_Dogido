@@ -88,11 +88,11 @@ time.sleep(float((root/'delay').read_text()))
                 user = requests[-1]["messages"][-1]["content"]
                 if image:
                     png, captured = image
-                    assert [part["type"] for part in user] == ["text", "image_url"], user
-                    assert user[1]["image_url"]["url"] == "data:image/png;base64," + png
+                    assert [part["type"] for part in user] == ["text", "text", "image_url"], user
+                    assert user[1]["text"] == "緑のPLAYER枠はプレイヤーの位置やで", user
+                    assert user[2]["image_url"]["url"] == "data:image/png;base64," + png
                     user = user[0]["text"]
-                    meta = json.loads(user.split("\n\nimage_observation: ", 1)[1])
-                    assert meta["captured_at"] == captured, meta
+                    assert all(part not in user for part in (captured, "image_observation:", "captured_at", "capture_id", "sha256", "motion_sequence")), user
                 assert isinstance(user, str) and "【今回の用件】" in user and text in user, user
                 assert "呼び名: プレイヤー（自然なら一度だけ）" in user
                 trace = [line for line in log.read_text().splitlines()
@@ -156,8 +156,9 @@ time.sleep(float((root/'delay').read_text()))
             send(sid,mobs=[mob(distance=6)],combat={"hostiles_within_scan_ground":3,"hostile_scan_distance":24})
             user = ask_mob(sid, "敵は何体？")
             assert "現在視認：ゾンビ 1体" in user and "ゾンビ 3体" not in user
+            # F：対象を指定した場合、模擬HTTPへ無関係なゾンビを載せず、スケルトンも視認済みにしない。
             user = ask_mob(sid, "スケルトンどこ？")
-            assert "現在視認：スケルトン" not in user and "現在視認：ゾンビ 1体" in user
+            assert all(v not in user for v in ("現在視認：スケルトン", "現在視認：ゾンビ", "現在視認：一覧にモブの記録なし")), user
             passed.append("mob_questions_use_single_chat_with_observed_count_and_direction")
             close(sid)
 
@@ -182,7 +183,7 @@ time.sleep(float((root/'delay').read_text()))
             passed.append("visible_recent_audio_and_delivered_history_remain_distinct")
             close(sid)
 
-            # 画像ありでは同じ質問へ撮影時刻付きPNG一枚を一度だけ添える。画像理解は本人の実機確認。
+            # D・E：未比較なら同じ模擬HTTP要求に今回のPNG一枚とその枠の説明だけを添え、撮影台帳は送らない。実際の画像理解は対象外。
             sid = request(base,"/api/v1/adapter-sessions",{"adapter_name":"fabric-test","adapter_version":"test",
                 "game":"minecraft-java","schema_version":"2026-05-24","player_name":"試験",
                 "player_uuid":"11111111-1111-4111-8111-111111111111",
@@ -193,12 +194,12 @@ time.sleep(float((root/'delay').read_text()))
             view = {k:command[k] for k in ("body_entity_uuid","body_epoch","owner_uuid","dimension")}
             view.update(camera_restored=True,png_base64=png,sha256=hashlib.sha256(base64.b64decode(png)).hexdigest(),
                 width=1,height=1,captured_at=captured,annotation_status="available",capture_id=command["command_id"],
-                motion_sequence=1,scene_comparison={"status":"not_compared","reference":None,"cells":[]})
+                motion_sequence=1,scene_comparison={"status":"not_compared","reference":None})
             send(sid, results=[{"command_id":command["command_id"],"command_type":"capture_body_view",
                                "status":"succeeded","executed_at":captured,"body_view":view}])
             user = ask_mob(sid,"パンダさんもいるかな？",image=(png,captured))
             assert "現在視認：一覧にモブの記録なし" in user
-            passed.append("single_chat_with_one_timed_image_and_no_listed_mob")
+            passed.append("single_chat_with_one_current_image_and_no_capture_ledger")
             close(sid)
 
             # 通常の警告中に受けた質問は、同じ分類で一度だけ再開する。緊急割込みは別に確認。

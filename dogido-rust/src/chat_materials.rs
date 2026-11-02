@@ -185,7 +185,8 @@ pub fn prepare(
         (combat, visual, dark),
     )?;
     if input.asks_mob_information {
-        details["observation_summary"] = mobs::observations(event, snapshot).into();
+        details["asks_mob_information"] = true.into();
+        details["observation_summary"] = mobs::observations(event, snapshot, user, &context.history.conversation_history).into();
         return Ok(Prepared::Reply(Reply { details }));
     }
     let effective_visual = current::unique(
