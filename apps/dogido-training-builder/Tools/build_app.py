@@ -46,7 +46,7 @@ def build(project, destination):
     identity = "-"  # ローカルでビルドしたアプリ用。キーチェーンの秘密鍵を使用しない。
     with tempfile.TemporaryDirectory(prefix="dogido-training-build-") as temporary:
         work = Path(temporary)
-        app = work / "ドギド 学習教材.app"
+        app = work / "ModernBERT 学習教材.app"
         executable = app / "Contents/MacOS/DogidoTrainingBuilder"
         executable.parent.mkdir(parents=True)
         resources = app / "Contents/Resources"
@@ -81,7 +81,7 @@ try bitmap.representation(using: .png, properties: [:])!.write(to: URL(fileURLWi
                 subprocess.run(["sips", "-z", str(size * scale), str(size * scale), str(work / "icon.png"),
                                 "--out", str(iconset / filename)], check=True, stdout=subprocess.DEVNULL)
         subprocess.run(["iconutil", "-c", "icns", str(iconset), "-o", str(resources / "Training.icns")], check=True)
-        info = {"CFBundleName": "ドギド 学習教材", "CFBundleDisplayName": "ドギド 学習教材",
+        info = {"CFBundleName": "ModernBERT 学習教材", "CFBundleDisplayName": "ModernBERT 学習教材",
                 "CFBundleIdentifier": "local.dogido.training-builder", "CFBundleExecutable": executable.name,
                 "CFBundlePackageType": "APPL", "CFBundleShortVersionString": "0.3.0", "CFBundleVersion": "3",
                 "CFBundleIconFile": "Training.icns", "LSMinimumSystemVersion": "13.0", "NSHighResolutionCapable": True,

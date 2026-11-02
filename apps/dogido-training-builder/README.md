@@ -7,7 +7,7 @@
 ビルド：
 
 ```sh
-python3 apps/dogido-training-builder/Tools/build_app.py --output .dogido_tools/training-builder/ドギド\ 学習教材.app
+python3 apps/dogido-training-builder/Tools/build_app.py --output .dogido_tools/training-builder/ModernBERT\ 学習教材.app
 ```
 
 標準PythonとAppKitを利用し、ad-hoc署名を使う。共通の`train.py`・`evaluation.py`を再利用する。プロジェクト定義、分類CSV、入力形式、教材・コードのhashをNotebookと結果へ残す。

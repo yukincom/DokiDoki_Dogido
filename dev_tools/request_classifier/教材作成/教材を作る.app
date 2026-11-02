@@ -1,1 +1,1 @@
-../../../apps/ドギド 学習教材.app
+../../../apps/ModernBERT 学習教材.app
