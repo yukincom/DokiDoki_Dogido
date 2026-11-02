@@ -75,6 +75,11 @@ pub fn observation(event: &GameEvent) -> Value {
         &e["passive_mobs"],
         "type distance direction certainty temperament caution_reason is_baby profession villager_type",
     );
+    for (row, mob) in passive.iter_mut().zip(&event.passive_mobs) {
+        if let Some(identity) = &mob.identity {
+            row["entity_id"] = json!(identity.entity_id);
+        }
+    }
     let mut ambient = rows(
         &e["ambient_sounds"],
         "type source_id sound_event direction distance_band certainty",
@@ -100,6 +105,15 @@ pub fn observation(event: &GameEvent) -> Value {
         "dimension position health hunger held_item block_breaking_active yaw pitch hotbar vehicle active_status_effects",
     );
     player["position"] = pick(&player["position"], "x y z");
+    let mut combat = pick(&e["combat"], "combat_active_hint recent_damage_ms recent_hostile_visual_ms recent_hostile_audio_ms hostiles_within_7 hostiles_within_10 hostile_scan_distance hostiles_within_scan_ground hostile_outcomes");
+    for key in ["player_engaged", "opponents", "former_opponent_nearby"] {
+        if let Some(value) = e["combat"].get(key) {
+            combat[key] = value.clone();
+        }
+    }
+    if let Some(value) = event.player.invulnerable {
+        player["invulnerable"] = value.into();
+    }
     json!({"player":player,
         "world":pick(&e["world"],"biome structure time_of_day time_phase weather local_light sky_visible surface_y depth_below_surface ceiling_height overhead_cover_type is_submerged submerged_depth_blocks air_supply cardinal_wall_count double_height_open_side_count drafty_opening_count enclosure_score connected_dark_volume nearest_dark_spawn_distance danger_darkness_score nearby_light_source_count nearest_light_source_distance nearby_damaging_light_source_count nearest_damaging_light_source_distance standing_on_magma_block nearby_door_count open_door_count nearby_window_present nearby_bed_count nearby_sleeping_people_count safe_zone_with_door respawn_point_set respawn_distance"),
         "visual_threats":{"count":visual.len(),"types":unique(&visual,"type"),"nearest":nearest,"items":visual},
@@ -108,7 +122,7 @@ pub fn observation(event: &GameEvent) -> Value {
         "passive_mobs":{"count":passive.len(),"types":unique(&passive,"type"),"items":passive},
         "inventory":e["inventory"],"nearby_resources":resources,"dropped_items":e["dropped_items"],"recent_block_breaks":e["recent_block_breaks"],
         "look_target":if e["look_target"].is_null(){Value::Null}else{pick(&e["look_target"],"kind name distance")},
-        "combat":pick(&e["combat"],"combat_active_hint recent_damage_ms recent_hostile_visual_ms recent_hostile_audio_ms hostiles_within_7 hostiles_within_10 hostile_scan_distance hostiles_within_scan_ground hostile_outcomes")})
+        "combat":combat})
 }
 impl Record {
     pub fn payload(&self) -> Value {

@@ -68,6 +68,7 @@ pub struct Specials {
     // 発話待ちでも保持し、完全観測で燃焼が続いている個体だけを候補にする。
     pending_burning: HashSet<String>,
     water_handled: HashSet<String>,
+    // 同じ戦闘の通知済み個体。視界から一瞬外れても再通知しない。
     pub(super) ranged_announced: HashSet<String>,
     last_water_at: Option<u64>,
     last_rain_at: Option<u64>,
@@ -236,7 +237,6 @@ impl Specials {
             self.rear_announced.retain(|id| e.visual_threats.iter().any(|t|
                 super::core::rear_near(t, s) && identity(t) == *id));
             self.water_handled.retain(|id| current_ids.contains(id));
-            self.ranged_announced.retain(|id| current_ids.contains(id));
             let effects: HashSet<_> = e
                 .player
                 .active_status_effects
@@ -282,6 +282,7 @@ impl Specials {
     }
 
     fn reset_combat(&mut self) {
+        self.ranged_announced.clear();
         self.fuse_warned.clear();
         self.boss_seen.clear();
         self.last_sonic_at = None;

@@ -495,6 +495,18 @@ pub struct AuditoryThreat {
     #[serde(flatten)]
     pub extra: BTreeMap<String, Value>,
 }
+/// 現在の相手ごとの根拠。索敵範囲・視認・音量とは独立してFabricが決める。
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CombatOpponent {
+    pub entity_id: String,
+    pub evidence: OpponentEvidence,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OpponentEvidence {
+    TargetingPlayer,
+    PlayerAttack,
+}
 /// buildCombatが実観測とadapter内の追跡状態からまとめる戦況補助情報。
 /// 通常の敵数・直近の被弾と、確認できた死亡結果、ボス固有情報を併せて渡す。
 /// Optionの省略は情報なしであり、敵数0や撃破falseを実測したことにはしない。
@@ -527,6 +539,12 @@ pub struct CombatState {
     /// 敵が本人を狙った、または本人が敵を攻撃してから既存の戦闘終了まで。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub player_engaged: Option<bool>,
+    /// Some([])は現在の相手なし。部分通知での未提供とは区別する。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub opponents: Option<Vec<CombatOpponent>>,
+    /// 戦闘終了時、交戦していた個体が非敵対に戻ってもまだ周囲にいる。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub former_opponent_nearby: Option<bool>,
     /// 統合サーバーが本人の撃破と、他に交戦中の敵がいないことを同時に確認した。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_opponent_defeated: Option<bool>,

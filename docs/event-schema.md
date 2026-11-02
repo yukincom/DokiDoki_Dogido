@@ -721,7 +721,8 @@ MISS・空気のときは **フィールド自体を省略**する。
     }
   ],
   "combat_active_hint": true,
-  "player_engaged": true
+  "player_engaged": true,
+  "opponents": [{"entity_id":"ac10…", "evidence":"targeting_player"}]
 }
 ```
 
@@ -729,7 +730,8 @@ MISS・空気のときは **フィールド自体を省略**する。
 
 - `player_engaged` は敵が本人を狙ったか、本人が敵を攻撃した後、既存の戦闘終了までtrue。川柳はこの値で中断する。敵の視認・音・被弾だけでも立ち得る `combat_active_hint` は戦況の観測に使う。
 - 敵AIの攻撃対象は統合サーバーでホスト本人について取得する。クライアントだけで外部サーバーに参加した場合、通常の敵AIの攻撃対象は取得できない。近接攻撃は本人の敵への攻撃操作、飛び道具は本人を攻撃者とする命中通知から取る。
-- 生データだけでなく、状態機械がすぐ使える集約値も持たせてよい
+- `combat.opponents` は本人を狙っている（`targeting_player`）か、本人が攻撃した（`player_attack`）個体とその根拠。空配列は現在の相手なし、省略は情報なし。別個体の交戦を流用しない。姿や鳴き声の種類と音のHOSTILE分類だけでは敵にしない。相手以外の姿と音は `passive_mobs` と `ambient_sounds` に載せる。身体とプレイヤーの視認範囲・聴取履歴は独立している。
+- `combat_ended` の `former_opponent_nearby` は、この交戦で観測した相手が非敵対に戻ってもまだ周囲にいるかを示す。不在と交戦終了を区別する。
 - `hostile_scan_distance` は通常敵の索敵半径、`hostiles_within_scan_ground` はその範囲内の地上系敵数。範囲付き集計には両方を送る。集計がない場合は現在の視認から数え、固定30ブロックの値へ読み替えない
 - `hostile_outcomes` は、追跡中の個体について実際の死亡またはクリーパー爆発を観測した結果。一覧要素は `entity_id / type / outcome / evidence`
 - `entity_id` は同じ結果を即時発話と戦闘終了で二重に話さないための空でない個体IDで、各結果に必須

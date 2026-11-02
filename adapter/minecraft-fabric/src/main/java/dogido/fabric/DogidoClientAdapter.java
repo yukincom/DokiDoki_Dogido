@@ -35,6 +35,7 @@ import java.util.UUID;
 import net.minecraft.entity.mob.MobEntity;
 import static dogido.fabric.observation.MobIdentityObservation.entityTypeName;
 import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
 import net.minecraft.network.packet.s2c.play.EntityDamageS2CPacket;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.ActionResult;
@@ -122,7 +123,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.characterHud = DogidoCharacterHud.register();
         this.config = DogidoConfig.load();
         this.playerObserver = new PlayerObserver(this.config.playerNameOverride);
-        this.bodySenses = new dogido.fabric.body.BodySensesCollector(LOGGER,() -> this.tickCounter,
+        this.bodySenses = new dogido.fabric.body.BodySensesCollector(new MobClassifier(this.mobClassifier::hasOpponent),LOGGER,() -> this.tickCounter,
             this.config.snapshotIntervalTicks,this.config.audioThreatDistance,new ThreatObserver.Settings(
                 this.config.maxThreatDistance,this.config.visibleThreatDistance,this.config.rearWarningDistance,
                 this.config.panicDistance,this.config.visualConfirmTicks,this.config.visualHoldTicks,this.config.combatEndedQuietTicks));
@@ -134,7 +135,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             this.config.combatEndedQuietTicks), this.mobClassifier, this.bossTracker,
             this.soundObserver::markThreatObserved, () -> this.tickCounter);
         this.bossObserver = new BossObserver(this.bossTracker, () -> this.tickCounter,
-            this.threatObserver::lastExplosionObservedTick);
+            this.threatObserver::lastExplosionObservedTick, this.mobClassifier);
         this.combatObserver = new CombatObserver(this.threatObserver, this.soundObserver, this.bossObserver,
             this.config.maxThreatDistance, this.config.visibleThreatDistance, () -> this.tickCounter);
         this.worldObserver = new WorldObserver(this.config.snapshotIntervalTicks, this.playerObserver,
@@ -186,6 +187,9 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             }
             return ActionResult.PASS;
         });
+        ServerEntityEvents.ENTITY_UNLOAD.register((entity, world) -> {
+            if (this.config.enabled && entity instanceof MobEntity) this.threatObserver.recordServerUnload(world, entity.getUuid());
+        });
         ServerLivingEntityEvents.AFTER_DEATH.register((entity, damageSource) -> {
             Entity attacker = damageSource.getAttacker();
             UUID playerAttackerUuid = attacker instanceof ServerPlayerEntity
@@ -232,12 +236,10 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         instance.soundObserver.onEntitySoundPacket(packet);
     }
 
-    public static void recordMobTarget(ServerPlayerEntity target, UUID mob) {
-        var world = target.getEntityWorld();
-        var host = world.getServer().getHostProfile();
+    public static void recordMobTarget(ServerWorld world, UUID mob, boolean targetsPlayer) {
         var adapter = INSTANCE;
-        if (adapter != null && host != null && target.getUuid().equals(host.id())) {
-            adapter.threatObserver.recordServerTarget(world, mob);
+        if (adapter != null && adapter.threatObserver != null && adapter.config.enabled) {
+            adapter.threatObserver.recordServerTarget(world, mob, targetsPlayer);
         }
     }
 
@@ -316,6 +318,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             this.resetTransientState();
             return;
         }
+        boolean worldReplaced = this.displayWorld != null && this.displayWorld != world;
         if (this.displayWorld != world) {
             this.ambientMobObserver.resetRangeTracking();
             this.worldObserver.resetRangeTracking();
@@ -330,7 +333,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.displayConnection = client.getNetworkHandler();
         long displaySequenceBefore = this.eventClient.currentSequence();
         String currentDimensionId = world.getRegistryKey().getValue().toString();
-        if (this.lastDimensionId != null && !this.lastDimensionId.equals(currentDimensionId)) {
+        if (worldReplaced || this.lastDimensionId != null && !this.lastDimensionId.equals(currentDimensionId)) {
             resetThreatStateForDimensionChange();
         }
         this.lastDimensionId = currentDimensionId;
@@ -345,6 +348,12 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.lastPlayerZ = player.getZ();
 
         this.tickCounter += 1;
+        // 身体・本人の両視点を作る前に、同じworldの攻撃対象と解除を反映する。
+        var server = client.getServer();
+        boolean finalKill = this.threatObserver.applyServerObservations(
+            server == null ? null : server.getWorld(world.getRegistryKey()), player.getUuid());
+        boolean opponentsChanged = this.threatObserver.opponentEvidenceChanged();
+        if (opponentsChanged) this.bodySenses.opponentsChanged();
         if (this.tickCounter % 5 == 0) this.bodyConnection.observeOwnerWork(bodyFrame,PlayerObserver.blockBreakingActive(client));
         this.bodyObservation = this.bodySenses.capture(bodyFrame,client,bodyEntity);
         this.bodyAutonomy = this.bodySenses.autonomy(bodyFrame,this.bodyObservation);
@@ -360,9 +369,6 @@ public final class DogidoClientAdapter implements ClientModInitializer {
 
         this.threatObserver.observeHealth(player);
 
-        var server = client.getServer();
-        boolean finalKill = this.threatObserver.applyServerObservations(
-            server == null ? null : server.getWorld(world.getRegistryKey()), player.getUuid());
         Map<UUID, HostileOutcomeObservation> newCreeperDetonations = this.threatObserver.observeCreeperDetonations(world);
         List<ThreatObservation> threats = this.threatObserver.scanThreats(player, world);
         List<HostileOutcomeObservation> newHostileDefeats = new ArrayList<>();
@@ -378,7 +384,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         List<ThreatObservation> visibleThreats = this.threatObserver.filterVisibleThreats(threats);
         boolean urgentChange = this.threatObserver.urgentObservationChanged(visibleThreats);
         boolean captureNearbyKinds = this.eventClient.consumeFreshSnapshotRequest() || shouldSendSnapshot()
-            || engagementStarted || urgentChange;
+            || engagementStarted || opponentsChanged || urgentChange;
         WorldObservationFrame worldFrame = this.eventCapture.frame(player, world, captureNearbyKinds);
         this.bossObserver.observeWardenSpecialSetups(player, worldFrame, threats);
         this.bossObserver.observeTrackedWardenDefeat(world);
@@ -457,9 +463,10 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         } else if (finalKill || this.threatObserver.shouldSendCombatEnded(visibleThreats, audioThreats, deadNow)) {
             // combat_ended 自体にも終了後の状態を載せる。旧順序では
             // this.combatObserver.buildCombat() が combat_active_hint=true を書いてしまっていた。
+            boolean formerOpponentNearby = this.threatObserver.formerOpponentNearby();
             if (finalKill) this.threatObserver.finishConfirmedKill();
             else this.threatObserver.endCombat();
-            JsonObject combatEndedEvent = this.eventCapture.buildCombatEnded(player, world, worldFrame, visibleThreats, audioThreats, ambientMobs, finalKill);
+            JsonObject combatEndedEvent = this.eventCapture.buildCombatEnded(player, world, worldFrame, visibleThreats, audioThreats, ambientMobs, finalKill, formerOpponentNearby);
             this.eventClient.postEvent(combatEndedEvent);
             this.threatObserver.clearCombatOutcomeObservations();
         }

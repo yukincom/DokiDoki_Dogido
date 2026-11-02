@@ -25,6 +25,7 @@ import net.minecraft.client.world.ClientWorld;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.mob.CreeperEntity;
+import net.minecraft.entity.mob.MobEntity;
 import net.minecraft.entity.mob.Monster;
 import net.minecraft.entity.passive.BeeEntity;
 import net.minecraft.entity.passive.DolphinEntity;
@@ -56,7 +57,13 @@ public final class ThreatObserver {
     private final Map<UUID, HostileOutcomeObservation> hostileOutcomes = new LinkedHashMap<>();
     private final Queue<ServerSignal> serverSignals = new ConcurrentLinkedQueue<>();
     private final Map<UUID, Long> confirmedDeaths = new HashMap<>();
-    private final Set<UUID> playerAttacked = new HashSet<>();
+    private final Map<UUID, Long> playerAttacked = new HashMap<>();
+    private final Set<UUID> targetingPlayer = new HashSet<>();
+    private UUID owner;
+    private boolean opponentsChanged;
+    private final Set<UUID> encounterOpponents = new HashSet<>();
+    private boolean formerOpponentNearby;
+    private Map<UUID,String> lastReportedOpponents = Map.of();
     private long resolvedDamageTick = -1001;
     private boolean serverOwnsDeaths;
     private final Deque<ExplosionObservation> recentExplosionObservations = new ArrayDeque<>();
@@ -102,12 +109,18 @@ public final class ThreatObserver {
         this.serverSignals.add(new ServerDeath(world, id, attacker, explosion, killedHostileType, noOtherAttacker));
     }
 
-    public void recordServerTarget(ServerWorld world, UUID mob) {
-        this.serverSignals.add(new ServerTarget(world, mob));
+    public void recordServerTarget(ServerWorld world, UUID mob, boolean targetsPlayer) {
+        this.serverSignals.add(new ServerTarget(world, mob, targetsPlayer));
+    }
+
+    public void recordServerUnload(ServerWorld world, UUID mob) {
+        this.serverSignals.add(new ServerUnload(world, mob));
     }
 
     public void observePlayerAttack(UUID mob) {
-        this.playerAttacked.add(mob);
+        this.encounterOpponents.add(mob);
+        this.opponentsChanged |= this.playerAttacked.put(mob, this.tickSource.getAsLong()) == null;
+        publishOpponents();
         observePlayerEngagement();
     }
 
@@ -117,6 +130,24 @@ public final class ThreatObserver {
     public long lastExplosionObservedTick() { return this.lastExplosionObservedTick; }
     public boolean combatActive() { return this.combatActive; }
     public boolean playerEngaged() { return this.playerEngaged; }
+    Map<UUID,String> opponentEvidence() { return this.mobClassifier.opponentEvidence(); }
+
+    public boolean opponentEvidenceChanged() {
+        var evidence = opponentEvidence();
+        if (evidence.equals(this.lastReportedOpponents)) return false;
+        this.lastReportedOpponents = evidence;
+        return true;
+    }
+    public boolean formerOpponentNearby() { return this.formerOpponentNearby; }
+
+    private void publishOpponents() {
+        if (!this.opponentsChanged) return;
+        var evidence = new HashMap<UUID,String>();
+        this.playerAttacked.keySet().forEach(id -> evidence.put(id, "player_attack"));
+        this.targetingPlayer.forEach(id -> evidence.put(id, "targeting_player"));
+        this.mobClassifier.publishOpponents(this.owner, evidence);
+        this.opponentsChanged = false;
+    }
 
     public void observePlayerEngagement() {
         this.playerEngaged = true;
@@ -127,7 +158,12 @@ public final class ThreatObserver {
     public void endCombat() {
         this.combatActive = false;
         this.playerEngaged = false;
+        this.encounterOpponents.clear();
+        this.formerOpponentNearby = false;
         this.playerAttacked.clear();
+        this.targetingPlayer.clear();
+        this.opponentsChanged = true;
+        publishOpponents();
     }
     public void finishConfirmedKill() {
         endCombat();
@@ -170,6 +206,10 @@ public final class ThreatObserver {
         return acquisitionDistance() + VISUAL_RANGE_MARGIN;
     }
 
+    boolean formerOpponentInRange(UUID id, double distance) {
+        return this.encounterOpponents.contains(id) && distance <= scanDistance();
+    }
+
     private boolean withinVisualRange(UUID id, double distance) {
         double limit = this.confirmedVisibleTicks.containsKey(id) ? scanDistance() : acquisitionDistance();
         return Double.isFinite(distance) && distance >= 0.0 && distance <= limit;
@@ -184,9 +224,12 @@ public final class ThreatObserver {
         List<Entity> entities = world.getOtherEntities(
             origin.player(),
             origin.bounds().expand(scanDistance),
-            this::isThreatScanCandidateEntity
+            e -> isThreatScanCandidateEntity(e) || e instanceof MobEntity
+                && (this.mobClassifier.hasOpponent(origin.threatTargetId(), e.getUuid())
+                    || this.encounterOpponents.contains(e.getUuid()))
         );
 
+        this.formerOpponentNearby = false;
         List<ThreatObservation> threats = new ArrayList<>();
         for (Entity entity : entities) {
             if (origin.isSelf(entity) || !(entity instanceof LivingEntity living)) {
@@ -208,14 +251,13 @@ public final class ThreatObserver {
                 }
                 continue;
             }
-            if (!isThreatCandidateEntity(entity)) {
-                continue;
-            }
+            // 遮蔽や通常モブ一覧の上限で、狙いを外した個体を「周囲からいなくなった」としない。
+            double distance = origin.distanceTo(entity);
+            this.formerOpponentNearby |= formerOpponentInRange(entityUuid, distance);
             MobDisposition disposition = this.mobClassifier.classifyMobDisposition(origin.threatTargetId(), living);
             if (!disposition.threatNow()) {
                 continue;
             }
-            double distance = origin.distanceTo(entity);
             if (!withinVisualRange(entityUuid, distance)) {
                 continue;
             }
@@ -323,20 +365,38 @@ public final class ThreatObserver {
 
     /** サーバー側の発生順を保つ。撃破後に別の敵が狙い始めた場合は、その戦闘を終了させない。 */
     public boolean applyServerObservations(ServerWorld world, UUID player) {
+        if (!player.equals(this.owner)) {
+            if (this.owner != null) endCombat();
+            this.owner = player;
+            this.opponentsChanged = true;
+        }
         this.serverOwnsDeaths = world != null;
+        // 本人からの攻撃は既存の交戦猶予だけ。単に見えている間じゅう交戦を延長しない。
+        long now = this.tickSource.getAsLong();
+        this.opponentsChanged |= this.playerAttacked.values().removeIf(at -> now - at >= this.settings.combatEndedQuietTicks());
         boolean confirmed = false;
         ServerSignal signal;
         while ((signal = this.serverSignals.poll()) != null) {
             if (signal.world() != world) continue;
             if (signal instanceof ServerTarget target) {
-                if (!this.confirmedDeaths.containsKey(target.id())) {
+                if (!target.targetsPlayer()) {
+                    this.opponentsChanged |= this.targetingPlayer.remove(target.id());
+                } else if (!this.confirmedDeaths.containsKey(target.id())) {
+                    this.encounterOpponents.add(target.id());
+                    this.opponentsChanged |= this.targetingPlayer.add(target.id());
                     observePlayerEngagement();
                     confirmed = false;
                 }
                 continue;
             }
+            if (signal instanceof ServerUnload unload) {
+                this.opponentsChanged |= this.targetingPlayer.remove(unload.id());
+                this.opponentsChanged |= this.playerAttacked.remove(unload.id()) != null;
+                continue;
+            }
             ServerDeath death = (ServerDeath) signal;
-            this.playerAttacked.remove(death.id());
+            this.opponentsChanged |= this.targetingPlayer.remove(death.id());
+            this.opponentsChanged |= this.playerAttacked.remove(death.id()) != null;
             if (this.confirmedDeaths.containsKey(death.id())) continue;
             boolean playerKill = player.equals(death.attacker());
             String type = this.lastThreatTypes.getOrDefault(death.id(), death.killedHostileType());
@@ -352,7 +412,8 @@ public final class ThreatObserver {
                 confirmed = death.noOtherAttacker();
             }
         }
-        return confirmed && this.playerAttacked.isEmpty();
+        publishOpponents();
+        return confirmed && this.playerAttacked.isEmpty() && this.targetingPlayer.isEmpty();
     }
 
     public Map<UUID, HostileOutcomeObservation> observeCreeperDetonations(ClientWorld world) {
@@ -557,7 +618,7 @@ public final class ThreatObserver {
         List<AudioThreatObservation> audioThreats,
         boolean deadNow
     ) {
-        if (!this.combatActive || deadNow) {
+        if (!this.combatActive || deadNow || !this.targetingPlayer.isEmpty()) {
             return false;
         }
         if (!threats.isEmpty() || !audioThreats.isEmpty()) {
@@ -573,7 +634,8 @@ public final class ThreatObserver {
     private sealed interface ServerSignal {
         ServerWorld world();
     }
-    private record ServerTarget(ServerWorld world, UUID id) implements ServerSignal {}
+    private record ServerTarget(ServerWorld world, UUID id, boolean targetsPlayer) implements ServerSignal {}
+    private record ServerUnload(ServerWorld world, UUID id) implements ServerSignal {}
     private record ServerDeath(ServerWorld world, UUID id, UUID attacker, boolean explosion,
             String killedHostileType, boolean noOtherAttacker) implements ServerSignal {}
 

@@ -20,6 +20,8 @@ final class BodySoundDeduplicator {
         for (Pending item : pending) {
             long difference = Math.abs(item.heardAt()-heardAt);
             // sound packet座標の1/8block量子化は許容し、別地点・同じ経路の繰り返しは別発音として残す。
+            if (SoundObservationPolicy.entityUuid(item.sourceId()) != null && SoundObservationPolicy.entityUuid(sourceId) != null
+                    && !item.sourceId().equals(sourceId)) continue;
             if (item.server() != server && item.event().equals(event) && item.source().squaredDistanceTo(source) <= .25*.25
                     && difference <= MATCH_NANOS && difference < closest) {
                 match = item; closest = difference;

@@ -112,8 +112,9 @@ class BodyObservationJsonTest {
             assertThrows(ClassNotFoundException.class,() -> loader.loadClass("dogido.lab.api.BodyBridge"));
             var settings = new dogido.fabric.observation.mobs.ThreatObserver.Settings(16,16,8,4,2,40,200);
             var collectorType = loader.loadClass("dogido.fabric.body.BodySensesCollector");
-            var collector = collectorType.getConstructor(org.slf4j.Logger.class,java.util.function.LongSupplier.class,
-                int.class,double.class,settings.getClass()).newInstance(org.slf4j.LoggerFactory.getLogger("absence-test"),
+            var classifier = new dogido.fabric.observation.mobs.MobClassifier();
+            var collector = collectorType.getConstructor(classifier.getClass(),org.slf4j.Logger.class,java.util.function.LongSupplier.class,
+                int.class,double.class,settings.getClass()).newInstance(classifier,org.slf4j.LoggerFactory.getLogger("absence-test"),
                     (java.util.function.LongSupplier)() -> 0L,10,16.0,settings);
             collectorType.getMethod("reset").invoke(collector);
             var runtimeType = loader.loadClass("dogido.fabric.body.BodyInspectRuntime");

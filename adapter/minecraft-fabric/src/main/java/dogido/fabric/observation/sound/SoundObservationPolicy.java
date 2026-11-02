@@ -4,8 +4,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import static dogido.fabric.observation.mobs.MobClassifier.NEUTRAL_MONSTER_TYPES;
-
 /** Sound retention uses the current position of an already heard entity, never a new sighting. */
 public final class SoundObservationPolicy {
 
@@ -64,7 +62,7 @@ public final class SoundObservationPolicy {
     }
 
     /** Positional packets have no UUID. Require a unique same-species close match. */
-    static UUID uniqueAmbientSource(String emitter, Point sound, List<MobSource> candidates) {
+    static UUID uniqueMobSource(String emitter, Point sound, List<MobSource> candidates) {
         if (emitter == null) return null;
         UUID result = null;
         for (MobSource candidate : candidates) {
@@ -108,10 +106,6 @@ public final class SoundObservationPolicy {
         return soundType.equals(entityType)
             || ("creeper".equals(soundType) && "charged_creeper".equals(entityType))
             || ("spider".equals(soundType) && "cave_spider".equals(entityType));
-    }
-
-    static boolean unresolvedSoundIsThreat(String recognizedHostileSoundType) {
-        return !NEUTRAL_MONSTER_TYPES.contains(recognizedHostileSoundType);
     }
 
     static long ageMillis(long nowNanos, long heardAtNanos) {

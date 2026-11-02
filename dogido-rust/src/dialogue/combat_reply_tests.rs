@@ -83,14 +83,15 @@ async fn combat_presence_allows_new_conversation_and_does_not_cancel_active_repl
     dialogue.shutdown().await;
 }
 
-// 見込み: 遠隔敵の発見は生成中・再生中・次入力へ引き継いだ再生を遮らない。
-// 合格: 模擬観測を実セッションに入れ、元返答が完了するまで通知は保留。残っていれば一件だけ配送、いなくなればゼロ。実音声は使わない。
+// 見込み: 遠隔敵の通知中も返答は継続。視認省略と交戦解除を区別し、解除された個体を古い完全観測から読み直さない。
+// 合格: 模擬セッションで返答完了後の通知が視認省略なら1件、視界外・部分通知による解除なら0件。実音声は使わない。
 #[tokio::test]
 async fn ranged_sighting_waits_for_reply_completion_and_drops_a_departed_target() {
-    for (stage, preserved, leaves) in [
-        ("generating", false, false),
-        ("started", false, true),
-        ("started", true, false),
+    for (stage, preserved, change) in [
+        ("generating", false, "audio_only"),
+        ("started", false, "out_of_sight"),
+        ("started", true, "target_cleared"),
+        ("started", true, "audio_only"),
     ] {
         let mut config = DialogueConfig {
             audio_enabled: false,
@@ -106,7 +107,9 @@ async fn ranged_sighting_waits_for_reply_completion_and_drops_a_departed_target(
             super::super::reply_output::preserve(&mut dialogue.data.lock().unwrap(), "s");
         }
         let mut frame = empty_event("試験");
-        frame["visual_threats"] = json!([{"type":"skeleton","entity_id":"s1","distance":2}]);
+        frame["visual_threats"] = json!([{"type":"skeleton","entity_id":"s1","distance":13}]);
+        frame["combat"]["player_engaged"] = json!(true);
+        frame["combat"]["opponents"] = json!([{"entity_id":"s1","evidence":"targeting_player"}]);
         for seq in 1..=2 {
             frame["sequence"] = json!(seq);
             dialogue.observe("s", GameEvent::parse(frame.clone()).unwrap(), None);
@@ -114,16 +117,33 @@ async fn ranged_sighting_waits_for_reply_completion_and_drops_a_departed_target(
             let s = &d.sessions["s"];
             assert_eq!(d.rows[0]["playback_status"], stage);
             assert!(s.warning.is_none() && s.reply_queue.is_empty());
-            assert!(s.chat_allowed && !s.foreground.combat_active);
+            assert!(s.chat_allowed && s.foreground.combat_active);
             assert_eq!(
                 s.pending_warning.as_ref().unwrap()[0].kind,
                 "ranged_sighting"
             );
         }
-        if leaves {
-            frame["sequence"] = json!(3);
-            frame["visual_threats"] = json!([]);
+        frame["sequence"] = json!(3);
+        frame["visual_threats"] = json!([]);
+        if change != "out_of_sight" {
+            frame["event"]["name"] = json!("hostile_audio_detected");
+            frame["event"]["source_kind"] = json!("auditory");
+            if change == "target_cleared" {
+                frame["combat"]["opponents"] = json!([]);
+            } else {
+                frame["combat"].as_object_mut().unwrap().remove("opponents");
+            }
+        }
+        dialogue.observe("s", GameEvent::parse(frame.clone()).unwrap(), None);
+        if change == "target_cleared" {
+            // 後続の部分通知で相手欄が省略されても、解除された個体は戻らない。
+            frame["sequence"] = json!(4);
+            frame["combat"].as_object_mut().unwrap().remove("opponents");
             dialogue.observe("s", GameEvent::parse(frame).unwrap(), None);
+            let d = dialogue.data.lock().unwrap();
+            let current = d.sessions["s"].environment_latest.as_ref().unwrap();
+            assert!(current.visual_threats.is_empty());
+            assert_eq!(current.combat.opponents.as_ref().unwrap().len(), 0);
         }
         assert!(dialogue.update(
             "s",
@@ -143,7 +163,7 @@ async fn ranged_sighting_waits_for_reply_completion_and_drops_a_departed_target(
                     .iter()
                     .filter(|r| r["combat_actions"][0]["kind"] == "ranged_sighting")
                     .count(),
-                usize::from(!leaves)
+                usize::from(change == "audio_only")
             );
         }
         dialogue.shutdown().await;

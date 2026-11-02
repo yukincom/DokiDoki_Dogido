@@ -43,7 +43,7 @@ pub struct Engine {
     auditory: Auditory,
     specials: Specials,
     outcomes: Outcomes,
-    /// 部分通知へ補う最後の完全観測。observe末尾でcompleteのときだけ更新する。
+    /// 部分通知へ補う最後の完全観測。後続の交戦相手更新では古い敵を除くが視認時刻は延ばさない。
     latest_full: Option<GameEvent>,
     latest_full_at: Option<u64>,
     /// 部分通知で危険が増えたことを保持し、次の完全観測まで通常会話の早すぎる再開を止める。
@@ -393,7 +393,7 @@ impl Engine {
     }
     /// 新しい完全観測が届くまで、部分通知へ直近の視認・不足文脈を補う。
     /// 古い体力や「直前に聞こえた音」の経過時間は持ち越さず、10秒を越えた全体観測も使わない。
-    fn context(&self, event: &GameEvent, now: u64, complete: bool) -> GameEvent {
+    fn context(&mut self, event: &GameEvent, now: u64, complete: bool) -> GameEvent {
         if complete
             || self
                 .latest_full_at
@@ -401,9 +401,11 @@ impl Engine {
         {
             return event.clone();
         }
-        let Some(full) = &self.latest_full else {
+        let Some(full) = &mut self.latest_full else {
             return event.clone();
         };
+        full.refresh_partial_opponents(event);
+        let prior_full = serde_json::to_value(&*full).unwrap();
         let mut v = serde_json::to_value(event).expect("serializable event");
         v["visual_threats"] = serde_json::to_value(&full.visual_threats).unwrap();
         for name in [
@@ -412,15 +414,18 @@ impl Engine {
             "hostiles_within_scan_ground",
             "hostile_scan_distance",
         ] {
-            v["combat"][name] = serde_json::to_value(&full.combat).unwrap()[name].clone();
+            v["combat"][name] = prior_full["combat"][name].clone();
+        }
+        v["combat"]["opponents"] = serde_json::to_value(&full.combat.opponents).unwrap();
+        if full.combat.opponents.is_some() {
+            v["combat"]["combat_active_hint"] = prior_full["combat"]["combat_active_hint"].clone();
         }
         if event.combat.player_engaged.is_none() {
             v["combat"]["player_engaged"] =
                 serde_json::to_value(full.combat.player_engaged).unwrap();
         }
         for section in ["world", "player"] {
-            let prior = serde_json::to_value(full).unwrap()[section].clone();
-            for (key, value) in prior.as_object().unwrap() {
+            for (key, value) in prior_full[section].as_object().unwrap() {
                 if section == "player" && key == "health" {
                     continue;
                 }

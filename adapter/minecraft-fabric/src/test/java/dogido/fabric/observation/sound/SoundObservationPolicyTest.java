@@ -1,7 +1,6 @@
 package dogido.fabric.observation.sound;
 
 import dogido.fabric.observation.MobIdentityObservation;
-import dogido.fabric.observation.mobs.MobClassifier;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -56,15 +55,6 @@ final class SoundObservationPolicyTest {
     }
 
     @Test
-    void hostileSoundCategoryDoesNotProveNeutralMobHostility() {
-        for (String kind : MobClassifier.NEUTRAL_MONSTER_TYPES) {
-            assertFalse(SoundObservationPolicy.unresolvedSoundIsThreat(kind));
-        }
-        assertTrue(SoundObservationPolicy.unresolvedSoundIsThreat("zombie"));
-        assertTrue(SoundObservationPolicy.unresolvedSoundIsThreat("skeleton"));
-    }
-
-    @Test
     void soundAgeMeasuresRealElapsedTimeWithoutRefreshOnRead() {
         long heardAt = 1_000_000_000L;
         assertEquals(0, SoundObservationPolicy.ageMillis(heardAt, heardAt));
@@ -77,12 +67,12 @@ final class SoundObservationPolicyTest {
         var cat = new SoundObservationPolicy.MobSource(SOURCE, "cat", new SoundObservationPolicy.Point(0.125, 0, 0));
         var other = UUID.fromString("00000000-0000-0000-0000-000000000002");
         var wolf = new SoundObservationPolicy.MobSource(other, "wolf", LISTENER);
-        assertEquals(SOURCE, SoundObservationPolicy.uniqueAmbientSource("cat", LISTENER, List.of(wolf, cat)));
-        assertNull(SoundObservationPolicy.uniqueAmbientSource("cat", LISTENER, List.of(wolf)));
-        assertNull(SoundObservationPolicy.uniqueAmbientSource("cat", LISTENER, List.of(cat,
+        assertEquals(SOURCE, SoundObservationPolicy.uniqueMobSource("cat", LISTENER, List.of(wolf, cat)));
+        assertNull(SoundObservationPolicy.uniqueMobSource("cat", LISTENER, List.of(wolf)));
+        assertNull(SoundObservationPolicy.uniqueMobSource("cat", LISTENER, List.of(cat,
             new SoundObservationPolicy.MobSource(other, "cat", LISTENER))));
-        assertNull(SoundObservationPolicy.uniqueAmbientSource("cat", OLD, List.of(cat)));
-        assertNull(SoundObservationPolicy.uniqueAmbientSource(null, LISTENER, List.of(cat)));
+        assertNull(SoundObservationPolicy.uniqueMobSource("cat", OLD, List.of(cat)));
+        assertNull(SoundObservationPolicy.uniqueMobSource(null, LISTENER, List.of(cat)));
     }
 
     @Test

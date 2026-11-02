@@ -51,6 +51,33 @@ impl GameEvent {
                     && o.evidence == HostileOutcomeEvidence::ServerDeathEvent))
     }
 
+    /// 部分観測が交戦解除を明示したら、旧視認・聴覚の補完から外す。元の観測時刻は延ばさない。
+    pub(crate) fn refresh_partial_opponents(&mut self, incoming: &Self) {
+        let retained = &mut self.0;
+        let combat = &mut retained.combat;
+        let Some(current) = incoming.combat.opponents.as_ref().or(combat.opponents.as_ref()) else {
+            return;
+        };
+        let ids: std::collections::HashSet<_> = current.iter().map(|t| t.entity_id.as_str()).collect();
+        let present = |id: Option<&str>| id.is_some_and(|id| ids.contains(id));
+        retained.visual_threats.retain(|t| present(t.entity_id.as_deref()));
+        retained.auditory_threats.retain(|t| present(t.source_id.as_deref()));
+        if let Some(update) = &incoming.combat.opponents {
+            let same_ids = combat.opponents.as_ref().is_some_and(|prior| {
+                prior.len() == ids.len() && prior.iter().all(|t| ids.contains(t.entity_id.as_str()))
+            });
+            if !same_ids {
+                // 集計には視認外の敵も含まれる。集合が変わった後は古い個体数を補わない。
+                combat.hostiles_within_7 = None;
+                combat.hostiles_within_10 = None;
+                combat.hostiles_within_scan_ground = None;
+            }
+            combat.opponents = Some(update.clone());
+        }
+        combat.combat_active_hint = incoming.combat.combat_active_hint.or(combat.combat_active_hint);
+        combat.player_engaged = incoming.combat.player_engaged.or(combat.player_engaged);
+    }
+
     /// 撮影待機へ画像を渡した後、観測の複製・保持から一時画像だけを解放する。
     pub(crate) fn discard_command_images(&mut self) {
         for result in &mut self.0.command_results { result.body_view = None; }

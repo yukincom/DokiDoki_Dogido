@@ -74,11 +74,18 @@ fn layer(s: &Speech) -> &'static str {
     }
 }
 fn action(s: &Value, layer: &str) -> Value {
-    json!({"kind":"audio","layer":layer,"text":s["text"],"cue_id":s["cue_id"],
+    let mut row = json!({"kind":"audio","layer":layer,"text":s["text"],"cue_id":s["cue_id"],
         "cue_sequence":s["cue_sequence"].as_array().cloned().unwrap_or_default(),
         "interrupt":s["interrupt"].as_bool().unwrap_or(false),"protect_ms":s["protect_ms"].as_u64().unwrap_or(0),
         "speech_profile":null,"speed_scale":null,"speech_segments":[],"speech_segment_pause_ms":0,
-        "queue_priority":"normal","queue_replace_key":null,"references":[]})
+        "queue_priority":"normal","queue_replace_key":null,"references":[]});
+    if let Some(ids) = s["scope"]["targets"].as_array()
+        && matches!(s["scope"]["kind"].as_str(), Some("visual" | "auditory"))
+    {
+        row["notification_kind"] = s["kind"].clone();
+        row["target_ids"] = json!(ids);
+    }
+    row
 }
 fn project(out: &mut Vec<Value>, s: &Value, default_layer: &str) {
     if s["visual_plan"].is_object() {
@@ -252,6 +259,8 @@ mod tests {
             std::fs::remove_dir_all(root).unwrap();
         }
     }
+    // 見込み: 選んだ警告・対象IDと敵対の根拠は同じ行に残るが、再生成功とは数えない。
+    // 合格: 模擬イベントの既存writerを通し、対象の警告・根拠・service_decisionを照合する。実機・音声は対象外。
     #[tokio::test]
     async fn warning_selection_is_not_reported_as_successful_playback() {
         let root = root();
@@ -262,11 +271,16 @@ mod tests {
         e["event"]["source_kind"] = json!("visual");
         e["visual_threats"] = json!([{"type":"creeper","entity_id":"c1","distance":4,"direction":{"horizontal":"front","vertical":"same"},"approaching":true}]);
         e["combat"] =
-            json!({"combat_active_hint":true,"player_engaged":true,"hostiles_within_7":1,"hostiles_within_10":1});
+            json!({"combat_active_hint":true,"player_engaged":true,"opponents":[{"entity_id":"c1","evidence":"targeting_player"}],"hostiles_within_7":1,"hostiles_within_10":1});
         d.observe("s", crate::events::GameEvent::parse(e).unwrap(), None);
         d.shutdown().await;
         let rows = rows(&root);
         assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0]["observation"]["combat"]["player_engaged"], true);
+        assert_eq!(rows[0]["observation"]["combat"]["opponents"],
+            json!([{"entity_id":"c1","evidence":"targeting_player"}]));
+        assert!(rows[0]["action"]["items"].as_array().unwrap().iter().any(|a|
+            a["target_ids"] == json!(["c1"]) && a["notification_kind"].is_string()));
         assert_eq!(rows[0]["state_before"]["mode"], "normal");
         assert_eq!(rows[0]["decision"]["mode_after"], "panic");
         assert_eq!(rows[0]["result"]["scope"], "service_decision");

@@ -12,6 +12,8 @@
 
 記憶が有効な場合、重複を除いた受理済み game-event ごとに schema version 5 の決定記録を `eval/episodes.jsonl` へ追記する。観測、変更前状態、同期処理で選んだ発話・命令、adapter の新規結果を記録し、このファイルを記憶・プロンプト・判断へ読み戻さない。
 
+現在のFabricが送った `player_engaged`・`opponents`（個体IDと交戦の根拠）・`former_opponent_nearby` を観測に残す。対象個体のある警告には `notification_kind` と `target_ids` を記録し、選んだ警告をその個体と照合できる。
+
 記録は最大 256 件の待ち行列を通じて専用 writer へ渡す。通常停止時は受け付けた記録を書き終えてから終了する。満杯、シリアライズ・作成・追記失敗は診断ログへ残し、イベントの受理を失敗させない。したがって保存先の障害や過負荷時の全件保存は保証しない。
 
 `result.scope=service_decision` は判断結果であり、スピーカーから聞こえた証明ではない。既存 assist の検証を通した新規 adapter receipt がある行だけ `adapter_execution_observed` を使う。同じ receipt の ACK 再送と、サーバーが推定した期限切れは新しい実行証拠にしない。

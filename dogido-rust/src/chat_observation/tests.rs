@@ -122,6 +122,26 @@ fn snapshot_is_read_only_and_current_never_contains_recent_or_death_names() {
     );
     assert_eq!(memory.snapshot(&early, &labels), snapshot); // a read did not prune or renew
 }
+// 見込み: 同じ二体のうち一体だけが本人を狙うのをやめても、姿の記憶は消さず、今の戦闘材料からは外す。
+// 合格: 模擬観測で過去の二体を保持し、現非敵対の種類は通常観測だけ、別の交戦相手だけが直近の脅威に残る。実モデルは対象外。
+#[test]
+fn former_opponent_is_remembered_but_is_not_a_current_tactical_subject() {
+    let labels = labels();
+    let mut memory = ChatObservationMemory::default();
+    let previous = frame("2026-11-02T00:00:00Z", json!({
+        "visual_threats":[{"type":"skeleton","entity_id":"s"},{"type":"zombie","entity_id":"z"}],
+        "combat":{"opponents":[{"entity_id":"s","evidence":"targeting_player"},{"entity_id":"z","evidence":"player_attack"}]}
+    }));
+    memory.observe(&previous, &NameOutcomeUpdate::default(), &labels);
+    let current = frame("2026-11-02T00:00:01Z", json!({
+        "passive_mobs":[{"type":"skeleton","identity":{"entity_id":"s"}}],
+        "combat":{"opponents":[{"entity_id":"z","evidence":"player_attack"}]}
+    }));
+    let snapshot = memory.snapshot(&current, &labels);
+    assert_eq!(snapshot.recent.visual_memos.len(), 2);
+    assert_eq!(snapshot.current.passive_types, ["skeleton"]);
+    assert_eq!(snapshot.recent.visual_types, ["zombie"]);
+}
 #[test]
 fn explicit_empty_outcome_update_does_not_manufacture_a_death() {
     let labels = labels();

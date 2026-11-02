@@ -16,7 +16,7 @@ class BodyAutonomyJsonTest {
         return new Gson().fromJson(row,BodyProtocol.Snapshot.class);
     }
     static BodySensesCollector collector() {
-        return new BodySensesCollector(org.slf4j.LoggerFactory.getLogger("autonomy-test"),() -> 0,10,16,
+        return new BodySensesCollector(new dogido.fabric.observation.mobs.MobClassifier(),org.slf4j.LoggerFactory.getLogger("autonomy-test"),() -> 0,10,16,
             new dogido.fabric.observation.mobs.ThreatObserver.Settings(16,16,8,4,2,40,200));
     }
     static void cache(BodySensesCollector collector,JsonObject observation) throws Exception {

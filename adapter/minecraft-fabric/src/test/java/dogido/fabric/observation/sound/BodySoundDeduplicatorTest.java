@@ -4,6 +4,7 @@ import net.minecraft.util.math.Vec3d;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
+/** 模擬の発音源・位置・時刻で、server/clientの同じ発音だけが一件になるかを検査する。 */
 class BodySoundDeduplicatorTest {
     private static final Vec3d SOURCE = new Vec3d(10,64,20);
     private static final long SECOND = 1_000_000_000L;
@@ -35,4 +36,15 @@ class BodySoundDeduplicatorTest {
         policy.reset();
         assertNull(policy.reconcile("sound999",SOURCE,SECOND,"client",false,SECOND).previousSourceId());
     }
+    // 見込み: 同種の二体が同じ位置で発音しても、確認済みの別UUIDは別の音源。
+    // 合格: 模擬server/client音を照合しても前のIDを引き継がず、二つの発音が独立して残る。
+    @Test void differentKnownEmittersCannotBecomeOneSound() {
+        var policy = new BodySoundDeduplicator();
+        String a = java.util.UUID.randomUUID().toString(), b = java.util.UUID.randomUUID().toString();
+        policy.reconcile("entity.skeleton.step", SOURCE, SECOND, a, true, SECOND);
+        var second = policy.reconcile("entity.skeleton.step", SOURCE, SECOND, b, false, SECOND);
+        assertNull(second.previousSourceId());
+        assertEquals(2, policy.pendingCount());
+    }
+
 }

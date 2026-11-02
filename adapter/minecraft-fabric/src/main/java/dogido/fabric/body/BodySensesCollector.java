@@ -34,7 +34,7 @@ public final class BodySensesCollector {
     private final Logger logger;
     private final LongSupplier ticks;
     private final int snapshotInterval;
-    private final MobClassifier classifier = new MobClassifier();
+    private final MobClassifier classifier;
     private final AmbientMobObserver mobs;
     private final ThreatObserver threats;
     private final SoundObserver sounds;
@@ -49,8 +49,9 @@ public final class BodySensesCollector {
     private java.util.List<BodySpeechGaze.Target> speechVisuals = java.util.List.of();
     private long lastSoundSequence = -1;
 
-    public BodySensesCollector(Logger logger, LongSupplier ticks, int snapshotInterval,
+    public BodySensesCollector(MobClassifier classifier, Logger logger, LongSupplier ticks, int snapshotInterval,
             double hearingDistance, ThreatObserver.Settings threatSettings) {
+        this.classifier = classifier;
         this.logger = logger;
         this.ticks = ticks;
         this.snapshotInterval = snapshotInterval;
@@ -59,6 +60,10 @@ public final class BodySensesCollector {
         this.threats = new ThreatObserver(threatSettings,classifier,new BossTracker(),sounds::markThreatObserved,ticks);
         this.worldObserver = new WorldObserver(snapshotInterval,new PlayerObserver(""),sounds::worldFacts);
     }
+
+    MobClassifier classifier() { return this.classifier; }
+    // 同じ身体姿勢でも対象が切り替わったtickには、直前の敵一覧を使い回さない。
+    public void opponentsChanged() { this.frameKey = null; }
 
     /** 同じ身体frameは一度だけ全走査する。間のeventでも種類表は元frameと一緒に保持し、ageだけ進める。 */
     public JsonObject capture(BodyConnection.Frame frame, MinecraftClient client, Entity body) {

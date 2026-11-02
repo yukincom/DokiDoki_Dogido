@@ -103,6 +103,7 @@ pub(super) fn observed(
 pub(super) fn threat(
     event: &GameEvent,
     snapshot: &Snapshot,
+    combat: bool,
 ) -> String {
     let mut parts = vec![];
     if let Some(nearest) = event.visual_threats.iter().reduce(|a, b| {
@@ -133,7 +134,7 @@ pub(super) fn threat(
     {
         parts.push(recent.into())
     }
-    if event.combat.combat_active_hint == Some(true) && !parts.is_empty() {
+    if combat && !parts.is_empty() {
         parts.push("プレイヤーは交戦中っぽい".into())
     }
     parts.join("、")

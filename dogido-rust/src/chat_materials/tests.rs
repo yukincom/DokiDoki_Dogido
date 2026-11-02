@@ -398,3 +398,23 @@ fn block_sound_actions_reach_both_ordinary_chat_and_sound_question_requests() {
         assert!(!facts.contains(&snapshot.hearing.summary));
     }
 }
+
+// 見込み: 警戒解除待ちでも非ターゲットのスケルトンは通常の観測。姿・足音と戦闘の助言を分ける。
+// 合格: 模擬Fabric観測から通常会話の材料を作り、観測と音を残しつつ、戦闘フラグ・敵一覧・脅威案内は空。LLMの発言は対象外。
+#[test]
+fn non_target_skeleton_sight_and_sound_are_ordinary_conversation_materials() {
+    let e = individual_event("2026-11-02T01:00:00Z", json!({
+        "passive_mobs":[{"type":"skeleton","identity":{"entity_id":"s"}}],
+        "ambient_sounds":[{"type":"skeleton","source_id":"s","sound_event":"entity.skeleton.step"}],
+        "combat":{"combat_active_hint":true,"player_engaged":true,"opponents":[]}
+    }));
+    let input = PlayerInput { raw_text:"何がいる？".into(), semantic_text:"何がいる？".into(), ..Default::default() };
+    let snapshot = individual_snapshot(&e);
+    let Prepared::Reply(reply) = prepare(&e, &Settings::default(), &input, &Context::default(), &snapshot, &labels()).unwrap()
+        else { panic!("通常会話を維持する") };
+    assert_eq!(reply.details["combat_active"], false);
+    assert_eq!(reply.details["nearby_hostile_types"], json!([]));
+    assert_eq!(reply.details["threat_summary"], "");
+    assert!(reply.details["observation_summary"].as_str().unwrap().contains("スケルトン"));
+    assert!(reply.details["hearing_summary"].as_str().unwrap().contains("スケルトン"));
+}

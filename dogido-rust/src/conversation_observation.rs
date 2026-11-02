@@ -426,10 +426,13 @@ impl State {
         for fact in defeats {
             append(PLAYER_HOSTILE_DEFEATED, Value::Null, &fact);
         }
-        if event.ended_by_last_kill() && !cleared {
+        let still_nearby = event.combat.former_opponent_nearby == Some(true);
+        if event.ended_by_last_kill() && (!cleared || still_nearby) {
             append("combat_ended", Value::Null, "プレイヤーと交戦していた最後の敵が倒れ、戦闘が終わった");
         }
-        if cleared {
+        if cleared && still_nearby && !event.ended_by_last_kill() {
+            append("combat_ended", Value::Null, "プレイヤーとの交戦は終わった。相手はまだ周囲にいる");
+        } else if cleared && !still_nearby {
             append(PLAYER_HOSTILES_CLEARED, json!(true), "どうやら敵が周囲からいなくなったようだ");
         }
     }

@@ -28,12 +28,14 @@ public final class BossObserver {
     private static final int DRAGON_DEFEAT_WINDOW_TICKS = 400;
 
     private final BossTracker bossTracker;
+    private final MobClassifier mobClassifier;
     private final java.util.function.LongSupplier tickSource;
     private final java.util.function.LongSupplier lastExplosionTick;
 
     public BossObserver(BossTracker bossTracker, java.util.function.LongSupplier tickSource,
-            java.util.function.LongSupplier lastExplosionTick) {
+            java.util.function.LongSupplier lastExplosionTick, MobClassifier mobClassifier) {
         this.bossTracker = bossTracker;
+        this.mobClassifier = mobClassifier;
         this.tickSource = tickSource;
         this.lastExplosionTick = lastExplosionTick;
     }
@@ -146,12 +148,16 @@ public final class BossObserver {
     private EnderDragonEntity findNearestDragon(ClientPlayerEntity player, WorldObservationFrame frame) {
         EnderDragonEntity nearest = null;
         double nearestDistance = DRAGON_SCAN_RADIUS;
+        boolean nearestOpponent = false;
         for (var sample : frame.entities(player.getBoundingBox().expand(DRAGON_SCAN_RADIUS))) {
             if (!(sample.entity() instanceof EnderDragonEntity entity)) continue;
             double distance = Math.sqrt(player.squaredDistanceTo(sample.position()));
-            if (distance <= nearestDistance) {
+            boolean opponent = this.mobClassifier.hasOpponent(player.getUuid(), entity.getUuid());
+            if (distance <= DRAGON_SCAN_RADIUS && (opponent && !nearestOpponent
+                    || opponent == nearestOpponent && distance <= nearestDistance)) {
                 nearest = entity;
                 nearestDistance = distance;
+                nearestOpponent = opponent;
             }
         }
         return nearest;
@@ -202,6 +208,9 @@ public final class BossObserver {
         EnderDragonEntity dragon = findNearestDragon(player, frame);
         if (dragon != null) {
             this.bossTracker.observeDragon(this.tickSource.getAsLong(), dragon.getId());
+        }
+        // 死亡の追跡はそのまま。戦闘向けのphase・方位・クリスタル助言は交戦相手だけ。
+        if (dragon != null && this.mobClassifier.hasOpponent(player.getUuid(), dragon.getUuid())) {
             Vec3d dragonPosition = new Vec3d(dragon.getX(), dragon.getY(), dragon.getZ());
             json.addProperty("dragon_phase", dragonPhaseName(dragon));
             json.addProperty("dragon_distance", round(Math.sqrt(player.squaredDistanceTo(dragonPosition))));
@@ -288,7 +297,9 @@ public final class BossObserver {
                     || ticksSince(this.tickSource.getAsLong(), this.bossTracker.lastWardenTntSetupObservedTick()) <= WARDEN_SPECIAL_LATCH_TICKS * 50L
             );
             json.addProperty("warden_nearby_tnt_minecart_count", nearbyTntMinecartCount);
-        } else if (this.bossTracker.lastWardenSeenTick() >= 0 && this.tickSource.getAsLong() - this.bossTracker.lastWardenSeenTick() <= 200) {
+        } else if (this.bossTracker.lastWardenSeenTick() >= 0 && this.tickSource.getAsLong() - this.bossTracker.lastWardenSeenTick() <= 200
+                && world.getEntityById(this.bossTracker.trackedWardenEntityId()) instanceof LivingEntity prior
+                && this.mobClassifier.hasOpponent(player.getUuid(), prior.getUuid())) {
             // 同上: プレイヤー周辺と最終目撃地点周辺の二重計上を避ける
             int nearbyIronGolemCount = Math.max(
                 countNearbyEntityTypeAroundPlayer(frame, player, "iron_golem", 20.0),

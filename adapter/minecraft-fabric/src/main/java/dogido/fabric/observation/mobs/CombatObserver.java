@@ -6,6 +6,7 @@ import dogido.fabric.observation.mobs.ThreatObserver;
 import dogido.fabric.observation.sound.AudioThreatObservation;
 import dogido.fabric.observation.sound.SoundObserver;
 import java.util.List;
+import java.util.Map;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.world.ClientWorld;
 import dogido.fabric.observation.WorldObservationFrame;
@@ -49,6 +50,14 @@ public final class CombatObserver {
         double scanDistance = Math.max(this.maxThreatDistance, this.visibleThreatDistance);
         json.addProperty("hostile_scan_distance", round(scanDistance));
         json.addProperty("hostiles_within_scan_ground", countGroundThreatsWithin(threats, scanDistance));
+        var opponents = new com.google.gson.JsonArray();
+        this.threatObserver.opponentEvidence().entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
+            var opponent = new JsonObject();
+            opponent.addProperty("entity_id", entry.getKey().toString());
+            opponent.addProperty("evidence", entry.getValue());
+            opponents.add(opponent);
+        });
+        json.add("opponents", opponents);
         json.addProperty("player_engaged", this.threatObserver.playerEngaged());
         json.addProperty("combat_active_hint", this.threatObserver.combatActive() || !threats.isEmpty() || !audioThreats.isEmpty());
         int nearbyExperienceOrbCount = frame.countEntities(player.getBoundingBox().expand(24.0, 12.0, 24.0), null, 0, "experience_orb");

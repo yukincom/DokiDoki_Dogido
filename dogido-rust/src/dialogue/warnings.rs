@@ -250,13 +250,10 @@ pub(super) fn applicable(
         }
         Scope::Visual(ids) => {
             observation_fresh(session)
-                && session.latest.as_ref().is_some_and(|e| {
-                    ids.iter().all(|id| {
-                        e.visual_threats
-                            .iter()
-                            .any(|t| crate::threats::identity(t) == *id)
-                    })
-                })
+                && session.environment_latest.as_ref().or(session.latest.as_ref())
+                    .is_some_and(|e| ids.iter().all(|id| {
+                        e.visual_threats.iter().any(|t| crate::threats::identity(t) == *id)
+                    }))
         }
         Scope::Auditory(ids) => {
             session

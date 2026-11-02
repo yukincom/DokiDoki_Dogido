@@ -817,3 +817,26 @@ async fn combat_clear_is_one_player_scoped_change_after_observed_hostiles() {
     drop(permit);
     d.shutdown().await;
 }
+
+// 見込み: 狙うのをやめた個体が周囲に残っている場合、交戦終了は伝えられるが「いなくなった」にはしない。
+// 合格: 模擬Fabricの視認→交戦終了を通常会話へ渡し、終了1件と不在0件。Minecraftでの対象取得は別確認。
+#[tokio::test]
+async fn combat_ends_without_claiming_a_present_former_opponent_left() {
+    let d = server();
+    let permit = d.serial.acquire().await.unwrap();
+    let hostile = edit(event(1, 100, 23.0), |v| {
+        v["visual_threats"] = json!([{"type":"skeleton","entity_id":"s","distance":12}]);
+        v["combat"] = json!({"player_engaged":true,"opponents":[{"entity_id":"s","evidence":"targeting_player"}]});
+    });
+    d.observe("s", hostile, None);
+    let quiet = edit(event(2, 200, 23.0), |v| {
+        v["event"]["name"] = json!("combat_ended");
+        v["combat"] = json!({"player_engaged":false,"opponents":[],"former_opponent_nearby":true});
+    });
+    d.observe("s", quiet.clone(), None);
+    let changes = capture(&d, &quiet).context.world_context.unwrap().changes;
+    assert_eq!(changes.iter().filter(|c| c.kind == "combat_ended").count(), 1);
+    assert!(!changes.iter().any(|c| c.kind == "player_hostiles_cleared"));
+    drop(permit);
+    d.shutdown().await;
+}

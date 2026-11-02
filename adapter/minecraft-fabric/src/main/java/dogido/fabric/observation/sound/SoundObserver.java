@@ -59,7 +59,6 @@ public final class SoundObserver {
     // 人間が「…？」「今の音なに？」と言うまでの猶予を確保する（旧5秒だと短い）。
     // 20 tick/s 想定で約15秒。サーバ hearing バッファ（約20s）以下に保つ。
     private static final int SOUND_OBSERVATION_TTL_TICKS = 300;
-    private static final double GLOBAL_SOUND_SOURCE_MATCH_RADIUS = 4.0;
     // エンダーアイ投擲音: 鮮度 TTL（サーバ側 ender_eye_recent_ms=2000ms と同期）と投擲者判定の距離
     private static final double ENDER_EYE_LAUNCH_MATCH_RADIUS = 8.0;
     private static final String[][] HOSTILE_SOUND_LABEL_PATTERNS = {
@@ -113,6 +112,7 @@ public final class SoundObserver {
     private long lastThunderSoundObservedTick = -1000;
     private long lastEnderEyeLaunchObservedTick = -1000;
     private String lastOminousSoundKind = "";
+    private UUID lastOminousSource, lastOminousReceiver;
     private boolean bodyHearingTruncated;
     private final BodySoundDeduplicator bodySoundDeduplicator = new BodySoundDeduplicator();
 
@@ -130,6 +130,7 @@ public final class SoundObserver {
     }
 
     public WorldSoundFacts worldFacts() {
+        expireOminousOpponent();
         return new WorldSoundFacts(this.lastOminousSoundKind, this.lastOminousSoundObservedTick,
             this.lastRainSoundObservedTick, this.lastThunderSoundObservedTick, this.lastEnderEyeLaunchObservedTick);
     }
@@ -144,6 +145,7 @@ public final class SoundObserver {
         this.lastThunderSoundObservedTick = -1000;
         this.lastEnderEyeLaunchObservedTick = -1000;
         this.lastOminousSoundKind = "";
+        this.lastOminousSource = this.lastOminousReceiver = null;
     }
 
     public boolean bodyHearingTruncated() { return bodyHearingTruncated; }
@@ -198,6 +200,7 @@ public final class SoundObserver {
     }
     public List<AudioThreatObservation> scanAuditoryThreats(ObservationOrigin origin,
             Map<UUID,SoundObservationPolicy.Point> currentSoundSources) {
+        demoteLostOpponents(origin);
         Map<String, AudioThreatObservation> deduped = new LinkedHashMap<>();
         var observations = this.recentSoundObservations.iterator();
         while (observations.hasNext()) {
@@ -241,6 +244,26 @@ public final class SoundObserver {
         return audioThreats;
     }
 
+    // ターゲット解除後の実音は元の発音時刻で通常観測に戻す。再交戦でも旧音を警告に戻さない。
+    private void demoteLostOpponents(ObservationOrigin origin) {
+        var it = recentSoundObservations.iterator();
+        while (it.hasNext()) {
+            var sound = it.next();
+            if (mobClassifier.hasOpponent(origin.threatTargetId(), sound.entityUuid())) continue;
+            it.remove();
+            java.util.function.Predicate<SoundObservation> same = old ->
+                old.sourceId().equals(sound.sourceId()) && old.soundEvent().equals(sound.soundEvent());
+            if (recentAmbientSoundObservations.stream().anyMatch(old ->
+                    same.test(old) && old.heardAtNanos() >= sound.heardAtNanos())) continue;
+            recentAmbientSoundObservations.removeIf(same);
+            recentAmbientSoundObservations.addLast(sound);
+            if (origin.body() && recentAmbientSoundObservations.size() > 64) {
+                recentAmbientSoundObservations.removeFirst();
+                bodyHearingTruncated = true;
+            }
+        }
+    }
+
     public void expireSoundObservations() {
         while (!this.recentSoundObservations.isEmpty()) {
             SoundObservation oldest = this.recentSoundObservations.peekFirst();
@@ -253,13 +276,8 @@ public final class SoundObserver {
     }
 
     private void expireAmbientSoundObservations() {
-        while (!this.recentAmbientSoundObservations.isEmpty()) {
-            SoundObservation oldest = this.recentAmbientSoundObservations.peekFirst();
-            if (oldest == null || this.tickSource.getAsLong() - oldest.observedTick() <= SOUND_OBSERVATION_TTL_TICKS) {
-                break;
-            }
-            this.recentAmbientSoundObservations.removeFirst();
-        }
+        long now = this.tickSource.getAsLong();
+        this.recentAmbientSoundObservations.removeIf(sound -> now - sound.observedTick() > SOUND_OBSERVATION_TTL_TICKS);
     }
 
     public List<AudioThreatObservation> scanAmbientSounds(
@@ -270,6 +288,7 @@ public final class SoundObserver {
     }
     public List<AudioThreatObservation> scanAmbientSounds(ObservationOrigin origin,
             Map<UUID,SoundObservationPolicy.Point> currentSoundSources) {
+        demoteLostOpponents(origin);
         Map<SoundObservationPolicy.SoundKey, AudioThreatObservation> deduped = new LinkedHashMap<>();
         var observations = this.recentAmbientSoundObservations.iterator();
         while (observations.hasNext()) {
@@ -366,10 +385,8 @@ public final class SoundObserver {
             return;
         }
         String soundEventId = soundEventId(packet.getSound());
-        String ominousKind = classifyOminousSoundKind(soundEventId);
-        if (ominousKind != null) {
-            recordOminousSoundObservation(ominousKind);
-        }
+        recordOminousSoundObservation(SoundObservationPolicy.sculkActivationKind(soundEventId),
+            player.getUuid(), null, tickSource.getAsLong(), Long.MIN_VALUE);
         String weatherSoundKind = classifyWeatherSoundKind(soundEventId);
         if (weatherSoundKind != null) {
             recordWeatherSoundObservation(weatherSoundKind);
@@ -385,44 +402,10 @@ public final class SoundObserver {
             }
         }
         Vec3d source = new Vec3d(packet.getX(), packet.getY(), packet.getZ());
-        if (packet.getCategory() != SoundCategory.HOSTILE) {
-            // 村人などの NEUTRAL 音。戦闘トラックには載せない。
-            if (packet.getCategory() == SoundCategory.NEUTRAL
-                || ambientLabelFromSoundEvent(soundEventId) != null) {
-                tryRecordAmbientFromGlobalSound(player, world, soundEventId, source);
-            }
-            return;
-        }
-        String defaultHostileLabel = hostileLabelFromSoundEvent(soundEventId);
-        if (defaultHostileLabel == null) {
-            return;
-        }
-
-        SoundSourceResolution resolution = resolveGlobalHostileSoundSource(player, world, source, defaultHostileLabel, soundEventId);
-        if (resolution == null) {
-            return;
-        }
-        if (!resolution.threatNow()) {
-            // 蜘蛛・エンダーマン等はHOSTILEカテゴリの音を出しても、まだプレイヤーを
-            // 狙っていないことがある。脅威扱いにはせず、実際に聞いた音として残す。
-            recordAmbientSoundObservation(
-                player,
-                soundEventId,
-                resolution.label(),
-                source,
-                resolution.sourceId()
-            );
-            return;
-        }
-        recordSoundObservation(
-            player,
-            world,
-            soundEventId,
-            resolution.label(),
-            source,
-            resolution.spokenNameAllowed(),
-            resolution.sourceId()
-        );
+        String label = mobSoundLabel(soundEventId, packet.getCategory());
+        if (label == null) return;
+        LivingEntity emitter = resolvePositionalMob(world, source, label);
+        recordMobSound(player, world, soundEventId, label, source, emitter);
     }
 
     /**
@@ -444,14 +427,10 @@ public final class SoundObserver {
                 entity = living; break;
             }
         }
-        String label = category == SoundCategory.HOSTILE ? hostileLabelFromSoundEvent(soundId) : null;
-        boolean threat = false;
-        if (label != null) {
-            threat = entity != null ? this.mobClassifier.classifyMobDisposition(origin.threatTargetId(),entity).threatNow()
-                : SoundObservationPolicy.unresolvedSoundIsThreat(label);
-        } else {
-            label = ambientLabelFromSoundEvent(soundId);
-            if (label == null) label = environmentTypeFromPlayedSound(soundId,category);
+        String label = mobSoundLabel(soundId, category);
+        boolean mobSound = label != null;
+        if (label == null) {
+            label = environmentTypeFromPlayedSound(soundId,category);
             if (label == null && soundId.equals("entity.generic.explode")) label = "environment:explosion";
         }
         // UUID付きの実音は既に発音者が確定している。分類表に無いplayer音も捨てず、音IDと由来をそのまま運ぶ。
@@ -470,11 +449,14 @@ public final class SoundObserver {
         var evidence = sourceContext != null ? sourceContext.deepCopy()
             : paired == null || paired.sourceContext() == null ? null : paired.sourceContext().deepCopy();
         long latestPairTime = Math.max(incomingHeardAt,stamp.previousHeardAt());
-        boolean perSourceThreat = threat;
+        // 同じ発音の遅い配送は、交戦前の通常音を新しい警告にしない。
+        boolean threat = mobSound && mobClassifier.hasOpponent(origin.threatTargetId(), effectiveEntityId)
+            && (paired == null || recentSoundObservations.contains(paired));
+
         // 敵対音は従来どおり音源単位。非敵対音は同じ音種の新しい実音だけを旧配送から守る。
         if (java.util.stream.Stream.concat(this.recentSoundObservations.stream(),this.recentAmbientSoundObservations.stream())
                 .anyMatch(old -> (old.sourceId().equals(id) || old.sourceId().equals(stamp.previousSourceId()))
-                    && (perSourceThreat || soundId.equals(old.soundEvent()))
+                    && (threat || soundId.equals(old.soundEvent()))
                     && old.heardAtNanos() > latestPairTime+100_000_000L)) return;
         long heardAt = stamp.heardAt();
         long heardTick = this.tickSource.getAsLong()-(now-heardAt)/50_000_000L;
@@ -490,22 +472,18 @@ public final class SoundObserver {
             source.x,source.y,source.z,true,entity != null ? mobIdentity(entity) : paired == null ? null : paired.identity(),evidence);
         Deque<SoundObservation> target = threat ? this.recentSoundObservations : this.recentAmbientSoundObservations;
         // 遅れて届いた同じ音で、既に新しい実音の記録を巻き戻さない。
-        if (target.stream().anyMatch(old -> old.sourceId().equals(id) && (perSourceThreat || soundId.equals(old.soundEvent())) && old.heardAtNanos() > heardAt+100_000_000L)) return;
-        target.removeIf(old -> old.sourceId().equals(id) && (perSourceThreat || soundId.equals(old.soundEvent())));
+        if (target.stream().anyMatch(old -> old.sourceId().equals(id) && (threat || soundId.equals(old.soundEvent())) && old.heardAtNanos() > heardAt+100_000_000L)) return;
+        target.removeIf(old -> old.sourceId().equals(id) && (threat || soundId.equals(old.soundEvent())));
+        if (threat) recentAmbientSoundObservations.removeIf(old -> old.sourceId().equals(id)
+            && soundId.equals(old.soundEvent()) && old.heardAtNanos() <= heardAt);
         target.addLast(observation);
         while (target.size() > 64) { target.removeFirst(); bodyHearingTruncated = true; }
         if (threat) this.lastAudioThreatObservedTick = Math.max(this.lastAudioThreatObservedTick,heardTick);
         String weather = classifyWeatherSoundKind(soundId);
         if ("rain".equals(weather)) this.lastRainSoundObservedTick = correctedBodySoundTick(this.lastRainSoundObservedTick,replacedTick,heardTick);
         if ("thunder".equals(weather)) this.lastThunderSoundObservedTick = correctedBodySoundTick(this.lastThunderSoundObservedTick,replacedTick,heardTick);
-        String ominous = classifyOminousSoundKind(soundId);
-        if (ominous != null && ominous.equals(this.lastOminousSoundKind) && this.lastOminousSoundObservedTick == replacedTick)
-            this.lastOminousSoundObservedTick = heardTick;
-        if (ominous != null && heardTick >= this.lastOminousSoundObservedTick
-                && SoundObservationPolicy.replaceOminous(this.lastOminousSoundKind,
-                    heardTick-this.lastOminousSoundObservedTick,ominous,OMINOUS_SOUND_TTL_TICKS)) {
-            this.lastOminousSoundKind = ominous; this.lastOminousSoundObservedTick = heardTick;
-        }
+        String ominous = threat ? classifyOminousSoundKind(soundId) : SoundObservationPolicy.sculkActivationKind(soundId);
+        recordOminousSoundObservation(ominous, origin.threatTargetId(), threat ? effectiveEntityId : null, heardTick, replacedTick);
         if (soundId.contains("ender_eye.launch")) this.lastEnderEyeLaunchObservedTick = correctedBodySoundTick(this.lastEnderEyeLaunchObservedTick,replacedTick,heardTick);
         expireSoundObservations();
     }
@@ -521,120 +499,57 @@ public final class SoundObserver {
             && category != SoundCategory.UI && category != SoundCategory.MUSIC;
     }
 
-    private SoundSourceResolution resolveGlobalHostileSoundSource(
-        ClientPlayerEntity player,
-        ClientWorld world,
-        Vec3d source,
-        String defaultHostileLabel,
-        String soundEventId
-    ) {
-        LivingEntity nearest = null;
-        MobDisposition nearestDisposition = null;
-        double nearestDistance = GLOBAL_SOUND_SOURCE_MATCH_RADIUS;
+    /** 座標だけの音は、通常モブと同じ距離条件で同種一体に照合できた時だけ個体に帰属させる。 */
+    private LivingEntity resolvePositionalMob(ClientWorld world, Vec3d source, String label) {
+        List<SoundObservationPolicy.MobSource> candidates = new ArrayList<>();
+        Map<UUID, LivingEntity> entities = new HashMap<>();
         for (Entity entity : world.getOtherEntities(null, new net.minecraft.util.math.Box(
-            source.x - GLOBAL_SOUND_SOURCE_MATCH_RADIUS, source.y - GLOBAL_SOUND_SOURCE_MATCH_RADIUS, source.z - GLOBAL_SOUND_SOURCE_MATCH_RADIUS,
-            source.x + GLOBAL_SOUND_SOURCE_MATCH_RADIUS, source.y + GLOBAL_SOUND_SOURCE_MATCH_RADIUS, source.z + GLOBAL_SOUND_SOURCE_MATCH_RADIUS
+            source.x - 0.5, source.y - 0.5, source.z - 0.5, source.x + 0.5, source.y + 0.5, source.z + 0.5
         ))) {
-            if (!(entity instanceof LivingEntity living) || !living.isAlive()) {
-                continue;
-            }
-            MobDisposition disposition = this.mobClassifier.classifyMobDisposition(player, living);
-            // 音と違う種類の敵が近くにいても、その個体の音へすり替えない。
-            if (!SoundObservationPolicy.matchesMobSound(defaultHostileLabel, disposition.type())) {
-                continue;
-            }
-            double distance = Math.sqrt(entity.squaredDistanceTo(source));
-            if (distance < nearestDistance) {
-                nearest = living;
-                nearestDisposition = disposition;
-                nearestDistance = distance;
-            }
+            if (!(entity instanceof LivingEntity living) || !living.isAlive() || living instanceof PlayerEntity) continue;
+            candidates.add(new SoundObservationPolicy.MobSource(entity.getUuid(), entityTypeName(entity),
+                new SoundObservationPolicy.Point(entity.getX(), entity.getY(), entity.getZ())));
+            entities.put(entity.getUuid(), living);
         }
-        if (nearest != null) {
-            return new SoundSourceResolution(
-                nearestDisposition.type(),
-                nearest.getUuid().toString(),
-                true,
-                nearestDisposition.threatNow()
-            );
+        UUID matched = SoundObservationPolicy.uniqueMobSource(label,
+            new SoundObservationPolicy.Point(source.x, source.y, source.z), candidates);
+        return entities.get(matched);
+    }
+
+    private String mobSoundLabel(String sound, SoundCategory category) {
+        String emitter = ambientLabelFromSoundEvent(sound);
+        if (emitter != null) return emitter;
+        return category == SoundCategory.HOSTILE ? hostileLabelFromSoundEvent(sound) : null;
+    }
+
+    private void recordMobSound(ClientPlayerEntity player, ClientWorld world, String sound,
+            String label, Vec3d source, LivingEntity emitter) {
+        MobDisposition disposition = emitter == null ? null : mobClassifier.classifyMobDisposition(player, emitter);
+        if (disposition != null && disposition.threatNow()) {
+            recordOminousSoundObservation(classifyOminousSoundKind(sound), player.getUuid(), emitter.getUuid(),
+                tickSource.getAsLong(), Long.MIN_VALUE);
+            recordSoundObservation(player, world, sound, disposition.type(), source, true, emitter.getUuid().toString());
+        } else {
+            recordAmbientSoundObservation(player, sound, disposition == null ? label : disposition.type(), source,
+                emitter == null ? unresolvedSoundSourceId(source, sound) : emitter.getUuid().toString(),
+                emitter == null ? null : mobIdentity(emitter));
         }
-        // HOSTILEは音の分類で、エンダーマン等の現在の敵対を保証しない。
-        // 実体未照合の中立種は聞いた音としてだけ残す。
-        return new SoundSourceResolution(
-            defaultHostileLabel,
-            unresolvedSoundSourceId(source, soundEventId),
-            true,
-            SoundObservationPolicy.unresolvedSoundIsThreat(defaultHostileLabel)
-        );
     }
 
     public void onEntitySoundPacket(PlaySoundFromEntityS2CPacket packet) {
         MinecraftClient client = MinecraftClient.getInstance();
         ClientPlayerEntity player = client.player;
         ClientWorld world = client.world;
-        if (player == null || world == null) {
-            return;
-        }
-        String soundEventId = soundEventId(packet.getSound());
-        String ominousKind = classifyOminousSoundKind(soundEventId);
-        if (ominousKind != null) {
-            recordOminousSoundObservation(ominousKind);
-        }
+        if (player == null || world == null) return;
+        String sound = soundEventId(packet.getSound());
+        recordOminousSoundObservation(SoundObservationPolicy.sculkActivationKind(sound),
+            player.getUuid(), null, tickSource.getAsLong(), Long.MIN_VALUE);
         Entity entity = world.getEntityById(packet.getEntityId());
-        if (packet.getCategory() != SoundCategory.HOSTILE) {
-            if (entity instanceof LivingEntity living
-                && living.isAlive()
-                && !(entity instanceof PlayerEntity)
-                && !this.mobClassifier.classifyMobDisposition(player, living).threatNow()
-                && (packet.getCategory() == SoundCategory.NEUTRAL
-                    || ambientLabelFromSoundEvent(soundEventId) != null
-                    || isAmbientMobCandidate(entity))) {
-                String type = entityTypeName(living);
-                if (type == null || type.isBlank()) {
-                    type = ambientLabelFromSoundEvent(soundEventId);
-                }
-                if (type != null && !type.isBlank()) {
-                    recordAmbientSoundObservation(
-                        player,
-                        soundEventId,
-                        type,
-                        new Vec3d(living.getX(), living.getY(), living.getZ()),
-                        living.getUuid().toString(),
-                        mobIdentity(living)
-                    );
-                }
-            }
-            return;
+        if (!(entity instanceof LivingEntity living) || !living.isAlive() || living instanceof PlayerEntity) return;
+        if (packet.getCategory() == SoundCategory.HOSTILE || packet.getCategory() == SoundCategory.NEUTRAL
+            || mobSoundLabel(sound, packet.getCategory()) != null || isAmbientMobCandidate(living)) {
+            recordMobSound(player, world, sound, entityTypeName(living), living.getEntityPos(), living);
         }
-
-        if (!(entity instanceof LivingEntity hostileEntity) || !hostileEntity.isAlive()) {
-            return;
-        }
-        if (!this.mobClassifier.classifyMobDisposition(player, hostileEntity).threatNow()) {
-            // 敵対モブ音カテゴリでも、いまは中立の個体は ambient 側へ
-            String type = entityTypeName(hostileEntity);
-            if (type != null && !type.isBlank()) {
-                recordAmbientSoundObservation(
-                    player,
-                    soundEventId,
-                    type,
-                    new Vec3d(hostileEntity.getX(), hostileEntity.getY(), hostileEntity.getZ()),
-                    hostileEntity.getUuid().toString(),
-                    mobIdentity(hostileEntity)
-                );
-            }
-            return;
-        }
-
-        recordSoundObservation(
-            player,
-            world,
-            soundEventId,
-            entityTypeName(hostileEntity),
-            new Vec3d(hostileEntity.getX(), hostileEntity.getY(), hostileEntity.getZ()),
-            true,
-            hostileEntity.getUuid().toString()
-        );
     }
 
     /**
@@ -665,10 +580,8 @@ public final class SoundObserver {
         if (weatherKind != null) {
             recordWeatherSoundObservation(weatherKind);
         }
-        String ominousKind = classifyOminousSoundKind(soundEventId);
-        if (ominousKind != null) {
-            recordOminousSoundObservation(ominousKind);
-        }
+        recordOminousSoundObservation(SoundObservationPolicy.sculkActivationKind(soundEventId),
+            player.getUuid(), null, tickSource.getAsLong(), Long.MIN_VALUE);
 
         String environmentType = environmentTypeFromPlayedSound(soundEventId, category);
         if (environmentType == null) {
@@ -738,6 +651,7 @@ public final class SoundObserver {
             return;
         }
 
+        this.recentAmbientSoundObservations.removeIf(old -> old.sourceId().equals(sourceId) && soundEventId.equals(old.soundEvent()));
         boolean refreshed = this.recentSoundObservations.removeIf(
             existing -> existing.sourceId().equals(sourceId)
         );
@@ -766,35 +680,6 @@ public final class SoundObserver {
                 round(distance)
             );
         }
-    }
-
-    private boolean tryRecordAmbientFromGlobalSound(
-        ClientPlayerEntity player,
-        ClientWorld world,
-        String soundEventId,
-        Vec3d source
-    ) {
-        String typeHint = ambientLabelFromSoundEvent(soundEventId);
-        if (typeHint == null) return false;
-        List<SoundObservationPolicy.MobSource> candidates = new ArrayList<>();
-        Map<UUID, LivingEntity> entities = new HashMap<>();
-        for (Entity entity : world.getOtherEntities(null, new net.minecraft.util.math.Box(
-            source.x - 0.5, source.y - 0.5, source.z - 0.5,
-            source.x + 0.5, source.y + 0.5, source.z + 0.5
-        ))) {
-            if (!(entity instanceof LivingEntity living) || !living.isAlive() || entity instanceof PlayerEntity) continue;
-            MobDisposition disposition = this.mobClassifier.classifyMobDisposition(player, living);
-            if (disposition.threatNow()) continue;
-            candidates.add(new SoundObservationPolicy.MobSource(entity.getUuid(), disposition.type(),
-                new SoundObservationPolicy.Point(entity.getX(), entity.getY(), entity.getZ())));
-            entities.put(entity.getUuid(), living);
-        }
-        UUID matched = SoundObservationPolicy.uniqueAmbientSource(typeHint,
-            new SoundObservationPolicy.Point(source.x, source.y, source.z), candidates);
-        LivingEntity entity = matched == null ? null : entities.get(matched);
-        recordAmbientSoundObservation(player, soundEventId, typeHint, source,
-            matched == null ? null : matched.toString(), entity == null ? null : mobIdentity(entity));
-        return true;
     }
 
     private String ambientLabelFromSoundEvent(String soundEventId) {
@@ -872,13 +757,28 @@ public final class SoundObserver {
         return null;
     }
 
-    private void recordOminousSoundObservation(String kind) {
-        if (!SoundObservationPolicy.replaceOminous(this.lastOminousSoundKind,
-                this.tickSource.getAsLong() - this.lastOminousSoundObservedTick, kind, OMINOUS_SOUND_TTL_TICKS)) {
-            return;
+    private void expireOminousOpponent() {
+        if (lastOminousSource != null && !mobClassifier.hasOpponent(lastOminousReceiver, lastOminousSource)) {
+            lastOminousSource = lastOminousReceiver = null;
+            lastOminousSoundKind = "";
+            lastOminousSoundObservedTick = -1000;
         }
-        this.lastOminousSoundObservedTick = this.tickSource.getAsLong();
-        this.lastOminousSoundKind = kind;
+    }
+
+    private void recordOminousSoundObservation(String kind, UUID receiver, UUID emitter, long heardTick, long replacedTick) {
+        if (kind == null) return;
+        expireOminousOpponent();
+        if (kind.equals(lastOminousSoundKind) && this.lastOminousSoundObservedTick == replacedTick
+                && java.util.Objects.equals(lastOminousSource, emitter)) {
+            lastOminousSoundObservedTick = heardTick;
+        }
+        if (heardTick >= lastOminousSoundObservedTick && SoundObservationPolicy.replaceOminous(lastOminousSoundKind,
+                heardTick - lastOminousSoundObservedTick, kind, OMINOUS_SOUND_TTL_TICKS)) {
+            lastOminousSoundObservedTick = heardTick;
+            lastOminousSoundKind = kind;
+            lastOminousSource = emitter;
+            lastOminousReceiver = receiver;
+        }
     }
 
     private void recordWeatherSoundObservation(String kind) {
@@ -889,14 +789,6 @@ public final class SoundObserver {
         if ("thunder".equals(kind)) {
             this.lastThunderSoundObservedTick = this.tickSource.getAsLong();
         }
-    }
-
-    private record SoundSourceResolution(
-        String label,
-        String sourceId,
-        boolean spokenNameAllowed,
-        boolean threatNow
-    ) {
     }
 
     private record SoundObservation(

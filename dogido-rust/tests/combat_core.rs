@@ -50,8 +50,8 @@ fn tick(engine: &mut Engine, e: &GameEvent, at: u64) -> dogido_rust::combat::cor
     )
 }
 
-// 見込み: 視認中は経過時間や方位で再通知せず、同種でも別IDなら知らせる。
-// 合格: 模擬の完全観測・部分通知で各IDに短い発話1件、悲鳴・停止なし。完全観測から消えた後だけ再び対象になる。
+// 見込み: 戦闘中は視線や遮蔽物が変わっても、遠隔通知は一個体一度。同種の別個体と戦闘終了後の出会いは区別する。
+// 合格: 模擬観測でAとBを一度ずつ通知し、Aを見失って再発見しても無言。戦闘終了後に同じAを一度通知する。
 #[test]
 fn ranged_sighting_tracks_individuals_across_time_direction_and_partial_audio() {
     use dogido_rust::combat::{core::Decision, model::Scope};
@@ -66,12 +66,17 @@ fn ranged_sighting_tracks_individuals_across_time_direction_and_partial_audio() 
         assert!(!speech.interrupt && speech.cue_id.is_none() && speech.leaf.is_none());
     };
     let mut engine = Engine::default();
-    let a = event(json!([visual("skeleton", "a", 2.0)]), json!([]));
+    let a = changed(&event(json!([visual("skeleton", "a", 13.0)]), json!([])), |v| {
+        v["combat"] = json!({"player_engaged":true, "opponents":[{"entity_id":"a","evidence":"targeting_player"}]});
+    });
     notice(tick(&mut engine, &a, 0), "a");
     let turned = changed(&a, |v| {
         v["visual_threats"][0]["direction"]["horizontal"] = "back".into()
     });
-    let partial = event(json!([]), json!([sound("elsewhere")]));
+    let partial = changed(&event(json!([]), json!([{"label":"skeleton","source_id":"a"}])), |v| {
+        v["event"]["name"] = json!("hostile_audio_detected");
+        v["event"]["source_kind"] = json!("auditory");
+    });
     assert!(
         engine
             .observe(
@@ -90,13 +95,42 @@ fn ranged_sighting_tracks_individuals_across_time_direction_and_partial_audio() 
         v["visual_threats"]
             .as_array_mut()
             .unwrap()
-            .push(visual("skeleton", "b", 6.0))
+            .push(visual("skeleton", "b", 14.0));
+        v["combat"]["opponents"].as_array_mut().unwrap().push(json!({"entity_id":"b","evidence":"player_attack"}))
     });
     notice(tick(&mut engine, &two, 180_001), "b");
     assert!(tick(&mut engine, &two, 360_000).actions.is_empty());
-    let only_b = event(json!([visual("skeleton", "b", 6.0)]), json!([]));
+    let only_b = changed(&two, |v| { v["visual_threats"].as_array_mut().unwrap().remove(0); });
     assert!(tick(&mut engine, &only_b, 361_000).actions.is_empty());
-    notice(tick(&mut engine, &two, 362_000), "a");
+    assert!(tick(&mut engine, &two, 362_000).actions.is_empty());
+    let ended = changed(&event(json!([]), json!([])), |v| {
+        v["event"]["name"] = json!("combat_ended");
+        v["combat"] = json!({"player_engaged":false, "opponents":[]});
+    });
+    tick(&mut engine, &ended, 363_000);
+    notice(tick(&mut engine, &a, 364_000), "a");
+}
+
+// 見込み: 部分通知でAが対象外と確定したら、至近のAを以前の視認や敵数からパニックの根拠に戻さない。
+// 合格: 模擬エンジンでA・Bによるパニックが、Bだけの交戦通知で警戒へ戻る。続く音通知が相手欄を省略しても警戒のまま。
+#[test]
+fn released_opponent_is_not_carried_from_full_sight_into_later_partial_events() {
+    let mut engine = Engine::default();
+    let both = changed(&event(json!([visual("zombie", "a", 2.0), visual("skeleton", "b", 14.0)]), json!([])), |v| {
+        v["combat"] = json!({"player_engaged":true,"hostiles_within_10":2,
+            "opponents":[{"entity_id":"a","evidence":"targeting_player"},{"entity_id":"b","evidence":"player_attack"}]});
+    });
+    assert_eq!(tick(&mut engine, &both, 0).mode, Mode::Panic);
+    let mut partial = serde_json::to_value(event(json!([]), json!([]))).unwrap();
+    partial["event"]["name"] = json!("hostile_audio_detected");
+    partial["event"]["source_kind"] = json!("auditory");
+    partial["combat"]["opponents"] = json!([{"entity_id":"b","evidence":"player_attack"}]);
+    for at in [50, 100] {
+        let decision = engine.observe(&GameEvent::parse(partial.clone()).unwrap(), at, false, false,
+            &Settings::default(), &threats::Settings::default());
+        assert_eq!(decision.mode, Mode::Alert);
+        partial["combat"].as_object_mut().unwrap().remove("opponents");
+    }
 }
 
 // 見込み: 導火が先なら遠隔敵の初回を消費しない。交戦中も同じ遠隔敵だけを時間で読み直さない。

@@ -13,9 +13,10 @@ class ThreatObserverTest {
     private static final UUID ENEMY_B = UUID.fromString("00000000-0000-0000-0000-00000000000b");
     private final AtomicLong tick = new AtomicLong(100);
     private final BossTracker bosses = new BossTracker();
+    private final MobClassifier classifier = new MobClassifier();
     private final ThreatObserver observer = new ThreatObserver(
         new ThreatObserver.Settings(16, 30, 3, 2, 3, 3, 4),
-        new MobClassifier(), bosses, () -> {}, tick::get);
+        classifier, bosses, () -> {}, tick::get);
 
     private ThreatObservation threat(UUID id, boolean visible) {
         return threat(id, visible, 10);
@@ -43,9 +44,12 @@ class ThreatObserverTest {
         observer.updateCombatTracking(visible, List.of());
         assertTrue(observer.combatActive());
         assertFalse(observer.playerEngaged());
-        observer.recordServerTarget(null, ENEMY_A);
-        observer.applyServerObservations(null, UUID.randomUUID());
+        observer.recordServerTarget(null, ENEMY_A, true);
+        UUID player = UUID.randomUUID();
+        observer.applyServerObservations(null, player);
         assertTrue(observer.playerEngaged());
+        observer.recordServerTarget(null, ENEMY_A, false);
+        observer.applyServerObservations(null, player);
         tick.addAndGet(3);
         assertFalse(observer.shouldSendCombatEnded(List.of(), List.of(), false));
         assertTrue(observer.playerEngaged());
@@ -55,6 +59,69 @@ class ThreatObserverTest {
         assertFalse(observer.playerEngaged());
         observer.observePlayerAttack(ENEMY_B);
         assertTrue(observer.playerEngaged());
+    }
+
+    // 見込み: 同じ種類のA・Bでも本人を狙った個体だけが脅威。模擬AI通知から身体視点・分類・配送根拠まで検査し、Minecraftは起動しない。
+    // 合格: 未ターゲットの姿は通常観測、対象切替・解除・アンロードを即時反映し、別の受け手や残りの個体を昇格しない。
+    @Test void targetSwitchAndUnloadUpdateIndividualDispositionForBothViews() {
+        var owner = UUID.randomUUID();
+        var body = new MobClassifier(classifier::hasOpponent);
+        observer.applyServerObservations(null, owner);
+        for (var view : List.of(classifier, body)) {
+            var visible = view.disposition(owner, ENEMY_A, "skeleton", false, "neutral", null);
+            assertTrue(visible.ambientEligible());
+            assertFalse(visible.threatNow());
+        }
+        observer.recordServerTarget(null, ENEMY_A, true);
+        observer.applyServerObservations(null, owner);
+        assertTrue(observer.opponentEvidenceChanged());
+        assertFalse(observer.opponentEvidenceChanged());
+        assertEquals(java.util.Map.of(ENEMY_A, "targeting_player"), observer.opponentEvidence());
+        for (var view : List.of(classifier, body)) {
+            var opponent = view.disposition(owner, ENEMY_A, "skeleton", false, "neutral", null);
+            assertTrue(opponent.threatNow());
+            assertFalse(opponent.ambientEligible());
+            assertFalse(view.hasOpponent(UUID.randomUUID(), ENEMY_A));
+            assertFalse(view.hasOpponent(owner, ENEMY_B));
+        }
+        observer.recordServerTarget(null, ENEMY_B, true);
+        observer.recordServerTarget(null, ENEMY_A, false);
+        observer.applyServerObservations(null, owner);
+        assertTrue(observer.opponentEvidenceChanged());
+        assertTrue(observer.playerEngaged());
+        assertEquals(java.util.Map.of(ENEMY_B, "targeting_player"), observer.opponentEvidence());
+        assertTrue(observer.formerOpponentInRange(ENEMY_A, 35.0));
+        assertFalse(observer.formerOpponentInRange(ENEMY_A, 35.1));
+        assertFalse(observer.formerOpponentInRange(UUID.randomUUID(), 1.0));
+        assertFalse(body.hasOpponent(owner, ENEMY_A));
+        observer.recordServerUnload(null, ENEMY_B);
+        observer.applyServerObservations(null, owner);
+        assertTrue(observer.opponentEvidenceChanged());
+        assertTrue(observer.opponentEvidence().isEmpty());
+        assertFalse(body.hasOpponent(owner, ENEMY_B));
+        observer.endCombat();
+        assertFalse(observer.formerOpponentInRange(ENEMY_A, 1.0));
+    }
+
+    // 見込み: 本人が攻撃した相手は攻撃直後だけ対象。模擬時刻と視認を通し、AI指定との重複・期限・解除を確認する。
+    // 合格: 1個体1件の根拠でAI指定を優先し、攻撃から既存猶予を過ぎれば視認が続いても通常へ戻る。
+    @Test void recentAttackExpiresIndependentlyOfContinuousSight() {
+        var owner = UUID.randomUUID();
+        observer.applyServerObservations(null, owner);
+        observer.observePlayerAttack(ENEMY_A);
+        assertEquals(java.util.Map.of(ENEMY_A, "player_attack"), observer.opponentEvidence());
+        observer.recordServerTarget(null, ENEMY_A, true);
+        observer.applyServerObservations(null, owner);
+        assertEquals(java.util.Map.of(ENEMY_A, "targeting_player"), observer.opponentEvidence());
+        tick.addAndGet(3);
+        observer.updateCombatTracking(List.of(threat(ENEMY_A, true)), List.of());
+        observer.recordServerTarget(null, ENEMY_A, false);
+        observer.applyServerObservations(null, owner);
+        assertEquals(java.util.Map.of(ENEMY_A, "player_attack"), observer.opponentEvidence());
+        tick.incrementAndGet();
+        observer.applyServerObservations(null, owner);
+        assertTrue(observer.opponentEvidence().isEmpty());
+        assertTrue(classifier.disposition(owner, ENEMY_A, "zombie", false, "neutral", null).ambientEligible());
     }
 
     @Test void newEnemyUsesInnerBoundaryAndSixConsecutiveTicks() {
@@ -306,13 +373,13 @@ class ThreatObserverTest {
     // クライアントの死亡描画だけでも終了しない。検査するのは受信順と判断で、実機のAIは対象外。
     @Test void otherAttackerOrUnconfirmedDeathCannotEndCombatEarly() {
         UUID player = UUID.randomUUID();
-        observer.recordServerTarget(null, ENEMY_A);
+        observer.recordServerTarget(null, ENEMY_A, true);
         observer.recordServerDeath(null, ENEMY_A, player, false, "zombie", false);
         assertFalse(observer.applyServerObservations(null, player));
         observer.recordHostileOutcome(ENEMY_B, "skeleton", "other_death", "client_death_state");
         assertFalse(observer.applyServerObservations(null, player));
         observer.recordServerDeath(null, ENEMY_B, player, false, "skeleton", true);
-        observer.recordServerTarget(null, UUID.randomUUID());
+        observer.recordServerTarget(null, UUID.randomUUID(), true);
         assertFalse(observer.applyServerObservations(null, player));
         assertTrue(observer.playerEngaged());
     }

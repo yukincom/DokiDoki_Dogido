@@ -1,7 +1,6 @@
 package dogido.fabric.body;
 
 import com.google.gson.JsonObject;
-import dogido.fabric.observation.mobs.MobClassifier;
 import dogido.fabric.protocol.DogidoEventClient.SessionRef;
 import java.time.Instant;
 import java.util.function.Consumer;
@@ -19,7 +18,6 @@ import static dogido.fabric.body.BodyInspectProtocol.*;
 public final class BodyInspectRuntime {
     private final BodyInspectController controller;
     private final BodySensesCollector senses;
-    private final MobClassifier classifier=new MobClassifier();
     private BodyConnection.Frame currentFrame;
     private Entity currentBody;
     /** Body MOVE_TOだけの配送境界。実装はEventClientの既存session monitorを使って最終照合する。 */
@@ -74,7 +72,7 @@ public final class BodyInspectRuntime {
         return new BodyInspectController.Live(autonomy,point(sample.getAsJsonObject("self_pose").getAsJsonObject("position")),
             new Point(client.player.getX(),client.player.getY(),client.player.getZ()),client.player.getEyeY()-client.player.getY());
     }
-    public void clear() { controller.clear(); senses.clearFocus(); classifier.reset(); currentFrame=null; currentBody=null; }
+    public void clear() { controller.clear(); senses.clearFocus(); currentFrame=null; currentBody=null; }
     private BodyInspectController.ResolvedTarget resolveCurrent(Target target,BodyInspectController.Live live,boolean fromImage) {
         MinecraftClient client=MinecraftClient.getInstance();
         if (client.player == null || client.world == null || currentFrame == null) return null;
@@ -96,7 +94,7 @@ public final class BodyInspectRuntime {
                 if (!entity.getUuid().equals(target.entityId())) continue;
                 if (!(entity instanceof LivingEntity living) || !living.isAlive()
                         || !target.typeId().equals(Registries.ENTITY_TYPE.getId(entity.getType()).toString())
-                        || !classifier.classifyMobDisposition(client.player.getUuid(),living).ambientEligible()
+                        || !senses.classifier().classifyMobDisposition(client.player.getUuid(),living).ambientEligible()
                         || !vision.entity(client.world,entity,16)) return null;
                 return resolved(new Point(entity.getX(),entity.getY(),entity.getZ()),bounds(entity.getBoundingBox()),shape);
             }

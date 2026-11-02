@@ -155,8 +155,11 @@ pub fn prepare(
             announce_smell: true,
         }));
     }
-    let combat = event.combat.combat_active_hint == Some(true)
-        || matches!(context.mode.as_str(), "panic" | "suppressed_panic");
+    // 警戒解除待ちでも、もう交戦相手がいなければ会話材料では交戦中と呼ばない。
+    let combat = event.combat.opponents.as_ref().map_or_else(
+        || event.combat.combat_active_hint == Some(true) || matches!(context.mode.as_str(), "panic" | "suppressed_panic"),
+        |opponents| !opponents.is_empty(),
+    );
     let visual = !event.visual_threats.is_empty();
     let dark = event
         .world
@@ -208,7 +211,7 @@ pub fn prepare(
         sources.clear();
     }
     // 音の本文は共通world_context.hearingだけへ渡す。旧メモは内部診断に残す。
-    let threat = current::threat(event, snapshot);
+    let threat = current::threat(event, snapshot, combat);
     let mut look = crate::world_catalog::catalog()
         .look_target_label(chat_catalog::catalog(), event.look_target.as_ref());
     if !look.is_empty()

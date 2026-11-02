@@ -543,8 +543,12 @@ impl ChatObservationMemory {
             .filter(|v| age(now, v.heard_at_us) <= self.settings.player_chat_hearing_retention_ms)
             .cloned()
             .collect();
-        let visual_types = unique(visual.iter().map(|v| v.mob_type.clone()));
-        let visual_summary = visual.first().map(|v| {
+        // 直近の視認記録自体は残す。今の戦闘材料には、今も本人と交戦中の個体だけを使う。
+        let mut opponents_seen = visual.iter().filter(|v| event.combat.opponents.as_ref().is_none_or(|opponents| {
+            v.dedupe_key.strip_prefix("visual:").is_some_and(|id| opponents.iter().any(|o| o.entity_id == id))
+        }));
+        let visual_types = unique(opponents_seen.clone().map(|v| v.mob_type.clone()));
+        let visual_summary = opponents_seen.next().map(|v| {
             format!(
                 "ついさっき 視認 {} が{}",
                 nonempty(&v.label_ja).unwrap_or(&v.mob_type),

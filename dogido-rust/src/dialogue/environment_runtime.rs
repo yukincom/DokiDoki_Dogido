@@ -130,15 +130,14 @@ pub(super) fn context(s: &Session, event: &GameEvent, complete: bool) -> GameEve
             }
         }
     }
-    if let Some(full) = &s.latest {
-        data["visual_threats"] = json!(full.visual_threats);
-        data["combat"] = json!(full.combat);
-    }
+    // priorには直前の部分通知で確定した交戦相手の解除も含む。
     // 最新の音は独立した有効期間を持つ。環境の安全判定にも渡す。
     if let Some(audio) = &s.audio_latest {
         data["auditory_threats"] = json!(audio.auditory_threats);
     }
-    GameEvent::parse(data).expect("merged validated observations")
+    let mut merged = GameEvent::parse(data).expect("merged validated observations");
+    merged.refresh_partial_opponents(event);
+    merged
 }
 
 /// 警告の選択と同じ会話許可を使い、敵が見えたことだけで周期の気づきを取り消さない。
