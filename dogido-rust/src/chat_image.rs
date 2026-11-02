@@ -4,7 +4,7 @@
 use anyhow::{Result, ensure};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use sha2::{Digest, Sha256};
-use std::fmt;
+use std::{fmt, ops::Deref, sync::Arc};
 
 pub const MAX_PNG_BYTES: usize = 256 * 1024;
 pub const MAX_BASE64_BYTES: usize = MAX_PNG_BYTES.div_ceil(3) * 4;
@@ -13,29 +13,98 @@ pub const MAX_EDGE: u32 = 192;
 /// 一要求だけが借用する画像。Debugでも画像本文を出さず、serdeの保存対象にはしない。
 /// captured_atはtimezone付きRFC3339、width/heightは縮小済みPNGの画素数。
 #[derive(Clone)]
-pub struct Attachment {
+pub struct Frame {
+    pub capture_id: String,
+    pub camera_yaw: Option<f64>,
     pub png_base64: String,
     pub sha256: String,
     pub width: u32,
     pub height: u32,
     pub captured_at: String,
     pub annotation_status: String,
+}
+
+/// 既存の一枚送信はcurrentを参照する。時系列の利用側はframesから照合結果を受け取る。
+#[derive(Clone, Debug)]
+pub struct Attachment {
+    pub current: Arc<Frame>,
+    pub frames: ComparedFrames,
+    pub turned_to: Option<Heading>,
     pub scene_comparison: Option<SceneComparison>,
 }
 
 mod comparison;
-pub use comparison::{SceneComparison, ComparisonStatus, ComparisonReference, CellChange, Brightness};
+pub use comparison::{ComparisonReference, ComparisonStatus, SceneComparison};
 
-impl fmt::Debug for Attachment {
+#[derive(Clone, Default, Debug)]
+pub enum ComparedFrames {
+    #[default]
+    NotCompared,
+    Unchanged,
+    Changed {
+        previous: Arc<Frame>,
+    },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Heading {
+    South,
+    Southwest,
+    West,
+    Northwest,
+    North,
+    Northeast,
+    East,
+    Southeast,
+}
+
+impl Frame {
+    pub fn has_player_box(&self) -> bool {
+        self.annotation_status == "available"
+    }
+
+    pub(crate) fn heading(&self) -> Option<Heading> {
+        use Heading::*;
+        let yaw = self.camera_yaw.filter(|angle| angle.is_finite())?;
+        let index = ((yaw.rem_euclid(360.0) + 22.5) / 45.0).floor() as usize % 8;
+        Some(
+            [
+                South, Southwest, West, Northwest, North, Northeast, East, Southeast,
+            ][index],
+        )
+    }
+
+    pub(crate) fn data_url(&self) -> String {
+        format!("data:image/png;base64,{}", self.png_base64)
+    }
+}
+
+impl Deref for Attachment {
+    type Target = Frame;
+    fn deref(&self) -> &Frame {
+        &self.current
+    }
+}
+
+// 試験画像の破損・期限を作る時も、ほかの要求が借用中の画素は書き換えない。
+#[cfg(test)]
+impl std::ops::DerefMut for Attachment {
+    fn deref_mut(&mut self) -> &mut Frame {
+        Arc::make_mut(&mut self.current)
+    }
+}
+
+impl fmt::Debug for Frame {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Attachment")
+        f.debug_struct("Frame")
             .field("png_base64", &"[redacted]")
             .field("sha256", &self.sha256)
             .field("width", &self.width)
             .field("height", &self.height)
             .field("captured_at", &self.captured_at)
             .field("annotation_status", &self.annotation_status)
-            .field("scene_comparison", &self.scene_comparison)
+            .field("camera_yaw", &self.camera_yaw)
             .finish()
     }
 }
@@ -95,25 +164,25 @@ impl Attachment {
             ),
             "chat_image_invalid_annotation_status"
         );
-        if let Some(comparison) = &self.scene_comparison { comparison.validate(&self.captured_at)?; }
+        if let Some(comparison) = &self.scene_comparison {
+            comparison.validate(&self.captured_at)?;
+        }
         Ok(())
     }
 
     /// 現行の単一画像用。時系列化ではこのJSONを外す。出力に不要なハッシュ・撮影時刻は受信検証だけに使う。
     pub fn metadata_text(&self) -> String {
-        format!(
-            "image_observation: {}",
-            serde_json::json!({
-                "viewpoint":"dogido_client_render_eye", "media_type":"image/png",
-                "captured_at":self.captured_at, "width":self.width, "height":self.height,
-                "sha256":self.sha256, "annotation_status":self.annotation_status,
-                "scene_comparison":self.scene_comparison.as_ref().map(SceneComparison::description),
-            })
-        )
-    }
-
-    pub(crate) fn data_url(&self) -> String {
-        format!("data:image/png;base64,{}", self.png_base64)
+        let mut metadata = serde_json::json!({
+            "viewpoint":"dogido_client_render_eye", "media_type":"image/png",
+            "captured_at":self.captured_at, "width":self.width, "height":self.height,
+            "sha256":self.sha256, "annotation_status":self.annotation_status,
+        });
+        match self.frames {
+            ComparedFrames::Changed { .. } => metadata["scene_comparison"] = "変わった".into(),
+            ComparedFrames::Unchanged => metadata["scene_comparison"] = "変化がない".into(),
+            ComparedFrames::NotCompared => {}
+        }
+        format!("image_observation: {metadata}")
     }
 }
 
@@ -125,12 +194,18 @@ pub(crate) mod tests {
         let png_base64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==".to_owned();
         let bytes = STANDARD.decode(&png_base64).unwrap();
         Attachment {
-            sha256: format!("{:x}", Sha256::digest(bytes)),
-            png_base64,
-            width: 1,
-            height: 1,
-            captured_at: "2026-10-21T02:00:00Z".into(),
-            annotation_status: "available".into(),
+            current: Arc::new(Frame {
+                capture_id: format!("view_{}", uuid::Uuid::new_v4()),
+                camera_yaw: None,
+                sha256: format!("{:x}", Sha256::digest(bytes)),
+                png_base64,
+                width: 1,
+                height: 1,
+                captured_at: "2026-10-21T02:00:00Z".into(),
+                annotation_status: "available".into(),
+            }),
+            frames: ComparedFrames::NotCompared,
+            turned_to: None,
             scene_comparison: None,
         }
     }

@@ -41,6 +41,10 @@ final class BodyViewChange {
             JsonObject value = new JsonObject();
             value.addProperty("status", status.name().toLowerCase(java.util.Locale.ROOT));
             value.add("reference", reference == null ? JsonNull.INSTANCE : reference.json());
+            return value;
+        }
+        JsonObject diagnosticJson() {
+            JsonObject value = json();
             JsonArray changed = new JsonArray();
             for (Cell cell : cells) if (cell.changed()) changed.add(cell.json());
             value.add("cells", changed); return value;

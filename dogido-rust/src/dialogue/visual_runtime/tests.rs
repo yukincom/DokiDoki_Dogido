@@ -3,17 +3,15 @@ use super::*;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use sha2::{Digest, Sha256};
 const OWNER: &str = "11111111-1111-4111-8111-111111111111";
-const PNG: &str = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a8v0AAAAASUVORK5CYII=";
-// 比較元は現在画像とは別の撮影。局所変化1マスを固定し、Javaの変化検出そのものは模擬する。
-fn comparison(status: &str, at: DateTime<Utc>) -> Value {
+pub(super) const PNG: &str = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a8v0AAAAASUVORK5CYII=";
+// 比較元は現在画像とは別の撮影。Javaの変化判定だけを模擬し、通信にマス詳細を含めない。
+pub(super) fn comparison(status: &str, at: DateTime<Utc>) -> Value {
     json!({"status":status,"reference":if status == "not_compared" {Value::Null} else {
         json!({"capture_id":"view_22222222-2222-4222-8222-222222222222",
             "captured_at":at-chrono::Duration::seconds(4),"sha256":"a".repeat(64)})
-    },"cells":if status == "changed" {
-        json!([{"row":5,"column":3,"local_change":true,"brightness":"none"}])
-    } else {json!([])}})
+    }})
 }
-fn pending() -> (State,AdapterCommandResult,DateTime<Utc>) {
+pub(super) fn pending() -> (State,AdapterCommandResult,DateTime<Utc>) {
     let now=Utc::now();
     let context: Context=serde_json::from_value(crate::body::tests::fixture()["sample"]["context"].clone()).unwrap();
     let mut state=State {enabled:true,..Default::default()};state.arm("s",Some(context.clone()),now-chrono::Duration::milliseconds(10));
@@ -24,12 +22,34 @@ fn pending() -> (State,AdapterCommandResult,DateTime<Utc>) {
         "motion_sequence":1,"scene_comparison":comparison("changed",now)}})).unwrap();
     (state,result,now)
 }
+// 既存の通知試験には比較元の4画像を、通常の受信検証を通して用意する。
+pub(super) fn seed_reference(state: &mut State, result: &mut AdapterCommandResult) {
+    let now = DateTime::parse_from_rfc3339(result.body_view.as_ref().unwrap().0["captured_at"].as_str().unwrap()).unwrap().with_timezone(&Utc);
+    let mut past = State {enabled:true, ..Default::default()};
+    for sequence in 1..=4 {
+        let at = now - chrono::Duration::seconds(5 - sequence);
+        past.arm("s", state.context.clone(), at);
+        let mut old = result.clone();
+        old.command_id = past.commands(at)[0]["command_id"].as_str().unwrap().into();
+        let view = &mut old.body_view.as_mut().unwrap().0;
+        view["capture_id"] = json!(format!("view_{}", uuid::Uuid::new_v4()));
+        view["captured_at"] = json!(at);
+        view["motion_sequence"] = json!(sequence);
+        view["scene_comparison"] = comparison("not_compared", at);
+        past.receive(&old, at);
+    }
+    assert_eq!(past.history.len(), 4);
+    let old = past.history.front().unwrap();
+    result.body_view.as_mut().unwrap().0["scene_comparison"]["reference"] =
+        json!({"capture_id":old.capture_id, "captured_at":old.captured_at, "sha256":old.sha256});
+    state.history = past.history;
+}
 // 見込み: 同じ撮影要求を再利用し、成功画像の再送で通知を増やさない。合格: 命令IDを保ち、受理後の次命令だけIDと停止番号を更新し、snapshotにPNGを含めない。確認範囲: 模擬結果による受付状態。
 #[test]
 fn stop_request_reuses_sequence_and_acknowledges_accepted_image_exactly_once() {
     let (mut state,result,now)=pending();let command=state.commands(now)[0].clone();let context=state.context.clone();
     state.arm("s",context.clone(),now);assert_eq!(state.commands(now)[0],command);
-    assert!(state.receive(&result,now));assert!(state.ready);assert_eq!(state.latest.as_ref().unwrap().sequence,1);
+    assert!(state.receive(&result,now));assert!(!state.ready);assert_eq!(state.latest.as_ref().unwrap().sequence,1);
     assert!(state.receive(&result,now));state.arm("s",context,now);
     assert_ne!(state.commands(now)[0]["command_id"],command["command_id"]);
     assert_eq!(state.commands(now)[0]["after_motion_sequence"],1);
@@ -43,13 +63,13 @@ fn equivalent_fourth_image_updates_cache_but_creates_no_change_and_context_loss_
     state.receive(&result,now);assert!(!state.ready);assert!(state.latest.is_some());
     state.arm("s",None,now);assert!(state.latest.is_none());assert!(state.commands(now).is_empty());
 }
-// 見込み: 撮影identity・時刻・比較契約の破損はモデルへ届かない。合格: 各破損または期限超過で受信を完了しlatestを作らない。確認範囲: 模擬JSONの受理境界。撮影と検出精度は別確認。
+// 見込み: 現在画像のidentity・時刻・画素の破損はモデルへ届かない。合格: 各破損または期限超過で受信を完了しlatestを作らない。確認範囲: 模擬JSONの受理境界。撮影と検出精度は別確認。
 #[test]
 fn invalid_images_cannot_become_model_material_and_expired_requests_cannot_renew_their_results() {
-    for key in ["body_entity_uuid","body_epoch","owner_uuid","dimension","camera_restored","sha256","captured_at","capture_id","motion_sequence","comparison","timeout"] {
+    for key in ["body_entity_uuid","body_epoch","owner_uuid","dimension","camera_restored","sha256","captured_at","capture_id","motion_sequence","timeout"] {
         let (mut state,mut result,mut now)=pending();let view=&mut result.body_view.as_mut().unwrap().0;
         match key {"camera_restored"=>view[key]=json!(false),"motion_sequence"=>view[key]=json!(0),
-            "comparison"=>view["scene_comparison"]["cells"]=json!([]),"timeout"=>now+=chrono::Duration::seconds(11),_=>view[key]=json!("wrong")};
+            "timeout"=>now+=chrono::Duration::seconds(11),_=>view[key]=json!("wrong")};
         assert!(state.receive(&result,now));assert!(state.latest.is_none(),"{key}");
     }
 }
@@ -114,7 +134,7 @@ async fn changed_image_creates_one_existing_notice_with_frozen_image_and_unchang
     let (d,_)=server(100);let (_,mut result,_)=pending();
     let mut data=d.data.lock().unwrap();let s=data.sessions.get_mut("s").unwrap();
     result.command_id=s.visual.commands(Utc::now())[0]["command_id"].as_str().unwrap().into();
-    result.body_view.as_mut().unwrap().0["captured_at"]=json!(Utc::now());s.visual.receive(&result,Utc::now());
+    result.body_view.as_mut().unwrap().0["captured_at"]=json!(Utc::now());seed_reference(&mut s.visual,&mut result);s.visual.receive(&result,Utc::now());
     let mut action=opportunity(s).unwrap();assert!(action.image.is_some());assert!(opportunity(s).is_none());
     assert!(action.leaf.as_ref().unwrap().details["reaction_context"].is_null());
     assert!(super::super::environment_runtime::refresh_dialogue_context(s, std::slice::from_mut(&mut action)));
@@ -143,6 +163,7 @@ fn environment_with_image() -> (Arc<Dialogue>, crate::combat::model::Speech) {
     s.history.push("previous", "assistant", "カメさん、砂浜でゆっくりしとるなぁ。");
     result.command_id = s.visual.commands(Utc::now())[0]["command_id"].as_str().unwrap().into();
     result.body_view.as_mut().unwrap().0["captured_at"] = json!(Utc::now());
+    seed_reference(&mut s.visual, &mut result);
     s.visual.receive(&result, Utc::now());
     let mut action = opportunity(s).unwrap();
     action.delivery = crate::combat::model::Delivery::Ambient;
@@ -301,6 +322,7 @@ async fn unchanged_image_is_attached_to_periodic_and_ordinary_decisions_without_
         receipt.command_id=s.visual.commands(Utc::now())[0]["command_id"].as_str().unwrap().into();
         let v=&mut receipt.body_view.as_mut().unwrap().0;
         v["captured_at"]=json!(Utc::now()); v["scene_comparison"]=comparison("unchanged",Utc::now());
+        seed_reference(&mut s.visual, &mut receipt);
         s.visual.receive(&receipt,Utc::now()); assert!(opportunity(s).is_none());
         let mut frame=super::super::body_runtime::context(s).unwrap();
         s.conversation_observation.observe(frame.clone()); s.conversation_observation.sample_notice(10,1,true);

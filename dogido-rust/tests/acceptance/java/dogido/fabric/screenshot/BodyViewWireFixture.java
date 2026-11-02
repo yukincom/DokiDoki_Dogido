@@ -61,13 +61,14 @@ public final class BodyViewWireFixture {
         if (change.status() != expected || !Objects.equals(change.reference(), firstReference))
             throw new AssertionError("comparison status/reference: " + scenario);
         var comparison = change.json();
-        if (!comparison.keySet().equals(Set.of("status", "reference", "cells"))) throw new AssertionError("comparison keys");
+        if (!comparison.keySet().equals(Set.of("status", "reference"))) throw new AssertionError("comparison keys");
         if (firstReference == null ? !comparison.get("reference").isJsonNull() : !firstReference.json().equals(comparison.get("reference")))
             throw new AssertionError("wire reference");
-        int cells = comparison.getAsJsonArray("cells").size();
+        var diagnostics = change.diagnosticJson();
+        int cells = diagnostics.getAsJsonArray("cells").size();
         if (scenario.equals("changed") ? cells == 0 : cells != 0) throw new AssertionError("wire cell count");
         if (!realImages && scenario.equals("changed") && cells != 48) throw new AssertionError("synthetic changed cell count");
-        for (var cell : comparison.getAsJsonArray("cells")) {
+        for (var cell : diagnostics.getAsJsonArray("cells")) {
             var object = cell.getAsJsonObject();
             if (!object.keySet().equals(Set.of("row", "column", "local_change", "brightness"))) throw new AssertionError("wire cell keys");
             if (!realImages && (object.get("local_change").getAsBoolean() || !object.get("brightness").getAsString().equals("lighter")))
@@ -80,6 +81,7 @@ public final class BodyViewWireFixture {
         view.addProperty("body_entity_uuid", command.bodyId().toString()); view.addProperty("body_epoch", command.epoch().toString());
         view.addProperty("owner_uuid", command.ownerId().toString()); view.addProperty("dimension", command.dimension());
         view.addProperty("camera_restored", true); view.add("annotation_status", metadata.get("annotation_status"));
+        view.addProperty("camera_yaw", input.has("camera_yaw") ? input.get("camera_yaw").getAsDouble() : 0.0);
         view.addProperty("motion_sequence", command.afterMotionSequence() + 1);
         view.add("scene_comparison", comparison);
         var result = BodyViewProtocol.result(command, "succeeded", "captured", now);

@@ -675,8 +675,9 @@ async fn model_can_silently_look_at_owner_with_unchanged_image_and_covered_rain(
             capture_id:"view_22222222-2222-4222-8222-222222222222".into(),
             captured_at:(chrono::Utc::now()-chrono::Duration::seconds(4)).to_rfc3339(),
             sha256:"a".repeat(64),
-        }),cells:vec![],
+        }),
     });
+    image.frames=crate::chat_image::ComparedFrames::Unchanged;
     environment_decision_with_image(&d,frame,Some(image));completed(&d,&mock).await;
     let command=d.data.lock().unwrap().sessions["s"].body_autonomy.commands(Instant::now(),chrono::Utc::now())[0].clone();
     assert_eq!(command["purpose"],"look_owner"); assert!(command["target"].is_null());

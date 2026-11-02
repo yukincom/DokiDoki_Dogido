@@ -46,7 +46,7 @@ class BodyViewChangeTest {
         assertEquals(reference(0).json(), same.json().getAsJsonObject("reference"));
         assertEquals(48, same.cells().size());
         assertTrue(same.cells().stream().noneMatch(BodyViewChange.Cell::changed));
-        assertTrue(same.json().getAsJsonArray("cells").isEmpty());
+        assertFalse(same.json().has("cells"));
         var changed = changes.observe("body", 1, image(0xffffff), reference(5));
         assertEquals(BodyViewChange.Status.CHANGED, changed.status());
         assertEquals(reference(1), changed.reference());
@@ -63,7 +63,7 @@ class BodyViewChangeTest {
     }
 
     // 見込み: マス内の連結した強い小領域は、マス全体が明るくならなくても局所差になる。
-    // 合格: 左上の2×2点だけで1行1列だけlocal=true、明るさnone。JSONは判定項目だけ。範囲: 本体比較・JSON。物体認識は対象外。
+    // 合格: 左上の2×2点だけで1行1列だけlocal=true、明るさnone。通信は状態と参照だけ、セルは保存診断に保持。範囲: 本体比較・JSON。物体認識は対象外。
     @Test void retainsLocalChangeSeparatelyFromBrightnessWithoutSendingIntensities() {
         var pixels = image(0x808080);
         for (int y = 0; y < 2; y++) for (int x = 0; x < 2; x++) pixels.setRGB(x, y, 0xffffff);
@@ -74,9 +74,10 @@ class BodyViewChangeTest {
         assertEquals(1, cell.row()); assertEquals(1, cell.column());
         assertTrue(cell.localChange()); assertEquals(BodyViewChange.Brightness.NONE, cell.brightness());
         var wire = result.json();
-        assertEquals(Set.of("status", "reference", "cells"), wire.keySet());
-        assertEquals(1, wire.getAsJsonArray("cells").size());
-        var sent = wire.getAsJsonArray("cells").get(0).getAsJsonObject();
+        assertEquals(Set.of("status", "reference"), wire.keySet());
+        var diagnostics = result.diagnosticJson();
+        assertEquals(1, diagnostics.getAsJsonArray("cells").size());
+        var sent = diagnostics.getAsJsonArray("cells").get(0).getAsJsonObject();
         assertEquals(Set.of("row", "column", "local_change", "brightness"), sent.keySet());
         assertEquals("none", sent.get("brightness").getAsString());
         assertTrue(sent.get("local_change").getAsBoolean());

@@ -1,4 +1,4 @@
-//! 見込み: 画像取得と比較を分ければ、未比較を変化と取り違えず、必要な一枚を返答に使える。合格: 三状態の画像保持・変化時だけの通知・比較元と位置説明・一画像の実要求を照合。観測と応答は模擬、実モデルと描画は別確認。
+//! 見込み: 画像取得と比較を分ければ、未比較を変化と取り違えず、必要な一枚を返答に使える。合格: 三状態の画像保持・変化時だけの通知・比較元と撮影時の向き・一画像の実要求を照合。観測と応答は模擬、実モデルと描画は別確認。
 use super::*;
 
 const OWNER: &str = "11111111-1111-4111-8111-111111111111";
@@ -21,11 +21,7 @@ fn comparison(status: &str, now: DateTime<Utc>) -> Value {
     json!({"status":status,"reference":if status == "not_compared" {Value::Null} else {
         json!({"capture_id":"view_00000000-0000-0000-0000-000000000100",
             "captured_at":now-chrono::Duration::seconds(4),"sha256":"b".repeat(64)})
-    },"cells":if status == "changed" {json!([
-        {"row":5,"column":3,"local_change":true,"brightness":"none"},
-        {"row":6,"column":2,"local_change":true,"brightness":"none"},
-        {"row":6,"column":3,"local_change":true,"brightness":"none"}
-    ])} else {json!([])}})
+    }})
 }
 
 fn server() -> (Arc<Dialogue>, Source) {
@@ -59,7 +55,7 @@ fn server() -> (Arc<Dialogue>, Source) {
     (dialogue, source)
 }
 
-// 見込み: 比較不能でも写真は利用でき、景色が変わったとは扱わずに済む。合格: 未比較の画像を受信・保持・通常抽出でき、metadataは未比較、発話機会なし。確認範囲: 模擬画像の実受信から返答用抽出まで。
+// 見込み: 比較不能でも写真は利用でき、景色が変わったとは扱わずに済む。合格: 未比較の画像を受信・保持・通常抽出でき、metadataに比較説明なし、発話機会なし。確認範囲: 模擬画像の実受信から返答用抽出まで。
 #[tokio::test]
 async fn acceptance_image_uncompared_is_usable_in_ordinary_reply_without_change_opportunity() {
     let (dialogue, source) = server();
@@ -92,10 +88,7 @@ async fn acceptance_image_uncompared_is_usable_in_ordinary_reply_without_change_
             .unwrap(),
     )
     .unwrap();
-    assert_eq!(
-        metadata["scene_comparison"],
-        "画像は取得したが、比較できていない"
-    );
+    assert!(metadata.get("scene_comparison").is_none());
     assert!(metadata.get("scene_change").is_none());
     assert_eq!(metadata["captured_at"], captured.image.captured_at);
 }
@@ -133,9 +126,9 @@ async fn acceptance_image_compared_change_emits_once_and_unchanged_still_updates
     let mut data = dialogue.data.lock().unwrap();
     let session = data.sessions.get_mut("s").unwrap();
     let now = Utc::now();
-    session
-        .visual
-        .receive(&receipt(&session.visual, now, 1, "changed"), now);
+    let mut changed = receipt(&session.visual, now, 1, "changed");
+    super::tests::seed_reference(&mut session.visual, &mut changed);
+    session.visual.receive(&changed, now);
     let action = opportunity(session).expect("比較済みの差分には既存の発話機会がある");
     assert!(action.image.is_some());
     assert_eq!(
@@ -226,11 +219,11 @@ async fn acceptance_image_explicit_capture_survives_changed_pose_and_missing_bod
     );
 }
 
-// 見込み: Javaの比較結果をそのまま受ければ、通信境界で未比較と変化を取り違えない。合格: 3状態で画像を保持、referenceとcellsが受信前後で一致し、changedだけ機会1回。確認範囲: 合成画素の実比較・符号化・JSON・Rust受信。
+// 見込み: Javaの比較結果をそのまま受ければ、通信境界で未比較と変化を取り違えない。合格: 3状態で画像を保持、referenceは診断に残り、Rustに比較元が無い時の機会は0回。確認範囲: 合成画素の実比較・符号化・JSON・Rust受信。
 #[tokio::test]
 async fn acceptance_image_java_protocol_to_rust_receipt_preserves_three_states() {
     let wire_fixture = JavaWireFixture::compile();
-    for (scenario, expected_change) in [("unchanged", false), ("changed", true), ("unknown", false)]
+    for scenario in ["unchanged", "changed", "unknown"]
     {
         let (dialogue, source) = server();
         let now = Utc::now();
@@ -288,8 +281,8 @@ async fn acceptance_image_java_protocol_to_rust_receipt_preserves_three_states()
             );
             assert_eq!(
                 opportunity(session).is_some(),
-                expected_change,
-                "{scenario}: 未比較は景色の変化ではない"
+                false,
+                "{scenario}: Javaだけにある比較元では変化を通知しない"
             );
             assert!(
                 opportunity(session).is_none(),
@@ -326,6 +319,29 @@ impl JavaWireFixture {
         fixture
     }
 
+    // Javaが符号化した比較元の画素を、現在とは別の撮影ACKとして4回受ける。
+    fn previous_captures(&self, input: &Value, now: DateTime<Utc>) -> VecDeque<Arc<Frame>> {
+        let mut earlier = input.clone();
+        earlier["scenario"] = json!("unknown");
+        earlier["after_path"] = earlier["before_path"].clone();
+        let event = self.event(&earlier);
+        let mut past = State {enabled:true, ..Default::default()};
+        for i in 0..4 {
+            let at = now - chrono::Duration::seconds(4-i);
+            past.arm("s", Some(context()), at);
+            let mut receipt = event.command_results[0].clone();
+            receipt.command_id = past.commands(at)[0]["command_id"].as_str().unwrap().into();
+            let v = &mut receipt.body_view.as_mut().unwrap().0;
+            v["capture_id"] = json!(format!("view_00000000-0000-0000-0000-{:012}",100+i));
+            // Instant.toString()で書かれたJavaの表現（Z、3桁の組単位）に揃える。
+            v["captured_at"] = json!(at.to_rfc3339_opts(chrono::SecondsFormat::AutoSi, true));
+            v["motion_sequence"] = json!(i+1);
+            past.receive(&receipt, at);
+        }
+        assert_eq!(past.history.len(), 4);
+        past.history
+    }
+
     fn event(&self, input: &Value) -> crate::events::GameEvent {
         use std::io::Write;
         use std::process::{Command, Stdio};
@@ -359,22 +375,17 @@ impl Drop for JavaWireFixture {
     }
 }
 
-// 見込み: 矛盾した比較情報を拒否すれば、誤った参照やマスで変化を説明しない。合格: 参照・時刻・ID・hash・状態・範囲・重複・無判定マスの各不正で画像保持なし。確認範囲: 実Rust受信、Javaの計測精度はgolden照合で別確認。
+// 見込み: 矛盾した比較情報を拒否すれば、誤った参照やマスで変化を説明しない。合格: 比較情報の不正時は検証済みの今回画像だけを保持し、変化は通知しない。確認範囲: 実Rust受信、Javaの計測精度はgolden照合で別確認。
 #[test]
-fn acceptance_image_invalid_comparison_never_enters_latest_cache() {
+fn acceptance_image_invalid_comparison_preserves_only_current_png() {
     for fault in [
         "reference_missing",
         "future",
         "same_capture",
         "id",
         "hash",
-        "row",
-        "column",
-        "duplicate",
-        "empty_changed",
-        "empty_cell",
+        "unexpected_cells",
         "unknown_status",
-        "unchanged_cells",
         "not_compared_reference",
         "legacy_only",
     ] {
@@ -398,16 +409,10 @@ fn acceptance_image_invalid_comparison_never_enters_latest_cache() {
             "same_capture" => c["reference"]["capture_id"] = capture_id,
             "id" => c["reference"]["capture_id"] = json!("not-a-capture"),
             "hash" => c["reference"]["sha256"] = json!("z".repeat(64)),
-            "row" => c["cells"][0]["row"] = json!(7),
-            "column" => c["cells"][0]["column"] = json!(0),
-            "duplicate" => c["cells"][1] = c["cells"][0].clone(),
-            "empty_changed" => c["cells"] = json!([]),
-            "empty_cell" => c["cells"][0]["local_change"] = json!(false),
+            "unexpected_cells" => c["cells"] = json!([]),
             "unknown_status" => c["status"] = json!("unknown"),
-            "unchanged_cells" => c["status"] = json!("unchanged"),
             "not_compared_reference" => {
                 c["status"] = json!("not_compared");
-                c["cells"] = json!([]);
             }
             "legacy_only" => {
                 view.as_object_mut().unwrap().remove("scene_comparison");
@@ -418,42 +423,15 @@ fn acceptance_image_invalid_comparison_never_enters_latest_cache() {
         }
         assert!(state.receive(&result, now));
         assert!(
-            state.latest.is_none(),
-            "{fault}: ACKを画像の受理成功と数えない"
+            matches!(state.latest.as_ref().unwrap().image.frames, ComparedFrames::NotCompared),
+            "{fault}: 今回の画像に不正な比較元を結びつけない"
         );
+        assert!(state.latest.as_ref().unwrap().image.scene_comparison.is_none(), "{fault}");
         assert!(!state.ready, "{fault}");
     }
 }
 
-// 見込み: 行列から説明を作れば、検出位置を余分な領域へ広げず明暗も伝えられる。合格: L字3マスの行・列が一致し、明暗混在は両方を表示。比較元ID・hash・率・強度を説明に混ぜない。確認範囲: 実説明生成、画像の意味判断は別確認。
-#[test]
-fn acceptance_image_location_description_keeps_exact_cells_and_both_brightness_signs() {
-    let now = Utc::now();
-    let plain: crate::chat_image::SceneComparison =
-        serde_json::from_value(comparison("changed", now)).unwrap();
-    assert_eq!(
-        plain.description(),
-        "画像を横8×縦6に分けた位置。行は上から、列は左から数える。\n画面の左側、下部にある範囲。上から5行目は左から3列目、上から6行目は左から2〜3列目。\n画像の明るさの変化は検出していない。"
-    );
-    let mut mixed = comparison("changed", now);
-    mixed["cells"][0]["brightness"] = json!("lighter");
-    mixed["cells"][1]["brightness"] = json!("darker");
-    let mixed: crate::chat_image::SceneComparison = serde_json::from_value(mixed).unwrap();
-    let text = mixed.description();
-    assert!(text.ends_with("明るくなった領域と暗くなった領域をそれぞれ検出した。"));
-    for forbidden in [
-        "view_",
-        "bbbbbbbb",
-        "local_top_mean",
-        "fraction",
-        "%",
-        "強度",
-    ] {
-        assert!(!text.contains(forbidden));
-    }
-}
-
-// 見込み: 本体の一画像経路を通せば、比較の説明を重ねず同じ画像を通常・環境で使える。合格: 三状態各2要求に現在PNG1枚と説明1回、比較元は内部に保持。確認範囲: 実画像→Java→Rust→模擬HTTP。無変化時の環境契機と全応答は固定、意味理解は未判定。
+// 見込み: 本体の一画像経路を通せば、比較の説明を重ねず同じ画像を通常・環境で使える。合格: 三状態各2要求に現在PNG1枚、照合済みの比較だけ説明1回、参照は内部に保持。確認範囲: 実画像→Java→Rust→模擬HTTP。無変化時の環境契機と全応答は固定、意味理解は未判定。
 #[tokio::test]
 async fn acceptance_image_both_model_routes_send_one_current_image_and_one_comparison() {
     let wire_fixture = JavaWireFixture::compile();
@@ -493,9 +471,11 @@ async fn acceptance_image_both_model_routes_send_one_current_image_and_one_compa
                 "after_path":base.join("after-native.png")})
         };
         let received = wire_fixture.event(&input);
+        let past = if scenario == "unknown" { VecDeque::new() } else { wire_fixture.previous_captures(&input, now) };
         let (normal, action) = {
             let mut data = d.data.lock().unwrap();
             let s = data.sessions.get_mut("s").unwrap();
+            s.visual.history = past;
             // 期限そのものの検査はvisual_runtimeの単体試験に任せる。
             s.visual.receive(&received.command_results[0], now + chrono::Duration::seconds(1));
             let image = &s.visual.latest.as_ref().expect("実画像を保持").image;
@@ -504,6 +484,14 @@ async fn acceptance_image_both_model_routes_send_one_current_image_and_one_compa
                 json!(image.scene_comparison),
                 json!(serde_json::from_value::<crate::chat_image::SceneComparison>(received.command_results[0].body_view.as_ref().unwrap().0["scene_comparison"].clone()).unwrap())
             );
+            match (&image.frames, scenario) {
+                (ComparedFrames::Changed { previous }, "changed") => {
+                    assert_eq!(previous.sha256, image.scene_comparison.as_ref().unwrap().reference.as_ref().unwrap().sha256);
+                    assert_ne!(previous.png_base64, image.current.png_base64);
+                }
+                (ComparedFrames::Unchanged, "unchanged") | (ComparedFrames::NotCompared, "unknown") => {}
+                _ => panic!("{scenario}: 比較元の実画像と今回画像を照合"),
+            }
             let native = chat_context::capture(
                 s,
                 s.latest.as_ref().unwrap(),
@@ -603,19 +591,16 @@ async fn acceptance_image_both_model_routes_send_one_current_image_and_one_compa
                     .collect::<Vec<_>>()
                     .join("\n");
                 assert_eq!(all_text.matches("image_observation: ").count(), 1);
-                let encoded_description =
-                    json!(image.scene_comparison.as_ref().unwrap().description()).to_string();
-                assert_eq!(
-                    all_text.matches(&encoded_description).count(),
-                    1,
-                    "説明本文も要求全体で一回"
-                );
                 let (context, metadata) = text.split_once("\n\nimage_observation: ").unwrap();
                 let metadata: Value = serde_json::from_str(metadata).unwrap();
-                assert_eq!(
-                    metadata["scene_comparison"],
-                    image.scene_comparison.as_ref().unwrap().description()
-                );
+                match status {
+                    "changed" => assert_eq!(metadata["scene_comparison"], "変わった"),
+                    "unchanged" => assert_eq!(metadata["scene_comparison"], "変化がない"),
+                    _ => assert!(metadata.get("scene_comparison").is_none()),
+                }
+                if let Some(description) = metadata["scene_comparison"].as_str() {
+                    assert_eq!(all_text.matches(&json!(description).to_string()).count(), 1);
+                }
                 assert!(!context.contains("scene_comparison"));
                 assert!(!all_text.contains("view_00000000-0000-0000-0000-000000000100"));
                 for forbidden in [

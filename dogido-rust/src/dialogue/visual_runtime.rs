@@ -1,7 +1,7 @@
 //! 停止時・明示注視後の身体画像を既存game-eventsで受け取る。明示撮影は移動と並行し、撮影後の一枚を返答まで保持する。
-//! Fabricが比較元を選び、Rustが画像の世代・寿命を管理する。現行は最新の一枚。時系列化では比較元に一致する受理済み画像だけを対にする。
+//! Fabricが比較元を選び、Rustが画像の世代・寿命を管理する。比較元に一致する受理済み画像だけを対にする。
 use super::{Dialogue, Session, bridge, chat_context};
-use crate::{body::contracts::Context, chat_image::Attachment, events::{AdapterCommandResult, AdapterCommandResultStatus as Status}};
+use crate::{body::contracts::Context, chat_image::{Attachment, Frame, ComparedFrames, ComparisonStatus}, events::{AdapterCommandResult, AdapterCommandResultStatus as Status}};
 use chrono::{DateTime, Utc};
 use serde_json::{Value, json};
 use std::{collections::VecDeque, sync::{Arc, Weak}, time::{Duration, Instant}};
@@ -28,6 +28,8 @@ pub(super) struct State {
     context: Option<Context>,
     pending: Option<Pending>,
     latest: Option<Captured>,
+    // 次の撮影が参照できる直近4枚。PNGを複製せず、古い比較元を再帰的に保持しない。
+    history: VecDeque<Arc<Frame>>,
     ready: bool,
     sequence: u64,
     done: VecDeque<String>,
@@ -43,7 +45,11 @@ impl State {
     pub fn arm(&mut self, sid: &str, context: Option<Context>, now: DateTime<Utc>) {
         if self.context != context || !self.enabled {
             // 明示撮影は取得時のidentityに属する。移動中の観測欠落や別poseで予約・取得済み画像を捨てない。
-            if !self.enabled { self.cancel_look(); }
+            if !self.enabled || self.look.as_ref().is_some_and(|look|
+                context.as_ref().is_some_and(|next| next != &look.request.look.context)) {
+                self.cancel_look();
+            }
+            self.history.clear();
             if self.look.is_none() && let Some(p) = self.pending.take() {
                 self.finish(p.command["command_id"].as_str().unwrap_or(""));
             }
@@ -88,7 +94,15 @@ impl State {
         json!({"supported":self.enabled,"capture_trigger":"body_stopped_or_stationary_refresh","pending":self.pending.as_ref().map(|p| json!({
             "command_id":p.command["command_id"],"phase":"waiting_for_stop","issued_at":p.issued,"expires_at":p.expires})),
             "latest":self.latest.as_ref().map(|v| json!({"capture_id":v.capture_id,"motion_sequence":v.sequence,
-                "captured_at":v.image.captured_at,"sha256":v.image.sha256,"scene_comparison":v.image.scene_comparison})),"notice_pending":self.ready})
+                "captured_at":v.image.captured_at,"sha256":v.image.sha256,"scene_comparison":v.image.scene_comparison,
+                "player_box":v.image.has_player_box(),"camera_yaw":v.image.camera_yaw,"turned_to":v.image.turned_to,
+                "verified_comparison":match &v.image.frames {
+                    ComparedFrames::NotCompared => json!({"status":"not_compared"}),
+                    ComparedFrames::Unchanged => json!({"status":"unchanged"}),
+                    ComparedFrames::Changed { previous } => json!({"status":"changed","capture_id":previous.capture_id,
+                        "captured_at":previous.captured_at,"sha256":previous.sha256,"player_box":previous.has_player_box(),
+                        "camera_yaw":previous.camera_yaw}),
+                }})),"notice_pending":self.ready})
     }
     pub fn owns(&self, id: &str) -> bool {
         self.pending.as_ref().is_some_and(|p| p.command["command_id"] == id) || self.done.iter().any(|v| v == id)
@@ -96,14 +110,38 @@ impl State {
     pub fn commands(&self, now: DateTime<Utc>) -> Vec<Value> {
         self.pending.as_ref().filter(|p| now < p.expires).map(|p| vec![p.command.clone()]).unwrap_or_default()
     }
-    /// 一枚を検証して最新へ置換し、受信ACKを返す。生成中の一枚はSpeechが別に所有するため再送保持は不要。
+    /// Fabricが指定した実画像だけを使う。4枚前は通常の静止撮影で40秒以上前にもなるので、
+    /// 現在画像の鮮度は各受理間隔に適用し、途中で観測が失効した系列は引き継がない。
+    fn remember(&mut self, captured: &mut Captured, now: DateTime<Utc>) {
+        if self.history.back().is_some_and(|last| !fresh(&last.captured_at, now)) {
+            self.history.clear();
+        }
+        if let Some(comparison) = &captured.image.scene_comparison
+            && let Some(id) = &comparison.reference
+            && let Some(old) = self.history.iter().find(|old|
+                old.capture_id == id.capture_id && old.captured_at == id.captured_at
+                    && old.sha256.eq_ignore_ascii_case(&id.sha256))
+        {
+            captured.image.turned_to = old.heading().zip(captured.image.heading())
+                .and_then(|(before, after)| (before != after).then_some(after));
+            captured.image.frames = match comparison.status {
+                ComparisonStatus::Changed => ComparedFrames::Changed { previous: Arc::clone(old) },
+                ComparisonStatus::Unchanged => ComparedFrames::Unchanged,
+                ComparisonStatus::NotCompared => ComparedFrames::NotCompared,
+            };
+        }
+        self.history.push_back(Arc::clone(&captured.image.current));
+        if self.history.len() > 4 { self.history.pop_front(); }
+    }
+    /// 一撮影一画像を検証し、照合済みの変化だけを一度通知する。
     /// 同じ地点で4枚前と同等なら画像は更新するが、変化と新たなモデル判断は作らない。
     pub fn receive(&mut self, result: &AdapterCommandResult, now: DateTime<Utc>) -> bool {
         let Some(p) = self.pending.as_ref().filter(|p| p.command["command_id"] == result.command_id) else { return true; };
         let explicit = self.look.as_ref().is_some_and(|v| v.request.capture_id == result.command_id);
         let captured = (now < p.expires && result.status == Status::Succeeded).then(|| parse_image(result,p,now)).flatten();
-        if let Some(captured) = captured.filter(|v| v.sequence > self.sequence) {
-            let changed = captured.image.scene_comparison.as_ref().is_some_and(|c| c.changed());
+        if let Some(mut captured) = captured.filter(|v| v.sequence > self.sequence) {
+            self.remember(&mut captured, now);
+            let changed = matches!(captured.image.frames, ComparedFrames::Changed { .. });
             self.sequence = captured.sequence; self.ready = changed && !explicit;
             if explicit && let Some(look) = self.look.as_mut() { look.image = Some(captured.clone()); }
             tracing::info!(event="body_stop_image_received",command_id=result.command_id,capture_id=captured.capture_id,
@@ -126,12 +164,17 @@ fn parse_image(result: &AdapterCommandResult, pending: &Pending, now: DateTime<U
     if uuid::Uuid::parse_str(capture_id).ok()?.to_string() != capture_id { return None; }
     let sequence = v["motion_sequence"].as_u64()?;
     if sequence == 0 || sequence > i64::MAX as u64 { return None; }
-    let comparison: crate::chat_image::SceneComparison = serde_json::from_value(v["scene_comparison"].clone()).ok()?;
-    if comparison.reference.as_ref().is_some_and(|r| Some(r.capture_id.as_str()) == v["capture_id"].as_str()) { return None; }
-    let image = Attachment { png_base64:v["png_base64"].as_str()?.into(), sha256:v["sha256"].as_str()?.into(),
+    let comparison = serde_json::from_value::<crate::chat_image::SceneComparison>(v["scene_comparison"].clone()).ok()
+        .filter(|c| c.reference.as_ref().is_none_or(|r| Some(r.capture_id.as_str()) != v["capture_id"].as_str())
+            && c.validate(v["captured_at"].as_str().unwrap_or("")).is_ok());
+    let current = Frame {
+        capture_id:format!("view_{capture_id}"), camera_yaw:v["camera_yaw"].as_f64(),
+        png_base64:v["png_base64"].as_str()?.into(), sha256:v["sha256"].as_str()?.into(),
         width:v["width"].as_u64()?.try_into().ok()?, height:v["height"].as_u64()?.try_into().ok()?,
         captured_at:v["captured_at"].as_str()?.into(), annotation_status:v["annotation_status"].as_str()?.into(),
-        scene_comparison:Some(comparison) };
+    };
+    let image = Attachment { current:Arc::new(current), scene_comparison:comparison,
+        frames:ComparedFrames::NotCompared, turned_to:None };
     image.validate().ok()?;
     Some(Captured { image,context:pending.context.clone(),capture_id:format!("view_{capture_id}"),sequence })
 }
@@ -157,9 +200,13 @@ fn latest(s: &Session) -> Option<&Captured> {
     if !s.visual.enabled { return None; }
     let captured = s.visual.latest.as_ref()?;
     if s.body_observation.accepted(Instant::now())?.context != captured.context { return None; }
-    let at = DateTime::parse_from_rfc3339(&captured.image.captured_at).ok()?.with_timezone(&Utc);
-    let age = Utc::now()-at;
-    (age >= chrono::Duration::zero() && age < chrono::Duration::seconds(IMAGE_FRESH_SECONDS)).then_some(captured)
+    fresh(&captured.image.captured_at, Utc::now()).then_some(captured)
+}
+fn fresh(captured_at: &str, now: DateTime<Utc>) -> bool {
+    DateTime::parse_from_rfc3339(captured_at).is_ok_and(|at| {
+        let age = now - at.with_timezone(&Utc);
+        age >= chrono::Duration::zero() && age < chrono::Duration::seconds(IMAGE_FRESH_SECONDS)
+    })
 }
 fn capture_metadata(captured: &Captured) -> Value {
     json!({"capture_id":captured.capture_id,"captured_at":captured.image.captured_at,
@@ -235,7 +282,7 @@ impl Source {
         history.conversation_turns = s.refresh_model_history(&self.turn, &history.conversation_turns, input.retained_history_count);
         history.conversation_history = super::history::History::lines_for(&history.conversation_turns);
         let image_current = captured.is_some_and(|context| match &self.after_look {
-            Some(request) => context == &request.look.context,
+            Some(request) => context == &request.look.context && captured_look(s, request),
             None => s.body_observation.accepted(Instant::now()).is_some_and(|sample| &sample.context == context),
         });
         let native = chat_context::capture(s, s.latest.as_ref()?, &owner.config.combat, history, None).ok()?;
@@ -244,6 +291,8 @@ impl Source {
 }
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod frame_tests;
 
 #[cfg(test)]
 #[path = "../../tests/acceptance/part5_image.rs"]
