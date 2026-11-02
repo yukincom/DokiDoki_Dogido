@@ -22,7 +22,7 @@ workshop の講評を次の発句に効かせる方針は [haiku-workshop-checkp
 - 緊急度中 / 普通のレイテンシ
   - 雑談・状況解説・助言
   - `chat` route の LLM を使う
-  - ローカル MLX でもクラウド API でもよい
+  - 常用はローカルのGGUF版Gemmaを `llama-server` 経由で使う
 
 - 緊急度低 / レイテンシ許容
   - 川柳
@@ -51,7 +51,7 @@ irony の `description` は発句前に実際に話す短い詩的解釈であ�
 
 ### 自動生成の本文JSONと検査の境界
 
-2026-10-11の固定比較とユーザーの採用判断により、自動川柳の初稿・行再生成は既存の本文JSON方式へ戻した。運用モデルはGoogle公式QAT由来の `lmstudio-community/gemma-4-26B-A4B-it-QAT-MLX-4bit`。比較に使ったJSON実装・人格の共有・プロンプト・ドメイン検査・最大6回再生成を再利用する。初稿は `lines: [上五, 中七, 下五]`、再生成は指定行の `lines: [{line_index, text}]`。生成候補のnative function callingは運用経路から外し、過去の比較資料を実験記録として残す。workshopの読み取り・編集ツールは別の既存経路で継続する。[採用と確認記録](2026-10-11-qat-json-adoption.md)。
+2026-10-11の固定比較とユーザーの採用判断により、自動川柳の初稿・行再生成は既存の本文JSON方式へ戻した。この比較には当時のMLX版を使用した。現在の発句は[共有GGUFモデルとプロンプトキャッシュ](shared-llm-profile.md)を使う。比較に使ったJSON実装・人格の共有・プロンプト・ドメイン検査・最大6回再生成を再利用する。初稿は `lines: [上五, 中七, 下五]`、再生成は指定行の `lines: [{line_index, text}]`。生成候補のnative function callingは運用経路から外し、過去の比較資料を実験記録として残す。workshopの読み取り・編集ツールは別の既存経路で継続する。[採用と確認記録](2026-10-11-qat-json-adoption.md)。
 
 `haiku_irony` / `haiku_scene` は本文JSONを維持する。sceneの一節objectと `clauses` 配列は同じconsumerへ渡し、既知atom IDと主張区分を確認する。自動発句の `haiku_line_grounding` と欠落行の再照合は撤去した。壊れた初案も同じ有限回数内で再生成する。
 

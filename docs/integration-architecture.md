@@ -32,7 +32,7 @@ Minecraft Java Edition
 | Python補助 | 設定解決、UniDic token、Whisper設定、AEC、ModernBERTの推論 |
 | BERT | 現在発話の23分類。分類結果を原文・入力元・入力世代へ結び付ける |
 | LLM | 言い回し、workshopの返答・説明・新案生成、原文語句の限定抽出 |
-| 既存計算エンジン | MLX、VOICEVOX、Whisper、VAD、AECの計算。Rust化のために再実装しない |
+| 既存計算エンジン | 生成はllama.cpp（GGUFモデル・プロンプトキャッシュ）、音声はVOICEVOX、Whisper、VAD、AECを使う |
 
 通常会話・知識検索・workshopの状態と保存判断をPython補助やLLMへ戻しません。OS AIと旧分類fallback、learn worker、専用Chrome/MCPは撤去済みです。戦闘からの再開は敵の現在観測と警戒解除をRustが確認して決めます。
 

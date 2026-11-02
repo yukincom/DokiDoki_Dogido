@@ -75,7 +75,7 @@ cp .env.example .env
 ./dogido-rust/cargo.sh build --release --locked
 ```
 
-`.env` にLLMの接続先・モデル名と音声設定を記入し、LLM APIとVOICEVOXを起動してから本体を開きます。標準ランチャーの接続先はlocalhostに限ります。会話用LLM本体の導入は別途必要です。
+`.env` にLLMの接続先・モデル名と音声設定を記入し、LLM APIとVOICEVOXを起動してから本体を開きます。標準ランチャーの接続先はlocalhostに限ります。開発環境で常用するGGUFモデルとキャッシュは[共有LLMの運用プロファイル](docs/shared-llm-profile.md)に記載しています。会話用LLM本体の導入は別途必要です。
 
 分類用BERTは同梱モデルと `.env.example` の相対パスで接続します。推論はCPU上で行い、外部の研究フォルダは不要です。[同梱内容と検証](docs/2026-10-24-bundled-request-classifier.md)を参照してください。
 

@@ -86,7 +86,7 @@ Issueの開閉（Open/Close）状態はリンク先にて確認してくださ�
 | 3 | [sample-event-log-cases.md](sample-event-log-cases.md) | イベントログの代表ケース |
 | 4 | [Rust本体の案内](../dogido-rust/README.md) | 現行のビルド・起動・補助依存 |
 | 5 | [実機チェック](../dogido-rust/manual-dialogue-check.md) | Rust本体の一巡・個別確認・結果記録 |
-| 6 | [shared-llm-profile.md](shared-llm-profile.md) | 共有MLX endpointと設定プロファイルの選択 |
+| 6 | [shared-llm-profile.md](shared-llm-profile.md) | 常用GGUFモデル、プロンプトキャッシュ、共有APIの起動設定 |
 | 7 | [voice-echo-cancellation.md](voice-echo-cancellation.md) | macOSの任意AEC、独立導入、権限と実機試験 |
 | 8 | [debug-checklist.md](debug-checklist.md) | 旧Python版のデバッグ履歴。現在の実機結果とは区別 |
 | 9 | [3D身体とRust本線の連携境界](../dogido-rust/docs/body-integration-boundary.md) | Body API v3、自他位置のP1接続、身体と本線の分担・残る接続 |

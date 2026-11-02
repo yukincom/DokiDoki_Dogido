@@ -1,11 +1,20 @@
-# 共有 MLX プロファイル
+# 共有LLMの運用プロファイル（GGUF・キャッシュ）
 
-別に起動した常駐 MLX サーバーの `http://127.0.0.1:8080/v1` を、雑談と川柳で
-共有するための起動プロファイルです。各アプリは OpenAI 互換 Chat Completions endpoint へ
-接続するだけです。
-**状態: 旧Python本体のプロセス内MLX運用は終了（2026-10-03）。**
-現在は `standalone` / `shared` のどちらも [Rust本体](../dogido-rust/README.md) を起動します。
-`standalone` は `.env`、`shared` は `.env` と `.env.shared` の設定選択を表し、モデル実行方式の切替ではありません。
+2026-11-02確認。通常会話、画像付き会話、環境反応、川柳は、常駐する llama.cpp の `llama-server` へ Chat Completions で接続します。接続先は `http://127.0.0.1:8080/v1`、要求のモデル名は `default_model` です。実モデルは Gemma 4 26B-A4B のGGUF量子化版（QAT UD-Q4_K_XL）です。
+
+| 用途 | 現行のファイル |
+|---|---|
+| 生成モデル | `gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf` |
+| 画像入力用プロジェクター | `mmproj-F16.gguf` |
+| MTPのドラフトモデル | `mtp-gemma-4-26B-A4B-it.gguf` |
+
+**モデルファイルのキャッシュ**は `~/.cache/gguf/models/gemma4-26b-qat-ud-q4-k-xl/` です。上の3ファイルをここからロードします。管理アプリの名称は `MLX 8080.app` で、GGUFの起動設定は `~/mlx-server/gguf/profiles.json` にあります。過去のMLX版で測った値は当時の比較記録です。
+
+**プロンプトキャッシュ**は `llama-server` 側で有効です。以前の要求と一致する先頭トークンのKVキャッシュを再利用できます。固定の指示を先に、変わる観測・対話履歴・今回の入力を後に組み立てます。速度を比べるときは入力全体の長さと再利用分を分け、取得できる場合は `timings.cache_n`（再利用トークン数）と `timings.prompt_ms`（今回の入力処理時間）を記録します。実際の会話履歴・画像は各要求に合わせて用意します。
+
+## ドギドの設定プロファイル
+
+`standalone` と `shared` はどちらもRust本体を起動します。`standalone` は `.env`、`shared` は `.env` の後で `.env.shared` を読みます。
 
 ## 初回設定
 
@@ -19,10 +28,7 @@ API キーは不要で、このファイルは Git 対象外です。共有プ�
 - chat / haiku がともに `chat_completions`、`http://127.0.0.1:8080/v1`
 - request の `model` が必ず `default_model`
 
-検査に失敗した場合は起動を止めます。共有 endpoint の失敗時にプロセス内 MLX をロードする
-fallback はなく、ドギド終了時にも 8080 を停止しません。8080 の起動・停止・モデル・並列度・
-context・cache は共有 MLX サーバー側で管理します。`GET /v1/models` は現在ロード中のモデル確認には
-使いません。
+検査に失敗した場合はドギドの起動を止めます。モデルの起動・停止・並列度・コンテキスト長とキャッシュは共有サーバーが管理します。稼働構成を再確認するときは、`GET /v1/models` の形式（`gguf`）と提供元（`llamacpp`）、`llama-server` の起動引数またはロードログにあるモデルファイル名を照合します。`default_model` はAPI上の別名です。
 
 OS AIの接続とprovider設定は撤去済みです。意図分類は共通BERT、戦闘中断後の再開・継続はRustの警戒解除判定を使います。[現行仕様](2026-10-23-modernbert-23class-integration.md)。
 
