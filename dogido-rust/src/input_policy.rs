@@ -76,7 +76,7 @@ fn payload(raw: &str, prefix_key: &str) -> Option<String> {
 }
 /// `normalized`の再正規化はせず、句本文だけは改行・引用を保持した`raw`から読む。
 /// slash commandの早期returnと保存可否は呼出側が既存の規則で判断する。
-// モブ質問はBERTへ変更済み。旧判定へ戻さない。対象・数・方角は受理後の現在観測へ照合する。
+// この投影でモブ質問を語句分類しない。11月2日仕様では既存BERTのモブ情報も通常会話へ渡す。
 pub fn classify(raw: &str, normalized: &str) -> Projection {
     let text = fold(normalized);
     let possession = has(&text, "POSSESSION_HINT_KEYWORDS");

@@ -11,7 +11,8 @@ pub(super) struct Material {
     pub atoms: Vec<SourceAtom>,
 }
 
-/// 観測・カタログの一次資料だけを、元の順序のまま出典ごとにまとめる。
+/// 渡された元材料を出典ごとにまとめ、派生した前置きは候補にしない。
+/// 11月2日仕様では、前置きとここに同じ候補を渡し、直近視認・会話の出典も区別する。
 pub(super) fn candidates(atoms: &[SourceAtom]) -> Vec<Material> {
     let mut groups: Vec<Material> = vec![];
     for atom in atoms.iter().filter(|a| {

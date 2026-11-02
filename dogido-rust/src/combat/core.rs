@@ -117,8 +117,7 @@ impl Engine {
     pub fn take_name_updates(&mut self) -> crate::chat_observation::NameOutcomeUpdate {
         self.outcomes.take_name_updates()
     }
-    /// BERTへ変更済み。旧判定へ戻さない。
-    /// 一度受理した周囲モブ質問を、発話直前の身体観測で再計算する。
+    /// 移行前の定型応答を、発話直前の身体観測で再計算する。
     pub fn answer_classified_query(
         &self,
         event: &GameEvent,
@@ -343,8 +342,8 @@ impl Engine {
     ) -> Option<Decision> {
         self.input_with_enemy_request(event, text, now, s, ws, false)
     }
-    /// BERTへ変更済み。旧判定へ戻さない。
-    /// モブ質問は共通分類が受理した場合だけ答える。quiet等の直接制御は別に保つ。
+    /// 移行前は分類済みのモブ質問もここで答える。11月2日仕様の通常会話への移管は
+    /// 質問だけを対象とし、quiet等の直接制御は引き続き戦闘側で扱う。
     #[allow(clippy::too_many_arguments)]
     pub fn input_with_enemy_request(
         &mut self,
@@ -623,7 +622,7 @@ impl Engine {
             speech.cue_id = Some(id);
             return Some(speech);
         }
-        // モブ質問はBERTへ変更済み。旧判定へ戻さない。通常の観測更新で入力を再分類しない。
+        // 通常の観測更新でプレイヤー入力を再分類しない。
         if let Some(speech) = self
             .specials
             .warden_tactic(e, now, s)

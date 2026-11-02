@@ -5,6 +5,8 @@
 
 開発・文言調整は、ユーザーの書類フォルダ内にある `DokiDoki-Dogido` のmainブランチで行う。Codex内部のworktreeを継続開発の本体にしない。分離作業が必要な場合もmainブランチへの統合を完了し、ユーザーへ案内するファイルと起動場所は書類側へ揃える。
 
+[11月2日の川柳材料・モブ質問・一行編集の仕様](docs/2026-11-02-senryu-materials-mob-chat-edit-input.md)は決定済み・未実装。該当する旧仕様よりこちらを優先する。この3件は担当別に実機確認してから書類側mainへコミットする。
+
 ## 作業範囲と完了報告
 
 - Pythonテスト・模擬worker・テストデータは `dogido-rust/tests/python/`（リポジトリ共通のPythonテストは `tests/`）へ置き、本体起動用の `scripts/` に混在させない。

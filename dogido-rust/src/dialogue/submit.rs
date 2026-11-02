@@ -467,7 +467,8 @@ impl Dialogue {
         if (quiet || classified || !workshop_focus::quiet(s))
             && let Some(raw) = s.latest.clone()
         {
-            // 分類済みの現在モブ質問はドギドの身体観測を使う。戦況・静粛は従来の観測を保つ。
+            // 移行前はモブ情報ラベルをここで定型応答へ渡す。11月2日仕様では質問だけを
+            // 通常会話へ移し、戦況判断と静粛の処理はここに残す。
             let event = if classified && !quiet {
                 super::body_runtime::event(s, &raw)
             } else {

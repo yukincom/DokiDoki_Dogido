@@ -141,8 +141,8 @@ async fn body(
                 json!({"op":"result","memory_query_requested":true,"memory_query":query,"llm_reports":[]}),
             );
         }
-        // 剣・モブのフラグは共通分類で置換済み。専用経路から通常会話へ誤流入した場合を扱う。
-        // 完成句の保存・三行編集は23分類とは別の既存経路なので、この分岐を残す。
+        // 移行前はモブ情報も拒否している。11月2日仕様ではそのラベルを通常会話で受ける。
+        // 剣の操作、完成句の保存・三行編集は既存の各経路が所有する。
         if context.requests_sword
             || context.asks_save_last_haiku
             || context.revised_haiku_text.is_some()
@@ -221,6 +221,8 @@ async fn body(
                 return Ok(result);
             }
             // 通常の本文生成だけが一枚を要求する。知識・川柳・操作・workshopには画像待機を足さない。
+            // 将来のMinecraft専用画像分析器の検出結果は、対応する画像の撮影時刻に結び付け、
+            // その一枚で見えたものとして会話に渡す。分析器はまだ接続していない。
             let mut image = None;
             if config.llm_enabled
                 && config.chat_image.enabled

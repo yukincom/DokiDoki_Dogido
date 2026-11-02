@@ -1,4 +1,4 @@
-//! 分類済みの周囲モブ質問を、身体の現在視認だけで解決する。
+//! 移行前の定型応答は身体の現在視認だけを読む。11月2日仕様の通常会話とは異なる。
 //! 名前は正本カタログと観測済み名札、実数は個体一覧を使う。
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -444,7 +444,7 @@ mod tests {
         state.sensory_event(&raw, at, None)
     }
     fn classified(event: &GameEvent, text: &str, recent: Option<(&str, u64)>, now: u64) -> Speech {
-        // BERTへ変更済み。旧判定へ戻さない。依頼性は分類済み入口の契約として与える。
+        // 移行前の定型応答の試験。依頼性は分類済み入口の契約として与える。
         let answer = crate::combat::queries::answer_classified(event, text, recent, now).unwrap();
         assert_eq!(answer.kind, "mob_information");
         assert_eq!(answer.delivery, Delivery::PlayerReply);
