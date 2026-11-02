@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import gc
 import hashlib
+from functools import partial
 import importlib.metadata
 import json
 from pathlib import Path
@@ -39,16 +40,24 @@ def materials(root, mode):
 
     folder = root / "data" / mode
     labels = read(folder / "labels.json")
-    # 既存共通部品へ今回のモードのラベルを設定する。モデル入力の整形は既存関数。
-    dataset.LABEL_TO_ID.clear()
-    dataset.LABEL_TO_ID.update(labels)
-    evaluation.LABELS = list(labels)
-    shared.LABELS = list(labels)
+    if set(labels.values()) != set(range(len(labels))) or any(type(i) is not int for i in labels.values()):
+        raise ValueError("分類IDは0から重複なく連続で指定してください。")
+    labels = dict(sorted(labels.items(), key=lambda pair: pair[1]))
     splits = {s: [json.loads(line) for line in (folder / f"{s}.jsonl").read_text(encoding="utf-8").splitlines()]
               for s in ("train", "dev", "test")}
     if any(row["context"] for rows in splits.values() for row in rows):
         raise ValueError("現在発話のみの契約と異なる履歴付き教材です。")
     return labels, splits, shared, evaluation
+
+
+def model_example(row, labels, input_format):
+    if input_format == "plain_text":
+        text = row["text"]
+    elif input_format == "dogido_current_v1":
+        text = "履歴:\n（なし）\n現在のユーザー発話:\n" + row["text"]
+    else:
+        raise ValueError("未対応のモデル入力形式です。")
+    return {"text": text, "labels": labels[row["label"]]}
 
 
 def completed(root, output, mode, config):
@@ -87,11 +96,16 @@ def train_profile(root, output, mode, config, device="cuda"):
     set_seed(config["seed"])
     options = {"revision": config["revision"], "trust_remote_code": False}
     tokenizer = AutoTokenizer.from_pretrained(config["model"], **options)
-    encoded = {s: shared.EncodedRows(splits[s], tokenizer, config["max_length"]) for s in ("train", "dev")}
+    input_format = config.get("input_format", "dogido_current_v1")
+    example_fn = partial(model_example, labels=labels, input_format=input_format)
+    encoded = {s: shared.EncodedRows(splits[s], tokenizer, config["max_length"], example_fn=example_fn) for s in ("train", "dev")}
     model = AutoModelForSequenceClassification.from_pretrained(
         config["model"], **options, num_labels=len(labels), label2id=labels,
         id2label={i: name for name, i in labels.items()}, dtype=torch.float32,
         attn_implementation="sdpa", use_safetensors=True)
+    model.config.classifier_input_format = input_format
+    protocol_path = root / "training-protocol.json"
+    model.config.classifier_project = read(protocol_path).get("project", {}) if protocol_path.exists() else {}
     callback = shared.SaveBestDevelopment(directory, 0, config["learning_rate"], tokenizer)
     if (directory / "best_development.json").is_file():
         callback.best = read(directory / "best_development.json")
@@ -107,7 +121,7 @@ def train_profile(root, output, mode, config, device="cuda"):
     trainer = Trainer(model=model, args=arguments, train_dataset=encoded["train"],
                       eval_dataset=encoded["dev"], processing_class=tokenizer,
                       data_collator=DataCollatorWithPadding(tokenizer=tokenizer),
-                      compute_metrics=shared.compute_metrics, callbacks=[callback])
+                      compute_metrics=partial(shared.compute_metrics, labels=list(labels)), callbacks=[callback])
     if not str(next(trainer.model.parameters()).device).startswith(device):
         raise ValueError("要求した学習デバイスと異なります。")
     checkpoint_root = directory / "checkpoints"
@@ -137,10 +151,14 @@ def evaluate_profile(root, output, mode, config, device="cuda"):
     labels, splits, shared, evaluation = materials(root, mode)
     directory = output / mode
     tokenizer = AutoTokenizer.from_pretrained(directory / "best", local_files_only=True, trust_remote_code=False)
-    encoded = {s: shared.EncodedRows(rows, tokenizer, config["max_length"]) for s, rows in splits.items()}
+    input_format = config.get("input_format", "dogido_current_v1")
+    example_fn = partial(model_example, labels=labels, input_format=input_format)
+    encoded = {s: shared.EncodedRows(rows, tokenizer, config["max_length"], example_fn=example_fn) for s, rows in splits.items()}
     best = AutoModelForSequenceClassification.from_pretrained(
         directory / "best", local_files_only=True, trust_remote_code=False,
         use_safetensors=True, dtype=torch.float32, attn_implementation="sdpa")
+    if best.config.label2id != labels or best.config.classifier_input_format != input_format:
+        raise ValueError("モデルの分類ID・入力形式がプロジェクトと一致しません。")
     evaluator = Trainer(model=best, args=TrainingArguments(
         output_dir=str(directory / "evaluation"), use_cpu=device == "cpu",
         per_device_eval_batch_size=config["batch_size"], report_to="none",
@@ -150,7 +168,7 @@ def evaluate_profile(root, output, mode, config, device="cuda"):
     mistakes = ["# 誤分類一覧", "", "devは選択用、testは既知の診断用、trainは学習内確認です。", ""]
     for split in ("test", "dev", "train"):
         prediction = evaluator.predict(encoded[split])
-        predicted_rows = shared.prediction_rows(splits[split], prediction)
+        predicted_rows = shared.prediction_rows(splits[split], prediction, labels=list(labels))
         metrics[split] = evaluation.classification_metrics(
             [row["gold"] for row in predicted_rows], [row["predicted"] for row in predicted_rows], list(labels))
         metrics[split]["loss"] = float(prediction.metrics["test_loss"])

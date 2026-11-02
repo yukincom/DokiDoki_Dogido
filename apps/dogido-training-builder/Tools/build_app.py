@@ -16,6 +16,8 @@ REPO = SOURCE.parents[1]
 def prepare_assets(project, target):
     target.mkdir(parents=True)
     classifier = project / "dev_tools/request_classifier"
+    shutil.copyfile(SOURCE / "dogido_project.json", target / "dogido_project.json")
+    shutil.copyfile(classifier / "教材作成/分類一覧.csv", target / "dogido-labels.csv")
     releases = {"normal": "2026-10-24-normal-dialogue-four-system", "senryu": "2026-10-24-senryu-only-424"}
     for mode, release in releases.items():
         folder = target / "baseline" / mode
@@ -51,6 +53,7 @@ def build(project, destination):
         resources.mkdir()
         prepare_assets(project, resources / "assets")
         shutil.copyfile(SOURCE / "builder.py", resources / "builder.py")
+        shutil.copyfile(SOURCE / "使い方.md", resources / "使い方.md")
         subprocess.run(["xcrun", "swiftc", "-O", "-module-cache-path", str(work / "swift-cache"),
                         "-target", f"{platform.machine()}-apple-macos13.0", "-framework", "AppKit",
                         str(SOURCE / "Sources/main.swift"), "-o", str(executable)], check=True)
@@ -80,9 +83,11 @@ try bitmap.representation(using: .png, properties: [:])!.write(to: URL(fileURLWi
         subprocess.run(["iconutil", "-c", "icns", str(iconset), "-o", str(resources / "Training.icns")], check=True)
         info = {"CFBundleName": "ドギド 学習教材", "CFBundleDisplayName": "ドギド 学習教材",
                 "CFBundleIdentifier": "local.dogido.training-builder", "CFBundleExecutable": executable.name,
-                "CFBundlePackageType": "APPL", "CFBundleShortVersionString": "0.2.0", "CFBundleVersion": "2",
+                "CFBundlePackageType": "APPL", "CFBundleShortVersionString": "0.3.0", "CFBundleVersion": "3",
                 "CFBundleIconFile": "Training.icns", "LSMinimumSystemVersion": "13.0", "NSHighResolutionCapable": True,
+                "NSDocumentsFolderUsageDescription": "選択した学習プロジェクトの分類一覧と教材を読み、NotebookとZIPを保存します。",
                 "DogidoTrainingWorkspace": str(project / "dev_tools/request_classifier/教材作成"),
+                "TrainingProjectsRoot": str(project / "dev_tools/request_classifier/教材作成/プロジェクト"),
                 "CFBundleDocumentTypes": [{"CFBundleTypeName": "学習用CSV", "CFBundleTypeRole": "Viewer",
                     "LSHandlerRank": "Alternate", "LSItemContentTypes": ["public.comma-separated-values-text"],
                     "CFBundleTypeExtensions": ["csv"]}]}

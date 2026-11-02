@@ -41,11 +41,11 @@ def digest(path: Path) -> str:
 
 class EncodedRows(torch.utils.data.Dataset):
     """唯一の入力整形関数で本文を作る。現在発話が欠けないよう切り詰めを拒否する。"""
-    def __init__(self, rows: list[dict], tokenizer, max_length: int):
+    def __init__(self, rows: list[dict], tokenizer, max_length: int, example_fn=None):
         self.values = []
         self.lengths = []
         for row in rows:
-            item = model_example(row)
+            item = (example_fn or model_example)(row)
             tokens = tokenizer(item['text'], truncation=False)
             length = len(tokens['input_ids'])
             if length > max_length:
@@ -61,11 +61,12 @@ class EncodedRows(torch.utils.data.Dataset):
         return self.values[index]
 
 
-def compute_metrics(prediction) -> dict:
+def compute_metrics(prediction, labels=None) -> dict:
     """Trainerから渡るdevの予測だけを学習中の選択指標へ変換する。"""
+    labels = LABELS if labels is None else labels
     estimated = np.argmax(prediction.predictions, axis=-1)
-    result = classification_metrics([LABELS[i] for i in prediction.label_ids],
-                                    [LABELS[i] for i in estimated], LABELS)
+    result = classification_metrics([labels[i] for i in prediction.label_ids],
+                                    [labels[i] for i in estimated], labels)
     return {'accuracy': result['accuracy'], 'macro_f1': result['macro_f1']}
 
 
@@ -95,16 +96,17 @@ class SaveBestDevelopment(TrainerCallback):
         return control
 
 
-def prediction_rows(rows: list[dict], output) -> list[dict]:
+def prediction_rows(rows: list[dict], output, labels=None) -> list[dict]:
     """評価後にだけ注釈を予測へ結び付ける。全確率は未校正のsoftmax値。"""
+    labels = LABELS if labels is None else labels
     scores = torch.softmax(torch.from_numpy(output.predictions), dim=-1).numpy()
     result = []
     for row, values in zip(rows, scores, strict=True):
-        predicted = LABELS[int(values.argmax())]
+        predicted = labels[int(values.argmax())]
         result.append({'id': row['id'], 'text': row['text'], 'context': row['context'],
                        'gold': row['label'], 'predicted': predicted,
                        'correct': row['label'] == predicted, 'confidence': float(values.max()),
-                       'probabilities': {label: float(values[i]) for i, label in enumerate(LABELS)},
+                       'probabilities': {label: float(values[i]) for i, label in enumerate(labels)},
                        'tags': row['tags'], 'needs_clarification': row['needs_clarification'],
                        'source': row['source'], 'group_id': row['group_id']})
     return result

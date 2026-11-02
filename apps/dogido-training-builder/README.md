@@ -1,8 +1,8 @@
-# ドギド 学習教材
+# ModernBERT 学習教材
 
-CSVをドロップして、Colabの無料T4向けNotebookと教材ZIPを作るMacアプリ。通常914件・川柳424件の元教材へCSVを用途別に追加し、公開ベースから再学習する。Colabの「学習する」「テストする」「結果ZIPを保存」で操作する。本体採用は別途。
+プロジェクトごとの分類ラベル・教材CSVから、無料T4向けのColab Notebookと教材ZIPを作るMacアプリ。Excelで編集してドロップし、Colabの「学習する」「テストする」「結果ZIPを保存」で操作する。
 
-利用者向け：[日本語の使い方](../../dev_tools/request_classifier/教材作成/使い方.md)。
+[日本語の使い方](使い方.md)。ドギドの元教材・既存CSVは保持し、新規プロジェクトへ混ぜない。新規プロジェクトは本文だけ、ドギドは従来の入力整形を使う。学習は公開ベースのModernBERT-Ja 30Mからの再学習。
 
 ビルド：
 
@@ -10,6 +10,6 @@ CSVをドロップして、Colabの無料T4向けNotebookと教材ZIPを作るMa
 python3 apps/dogido-training-builder/Tools/build_app.py --output .dogido_tools/training-builder/ドギド\ 学習教材.app
 ```
 
-ローカル用のad-hoc署名を使い、キーチェーンの秘密鍵は利用しない。`builder.py`は標準ライブラリのみ。`train_colab.py`は既存`train.py`の入力・token検査・最良dev保存・予測整形と、`evaluation.py`の評価集計を再利用する。ビルド時に共通ソースと通常16分類・川柳8分類の固定教材を同梱し、ファイルhashを保存する。
+標準PythonとAppKitを利用し、ad-hoc署名を使う。共通の`train.py`・`evaluation.py`を再利用する。プロジェクト定義、分類CSV、入力形式、教材・コードのhashをNotebookと結果へ残す。
 
-確認：`env DOGIDO_RUN_TRAINING_SMOKE=1 .dogido_tools/request_classifier/.venv/bin/python -m unittest discover -s tests -p test_training_builder.py -v`。元教材保持・用途間混入拒否・小型CPUモデルの学習と独立評価を検査する。無料T4上の実学習は未実施。
+確認：`env DOGIDO_RUN_TRAINING_SMOKE=1 .dogido_tools/request_classifier/.venv/bin/python -m unittest discover -s tests -p test_training_builder.py -v`。プロジェクト分離、元教材保持、用途間混入拒否、小型CPUモデルの学習と独立評価を検査する。無料T4上の実学習とモデル品質は未確認。

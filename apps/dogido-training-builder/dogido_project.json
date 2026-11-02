@@ -1,0 +1,52 @@
+{
+  "schema": "classifier_project.v1",
+  "id": "dogido",
+  "name": "ドギド",
+  "input_format": "dogido_current_v1",
+  "labels_file": "分類一覧.csv",
+  "modes": {
+    "normal": {
+      "name": "通常",
+      "aliases": [
+        "通常対話"
+      ],
+      "baseline": "bundled:normal",
+      "optional_labels": [
+        "look_relative_up",
+        "look_relative_down"
+      ]
+    },
+    "senryu": {
+      "name": "川柳",
+      "baseline": "bundled:senryu"
+    }
+  },
+  "label_aliases": {
+    "対象外": "not_target",
+    "対象外・その他": "not_target",
+    "モブ情報": "enemy_information",
+    "剣に持ち替える": "equip_sword",
+    "乗用動物の呼び寄せ": "recall_mount",
+    "ドギドの呼び寄せ": "dogido_recall",
+    "指定方向を向く": "look_direction",
+    "右を向く": "look_relative_right",
+    "指定した対象を見る": "look_target",
+    "プレイヤーを見る": "look_player",
+    "前を向く": "look_relative_front",
+    "後ろを向く": "look_relative_back",
+    "左を向く": "look_relative_left",
+    "左前を向く": "look_relative_front_left",
+    "右前を向く": "look_relative_front_right",
+    "左後ろを向く": "look_relative_back_left",
+    "右後ろを向く": "look_relative_back_right",
+    "上を向く": "look_relative_up",
+    "下を向く": "look_relative_down",
+    "上五の行指定": "senryu_line_upper",
+    "中七の行指定": "senryu_line_middle",
+    "下五の行指定": "senryu_line_lower",
+    "上五の具体変更": "senryu_change_upper",
+    "中七の具体変更": "senryu_change_middle",
+    "下五の具体変更": "senryu_change_lower",
+    "川柳相談の終了": "senryu_end"
+  }
+}

@@ -12,6 +12,7 @@ from pathlib import Path
 import tempfile
 import sys
 import types
+import unicodedata
 import unittest
 from unittest.mock import patch
 import zipfile
@@ -55,7 +56,7 @@ class BuilderTests(unittest.TestCase):
         text = 'CSV検査の「音,風」を聞く\n続きもそのまま'
         path = self.csv([["はい", "通常", text, "対象外", "この説明は教師ラベルの理由", ""]])
         result = builder.build([path], self.assets)
-        notebook = json.loads((result / "ドギド_T4学習.ipynb").read_text())
+        notebook = json.loads((result / "ModernBERT_T4学習.ipynb").read_text())
         with zipfile.ZipFile(result / "教材.zip") as archive:
             training = [json.loads(line) for line in archive.read("data/normal/train.jsonl").splitlines()]
             row = next(r for r in training if r["text"] == text)
@@ -130,13 +131,13 @@ class BuilderTests(unittest.TestCase):
     def test_duplicate_and_conflicting_labels(self):
         first = ["はい", "通常", "CSVの重複確認用発話です", "対象外", "", ""]
         path = self.csv([first, first])
-        rows, skipped, _ = builder.read_csv([path])
+        rows, skipped, _ = builder.read_csv([path], builder.load_project(self.assets))
         self.assertEqual((len(rows), len(skipped)), (1, 1))
         other = first.copy()
         other[3] = "ドギドの呼び寄せ"
         path = self.csv([first, other])
         with self.assertRaisesRegex(ValueError, "異なる正解"):
-            builder.read_csv([path])
+            builder.read_csv([path], builder.load_project(self.assets))
 
     # 見込み: モードが違うラベル・入力列の破損を、別の分類で補わない。
     # 合格: 川柳へ通常ラベルを渡した場合と、列不足のCSVは拒否。
@@ -146,7 +147,7 @@ class BuilderTests(unittest.TestCase):
             builder.build([path], self.assets)
         path.write_text("モード,発話,正解分類\n通常,欠けた列\n", encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "列数"):
-            builder.read_csv([path])
+            builder.read_csv([path], builder.load_project(self.assets))
 
     # 見込み: 上下を要求した場合は既存IDを保ち、両クラスに教材を要求する。
     # 合格: 上だけは拒否、上下ならID16/17を追加。既存dev/testはそのまま。
@@ -185,10 +186,95 @@ class BuilderTests(unittest.TestCase):
     def test_repeated_generation_keeps_previous_artifact(self):
         path = self.csv([["はい", "川柳", "CSV再生成用の発話です", "対象外", "", ""]])
         first = builder.build([path], self.assets)
-        old = (first / "ドギド_T4学習.ipynb").read_bytes()
+        old = (first / "ModernBERT_T4学習.ipynb").read_bytes()
         second = builder.build([path], self.assets)
         self.assertNotEqual(first, second)
-        self.assertEqual((first / "ドギド_T4学習.ipynb").read_bytes(), old)
+        self.assertEqual((first / "ModernBERT_T4学習.ipynb").read_bytes(), old)
+
+
+class ProjectTests(unittest.TestCase):
+    setUp = BuilderTests.setUp
+    # 見込み: 新規プロジェクトは既存データを含めず、Excelで編集できる入口だけを作る。
+    # 合格: 二つのCSVがBOM UTF-8・見出しのみで、IDが別個。同名作成は元データを壊さず拒否。
+    def test_create_empty_excel_project(self):
+        first = builder.create_project(self.root / "ニャムル", "ニャムル")
+        second = builder.create_project(self.root / "別の制作", "別の制作")
+        for filename in ("教材.csv", "分類一覧.csv"):
+            data = (first / filename).read_bytes()
+            self.assertTrue(data.startswith(b"\xef\xbb\xbf"))
+            self.assertEqual(len(list(csv.reader(io.StringIO(data.decode("utf-8-sig"))))), 1)
+        self.assertNotEqual(builder.json_read(first / "project.json")["id"], builder.json_read(second / "project.json")["id"])
+        with self.assertRaisesRegex(ValueError, "存在しない"):
+            builder.create_project(first, "上書き禁止")
+
+    def project(self, name, prefix):
+        folder = builder.create_project(self.root / name, name)
+        with (folder / "分類一覧.csv").open("w", encoding="utf-8-sig", newline="") as stream:
+            writer = csv.writer(stream)
+            writer.writerow(["モード", "ID", "正解分類", "機械名", "備考"])
+            # 行順ではなく明示IDで学習ヘッドを割り当てる。
+            writer.writerow(["分類", 1, "分類乙", prefix + "_b", ""])
+            writer.writerow(["分類", 0, "分類甲", prefix + "_a", ""])
+        with (folder / "教材.csv").open("w", encoding="utf-8-sig", newline="") as stream:
+            writer = csv.writer(stream)
+            writer.writerow(builder.HEADERS)
+            for split in ("学習", "調整", "テスト"):
+                for label in ("分類甲", "分類乙"):
+                    writer.writerow(["はい", "", split + 'の独立例,"' + label, label, "メモは入力外", "", split])
+        return folder
+
+    # 見込み: 同じモード名でもプロジェクトの分類・教材・入力形式は独立したまま梱包する。
+    # 合格: 任意2分類だけをID順で出力し、ドギド教材・evidenceを含めず各用途2件。混在dropは拒否。
+    def test_generic_projects_isolated_labels_data_and_provenance(self):
+        a, b = self.project("ニャムル", "nyamuru"), self.project("別用途", "other")
+        for folder, prefix in ((a, "nyamuru"), (b, "other")):
+            output = builder.build([folder / "教材.csv"], self.assets)
+            with zipfile.ZipFile(output / "教材.zip") as archive:
+                labels = json.loads(archive.read("data/main/labels.json"))
+                self.assertEqual(list(labels.items()), [(prefix + "_a", 0), (prefix + "_b", 1)])
+                self.assertFalse(any(name.startswith("evidence/") or name.startswith("data/normal/") for name in archive.namelist()))
+                protocol = json.loads(archive.read("training-protocol.json"))
+                self.assertEqual(protocol["project"]["name"], folder.name)
+                self.assertEqual(protocol["training"]["input_format"], "plain_text")
+                self.assertEqual(protocol["profiles"]["main"]["baseline_counts"], dict.fromkeys(("train", "dev", "test"), 0))
+                for split in ("train", "dev", "test"):
+                    rows = [json.loads(line) for line in archive.read(f"data/main/{split}.jsonl").splitlines()]
+                    self.assertEqual(len(rows), 2)
+                    self.assertEqual({row['label'] for row in rows}, set(labels))
+                for name, expected in json.loads(archive.read("input-sha256.json")).items():
+                    self.assertEqual(hashlib.sha256(archive.read(name)).hexdigest(), expected)
+        with self.assertRaisesRegex(ValueError, "別のプロジェクト"):
+            builder.build([a / "教材.csv", b / "教材.csv"], self.assets)
+        with self.assertRaisesRegex(ValueError, "異なります"):
+            builder.build([a / "教材.csv"], self.assets, project=b)
+
+    # 見込み: プロジェクトごとのID矛盾や未用意の評価集合を勝手に補完しない。
+    # 合格: 重複IDとtest欠落を個別に拒否。空の分類一覧も学習生成できない。
+    def test_invalid_labels_and_missing_evaluation_require_user_data(self):
+        folder = self.project("検査用", "custom")
+        labels = folder / "分類一覧.csv"
+        raw = labels.read_text(encoding="utf-8-sig")
+        labels.write_text(raw.replace("分類,1,", "分類,0,"), encoding="utf-8-sig")
+        with self.assertRaisesRegex(ValueError, "ID"):
+            builder.build([folder / "教材.csv"], self.assets)
+        labels.write_text(raw, encoding="utf-8-sig")
+        path = folder / "教材.csv"
+        with path.open(encoding="utf-8-sig", newline="") as stream:
+            rows = list(csv.reader(stream))
+        with path.open("w", encoding="utf-8-sig", newline="") as stream:
+            csv.writer(stream).writerows(row for row in rows if row[-1] != "テスト")
+        with self.assertRaisesRegex(ValueError, "test.*空"):
+            builder.build([path], self.assets)
+
+    # 見込み: macOSの日本語パスの分解・合成表記が違っても同じフォルダを別プロジェクト扱いしない。
+    # 合格: 実体が同じNFD/NFCパスで生成できる。本文・分類の文字列正規化は対象外。
+    def test_mac_unicode_project_paths_identify_same_directory(self):
+        folder = self.project("プロジェクト", "unicode")
+        decomposed = Path(unicodedata.normalize("NFD", str(folder)))
+        if not decomposed.exists():
+            self.skipTest("このファイルシステムはNFD/NFCパスを別扱いする")
+        result = builder.build([decomposed / "教材.csv"], self.assets, project=folder)
+        self.assertTrue((result / "教材.zip").is_file())
 
 
 @unittest.skipUnless(os.environ.get("DOGIDO_RUN_TRAINING_SMOKE") == "1", "明示したときだけ小型CPUモデルで学習部品を確認")
@@ -252,6 +338,35 @@ class TrainingSmokeTests(unittest.TestCase):
             self.assertEqual(evaluated["metrics"]["test"]["n"], 8)
             self.assertEqual(runtime.completed(root, output, "senryu", config), result)
             self.assertEqual((output / "senryu/trainer-history.json").read_bytes(), history)
+            # 別プロジェクトを同一プロセスで学習し、ドギドのラベル・入力が漏れないことを見る。
+            generic_labels = {"image_edit": 1, "image_observe": 0}
+            generic_data = root / "data/main"
+            generic_data.mkdir()
+            runtime.save(generic_data / "labels.json", generic_labels)
+            for split in ("train", "dev", "test"):
+                generic_rows = [{**rows[i], "id": split + str(i), "group_id": split + str(i),
+                                 "text": split + "制作入力" + str(i), "label": label}
+                                for i, label in enumerate(generic_labels)]
+                (generic_data / f"{split}.jsonl").write_text("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in generic_rows))
+            generic_base = root / "generic-base"
+            generic_model_config = ModernBertConfig.from_pretrained(model_root)
+            generic_model_config.num_labels = 2
+            generic_model_config.label2id = generic_labels
+            generic_model_config.id2label = {i: name for name, i in generic_labels.items()}
+            ModernBertForSequenceClassification(generic_model_config).save_pretrained(generic_base)
+            PreTrainedTokenizerFast.from_pretrained(model_root).save_pretrained(generic_base)
+            generic_config = {**config, "model": str(generic_base), "input_format": "plain_text"}
+            example = {"text": "本文だけ", "label": "image_edit"}
+            self.assertEqual(runtime.model_example(example, generic_labels, "plain_text"), {"text": "本文だけ", "labels": 1})
+            self.assertEqual(runtime.model_example(example, generic_labels, "dogido_current_v1")["text"],
+                             "履歴:\n（なし）\n現在のユーザー発話:\n本文だけ")
+            runtime.train_profile(root, output, "main", generic_config, device="cpu")
+            with patch.object(Trainer, "train", side_effect=AssertionError("評価時に再学習は禁止")):
+                generic_result = runtime.evaluate_profile(root, output, "main", generic_config, device="cpu")
+            self.assertEqual(generic_result["metrics"]["test"]["label_order"], ["image_observe", "image_edit"])
+            self.assertEqual(runtime.completed(root, output, "senryu", config), result)
+            with self.assertRaisesRegex(ValueError, "別の教材"):
+                runtime.evaluate_profile(root, output, "main", {**generic_config, "input_format": "dogido_current_v1"}, device="cpu")
             weights = output / "senryu/best/model.safetensors"
             weights.write_bytes(weights.read_bytes() + b"changed")
             with self.assertRaisesRegex(ValueError, "変更されています"):
