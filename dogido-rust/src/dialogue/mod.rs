@@ -362,6 +362,9 @@ impl Dialogue {
             request_classifier: tokio::sync::Mutex::new(request_runtime::Models::default()),
             reading_dictionary: tts_runtime::Dictionary::default(),
             episodes: if config.haiku.memory_enabled {
+                #[cfg(test)]
+                let root = config.haiku.memory_dir.clone();
+                #[cfg(not(test))]
                 let root = std::env::var_os("DOGIDO_EPISODE_MEMORY_DIR").map(std::path::PathBuf::from)
                     .unwrap_or_else(|| config.haiku.memory_dir.clone());
                 match crate::episode_log::Recorder::new(root) {

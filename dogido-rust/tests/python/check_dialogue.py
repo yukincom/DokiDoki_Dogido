@@ -22,6 +22,7 @@ from urllib.parse import parse_qs, urlsplit
 import wave
 
 from request_classifier_fixture import mock_request_classifier, resolve_input_response
+from storage_fixture import isolated_storage
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -200,9 +201,7 @@ def dependencies():
 @contextmanager
 def running(binary, directory, dependency, *, live=False, player=None, warning_settings=None, combat_settings=None, haiku_settings=None, output_sampling_rate=None, extra_args=()):
     log_path = directory / "runtime.log"
-    env = dict(os.environ)
-    env.pop("DOGIDO_AUTH_TOKEN", None); env.pop("DOGIDO_LLM_API_KEY", None)
-    env.pop("DOGIDO_LLM_HAIKU_API_KEY", None)
+    haiku_settings, env = isolated_storage(directory, haiku_settings, extra_args)
     if player is None:
         player = directory / "player"
         player.write_text(f"#!{sys.executable}\nimport time,sys\nfrom pathlib import Path\np=Path(__file__).with_name('player_mode')\nmode=p.read_text() if p.exists() else 'ok'\ntime.sleep(4 if mode=='slow' else .15)\nsys.exit(1 if mode=='fail' else 0)\n")

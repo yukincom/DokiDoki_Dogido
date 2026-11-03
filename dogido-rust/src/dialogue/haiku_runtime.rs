@@ -50,6 +50,10 @@ impl Default for Settings {
             timeout_ms: None,
             job_timeout_ms: 600_000,
             memory_enabled: true,
+            // 単体試験で既定値を使っても、試験ごとの一時保存先へ書く。
+            #[cfg(test)]
+            memory_dir: std::env::temp_dir().join(format!("dogido-unit-memory-{}", uuid::Uuid::new_v4())),
+            #[cfg(not(test))]
             memory_dir: PathBuf::from(".dogido_memory/rust-migration"),
             screenshot_dir: None,
             internal_capture_enabled: crate::runtime_settings::defaults("haiku_capture")["enabled"]
