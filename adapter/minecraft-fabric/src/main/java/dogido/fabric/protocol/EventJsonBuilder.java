@@ -76,7 +76,7 @@ public final class EventJsonBuilder {
         event.addProperty("priority_hint", priorityHint);
         event.addProperty("certainty", certainty);
         root.add("event", event);
-        root.add("smell_observation", buildSmellObservation(smell));
+        if (smell != null) root.add("smell_observation", buildSmellObservation(smell));
         return root;
     }
 

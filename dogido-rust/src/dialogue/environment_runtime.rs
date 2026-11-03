@@ -560,7 +560,7 @@ impl Dialogue {
             projected = Some(event);
         }
         let s = d.sessions.get_mut(sid).unwrap();
-        if super::workshop_focus::active(s) {
+        if super::workshop_focus::active(s) || s.environment_latest.as_ref().is_some_and(|e| e.meta.workshop_observation) {
             // update済みの現在観測は保持し、発話候補やCDは消費しない。
             Self::cancel_light(d, sid);
             return;

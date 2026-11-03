@@ -156,13 +156,19 @@ public final class SoundObserver {
         this.recentAmbientSoundObservations.clear();
     }
 
-    public Map<UUID, SoundObservationPolicy.Point> currentSoundSources(ClientWorld world) {
+    public void clearAmbientSounds() {
+        this.recentAmbientSoundObservations.clear();
+    }
+
+    public Map<UUID, SoundObservationPolicy.Point> currentSoundSources(ClientWorld world, boolean includeAmbient) {
         Set<UUID> heardEntities = new java.util.HashSet<>();
         for (SoundObservation sound : this.recentSoundObservations) {
             if (sound.entityUuid() != null) heardEntities.add(sound.entityUuid());
         }
-        for (SoundObservation sound : this.recentAmbientSoundObservations) {
-            if (sound.entityUuid() != null) heardEntities.add(sound.entityUuid());
+        if (includeAmbient) {
+            for (SoundObservation sound : this.recentAmbientSoundObservations) {
+                if (sound.entityUuid() != null) heardEntities.add(sound.entityUuid());
+            }
         }
         Map<UUID, SoundObservationPolicy.Point> positions = new HashMap<>();
         if (heardEntities.isEmpty()) return positions;

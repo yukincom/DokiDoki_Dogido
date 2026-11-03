@@ -36,7 +36,6 @@ public final class HorseRecallRuntime {
     private final Predicate<DogidoEventClient.SessionRef> currentSession;
     private final AtomicReference<Operation> active = new AtomicReference<>();
     private volatile Scope scope;
-    private volatile HorseRecallProtocol.Snapshot snapshot;
     private HorseRecallEffect effect;
     private long clientTicks;
 
@@ -49,6 +48,8 @@ public final class HorseRecallRuntime {
         final MinecraftServer server;
         final AtomicLong revision = new AtomicLong();
         final AtomicBoolean observing = new AtomicBoolean();
+        // WS中は周期取得を外す。開始前の非同期結果は以前の入れ物にだけ届く。
+        volatile AtomicReference<HorseRecallProtocol.Snapshot> observations = new AtomicReference<>();
         UUID recentMount; // server threadのみが更新する。
         long nextObservation; // client threadのみが更新する。
 
@@ -93,14 +94,14 @@ public final class HorseRecallRuntime {
 
     /** status_snapshotだけが取得する。古いserver callbackは新scopeへ公開しない。 */
     public JsonObject snapshotJson() {
-        HorseRecallProtocol.Snapshot current = snapshot;
-        Scope currentScope = scope;
-        return current == null || currentScope == null || !current.worldId().equals(currentScope.worldId)
-            ? null : current.toJson();
+        Scope current = scope;
+        var observations = current == null ? null : current.observations;
+        var latest = observations == null ? null : observations.get();
+        return latest == null ? null : latest.toJson();
     }
 
     /** END_CLIENT_TICKで呼ぶ。world/接続が変われば先に旧操作を取消し、正本観測を非同期要求する。 */
-    public void tick(MinecraftClient client) {
+    public void tick(MinecraftClient client, boolean observeHorses) {
         if (client.player == null || client.world == null || client.getNetworkHandler() == null) {
             clear();
             return;
@@ -109,17 +110,24 @@ public final class HorseRecallRuntime {
             clear();
             Scope next = new Scope(client);
             scope = next;
-            snapshot = unavailable(next);
+            next.observations.set(unavailable(next));
         }
         clientTicks++;
         Scope current = scope;
-        if (clientTicks >= current.nextObservation && current.observing.compareAndSet(false, true)) {
+        if (!observeHorses) {
+            current.observations = null;
+            current.nextObservation = clientTicks;
+        } else if (current.observations == null) {
+            current.observations = new AtomicReference<>();
+        }
+        var observations = current.observations;
+        if (observations != null && clientTicks >= current.nextObservation && current.observing.compareAndSet(false, true)) {
             current.nextObservation = clientTicks + 20;
             if (current.server == null) {
-                snapshot = unavailable(current);
+                observations.set(unavailable(current));
                 current.observing.set(false);
             } else {
-                current.server.execute(() -> observe(current));
+                current.server.execute(() -> observe(current, observations));
             }
         }
         Operation operation = active.get();
@@ -139,7 +147,6 @@ public final class HorseRecallRuntime {
     /** 接続変更・無効化で呼ぶ。移動後は既存の成功結果を保持し、残りの演出だけを止める。 */
     public void clear() {
         scope = null;
-        snapshot = null;
         Operation operation = active.getAndSet(null);
         if (operation != null) reject(operation, "rejected", "stale_world");
         if (effect != null) {
@@ -175,12 +182,12 @@ public final class HorseRecallRuntime {
             current.playerId, current.dimension, null, List.of());
     }
 
-    private void observe(Scope current) {
+    private void observe(Scope current, AtomicReference<HorseRecallProtocol.Snapshot> observations) {
         try {
-            if (scope != current) return;
+            if (scope != current || current.observations != observations) return;
             ServerPlayerEntity player = current.server.getPlayerManager().getPlayer(current.playerId);
             if (player == null || !player.getEntityWorld().getRegistryKey().getValue().toString().equals(current.dimension)) {
-                if (scope == current) snapshot = unavailable(current);
+                observations.set(unavailable(current));
                 return;
             }
             if (player.getVehicle() instanceof MobEntity horse && HorseRecallWorld.authorized(horse, current.playerId))
@@ -188,9 +195,9 @@ public final class HorseRecallRuntime {
             List<HorseRecallProtocol.Candidate> candidates = HorseRecallWorld.observe(player.getEntityWorld(), current.playerId);
             var captured = new HorseRecallProtocol.Snapshot(true, current.worldId, current.revision.incrementAndGet(),
                 Instant.now(), current.playerId, current.dimension, current.recentMount, candidates);
-            if (scope == current) snapshot = captured;
+            observations.set(captured);
         } catch (RuntimeException error) {
-            if (scope == current) snapshot = unavailable(current);
+            observations.set(unavailable(current));
             logger.warn("Dogido horse observation failed: {}", error.getMessage());
         } finally {
             current.observing.set(false);

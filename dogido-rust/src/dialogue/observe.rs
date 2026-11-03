@@ -35,6 +35,10 @@ impl Dialogue {
             return json!({"accepted":false,"reason":"unknown_session_id"});
         };
         let duplicate = s.sequences.admit(sequence, key) != Admission::New;
+        // 遅着した通常撮影はACKだけ返し、WSへ画像を読み込まない。明示撮影の予約は別所有。
+        if workshop_focus::owns_input(s) || (!duplicate && event.meta.workshop_observation && workshop_focus::active(s)) {
+            s.visual.arm(session_id, None, chrono::Utc::now());
+        }
         let mut screenshot_acks = Vec::new();
         let mut assist_results = Vec::new();
         for result in &event.command_results {
@@ -147,30 +151,32 @@ impl Dialogue {
                 let (boss, ominous) = s.combat.environmental_presence(now, &self.config.combat);
                 s.danger.set_presence(boss, ominous);
                 s.danger.update(&senses, now, complete, &self.config.combat);
-                s.ambient
-                    .update(&senses, now, complete, &self.config.combat);
-                s.conversation_observation.observe_origin(&senses);
-                if let Some(current) = &s.environment_latest {
-                    let current = super::body_runtime::event(s, current);
-                    match crate::conversation_observation::project(
-                        &current,
-                        s.ambient.current_structure(),
-                        self.config.combat.number("home_bed_prompt_distance"),
-                        self.config.combat.number("darkness_advice_light_threshold"),
-                        self.config.combat.ms("weather_sound_recent_ms"),
-                    ) {
-                        Ok(context) => {
-                            let context = super::body_runtime::with_context(context, &current);
-                            s.conversation_observation.observe(context);
-                            projected = true;
-                        }
-                        Err(error) => {
-                            tracing::warn!(event="conversation_observation_rejected",session_id,%error)
+                if !event.meta.workshop_observation {
+                    s.ambient
+                        .update(&senses, now, complete, &self.config.combat);
+                    s.conversation_observation.observe_origin(&senses);
+                    if let Some(current) = &s.environment_latest {
+                        let current = super::body_runtime::event(s, current);
+                        match crate::conversation_observation::project(
+                            &current,
+                            s.ambient.current_structure(),
+                            self.config.combat.number("home_bed_prompt_distance"),
+                            self.config.combat.number("darkness_advice_light_threshold"),
+                            self.config.combat.ms("weather_sound_recent_ms"),
+                        ) {
+                            Ok(context) => {
+                                let context = super::body_runtime::with_context(context, &current);
+                                s.conversation_observation.observe(context);
+                                projected = true;
+                            }
+                            Err(error) => {
+                                tracing::warn!(event="conversation_observation_rejected",session_id,%error)
+                            }
                         }
                     }
-                }
-                if complete {
-                    chat_context::update_haiku(s, &event, &self.config.combat);
+                    if complete {
+                        chat_context::update_haiku(s, &event, &self.config.combat);
+                    }
                 }
                 s.combat.set_dark_push_context(
                     s.danger.dark_push_active(),
@@ -215,11 +221,13 @@ impl Dialogue {
                     );
                 }
                 let names = s.combat.take_name_updates();
-                s.chat_observation.observe_body(
-                    &senses,
-                    &names,
-                    &chat_context::CatalogLabels,
-                );
+                if !event.meta.workshop_observation {
+                    s.chat_observation.observe_body(
+                        &senses,
+                        &names,
+                        &chat_context::CatalogLabels,
+                    );
+                }
                 let conversation_threat = !event.ended_by_last_kill() && !decision.presence_only
                     && warnings::interruption_reason(&event).is_some()
                     && !workshop_focus::owns_input(s);
@@ -276,7 +284,7 @@ impl Dialogue {
                 let s = d.sessions.get_mut(session_id).unwrap();
                 s.conversation_observation.finish_notice_opportunity();
                 s.danger.finish_frame(s.mode);
-            } else {
+            } else if !event.meta.workshop_observation {
                 let s = d.sessions.get_mut(session_id).unwrap();
                 s.chat_observation.observe_body(
                     &senses,
@@ -361,7 +369,8 @@ impl Dialogue {
                     commands.extend(s.body_autonomy.commands(Instant::now(),utc));
                     commands.extend(super::body_request_runtime::commands(s));
                     commands.extend(s.screenshots.commands(utc));
-                    let capture_context = (self.config.chat_image.enabled && !s.preview && !s.foreground.game_paused)
+                    let capture_context = (self.config.chat_image.enabled && !s.preview && !s.foreground.game_paused
+                        && !workshop_focus::owns_input(s) && !s.latest.as_ref().is_some_and(|e| e.meta.workshop_observation))
                         .then(|| s.body_observation.accepted(Instant::now()).map(|v| v.context.clone())).flatten();
                     s.visual.validate_generation(s.input_generation);
                     s.visual.arm(session_id,capture_context,utc);

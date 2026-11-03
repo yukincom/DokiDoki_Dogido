@@ -60,10 +60,12 @@ public final class CombatObserver {
         json.add("opponents", opponents);
         json.addProperty("player_engaged", this.threatObserver.playerEngaged());
         json.addProperty("combat_active_hint", this.threatObserver.combatActive() || !threats.isEmpty() || !audioThreats.isEmpty());
-        int nearbyExperienceOrbCount = frame.countEntities(player.getBoundingBox().expand(24.0, 12.0, 24.0), null, 0, "experience_orb");
-        json.addProperty("nearby_experience_orb_count", nearbyExperienceOrbCount);
         json.add("hostile_outcomes", buildHostileOutcomes(this.threatObserver.outcomes()));
-        this.bossObserver.appendCombatInfo(json, player, world, frame, threats);
+        if (!frame.workshop()) {
+            int nearbyExperienceOrbCount = frame.countEntities(player.getBoundingBox().expand(24.0, 12.0, 24.0), null, 0, "experience_orb");
+            json.addProperty("nearby_experience_orb_count", nearbyExperienceOrbCount);
+            this.bossObserver.appendCombatInfo(json, player, world, frame, threats);
+        }
         return json;
     }
 

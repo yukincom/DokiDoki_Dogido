@@ -709,6 +709,9 @@ pub struct MetaState {
     pub call_name: Option<String>,
     #[serde(default)]
     pub debug: bool,
+    /// WS中の軽量観測。未収集の周囲・所持品を「消えた」として材料へ登録しない。
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub workshop_observation: bool,
     /// player_diedなどで添える、取得できた死亡理由。省略時に原因を推定しない。
     #[serde(default)]
     pub death_cause: Option<String>,

@@ -26,6 +26,7 @@ public final class WorldObservationFrame {
         }
     }
 
+    private final boolean workshop;
     private final Supplier<JsonObject> capture;
     private JsonObject observation;
     private final Supplier<JsonObject> captureBlocks;
@@ -41,11 +42,19 @@ public final class WorldObservationFrame {
 
     public WorldObservationFrame(Supplier<JsonObject> capture, Supplier<JsonObject> captureBlocks,
             Supplier<Materials> captureMaterials, Function<Box, List<EntitySample>> captureEntities) {
+        this(false, capture, captureBlocks, captureMaterials, captureEntities);
+    }
+
+    WorldObservationFrame(boolean workshop, Supplier<JsonObject> capture, Supplier<JsonObject> captureBlocks,
+            Supplier<Materials> captureMaterials, Function<Box, List<EntitySample>> captureEntities) {
+        this.workshop = workshop;
         this.capture = capture;
         this.captureBlocks = captureBlocks;
         this.captureMaterials = captureMaterials;
         this.captureEntities = captureEntities;
     }
+
+    public boolean workshop() { return workshop; }
 
     public JsonObject blocks() {
         if (blocks == null) blocks = captureBlocks.get();

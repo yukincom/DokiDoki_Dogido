@@ -23,38 +23,54 @@ public final class BodySpeechGaze {
     private boolean selectedOnce;
     private BooleanSupplier current;
     private long received, sequence, nextSend;
-    private boolean sent;
+    private boolean sent, workshopOpen;
 
     public BodySpeechGaze(BodyConnection connection) { this(connection,System::nanoTime); }
     BodySpeechGaze(BodyConnection connection, LongSupplier clock) { this.connection=connection; this.clock=clock; }
 
     /** snapshotのsession検証後に呼ぶ。空値は音声終了として即解除し、失敗したpollは時計を更新しない。 */
     public void receive(DialoguePayload.Snapshot snapshot, BooleanSupplier current) {
+        boolean open = snapshot.workshop() != null && "open".equals(snapshot.workshop().state());
+        if (open != workshopOpen) nextSend = 0;
+        workshopOpen = open;
         Request next = parse(snapshot.voiceEnabled() ? snapshot.bodyGaze() : null);
         if (request == null || next == null || !request.turn().equals(next.turn()) || !request.context().equals(next.context())) {
             selected=null; selectedOnce=false; nextSend=0;
         }
         request=next; this.current=current; received=clock.getAsLong();
     }
-    public void clear() { request=null; selected=null; selectedOnce=false; current=null; nextSend=0; }
+    /** 音声スイッチや掛け軸の表示とは独立した、現在の相談受付。 */
+    public boolean workshopActive() {
+        return workshopOpen && current != null && current.getAsBoolean() && clock.getAsLong()-received < 1_200_000_000L;
+    }
+    public void clear() { workshopOpen=false; request=null; selected=null; selectedOnce=false; current=null; nextSend=0; }
 
     /** client tickで一度呼ぶ。fresh frameのtickをそのまま送り、同一音や古いHTTP応答の鮮度を作り直さない。 */
-    public void tick(BodyConnection.Frame frame, List<Target> targets) {
+    public void tick(BodyConnection.Frame frame, List<Target> targets, Vec3d workshopOwnerEye) {
         JsonObject row=frame.observation();
         if (!"observed".equals(BodyInspectProtocol.string(row,"status")) || row.get("age_ms").getAsLong() > 750) {
-            clear(); return;
+            request=null; selected=null; selectedOnce=false; nextSend=0; return;
         }
         JsonObject sample=row.getAsJsonObject("sample");
         var context=BodyInspectProtocol.context(sample.getAsJsonObject("context"));
         long tick=sample.get("server_tick").getAsLong(), now=clock.getAsLong();
-        Vec3d target=resolve(context,targets,now);
+        Vec3d target;
+        if (workshopOwnerEye != null && workshopActive()) {
+            var eye = BodyInspectProtocol.point(sample.getAsJsonObject("self_pose").getAsJsonObject("eye_position"));
+            var origin = new Vec3d(eye.x(),eye.y(),eye.z());
+            var direction = workshopOwnerEye.subtract(origin);
+            // bridgeの注視点は64ブロック以内。遠くても、同じ方向の点へ顔だけを向ける。
+            target = direction.lengthSquared() > 32*32 ? origin.add(direction.normalize().multiply(32)) : workshopOwnerEye;
+        } else {
+            target=resolve(context,targets,now);
+        }
         if (target == null && !sent || target != null && now < nextSend) return;
         connection.observeSpeechGaze(context,++sequence,tick,target);
         sent=target != null; nextSend=now+250_000_000L;
     }
     Vec3d resolve(BodyInspectProtocol.Context context, List<Target> targets, long now) {
         if (request == null || current == null || !current.getAsBoolean() || now-received >= 1_200_000_000L
-                || !request.context().equals(context)) { clear(); return null; }
+                || !request.context().equals(context)) { request=null; selected=null; selectedOnce=false; return null; }
         if (!selectedOnce) {
             for (Reference reference : request.targets()) {
                 if (targets.stream().anyMatch(t -> matches(reference,t))) { selected=reference; break; }

@@ -100,6 +100,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private String displayThreatSignature = "";
     private boolean wasDead = false;
     private boolean reportedEngaged;
+    private boolean lastWorkshopObservation;
     private PlayerObserver playerObserver;
     private WorldObserver worldObserver;
     private SoundObserver soundObserver;
@@ -169,7 +170,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             if (snapshot != null) {
                 var ref = this.eventClient.currentSession();
                 this.bodySpeechGaze.receive(snapshot, () -> this.eventClient.isCurrent(ref));
-            }
+            } else this.bodySpeechGaze.clear();
             var workshop = snapshot == null ? null : snapshot.workshop();
             this.characterHud.receive(workshop);
             return this.workshopHud.receive(workshop);
@@ -264,7 +265,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
 
     public static void recordPlayedSound(SoundInstance sound) {
         DogidoClientAdapter instance = INSTANCE;
-        if (instance == null || sound == null) {
+        if (instance == null || sound == null || instance.lastWorkshopObservation) {
             return;
         }
         instance.soundObserver.onPlayedSound(sound);
@@ -285,8 +286,11 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         // 撮影の移動追跡は無効化中も進める。通常consumerと同じ取得値を明示的に配る。
         var bodyFrame=client.player==null || client.world==null ? null
             : this.bodyConnection.captureFrame(client.player.getUuid(),client.world.getRegistryKey().getValue().toString());
-        var bodyEntity=bodyFrame==null ? null : bodyFrame.resolveBody(client.world);
-        dogido.fabric.screenshot.BodyViewCapture.tick(client,bodyFrame,bodyEntity);
+        boolean workshopAtTickStart = this.bodySpeechGaze.workshopActive();
+        boolean resolveForCapture = dogido.fabric.screenshot.BodyViewCapture.needsBody(workshopAtTickStart);
+        var bodyEntity=bodyFrame==null || !resolveForCapture
+            ? null : bodyFrame.resolveBody(client.world);
+        dogido.fabric.screenshot.BodyViewCapture.tick(client,bodyFrame,bodyEntity,workshopAtTickStart);
         if (!this.config.enabled) {
             this.horseRecall.clear();
             this.bodyInspect.clear();
@@ -297,7 +301,6 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             return;
         }
 
-        this.horseRecall.tick(client);
         ClientPlayerEntity player = client.player;
         ClientWorld world = client.world;
         if (this.displayConnection != null && this.displayConnection != client.getNetworkHandler()) {
@@ -305,6 +308,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             // Dimension changes on the same connection retain the existing session.
             this.eventClient.disconnected();
             this.dialogueChat.reset();
+            this.bodySpeechGaze.clear();
             this.workshopHud.reset();
             this.characterHud.reset();
             this.displayConnection = null;
@@ -315,6 +319,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             this.workshopHud.reset();
             this.displayWorld = null;
             this.characterHud.reset();
+            this.horseRecall.clear();
             this.resetTransientState();
             return;
         }
@@ -324,6 +329,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             this.worldObserver.resetRangeTracking();
             this.worldObserver.resetPortalTracking();
             this.eventClient.invalidateDisplayRequests();
+            this.bodySpeechGaze.clear();
             this.workshopHud.reset();
             this.workshopHud.synchronizeAfter(this.eventClient.currentSequence() + 1);
             this.characterHud.reset();
@@ -354,17 +360,36 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             server == null ? null : server.getWorld(world.getRegistryKey()), player.getUuid());
         boolean opponentsChanged = this.threatObserver.opponentEvidenceChanged();
         if (opponentsChanged) this.bodySenses.opponentsChanged();
+        boolean deadNow = this.playerObserver.isPlayerDead(player);
+        boolean workshopObservation = this.bodySpeechGaze.workshopActive() && !this.threatObserver.playerEngaged() && !deadNow;
+        if (workshopObservation != this.lastWorkshopObservation) {
+            this.lastWorkshopObservation = workshopObservation;
+            this.lastSnapshotTick = -1; // 最初の通常tickで終了後の現在値を採り直す。
+            this.bodySenses.reset();
+            this.ambientMobObserver.resetRangeTracking();
+            this.worldObserver.resetRangeTracking();
+            this.smellObserver.reset();
+            this.soundObserver.clearAmbientSounds();
+        }
+        this.horseRecall.tick(client, !workshopObservation);
         if (this.tickCounter % 5 == 0) this.bodyConnection.observeOwnerWork(bodyFrame,PlayerObserver.blockBreakingActive(client));
-        this.bodyObservation = this.bodySenses.capture(bodyFrame,client,bodyEntity);
+        if (workshopObservation) {
+            // 元frameには身体・本人の姿勢と「感覚は未測定」が入っている。
+            this.bodyObservation = bodyFrame.observation();
+        } else {
+            if (!resolveForCapture) bodyEntity = bodyFrame.resolveBody(world);
+            this.bodyObservation = this.bodySenses.capture(bodyFrame,client,bodyEntity);
+        }
         this.bodyAutonomy = this.bodySenses.autonomy(bodyFrame,this.bodyObservation);
         this.bodyInspect.tick(bodyFrame,this.bodyAutonomy);
         this.bodyRequests.tick(bodyFrame);
         this.eventClient.ensureSession(this.playerObserver.resolvePlayerName(player),player.getUuid(),this.bodyConnection.supported());
         this.soundObserver.expireSoundObservations();
         this.worldObserver.expireBlockBreakObservations(this.tickCounter);
-        this.worldObserver.observeNearbyLightning(player, world, this.tickCounter);
-        this.worldObserver.probeStructureAtPlayer(client, player, world, this.tickCounter);
-
+        if (!workshopObservation) {
+            this.worldObserver.observeNearbyLightning(player, world, this.tickCounter);
+            this.worldObserver.probeStructureAtPlayer(client, player, world, this.tickCounter);
+        }
         this.playerObserver.observeSleep(player, world, () -> countNearbyBeds(world, player.getBlockPos()));
 
         this.threatObserver.observeHealth(player);
@@ -385,23 +410,22 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         boolean urgentChange = this.threatObserver.urgentObservationChanged(visibleThreats);
         boolean captureNearbyKinds = this.eventClient.consumeFreshSnapshotRequest() || shouldSendSnapshot()
             || engagementStarted || opponentsChanged || urgentChange;
-        WorldObservationFrame worldFrame = this.eventCapture.frame(player, world, captureNearbyKinds);
-        this.bossObserver.observeWardenSpecialSetups(player, worldFrame, threats);
+        WorldObservationFrame worldFrame = this.eventCapture.frame(player, world, captureNearbyKinds, workshopObservation);
+        if (!workshopObservation) this.bossObserver.observeWardenSpecialSetups(player, worldFrame, threats);
         this.bossObserver.observeTrackedWardenDefeat(world);
         this.bossObserver.observeTrackedDragonDefeat(world);
-        Map<UUID, SoundObservationPolicy.Point> currentSoundSources = this.soundObserver.currentSoundSources(world);
+        Map<UUID, SoundObservationPolicy.Point> currentSoundSources = this.soundObserver.currentSoundSources(world, !workshopObservation);
         List<AudioThreatObservation> audioThreats = this.soundObserver.scanAuditoryThreats(player, currentSoundSources);
-        List<AudioThreatObservation> ambientSounds = this.soundObserver.scanAmbientSounds(player, currentSoundSources);
+        List<AudioThreatObservation> ambientSounds = workshopObservation ? List.of() : this.soundObserver.scanAmbientSounds(player, currentSoundSources);
         List<AudioThreatObservation> unseenAudioThreats = filterUnseenAudioThreats(visibleThreats, audioThreats);
-        this.smellObserver.observe(player, world, this.tickCounter, this.config.snapshotIntervalTicks);
-        List<AmbientMobObservation> ambientMobs = this.ambientMobObserver.scanAmbientMobs(player, world, captureNearbyKinds);
+        if (!workshopObservation) this.smellObserver.observe(player, world, this.tickCounter, this.config.snapshotIntervalTicks);
+        List<AmbientMobObservation> ambientMobs = workshopObservation ? List.of() : this.ambientMobObserver.scanAmbientMobs(player, world, captureNearbyKinds);
         this.threatObserver.updateCombatTracking(visibleThreats, audioThreats);
-        boolean deadNow = this.playerObserver.isPlayerDead(player);
         finalKill &= !deadNow;
 
         if (captureNearbyKinds) {
             JsonObject snapshot = this.eventCapture.buildStatusSnapshot(player, world, worldFrame, visibleThreats, audioThreats, ambientSounds, ambientMobs);
-            JsonObject ownedHorses = this.horseRecall.snapshotJson();
+            JsonObject ownedHorses = workshopObservation ? null : this.horseRecall.snapshotJson();
             if (ownedHorses != null) snapshot.add("owned_horses", ownedHorses);
             this.eventClient.postEvent(snapshot);
             this.lastSnapshotTick = this.tickCounter;
@@ -422,7 +446,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             this.lastAudioSignature = audioThreatSignature(unseenAudioThreats);
         }
 
-        if (shouldSendAmbientMobEvent(ambientMobs, visibleThreats, unseenAudioThreats, deadNow)) {
+        if (!workshopObservation && shouldSendAmbientMobEvent(ambientMobs, visibleThreats, unseenAudioThreats, deadNow)) {
             JsonObject ambientEvent = this.eventCapture.buildAmbientMobDetected(player, world, worldFrame, ambientMobs);
             this.eventClient.postEvent(ambientEvent);
             this.lastAmbientMobEventTick = this.tickCounter;
@@ -488,16 +512,21 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.reportedEngaged = engaged;
         this.characterHud.danger(displayDanger, displayDangerChanged, displayBarrier);
         // 発話の対象IDを現在の同じcollectorで照合する。固定警告にはplayer側で実視認した敵も使う。
-        var gazeTargets=new java.util.ArrayList<>(this.bodySenses.speechTargets());
-        for (var threat : visibleThreats) if (threat.lineOfSight())
-            gazeTargets.add(new dogido.fabric.body.BodySpeechGaze.Target("player","entity",threat.uuid().toString(),new net.minecraft.util.math.Vec3d(threat.x(),threat.y(),threat.z())));
-        for (var sound : this.soundObserver.spatialSounds())
-            gazeTargets.add(new dogido.fabric.body.BodySpeechGaze.Target("player","sound",sound.sourceId(),sound.position()));
-        this.bodySpeechGaze.tick(bodyFrame,gazeTargets);
+        if (this.bodySpeechGaze.workshopActive() && !engaged && !deadNow) {
+            this.bodySpeechGaze.tick(bodyFrame,List.of(),player.getEyePos());
+        } else {
+            var gazeTargets=new java.util.ArrayList<>(this.bodySenses.speechTargets());
+            for (var threat : visibleThreats) if (threat.lineOfSight())
+                gazeTargets.add(new dogido.fabric.body.BodySpeechGaze.Target("player","entity",threat.uuid().toString(),new net.minecraft.util.math.Vec3d(threat.x(),threat.y(),threat.z())));
+            for (var sound : this.soundObserver.spatialSounds())
+                gazeTargets.add(new dogido.fabric.body.BodySpeechGaze.Target("player","sound",sound.sourceId(),sound.position()));
+            this.bodySpeechGaze.tick(bodyFrame,gazeTargets,null);
+        }
         if (this.tickCounter % 8 == 0) this.dialogueChat.poll();
     }
 
     private void resetTransientState() {
+        this.lastWorkshopObservation = false;
         this.reportedEngaged = false;
         if (this.bodySenses != null) this.bodySenses.reset();
         this.bodyObservation = null;

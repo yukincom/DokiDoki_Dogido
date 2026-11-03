@@ -112,6 +112,50 @@ fn server(wait_ms: u64) -> (Arc<Dialogue>, Source) {
     (d, source)
 }
 
+// 模擬Minecraftの定期観測。WSでは遅着画像をACKだけして材料を保持し、終了後の実測で撮影・所持品更新が戻る。実描画は対象外。
+#[tokio::test]
+async fn workshop_suspends_periodic_capture_and_resumes_on_a_full_observation() {
+    let (d, _) = server(100);
+    let f = super::super::workshop_record::tests::fixture();
+    let old = d.data.lock().unwrap().sessions["s"].visual.commands(Utc::now())[0]["command_id"].clone();
+    let workshop = f.d.data.lock().unwrap().sessions.get_mut("s").unwrap().haiku.workshop.take();
+    {
+        let mut data = d.data.lock().unwrap();
+        let session = data.sessions.get_mut("s").unwrap();
+        session.haiku.workshop = workshop;
+        session.haiku_context.inventory_order = vec!["gold_ingot".into()];
+    }
+    let (_, mut late, _) = pending();
+    late.command_id = old.as_str().unwrap().to_owned();
+    late.body_view.as_mut().unwrap().0["captured_at"] = json!(Utc::now());
+    let mut heartbeat = json!(wire(2));
+    heartbeat["meta"]["workshop_observation"] = true.into();
+    heartbeat["command_results"] = json!([late]);
+    let result = d.observe("s", crate::events::GameEvent::parse(heartbeat.clone()).unwrap(), None);
+    assert!(result["acknowledged_command_ids"].as_array().unwrap().contains(&old));
+    assert!(result["commands"].as_array().unwrap().iter().all(|c| c["type"] != "capture_body_view"));
+    {
+        let mut data = d.data.lock().unwrap();
+        let session = data.sessions.get_mut("s").unwrap();
+        assert!(super::super::workshop_focus::owns_input(session));
+        assert_eq!(session.haiku_context.inventory_order, ["gold_ingot"]);
+        assert!(session.visual.latest.is_none());
+    }
+    // 完全観測を送る従来Modでも、受付中は通常撮影を再予約しない。
+    assert!(d.observe("s",wire(3),None)["commands"].as_array().unwrap().iter().all(|c| c["type"] != "capture_body_view"));
+    d.data.lock().unwrap().sessions.get_mut("s").unwrap().haiku.workshop.as_mut().unwrap().open = false;
+    let mut full = json!(wire(4));
+    full["inventory"] = json!({"diamond":1});
+    let result = d.observe("s",crate::events::GameEvent::parse(full).unwrap(),None);
+    assert!(result["commands"].as_array().unwrap().iter().any(|c| c["type"] == "capture_body_view" && c["command_id"] != old));
+    assert_eq!(d.data.lock().unwrap().sessions["s"].haiku_context.inventory_order, ["diamond"]);
+    // WS終了後の古い再配送は、再開済みの通常撮影を取り消さない。
+    let replay = d.observe("s", crate::events::GameEvent::parse(heartbeat).unwrap(), None);
+    assert_eq!(replay["deduplicated"], true);
+    assert_eq!(replay["commands"], result["commands"]);
+    f.finish().await;
+}
+
 // 見込み: 通常返答は既存の最新画像を再利用できる。合格: 新命令を増やさず同じ撮影IDを2回取得し、画像欠落時の取消でNoneになる。確認範囲: Sourceと模擬受信。実撮影なし。
 #[tokio::test]
 async fn ordinary_reply_uses_latest_image_without_starting_another_capture_and_can_cancel_empty_wait() {

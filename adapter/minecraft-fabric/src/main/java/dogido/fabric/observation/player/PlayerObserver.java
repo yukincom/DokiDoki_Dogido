@@ -80,7 +80,8 @@ public final class PlayerObserver {
         return new Observation(buildPlayer(player, world, stacks, selected), buildInventory(stacks));
     }
 
-    private JsonObject buildPlayer(ClientPlayerEntity player, ClientWorld world, ItemStack[] stacks, int selected) {
+    /** 川柳中も死亡・落下・溶岩・窒息を現在値で判定できるよう、本人の状態は毎snapshot共通。 */
+    public JsonObject observeSafety(ClientPlayerEntity player, ClientWorld world) {
         JsonObject json = new JsonObject();
         json.addProperty("name", resolvePlayerName(player));
         json.add("environment", MobEnvironmentObservation.capture(player).toJson());
@@ -106,17 +107,6 @@ public final class PlayerObserver {
         json.addProperty("hunger", player.getHungerManager().getFoodLevel());
         json.addProperty("dimension", world.getRegistryKey().getValue().toString());
 
-        ItemStack held = stacks[selected];
-        json.addProperty(
-            "held_item",
-            held.isEmpty() ? "minecraft:air" : Registries.ITEM.getId(held.getItem()).toString()
-        );
-        MinecraftClient client = MinecraftClient.getInstance();
-        json.addProperty(
-            "block_breaking_active",
-            blockBreakingActive(client)
-        );
-        json.add("hotbar", buildHotbar(player, stacks, selected));
         JsonObject vehicle = buildVehicleState(player);
         if (vehicle != null) {
             // 未乗車時はキーごと省略する。「乗っていない」をLLM材料にしない。
@@ -131,6 +121,22 @@ public final class PlayerObserver {
             activeEffects.add(effectId.getPath());
         }
         json.add("active_status_effects", activeEffects);
+        return json;
+    }
+
+    private JsonObject buildPlayer(ClientPlayerEntity player, ClientWorld world, ItemStack[] stacks, int selected) {
+        JsonObject json = observeSafety(player, world);
+        ItemStack held = stacks[selected];
+        json.addProperty(
+            "held_item",
+            held.isEmpty() ? "minecraft:air" : Registries.ITEM.getId(held.getItem()).toString()
+        );
+        MinecraftClient client = MinecraftClient.getInstance();
+        json.addProperty(
+            "block_breaking_active",
+            blockBreakingActive(client)
+        );
+        json.add("hotbar", buildHotbar(player, stacks, selected));
         return json;
     }
 

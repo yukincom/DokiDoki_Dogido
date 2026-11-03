@@ -1,5 +1,6 @@
 package dogido.fabric.observation;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import dogido.fabric.observation.mobs.AmbientMobObservation;
 import dogido.fabric.observation.mobs.AmbientMobObserver;
@@ -49,12 +50,21 @@ public final class EventObservationCapture {
     }
 
     /** 新しい周期の取得口を作るだけで、イベントがなければworld・所持品等は読まない。 */
-    public WorldObservationFrame frame(ClientPlayerEntity player, ClientWorld world, boolean captureNearbyKinds) {
+    public WorldObservationFrame frame(ClientPlayerEntity player, ClientWorld world, boolean captureNearbyKinds,
+            boolean workshop) {
         long tick = this.tickSource.getAsLong();
-        return new WorldObservationFrame(
-            () -> this.worldObserver.buildWorld(player, world, tick),
-            () -> this.worldObserver.buildNearbyBlocks(player, world, captureNearbyKinds),
+        return new WorldObservationFrame(workshop,
             () -> {
+                if (!workshop) return this.worldObserver.buildWorld(player, world, tick);
+                JsonObject safety = new JsonObject();
+                safety.addProperty("air_supply", player.getAir());
+                safety.addProperty("game_paused", net.minecraft.client.MinecraftClient.getInstance().isPaused());
+                return safety;
+            },
+            () -> this.worldObserver.buildNearbyBlocks(player, world, captureNearbyKinds && !workshop),
+            () -> {
+                if (workshop) return new WorldObservationFrame.Materials(this.playerObserver.observeSafety(player, world),
+                    new JsonObject(), null, new JsonArray(), null);
                 var owned = this.playerObserver.observe(player, world);
                 return new WorldObservationFrame.Materials(owned.player(), owned.inventory(),
                     captureNearbyKinds ? this.ambientMobObserver.copyNearbyComposition() : null,
@@ -66,19 +76,26 @@ public final class EventObservationCapture {
 
     private EventJsonBuilder baseEnvelope(String name, String source, String priority, String certainty,
             WorldObservationFrame frame) {
-        JsonObject blocks = frame.blocks();
         var materials = frame.materials();
         EventJsonBuilder root = new EventJsonBuilder(name, source, priority, certainty,
-            OffsetDateTime.now().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME), this.smellObserver.current())
+            OffsetDateTime.now().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME), frame.workshop() ? null : this.smellObserver.current())
             .bodyObservation(this.bodyObservation.get()).bodyAutonomy(this.bodyAutonomy.get());
         root.sequence(this.nextSequence.getAsLong());
         root.player(materials.player());
         root.world(frame.copy());
+        if (frame.workshop()) return root;
         root.inventory(materials.inventory());
-        root.nearbyComposition(blocks, materials.nearbyMobs());
+        root.nearbyComposition(frame.blocks(), materials.nearbyMobs());
         root.recentBlockBreaks(materials.recentBlockBreaks());
         root.lookTarget(materials.lookTarget());
         return root;
+    }
+
+    private static JsonObject finish(EventJsonBuilder root, WorldObservationFrame frame, String cause) {
+        JsonObject meta = EventJsonBuilder.buildMeta(cause);
+        if (frame.workshop()) meta.addProperty("workshop_observation", true);
+        root.meta(meta);
+        return root.finish();
     }
 
     public JsonObject buildStatusSnapshot(
@@ -93,11 +110,10 @@ public final class EventObservationCapture {
         EventJsonBuilder root = baseEnvelope("status_snapshot", "system", "background", "high", worldFrame);
         root.visualThreats(threats);
         root.auditoryThreats(audioThreats);
-        root.ambientSounds(ambientSounds);
-        root.passiveMobs(ambientMobs);
+        if (!worldFrame.workshop()) root.ambientSounds(ambientSounds);
+        if (!worldFrame.workshop()) root.passiveMobs(ambientMobs);
         root.combat(this.combatObserver.buildCombat(player, world, worldFrame, threats, audioThreats));
-        root.meta(EventJsonBuilder.buildMeta(null));
-        return root.finish();
+        return finish(root, worldFrame, null);
     }
 
     public JsonObject buildThreatApproaching(
@@ -111,10 +127,9 @@ public final class EventObservationCapture {
         EventJsonBuilder root = baseEnvelope("threat_approaching", "visual", "urgent", "high", worldFrame);
         root.visualThreats(threats);
         root.auditoryThreats(audioThreats);
-        root.passiveMobs(ambientMobs);
+        if (!worldFrame.workshop()) root.passiveMobs(ambientMobs);
         root.combat(this.combatObserver.buildCombat(player, world, worldFrame, threats, audioThreats));
-        root.meta(EventJsonBuilder.buildMeta(null));
-        return root.finish();
+        return finish(root, worldFrame, null);
     }
 
     public JsonObject buildHostileAudioDetected(
@@ -128,10 +143,9 @@ public final class EventObservationCapture {
         EventJsonBuilder root = baseEnvelope("hostile_audio_detected", "auditory", "normal", "medium", worldFrame);
         root.visualThreats(List.of());
         root.auditoryThreats(audioThreats);
-        root.passiveMobs(ambientMobs);
+        if (!worldFrame.workshop()) root.passiveMobs(ambientMobs);
         root.combat(this.combatObserver.buildCombat(player, world, worldFrame, threats, audioThreats));
-        root.meta(EventJsonBuilder.buildMeta(null));
-        return root.finish();
+        return finish(root, worldFrame, null);
     }
 
     public JsonObject buildAmbientMobDetected(
@@ -143,10 +157,9 @@ public final class EventObservationCapture {
         EventJsonBuilder root = baseEnvelope("ambient_mob_detected", "visual", "background", "high", worldFrame);
         root.visualThreats(List.of());
         root.auditoryThreats(List.of());
-        root.passiveMobs(ambientMobs);
+        if (!worldFrame.workshop()) root.passiveMobs(ambientMobs);
         root.combat(this.combatObserver.buildCombat(player, world, worldFrame, List.of(), List.of()));
-        root.meta(EventJsonBuilder.buildMeta(null));
-        return root.finish();
+        return finish(root, worldFrame, null);
     }
 
     public JsonObject buildPlayerDied(
@@ -160,10 +173,9 @@ public final class EventObservationCapture {
         EventJsonBuilder root = baseEnvelope("player_died", "system", "urgent", "high", worldFrame);
         root.visualThreats(threats);
         root.auditoryThreats(audioThreats);
-        root.passiveMobs(ambientMobs);
+        if (!worldFrame.workshop()) root.passiveMobs(ambientMobs);
         root.combat(this.combatObserver.buildCombat(player, world, worldFrame, threats, audioThreats));
-        root.meta(EventJsonBuilder.buildMeta(this.playerObserver.resolveDeathCause(player)));
-        return root.finish();
+        return finish(root, worldFrame, this.playerObserver.resolveDeathCause(player));
     }
 
     public JsonObject buildCreeperDetonated(
@@ -178,11 +190,10 @@ public final class EventObservationCapture {
         EventJsonBuilder root = baseEnvelope("creeper_detonated", "system", "urgent", "high", worldFrame);
         root.visualThreats(threats);
         root.auditoryThreats(audioThreats);
-        root.passiveMobs(ambientMobs);
+        if (!worldFrame.workshop()) root.passiveMobs(ambientMobs);
         JsonObject combat = this.combatObserver.buildCombat(player, world, worldFrame, threats, audioThreats);
         root.combatOutcomes(combat, detonations);
-        root.meta(EventJsonBuilder.buildMeta(null));
-        return root.finish();
+        return finish(root, worldFrame, null);
     }
 
     public JsonObject buildHostileDefeated(
@@ -197,11 +208,10 @@ public final class EventObservationCapture {
         EventJsonBuilder root = baseEnvelope("hostile_defeated", "system", "urgent", "high", worldFrame);
         root.visualThreats(threats);
         root.auditoryThreats(audioThreats);
-        root.passiveMobs(ambientMobs);
+        if (!worldFrame.workshop()) root.passiveMobs(ambientMobs);
         JsonObject combat = this.combatObserver.buildCombat(player, world, worldFrame, threats, audioThreats);
         root.combatOutcomes(combat, outcomes);
-        root.meta(EventJsonBuilder.buildMeta(null));
-        return root.finish();
+        return finish(root, worldFrame, null);
     }
 
     public JsonObject buildCombatEnded(
@@ -214,13 +224,12 @@ public final class EventObservationCapture {
         EventJsonBuilder root = baseEnvelope("combat_ended", "system", "normal", "high", worldFrame);
         root.visualThreats(threats);
         root.auditoryThreats(sounds);
-        root.passiveMobs(ambientMobs);
+        if (!worldFrame.workshop()) root.passiveMobs(ambientMobs);
         JsonObject combat = this.combatObserver.buildCombat(player, world, worldFrame, threats, sounds);
         combat.addProperty("former_opponent_nearby", formerOpponentNearby);
         if (lastOpponentDefeated) combat.addProperty("last_opponent_defeated", true);
         root.combat(combat);
-        root.meta(EventJsonBuilder.buildMeta(null));
-        return root.finish();
+        return finish(root, worldFrame, null);
     }
 
 }

@@ -373,6 +373,7 @@ impl Dialogue {
             .or(s.latest.as_ref())
             .unwrap()
             .clone();
+        if event.meta.workshop_observation { return; }
         let event = super::body_runtime::event(s, &event);
         // 身体の感覚が未取得・失効した瞬間は、所持品だけを残した観測で発句を始めない。
         // 時計やqueueを消費せず戻り、次の有効な身体観測で同じ発句機会を再確認する。

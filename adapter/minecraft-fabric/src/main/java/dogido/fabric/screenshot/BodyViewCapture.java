@@ -125,6 +125,9 @@ public final class BodyViewCapture {
                 proof);
         });
     }
+    private static boolean periodic(Request request) {
+        return request != null && request.command != null && request.afterLook == null;
+    }
     private static boolean explicitPending(Request request) {
         return request!=null && request.afterLook!=null && !request.completed.get();
     }
@@ -204,9 +207,20 @@ public final class BodyViewCapture {
     private static BodyViewMotion.Pose pose(Live live) {
         return new BodyViewMotion.Pose(live.body.getX(),live.body.getY(),live.body.getZ(),live.body.bodyYaw,live.body.getPitch());
     }
+    /** 相談中も句集と明示撮影でだけ実体の照合が要る。通常撮影は描画前に取り消す。 */
+    public static boolean needsBody(boolean workshop) {
+        return !workshop || poemRequest != null || explicitPending(stopRequest);
+    }
     /** rootの同じtickから受け取る。世界未取得時も期限・保存処理を進め、前世界の移動観測を消す。 */
-    public static void tick(MinecraftClient client,BodyConnection.Frame frame,Entity body) {
-        tick(live(client,frame,body));
+    public static void tick(MinecraftClient client,BodyConnection.Frame frame,Entity body,boolean workshop) {
+        // WS開始前から待っていた通常撮影も、描画前なら解除する。句集・明示撮影の期限と結果配送は進める。
+        if (workshop && periodic(stopRequest)) {
+            Request old=stopRequest; stopRequest=null; complete(old,null,"superseded");
+        }
+        if (workshop && periodic(pending)) {
+            Request old=pending; pending=null; DEADLINE.finish(old.id); complete(old,null,"superseded");
+        }
+        tick(!workshop || poemRequest != null || stopRequest != null ? live(client,frame,body) : null);
     }
     private static void tick(Live observed) {
         long now=System.nanoTime();
