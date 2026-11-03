@@ -31,10 +31,17 @@ pub(super) struct State {
     // 次の撮影が参照できる直近4枚。PNGを複製せず、古い比較元を再帰的に保持しない。
     history: VecDeque<Arc<Frame>>,
     ready: bool,
+    // 連続した照合済み「変化なし」の先頭画像。発話の有無にかかわらず一回の入力で消費する。
+    unchanged_since: Option<String>,
+    unchanged_notice_sent: bool,
     sequence: u64,
     done: VecDeque<String>,
 }
 impl State {
+    fn pending_unchanged(&self) -> Option<&str> {
+        let first = self.unchanged_since.as_deref()?;
+        (!self.unchanged_notice_sent && self.latest.as_ref()?.capture_id != first).then_some(first)
+    }
     fn finish(&mut self, id: &str) {
         if self.pending.as_ref().is_some_and(|p| p.command["command_id"] == id) { self.pending = None; }
         if !self.done.iter().any(|v| v == id) { self.done.push_back(id.into()); }
@@ -50,6 +57,7 @@ impl State {
                 self.cancel_look();
             }
             self.history.clear();
+            self.unchanged_since = None;
             if self.look.is_none() && let Some(p) = self.pending.take() {
                 self.finish(p.command["command_id"].as_str().unwrap_or(""));
             }
@@ -78,6 +86,7 @@ impl State {
         pending.command["after_look"] = json!({"command_id":look.command_id,"input_generation":look.input_generation,"executed_at":look.executed_at});
         let request = LookCapture {capture_id:pending.command["command_id"].as_str()?.into(),look};
         self.ready = false;
+        self.unchanged_since = None;
         self.look = Some(LookPending {request:request.clone(),expires:pending.expires,image:None,finished:false});
         Some(request)
     }
@@ -102,7 +111,7 @@ impl State {
                     ComparedFrames::Changed { previous } => json!({"status":"changed","capture_id":previous.capture_id,
                         "captured_at":previous.captured_at,"sha256":previous.sha256,"player_box":previous.has_player_box(),
                         "camera_yaw":previous.camera_yaw}),
-                }})),"notice_pending":self.ready})
+                }})),"notice_pending":self.ready || self.pending_unchanged().is_some()})
     }
     pub fn owns(&self, id: &str) -> bool {
         self.pending.as_ref().is_some_and(|p| p.command["command_id"] == id) || self.done.iter().any(|v| v == id)
@@ -133,8 +142,7 @@ impl State {
         self.history.push_back(Arc::clone(&captured.image.current));
         if self.history.len() > 4 { self.history.pop_front(); }
     }
-    /// 一撮影一画像を検証し、照合済みの変化だけを一度通知する。
-    /// 同じ地点で4枚前と同等なら画像は更新するが、変化と新たなモデル判断は作らない。
+    /// 一撮影一画像を検証する。変化と、変化なしが続いたときの気づきは別の契機として扱う。
     pub fn receive(&mut self, result: &AdapterCommandResult, now: DateTime<Utc>) -> bool {
         let Some(p) = self.pending.as_ref().filter(|p| p.command["command_id"] == result.command_id) else { return true; };
         let explicit = self.look.as_ref().is_some_and(|v| v.request.capture_id == result.command_id);
@@ -142,6 +150,14 @@ impl State {
         if let Some(mut captured) = captured.filter(|v| v.sequence > self.sequence) {
             self.remember(&mut captured, now);
             let changed = matches!(captured.image.frames, ComparedFrames::Changed { .. });
+            if !explicit && matches!(captured.image.frames, ComparedFrames::Unchanged) {
+                if self.unchanged_since.is_none() {
+                    self.unchanged_since = Some(captured.capture_id.clone());
+                    self.unchanged_notice_sent = false;
+                }
+            } else {
+                self.unchanged_since = None;
+            }
             self.sequence = captured.sequence; self.ready = changed && !explicit;
             if explicit && let Some(look) = self.look.as_mut() { look.image = Some(captured.clone()); }
             tracing::info!(event="body_stop_image_received",command_id=result.command_id,capture_id=captured.capture_id,
@@ -182,17 +198,35 @@ fn parse_image(result: &AdapterCommandResult, pending: &Pending, now: DateTime<U
 /// 優先処理が空いた時に最新の変化だけを既存noticeへ渡す。古い画像を待ち列へ蓄積しない。
 /// ここは画像と撮影情報だけを添える。全観測・変化表・履歴は環境runtimeが一緒に組み立てる。
 pub(super) fn opportunity(s: &mut Session) -> Option<crate::combat::model::Speech> {
-    if !s.visual.ready || s.preview || s.foreground.game_paused || s.foreground.combat_active
+    let unchanged_since = s.visual.pending_unchanged();
+    if (!s.visual.ready && unchanged_since.is_none()) || s.preview || s.foreground.game_paused || s.foreground.combat_active
         || !matches!(s.foreground.route,crate::foreground::Route::None|crate::foreground::Route::Casual) { return None; }
     let Some(captured) = latest(s) else { s.visual.ready=false;return None; };
     let mut action = crate::environment::notice::action();
     action.image = Some(Arc::new(captured.image.clone()));
     let details = &mut action.leaf.as_mut().unwrap().details;
     details["visual_capture"] = capture_metadata(captured);
-    details["visual_change_trigger"] = json!(true);
+    if let Some(first) = unchanged_since {
+        details["unchanged_scene_since"] = json!(first);
+    } else {
+        details["visual_change_trigger"] = json!(true);
+    }
     action.text.clear(); // 画像の意味をコード固定文で代弁しない。
     s.visual.ready = false;
     Some(action)
+}
+
+/// 生成直前の同じ連続区間だけに一度添える。待機中に景色が変わった古い通知は取り下げる。
+pub(super) fn begin_scene_notice(s: &mut Session, action: &mut crate::combat::model::Speech) -> bool {
+    let Some(leaf) = action.leaf.as_mut() else { return true; };
+    let Some(first) = leaf.details["unchanged_scene_since"].as_str() else { return true; };
+    if s.visual.pending_unchanged() != Some(first) || latest(s).is_none()
+        || !action.image.as_ref().is_some_and(|image| fresh(&image.captured_at, Utc::now())) {
+        return false;
+    }
+    leaf.details["reaction_context"]["scene_notice"] = json!("同じ景色が続いとるな。何かおもろいもんないかな。");
+    s.visual.unchanged_notice_sent = true;
+    true
 }
 
 /// 通常会話と環境判断で同じ一枚を使う。同一身体世代かつ30秒以内だけを現在画像として渡す。

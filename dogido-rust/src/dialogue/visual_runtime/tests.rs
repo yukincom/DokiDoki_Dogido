@@ -112,6 +112,133 @@ fn server(wait_ms: u64) -> (Arc<Dialogue>, Source) {
     (d, source)
 }
 
+// 通常撮影の受付を通し、Fabricが4枚前を参照する比較結果だけを模擬する。
+fn receive_scene(state: &mut State, status: &str) {
+    let (_, mut receipt, _) = pending();
+    let context = state.context.clone();
+    state.arm("s", context, Utc::now());
+    let at = Utc::now();
+    receipt.command_id = state.commands(at)[0]["command_id"].as_str().unwrap().to_owned();
+    let view = &mut receipt.body_view.as_mut().unwrap().0;
+    view["capture_id"] = json!(format!("view_{}", uuid::Uuid::new_v4()));
+    view["captured_at"] = json!(at);
+    view["motion_sequence"] = json!(state.sequence + 1);
+    view["scene_comparison"] = comparison(status, at);
+    if status != "not_compared" {
+        assert_eq!(state.history.len(), 4);
+        let reference = state.history.front().unwrap();
+        view["scene_comparison"]["reference"] = json!({"capture_id":reference.capture_id,
+            "captured_at":reference.captured_at, "sha256":reference.sha256});
+    }
+    state.receive(&receipt, at);
+}
+
+// 見込み: 照合済みの無変化が2回続くと一度だけモデルが気づき、変化として履歴へ混ぜない。
+// 合格: 未比較・1回目は0件、2回目だけ入力に指定文が1件。3回目は0件、次の区間は再び1件。模擬画像とモデル要求を確認。
+#[tokio::test]
+async fn repeated_unchanged_scenes_add_one_model_only_notice_per_run() {
+    let (d, _) = server(100);
+    let mut data = d.data.lock().unwrap();
+    let s = data.sessions.get_mut("s").unwrap();
+    for _ in 0..4 {
+        receive_scene(&mut s.visual, "not_compared");
+        assert!(opportunity(s).is_none());
+    }
+    for _ in 0..2 {
+        receive_scene(&mut s.visual, "unchanged");
+        assert!(opportunity(s).is_none());
+        receive_scene(&mut s.visual, "unchanged");
+        let mut action = opportunity(s).unwrap();
+        action.delivery = crate::combat::model::Delivery::Ambient;
+        let event = super::super::body_runtime::event(s, s.latest.as_ref().unwrap());
+        crate::environment::reaction::attach(&mut action, &event, &d.config.combat);
+        assert!(super::super::environment_runtime::refresh_dialogue_context(s, std::slice::from_mut(&mut action)));
+        assert!(begin_scene_notice(s, &mut action));
+        assert!(action.text.is_empty());
+        let input = json!({"kind":"environment_reaction","model":"fixture","max_tokens":200,
+            "fallback_text":"","details":action.leaf.as_ref().unwrap().details});
+        let req = crate::environment::reaction::Prepared::new(&input, "fixture").unwrap();
+        let user = &req.request.messages[1].content;
+        assert_eq!(user.matches("同じ景色が続いとるな。何かおもろいもんないかな。").count(), 1);
+        assert!(!user.contains("unchanged_scene_since") && !user.contains("\"kind\":\"body_view\""));
+        assert!(matches!(action.image.unwrap().frames, ComparedFrames::Unchanged));
+        receive_scene(&mut s.visual, "unchanged");
+        assert!(opportunity(s).is_none());
+        receive_scene(&mut s.visual, "not_compared");
+    }
+}
+
+// 見込み: 生成枠を待つ間に景色が変わったら、前の区間の気づきを次の連続区間に付け替えない。
+// 合格: 新しい区間でも旧通知は不採用、新しい通知だけが一度通る。実プレイ・モデルの発話内容は対象外。
+#[tokio::test]
+async fn stale_unchanged_notice_cannot_consume_a_new_run() {
+    let (d, _) = server(100);
+    let mut data = d.data.lock().unwrap();
+    let s = data.sessions.get_mut("s").unwrap();
+    for status in ["not_compared","not_compared","not_compared","not_compared","unchanged","unchanged"] {
+        receive_scene(&mut s.visual, status);
+    }
+    let mut old = opportunity(s).unwrap();
+    receive_scene(&mut s.visual, "changed");
+    assert!(opportunity(s).unwrap().leaf.unwrap().details["visual_change_trigger"] == true);
+    receive_scene(&mut s.visual, "unchanged");
+    assert!(opportunity(s).is_none());
+    receive_scene(&mut s.visual, "unchanged");
+    assert!(!begin_scene_notice(s, &mut old));
+    let mut new = opportunity(s).unwrap();
+    assert!(begin_scene_notice(s, &mut new));
+    assert!(opportunity(s).is_none());
+}
+
+// 見込み: 通常の観測受付から既存の環境反応へ届き、モデルが黙れば表示にも指定文が出ない。
+// 合格: 模擬HTTP一件のモデル入力に指定文と無変化画像、配送行はsilent。実Minecraft・実モデルの発話内容は対象外。
+#[tokio::test]
+async fn ongoing_scene_notice_uses_the_normal_environment_turn_and_can_stay_silent() {
+    let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let requests = seen.clone();
+    let app = axum::Router::new().route("/v1/chat/completions", axum::routing::post(move |axum::Json(payload): axum::Json<Value>| {
+        requests.lock().unwrap().push(payload);
+        async { axum::Json(json!({"id":"scene-test","object":"chat.completion","created":0,"model":"fixture",
+            "choices":[{"index":0,"message":{"role":"assistant","content":"{\"action\":\"silent\",\"speech\":\"\"}"},"finish_reason":"stop"}]})) }
+    }));
+    let socket = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/v1", socket.local_addr().unwrap());
+    let http = tokio::spawn(async move { axum::serve(socket,app).await.unwrap(); });
+    let mut config = super::super::DialogueConfig {audio_enabled:false, base_url:url, model:"fixture".into(), ..Default::default()};
+    config.haiku.enabled = false;
+    config.haiku.memory_enabled = false;
+    config.chat_image.enabled = true;
+    let d = Dialogue::new(config).unwrap();
+    d.register("s","test",false);
+    d.bind_body_owner("s",Some(OWNER));
+    d.set_execution_capabilities("s", &[CAPABILITY.into()]);
+    d.observe("s",wire(1),None);
+    {
+        let mut data = d.data.lock().unwrap();
+        let s = data.sessions.get_mut("s").unwrap();
+        for status in ["not_compared","not_compared","not_compared","not_compared","unchanged","unchanged"] {
+            receive_scene(&mut s.visual,status);
+        }
+    }
+    d.observe("s",wire(2),None);
+    tokio::time::timeout(Duration::from_secs(3), async {
+        loop {
+            if d.data.lock().unwrap().rows.iter().any(|r| r["environment_reaction_outcome"] == "silent") {break;}
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    }).await.unwrap();
+    {
+        let requests = seen.lock().unwrap();
+        assert_eq!(requests.len(),1);
+        let parts = requests[0]["messages"][1]["content"].as_array().unwrap();
+        assert!(parts[0]["text"].as_str().unwrap().contains("同じ景色が続いとるな。何かおもろいもんないかな。"));
+        assert!(parts.iter().any(|part| part["text"] == "変わらない"));
+        assert!(d.data.lock().unwrap().rows.iter().all(|r| !r["text"].as_str().unwrap_or("").contains("同じ景色")));
+    }
+    d.shutdown().await;
+    http.abort();
+}
+
 // 模擬Minecraftの定期観測。WSでは遅着画像をACKだけして材料を保持し、終了後の実測で撮影・所持品更新が戻る。実描画は対象外。
 #[tokio::test]
 async fn workshop_suspends_periodic_capture_and_resumes_on_a_full_observation() {

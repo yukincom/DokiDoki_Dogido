@@ -266,7 +266,7 @@ pub(super) fn refresh_dialogue_context(s: &Session, actions: &mut [Speech]) -> b
         // 定期比較の差分は画像添付の有無によらず固定する。現在の全観測は生成直前へ揃え、
         // 撮影後に変わった天候・匂い・モブ等を古い値に戻さない。画像自体は撮影時刻付きで固定する。
         let periodic_notice = action.kind == crate::environment::notice::KIND
-            && leaf.details["visual_change_trigger"] != true;
+            && leaf.details["visual_change_trigger"] != true && leaf.details.get("unchanged_scene_since").is_none();
         if !periodic_notice || !leaf.details[key]["world_context"].is_object() {
             let mut context = if periodic_notice {
                 let Some(context) = s.conversation_observation.noticing_context() else {

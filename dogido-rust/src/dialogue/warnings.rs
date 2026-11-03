@@ -836,10 +836,11 @@ impl Dialogue {
                 let mut refreshed = action.clone();
                 if action.kind == crate::environment::notice::KIND {
                     let mut data = self.data.lock().unwrap();
-                    let valid = data.sessions.get(&sid).is_some_and(|s|
+                    let valid = data.sessions.get_mut(&sid).is_some_and(|s|
                         s.warning.as_ref().is_some_and(|w| w.turn == turn)
                         && applicable(action, s, &config.warnings, &config.combat)
-                        && super::environment_runtime::refresh_dialogue_context(s, std::slice::from_mut(&mut refreshed)));
+                        && super::environment_runtime::refresh_dialogue_context(s, std::slice::from_mut(&mut refreshed))
+                        && super::visual_runtime::begin_scene_notice(s, &mut refreshed));
                     if !valid {
                         Self::cancel_warning(&mut data, &sid, "stale_environment_reaction");
                         anyhow::bail!("stale environment reaction");
