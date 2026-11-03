@@ -152,29 +152,29 @@ impl Prefix {
     }
     fn feed_actions(&mut self, delta: &str, actions: &[String]) -> Result<Vec<String>> {
         self.raw.push_str(delta);
-        let mut raw = self.raw.trim();
+        let mut raw = self.raw.trim_start();
         if raw.starts_with("```") {
             let Some((_, body)) = raw.split_once('\n') else {
                 return Ok(vec![]);
             };
-            raw = body.trim_end().strip_suffix("```").unwrap_or(body).trim();
+            raw = body.trim_start();
         }
-        let Some(value) = chat_validation::complete_json(raw) else {
-            return Ok(vec![]);
-        };
         if self.speech_ready.as_ref().is_some_and(|ready| !ready.load(Ordering::Acquire)) {
             return Ok(vec![]);
         }
-        let Some(action) = confirmed_action(raw) else {
+        let Some((action, text, closed)) = speech_fields(raw) else {
             return Ok(vec![]);
         };
-        if value["action"] != action || !actions.contains(&action) {
+        if !actions.contains(&action) {
             return Ok(vec![]);
         }
-        let Some(text) = value["speech"].as_str() else {
-            return Ok(vec![]);
-        };
-        self.take(text.trim_start(), false)
+        // 相談の本文が閉じた後の評価・材料は音声に使わない。コードが前置きや句を
+        // 組み立てるshow_currentと通常雑談は、従来どおり末尾を最終本文で照合する。
+        let flush = closed && matches!(
+            action.as_str(),
+            "respond" | "explain" | "ask" | "compare" | "acknowledge_meaning"
+        );
+        self.take(if flush { text.trim() } else { text.trim_start() }, flush)
     }
     fn check_final(&self, text: &str) -> Result<()> {
         ensure!(
@@ -212,50 +212,65 @@ impl Prefix {
     }
 }
 
-/// 原文で閉じ引用符まで届いた、最上位actionだけを返す。
-/// speechの末尾補完をactionへ流用せず、本文中の見かけのキーや子objectを拾わない。
-fn confirmed_action(raw: &str) -> Option<String> {
-    let mut depth = 0;
-    let mut string_start = None;
-    let mut escaped = false;
-    let mut previous = '\0';
-    let mut key = None;
+/// 最上位のactionとspeechだけを受信順に読む。後続フィールドや外側の閉じ括弧は待たない。
+/// action後置・tool呼出し・本文内に引用されたJSONを、確定した会話と取り違えない。
+fn speech_fields(raw: &str) -> Option<(String, String, bool)> {
+    use serde::de::IgnoredAny;
+
+    let mut rest = raw.strip_prefix('{')?;
     let mut action = None;
-    for (offset, ch) in raw.char_indices() {
-        if let Some(start) = string_start {
-            if escaped {
-                escaped = false;
-            } else if ch == '\\' {
-                escaped = true;
-            } else if ch == '"' {
-                if depth == 1 {
-                    let token = serde_json::from_str::<String>(&raw[start..offset + 1]).ok()?;
-                    if matches!(previous, '{' | ',') {
-                        key = Some(token);
-                    } else if previous == ':' && key.as_deref() == Some("action") {
-                        action = Some(token);
+    let mut speech = None;
+    loop {
+        let mut keys = serde_json::Deserializer::from_str(rest).into_iter::<String>();
+        let key = keys.next()?.ok()?;
+        rest = rest[keys.byte_offset()..].trim_start().strip_prefix(':')?.trim_start();
+        let consumed = match key.as_str() {
+            "action" | "speech" => {
+                let mut value = serde_json::Deserializer::from_str(rest).into_iter::<String>();
+                match value.next()? {
+                    Ok(text) => {
+                        if key == "action" {
+                            action = Some(text);
+                        } else {
+                            speech = Some(text);
+                        }
+                        value.byte_offset()
                     }
+                    Err(_) if key == "speech" => return Some((action?, open_speech(rest)?, false)),
+                    Err(_) => return None,
                 }
-                string_start = None;
-                previous = '"';
             }
-        } else {
-            match ch {
-                '"' => string_start = Some(offset),
-                '{' | '[' => {
-                    depth += 1;
-                    previous = ch;
-                }
-                '}' | ']' => {
-                    depth -= 1;
-                    previous = ch;
-                }
-                c if !c.is_whitespace() => previous = c,
-                _ => {}
+            _ => {
+                let mut value = serde_json::Deserializer::from_str(rest).into_iter::<IgnoredAny>();
+                value.next()?.ok()?;
+                value.byte_offset()
             }
+        };
+        if action.is_some() && speech.is_some() {
+            return Some((action?, speech?, true));
         }
+        rest = rest[consumed..].trim_start().strip_prefix(',')?;
     }
-    action
+}
+
+/// 未完の文字列はすでに到着した文字まで。末尾で分割されたエスケープまたは
+/// サロゲート対だけを次の受信に残す。復号は通常のJSON文字列と同じserdeに任せる。
+fn open_speech(raw: &str) -> Option<String> {
+    let mut body = raw.strip_prefix('"')?;
+    for _ in 0..=2 {
+        if let Ok(text) = serde_json::from_str::<String>(&format!("\"{body}\"")) {
+            return Some(text);
+        }
+        let (prefix, escape) = body.rsplit_once('\\')?;
+        let partial_unicode = escape.strip_prefix('u').is_some_and(|digits| {
+            digits.len() <= 4 && digits.bytes().all(|b| b.is_ascii_hexdigit())
+        });
+        if !escape.is_empty() && !partial_unicode {
+            return None;
+        }
+        body = prefix;
+    }
+    None
 }
 
 async fn send_sentences(
@@ -451,14 +466,27 @@ mod tests {
         );
         assert_eq!(prefix.feed(r#""}"#).unwrap(), ["うん。"]);
         assert_eq!(
-            confirmed_action(r#"{"speech":"\"action\":\"speak\"。"}"#),
+            speech_fields(r#"{"speech":"\"action\":\"speak\"。"}"#),
             None
         );
         assert_eq!(
-            confirmed_action(r#"{"child":{"action":"speak"},"speech":"うん。"}"#),
+            speech_fields(r#"{"child":{"action":"speak"},"speech":"うん。"}"#),
             None
         );
     }
+    // 見込み: 次の文字のUnicodeエスケープが割れても前の句点は確定済み。
+    // 合格: 分割中に一文、残りが届くと絵文字を一度だけ出す。範囲は音声へ渡す本文の抽出。
+    #[test]
+    fn workshop_sentence_precedes_split_surrogate_and_unfinished_feedback() {
+        let mut prefix = Prefix::default();
+        let actions = ["explain".into()];
+        let first = r#"{"extra":{"speech":"読まない。"},"action":"explain","speech":"一文目。\uD83D\u"#;
+        assert_eq!(prefix.feed_actions(first, &actions).unwrap(), ["一文目。"]);
+        assert_eq!(prefix.feed_actions(r#"DC36やで","feedback":"#, &actions).unwrap(), ["🐶やで"]);
+        assert!(prefix.feed_actions("null}", &actions).unwrap().is_empty());
+        assert!(prefix.take("一文目。🐶やで", true).unwrap().is_empty());
+    }
+
     #[test]
     fn first_sentence_is_available_without_complete_json_and_silent_stays_empty() {
         let mut prefix = Prefix::default();

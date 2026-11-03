@@ -61,6 +61,28 @@ def check_first_sentence(passed):
         passed.append("workshop_first_sentence_before_llm_end_one_request_one_delivery")
 
 
+# 見込み: speechのあとに評価欄が続く実機の形式でも、確定済みの説明は先に読める。
+# 合格: 評価欄の値を止めたまま句点と末尾の二文が一度ずつ再生され、句・履歴・表示は未確定。模擬HTTPの入力から配送まで。
+def check_speech_before_feedback(passed):
+    first, last = "いちぶんめやで。", "ここがくのよさやで"
+    prefix = '```json\n{"action":"respond","speech":"' + first + last + '","feedback":'
+    with streaming([prefix, 'null}\n```']) as (f, sid, gate, calls, offset, seen_offset):
+        base, _, log, _, seen, _, _, _, _, hud, _, stored, _ = f
+        original, entries = hud(sid)["canonical_lines"], stored(sid)
+        turn = submit(base, sid, "この句を説明して")
+        wait_for(lambda: player_count(log, offset) == 2, timeout=4)
+        assert syntheses(seen[seen_offset:]) == [first, last]
+        assert not gate.is_set() and not display_row(base, turn)
+        assert not session(base, sid)["workshop_history"]
+        gate.set()
+        result = wait_for(lambda: row(base, turn, {"completed"}))
+        assert result["text"] == first + last and player_count(log, offset) == 2
+        acknowledge(base, sid, display_row(base, turn))
+        assert len(session(base, sid)["workshop_history"]) == len(calls) == 1
+        assert hud(sid)["canonical_lines"] == original and stored(sid) == entries
+        passed.append("finished_speech_before_trailing_feedback_without_double_delivery")
+
+
 # 見込み: actionが後置された本文は用途確定まで保留できる。合格: gate中の合成0、explain確定後は本文二文だけを順に再生。モデルの意味理解は固定。
 def check_action_last(passed):
     with streaming(['{"speech":"' + SENTENCES[0], SENTENCES[1] + '","action":"explain"}']) as (f, sid, gate, calls, offset, seen_offset):
@@ -143,6 +165,7 @@ def main():
     passed = []
     check_first_sentence(passed)
     check_action_last(passed)
+    check_speech_before_feedback(passed)
     check_edit_tool(passed)
     check_late_failures(passed)
     check_manual_stop(passed)

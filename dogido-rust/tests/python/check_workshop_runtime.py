@@ -27,7 +27,13 @@ def install(control, fn):
         if incoming["max_tokens"] != 420:
             return original(incoming)
         prompt = "\n".join(m.get("content") or "" for m in incoming["messages"])
-        text = re.search(r"今回のプレイヤー発話（会話理解用）: ([^\n]+)", prompt).group(1)
+        # 通常相談は会話用の本文、BERTで分類済みの具体変更は同じ入力のJSONを受け取る。
+        match = re.search(r"今回のプレイヤー発話（会話理解用）: ([^\n]+)", prompt)
+        if match:
+            text = match.group(1)
+        else:
+            user = next(m["content"] for m in incoming["messages"] if m["role"] == "user")
+            text = json.loads(user)["player_text"]
         calls.append((text, prompt))
         payload = fn(text, prompt, len(calls))
         return native_mock_message(payload, prompt, len(calls))

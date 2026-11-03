@@ -210,8 +210,13 @@ def main():
         first=revisions(folder,sid)[0]["lines"][0]
         assert first["surface_text"]=="桜色" and first["reading_text"]=="さくらいろ"
         token_requests=[json.loads(line) for line in (token_dir/"requests.jsonl").read_text().splitlines()]
-        assert {"桜の葉", "桜色"} <= {request["text"] for request in token_requests}
-        passed.append("model_selected_current_fragment_and_kanji_edit_apply_once")
+        # 編集toolが返すのは変更後の一行。旧語を辞書で再解釈せず、新しい表記の読みと保存結果を検査する。
+        assert "桜色" in {request["text"] for request in token_requests}
+        previous, current = revisions(folder,sid)
+        assert current["parent_revision_id"] == previous["id"]
+        assert current["lines"][0]["surface_text"] == "さくらさく"
+        assert current["lines"][1:] == previous["lines"][1:]
+        passed.append("successive_whole_line_edits_keep_kanji_reading_and_other_lines")
         def inspection(text,prompt,n):
             if "段階: decide" in prompt:return step(text,"inspect",checks=["source"])
             assert '\"verse_kind\": \"canonical\"' in prompt and '\"source_status\": \"unavailable\"' in prompt
