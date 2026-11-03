@@ -196,7 +196,7 @@ Rustサーバーを終了して再起動し、更新を反映します。接続�
 
 ## Mac mini・オフライン展示の準備
 
-同じApple Siliconでも、16GBでのMinecraft・小さいモデル・VOICEVOXの同時稼働は未測定です。まずこのチェックアウトで統合確認し、その後にMac miniへ移して比較します。別PCからの接続は[LAN共有計画](../docs/2026-11-03-remote-mac-runtime-and-multiplayer-plan.md)に従い、後継方式を決めてから実機確認します。
+同じApple Siliconでも、16GBでのMinecraft・小さいモデル・VOICEVOXの同時稼働は未測定です。まずこのチェックアウトで統合確認し、その後にMac miniへ移して比較します。別PCからの接続は、実装後に[LAN共有計画](../docs/2026-11-03-remote-mac-runtime-and-multiplayer-plan.md)に沿って、遊ぶMacからの初回ペアリングと次回起動時の自動接続を実機確認します。
 
 ソースを持ち運ぶ場合は、リポジトリ本体・必要な資料・辞書・音声素材を一緒に置き、移動先でreleaseをビルドします。Python仮想環境はMac間でコピーせず、接続補助用の環境を移動先で用意します。会場へ行く前に、LLMを動かすMacではGGUFモデルと画像用プロジェクター、音声を扱うMacではWhisper、VAD、AEC、VOICEVOXを確認します。準備済みならRust起動時にダウンロードは行いません。
 
