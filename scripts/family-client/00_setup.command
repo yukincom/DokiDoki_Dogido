@@ -30,6 +30,10 @@ print -- "$task_stage"
 task_stage="3/3 Fabricの確認・配置"
 print -- "$task_stage"
 ./dogido-llm/bin/python client_tools/install_fabric.py
+if [[ -f client_tools/lan_apps/install.py ]]; then
+  task_stage="アプリケーションとデスクトップのエイリアスを配置"
+  ./dogido-llm/bin/python client_tools/lan_apps/install.py client --kit "$PWD"
+fi
 task_stage="完了"
 print -- "このMacの導入準備が完了しました。呼び名は『呼び名を設定.command』で変更できます。"
 print -- "LANサーバーPCへの専用接続・Minecraft・実音声は次の手順で確認します。"

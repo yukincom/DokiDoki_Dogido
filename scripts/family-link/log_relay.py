@@ -250,7 +250,7 @@ def run(source, root):
     for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
         signal.signal(sig, interrupt)
     env = dict(os.environ, PYTHONUNBUFFERED='1', PYTHONDONTWRITEBYTECODE='1', DOGIDO_ENV_PROFILE='shared')
-    commands = [[sys.executable, '-u', 'client_tools/check.py', '--network' if source == 'server' else '--server'],
+    commands = [[sys.executable, '-u', str(Path(__file__).with_name('check.py')), '--network' if source == 'server' else '--server'],
                 launch_command(root, voice=source == 'voice')]
     with managed_log(path) as log:
         def output(line):
@@ -318,6 +318,6 @@ if __name__ == '__main__':
     parser.add_argument('source', choices=['server', 'voice'])
     args = parser.parse_args()
     try:
-        raise SystemExit(run(args.source, Path(__file__).resolve().parents[1]))
+        raise SystemExit(run(args.source, Path(os.environ.get('DOGIDO_CLIENT_KIT', Path(__file__).resolve().parents[1]))))
     except (OSError, ValueError) as error:
         raise SystemExit(f'起動できません: {error}') from error

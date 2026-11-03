@@ -127,6 +127,19 @@ def uv_license_files(binary: Path, version: str) -> list[Path]:
     raise ValueError("指定uvのLICENSE-MIT／LICENSE-APACHEが不足しています。公式配布物を確認してください。")
 
 
+def package_lan_client(source: Path, target: Path) -> None:
+    """Play Macs receive the native app executable prebuilt, before creating their own pairing."""
+    scripts = source / "scripts"
+    installer = target / "client_tools/lan_apps"
+    copy_file(scripts / "lan_apps/install.py", installer / "install.py")
+    subprocess.run([sys.executable, str(scripts / "lan_apps/install.py"), "build-launcher",
+                    str(installer / "DogidoLauncher")], check=True)
+    for name in ("connection.py", "transport.py", "discovery.py"):
+        copy_file(scripts / "lan" / name, target / "lan_tools" / name)
+    copy_file(scripts / "family-link/gateway.py", target / "lan_tools/gateway.py")
+    copy_file(scripts / "lan/遊ぶMacの導入.md", target / "はじめに.md")
+
+
 def build(args: argparse.Namespace) -> None:
     source, target = args.source_root.resolve(), args.output.resolve()
     if target.exists() or target.with_suffix(".zip").exists():
@@ -166,22 +179,20 @@ def build(args: argparse.Namespace) -> None:
     copy_file(source / "cue_voice/player_names/ushiro_tail.mp3",
               target / "cue_voice/player_names/ushiro_tail.mp3")
     for template in TEMPLATES.iterdir():
-        if not template.is_file():
+        if not template.is_file() or template.name in {"01_connect.command", "はじめに.md"}:
             continue
         path = target / ("client_tools" if template.suffix == ".py" else "") / template.name
         copy_file(template, path)
         if template.suffix == ".command":
             path.chmod(0o755)
-    for source_name, installed in (("client.py", "family_link.py"), ("log_relay.py", "log_relay.py"),
+    for source_name, installed in (("log_relay.py", "log_relay.py"),
                                    ("minecraft_log_relay.py", "minecraft_log_relay.py"),
                                    ("start_client.py", "start_client.py")):
         copy_file(TEMPLATES.parent / "family-link" / source_name, target / "client_tools" / installed)
     (target / ".env").write_text(ENV, encoding="utf-8")
     (target / ".env").chmod(0o600)
     copy_file(source / ".env.shared.example", target / ".env.shared")
-    (target / "connection.txt").write_text(
-        "LANサーバーPCで専用接続を起動し、息子Macへ渡す.zip を適用してください。パスワードは不要です。\n",
-        encoding="utf-8")
+    package_lan_client(source, target)
     copy_file(source / "LICENSE.md", target / "LICENSE.md")
     copy_file(source / "LICENSE-CHARACTER.md", target / "LICENSE-CHARACTER.md")
     copy_file(source / ".dogido_tools/echo-cancel/bin/dogido-audio-capture",

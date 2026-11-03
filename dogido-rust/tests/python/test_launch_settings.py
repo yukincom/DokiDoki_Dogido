@@ -373,6 +373,8 @@ def test_source_checkout_requires_cargo_dependency_record(tmp_path):
         launch.check_binary_freshness(tmp_path, binary)
 
 
+# 見込み: play kitの専用環境のpythonがリンクでも、分類器はその環境の依存を使う。
+# 合格: 全modeでRustへの起動引数はvenvのパスを保持する。モデル読込とexecは模擬。
 @pytest.mark.parametrize("modes", [("normal",), ("senryu",), ("normal", "senryu")])
 def test_request_classifier_config_reaches_shared_launcher(monkeypatch, tmp_path, modes):
     import request_classifier_worker as worker
@@ -382,8 +384,7 @@ def test_request_classifier_config_reaches_shared_launcher(monkeypatch, tmp_path
         (model / "adopted-model.json").write_text('{}')
     python = tmp_path / ".dogido_tools/request_classifier/.venv/bin/python"
     python.parent.mkdir(parents=True)
-    python.touch()
-    python.chmod(0o700)
+    python.symlink_to(sys.executable)
     checked = []
     monkeypatch.setattr(worker, "read_spec", lambda args: checked.append(args))
     settings = Settings(_env_file=None,

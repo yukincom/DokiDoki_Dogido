@@ -10,7 +10,7 @@ import sys
 from urllib.error import URLError
 from urllib.request import build_opener, ProxyHandler
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(os.environ.get('DOGIDO_CLIENT_KIT', Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(ROOT))
 
 
@@ -36,7 +36,7 @@ def check_endpoint(url: str, label: str, valid) -> None:
 
 def check_network(voicevox_url: str) -> None:
     endpoints = (
-        ("http://127.0.0.1:8080/v1/models", "共有LLM API（01のSSH接続後に確認）",
+        ("http://127.0.0.1:8080/v1/models", "共有モデルへの接続",
          lambda result: isinstance(result, dict) and isinstance(result.get("data"), list)),
         (voicevox_url + "/version", "このMacのVOICEVOX API",
          lambda result: isinstance(result, str) and bool(result.strip())),

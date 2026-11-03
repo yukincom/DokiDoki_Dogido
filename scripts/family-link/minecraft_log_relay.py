@@ -149,6 +149,6 @@ def run(root: Path) -> int:
 
 if __name__ == '__main__':
     try:
-        raise SystemExit(run(Path(__file__).resolve().parents[1]))
+        raise SystemExit(run(Path(os.environ.get('DOGIDO_CLIENT_KIT', Path(__file__).resolve().parents[1]))))
     except (OSError, ValueError) as error:
         raise SystemExit(f'Minecraftログを確認できません: {error}') from error

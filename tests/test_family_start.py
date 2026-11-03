@@ -12,10 +12,12 @@ launcher = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(launcher)
 
 
-def test_one_click_waits_for_readiness_and_stops_only_owned_children(tmp_path, monkeypatch):
-    state = tmp_path / '.dogido_tools/family-link'
-    state.mkdir(parents=True)
-    (state / 'connection.json').write_text('{}')
+# 見込み: 新しいkitの一括起動はペアリング窓口を開き、VOICEVOXを必要な場合だけ起動してから音声を開始する。
+# 合格: 旧接続情報なしで新clientを起動し、未起動時だけVOICEVOXを開き、準備順・停止対象が一致する。プロセスと通信は模擬。
+@pytest.mark.parametrize('voicevox_running', [True, False])
+def test_one_click_waits_for_readiness_and_stops_only_owned_children(tmp_path, monkeypatch, voicevox_running):
+    (tmp_path / 'lan_tools').mkdir()
+    (tmp_path / 'lan_tools/connection.py').touch()
     events, children = [], []
     monkeypatch.setattr(launcher.os, 'environ', dict(launcher.os.environ))
     monkeypatch.setattr(sys, 'path', list(sys.path))
@@ -30,7 +32,9 @@ def test_one_click_waits_for_readiness_and_stops_only_owned_children(tmp_path, m
     monkeypatch.setattr(launcher.time, 'sleep', lambda _: None)
     class Child:
         def __init__(self, argv):
-            self.name = 'ssh' if argv[0] == 'fake-ssh' else argv[-1]
+            self.name = Path(argv[-1]).name
+            if self.name == 'client':
+                assert Path(argv[-2]) == tmp_path / 'lan_tools/connection.py'
             self.returncode = None
             children.append(self)
             events.append('spawn:' + self.name)
@@ -43,7 +47,11 @@ def test_one_click_waits_for_readiness_and_stops_only_owned_children(tmp_path, m
         def __init__(self, source): pass
         def put(self, line): pass
         def close(self): events.append('relay-close')
-    monkeypatch.setitem(sys.modules, 'family_link', SimpleNamespace(command=lambda root: ['fake-ssh']))
+    def open_voicevox(argv, **kwargs):
+        assert argv == ['/usr/bin/open', '-a', 'VOICEVOX']
+        events.append('open-voicevox')
+        return SimpleNamespace(returncode=0)
+    monkeypatch.setattr(launcher.subprocess, 'run', open_voicevox)
     monkeypatch.setitem(sys.modules, 'log_relay', SimpleNamespace(Relay=Relay,
         stop_child=lambda child: events.append('stop:' + child.name)))
     monkeypatch.setitem(sys.modules, 'dogido_server.config', SimpleNamespace(get_settings=lambda: SimpleNamespace(
@@ -52,6 +60,8 @@ def test_one_click_waits_for_readiness_and_stops_only_owned_children(tmp_path, m
         if url.endswith('/models'):
             events.append('model-ready'); return {'data': []}
         if url.endswith('/version'):
+            if not voicevox_running and 'open-voicevox' not in events:
+                raise OSError('not started')
             events.append('voicevox-ready'); return '1.0'
         assert url == 'http://127.0.0.1:5111/healthz'
         events.append('server-ready'); return {'ok': True, 'service': 'dogido-server', 'runtime': 'rust', 'dialogue_ready': True}
@@ -61,9 +71,11 @@ def test_one_click_waits_for_readiness_and_stops_only_owned_children(tmp_path, m
     assert launcher.os.environ['DOGIDO_CHAT_IMAGE_ENABLED'] == 'true'
     assert launcher.os.environ['DOGIDO_HAIKU_INTERNAL_CAPTURE_ENABLED'] == 'false'
     assert events.index('model-ready') < events.index('spawn:server')
+    assert events.count('open-voicevox') == int(not voicevox_running)
+    assert events.index('voicevox-ready') < events.index('spawn:server')
     assert events.index('server-ready') < events.index('spawn:voice')
     assert [e for e in events if e.startswith('stop:')] == [
-        'stop:voice', 'stop:server', 'stop:client_tools/minecraft_log_relay.py', 'stop:ssh']
+        'stop:voice', 'stop:server', 'stop:minecraft_log_relay.py', 'stop:client']
 
 
 def test_single_click_runs_the_shared_launcher_source():

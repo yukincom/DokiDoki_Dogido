@@ -32,6 +32,12 @@ def check_runtime_files(root):
         if not (root / relative).exists():
             raise RuntimeError(f"起動用の資料が不足しています: {relative}")
     check_binary_freshness(root, binary)
+    # The installed play app contains this kit's executable; user settings/data still live in the kit.
+    app_binary = os.environ.get("DOGIDO_CLIENT_APP_BINARY")
+    if app_binary:
+        binary = Path(app_binary)
+        if not binary.is_absolute() or not binary.is_file() or not os.access(binary, os.X_OK):
+            raise RuntimeError("ドギド.app 内の本体を開けません。初期設定からアプリを再配置してください。")
     return binary
 
 
@@ -64,7 +70,8 @@ def request_classifier_settings(settings, folder):
              for mode in ("normal", "senryu")}
     python = settings.request_classifier_python
     if any(root is not None for root in roots.values()):
-        python = (folder / (python or Path(".dogido_tools/request_classifier/.venv/bin/python"))).resolve()
+        # A venv's python is often a symlink. Launching its resolved target loses the installed packages.
+        python = (folder / (python or Path(".dogido_tools/request_classifier/.venv/bin/python"))).absolute()
         if not python.is_file() or not os.access(python, os.X_OK):
             raise RuntimeError("依頼分類器のPython環境が見つかりません。")
         from request_classifier_worker import digest, read_spec

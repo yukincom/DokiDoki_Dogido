@@ -1,6 +1,7 @@
 """Single visible launcher for the client PC's model link, Dogido and microphone."""
 from __future__ import annotations
 import fcntl
+import argparse
 import json
 import os
 from pathlib import Path
@@ -10,6 +11,7 @@ import subprocess
 import sys
 import time
 from urllib.request import build_opener, ProxyHandler
+from urllib.error import HTTPError
 
 
 def json_response(url):
@@ -46,7 +48,7 @@ def wait_ready(label, check, children, say, timeout=None):
         time.sleep(0.3)
 
 
-def run(root):
+def run(root, lan_tools=None):
     os.chdir(root)
     os.environ.update(DOGIDO_ENV_PROFILE='shared', DOGIDO_VOICE_ECHO_CANCELLATION='webrtc',
                       DOGIDO_CHAT_IMAGE_ENABLED='true', DOGIDO_HAIKU_INTERNAL_CAPTURE_ENABLED='false',
@@ -58,7 +60,18 @@ def run(root):
     from dogido_server.config import get_settings
     settings = get_settings()
     base_url = server_url(settings)
-    if not (root / '.dogido_tools/family-link/connection.json').is_file():
+    if lan_tools is None and (root / 'lan_tools').is_dir():
+        lan_tools = root / 'lan_tools'
+    if lan_tools is not None:
+        connector = lan_tools / 'connection.py'
+        if not connector.is_file():
+            raise RuntimeError('ドギドのLAN接続部品がありません。アプリを再配置してください。')
+        connect = [sys.executable, '-u', str(connector), 'client']
+    elif (root / '.dogido_tools/family-link/connection.json').is_file():
+        # Only pre-existing, separately shipped SSH kits use this entry point.
+        from family_link import command
+        connect = command(root)
+    else:
         raise RuntimeError('最初にLANサーバーPCから受け取った接続更新を適用してください。')
     # Do not adopt or kill independently started processes. Old 01/02/03 must
     # be stopped once when switching from the old manual launch procedure.
@@ -66,7 +79,6 @@ def run(root):
                               (settings.bind_host, settings.bind_port, '02の本体')):
         if port_open(port, host):
             raise RuntimeError(f'{label}が既に動いています。以前の03→02→01をCtrl+Cで閉じてから開いてください。')
-    from family_link import command
     from log_relay import Relay, stop_child
     children, relay = [], None
     def say(message):
@@ -82,15 +94,26 @@ def run(root):
         children.append((name, child))
         return child
     try:
-        say('[1/3] LANサーバーPCへ専用鍵で接続します。パスワードは入力しません。')
-        spawn('専用接続', command(root))
+        say('[1/3] 共有モデルのMacを探しています。初回は両方の画面で番号を確認してください。'
+            if lan_tools is not None else '[1/3] 旧セットの専用接続を開始します。')
+        spawn('専用接続', connect)
+        last_model_status = None
         def model_ready():
-            status = json_response('http://127.0.0.1:8080/v1/models')
+            nonlocal last_model_status
+            try:
+                status = json_response('http://127.0.0.1:8080/v1/models')
+            except HTTPError as error:
+                error.close()
+                if error.code == 502 and last_model_status != 502:
+                    say('[準備中] 共有窓口から有効なモデル応答が届きません。共有Macのモデル起動状態を確認してください。')
+                last_model_status = error.code
+                return False
             return isinstance(status, dict) and isinstance(status.get('data'), list)
         wait_ready('LANサーバーPCの共有モデル', model_ready,
-                   children, say, timeout=30)
+                   children, say, timeout=None if lan_tools is not None else 30)
         relay = Relay('server')
-        spawn('Minecraftログ', [sys.executable, '-u', 'client_tools/minecraft_log_relay.py'])
+        helpers = Path(__file__).resolve().parent
+        spawn('Minecraftログ', [sys.executable, '-u', str(helpers / 'minecraft_log_relay.py')])
         say('[ログ] MinecraftはDogidoが付けた行だけを確認します。全ログは転送しません。')
         version_url = settings.voicevox_url.rstrip('/') + '/version'
         def voicevox_ready():
@@ -107,12 +130,12 @@ def run(root):
                 raise RuntimeError('VOICEVOXを自動で開けませんでした。VOICEVOXを開いてから再実行してください。')
             wait_ready('VOICEVOX', voicevox_ready, children, say)
         say('[2/3] Rustのドギド本体を起動します。')
-        spawn('ドギド本体', [sys.executable, '-u', 'client_tools/log_relay.py', 'server'])
+        spawn('ドギド本体', [sys.executable, '-u', str(helpers / 'log_relay.py'), 'server'])
         def server_ready():
             return is_rust_ready(json_response(base_url + '/healthz'))
         wait_ready('ドギド本体', server_ready, children, say)
         say('[3/3] 本体の準備ができたので、音声入力を開始します。')
-        spawn('音声入力', [sys.executable, '-u', 'client_tools/log_relay.py', 'voice'])
+        spawn('音声入力', [sys.executable, '-u', str(helpers / 'log_relay.py'), 'voice'])
         say('[待機] 音声入力の「待機中」が出たら、Minecraftで遊べます。この画面だけ開いたままにしてください。')
         say('[終了方法] Ctrl+C一回で音声入力・本体・専用接続を順に終了します。')
         while True:
@@ -133,7 +156,12 @@ def run(root):
 
 
 def main():
-    root = Path(sys.argv[1]).resolve()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('kit', type=Path)
+    parser.add_argument('--lan-tools', type=Path)
+    args = parser.parse_args()
+    root = args.kit.resolve()
+    os.environ['DOGIDO_CLIENT_KIT'] = str(root)
     sys.path.insert(0, str(root / 'client_tools'))
     from family_runtime import validate_runtime
     validate_runtime(root)
@@ -144,7 +172,7 @@ def main():
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             raise RuntimeError('ドギドの起動画面は既に開いています。その画面を使ってください。')
-        run(root)
+        run(root, args.lan_tools.resolve() if args.lan_tools else None)
 
 
 if __name__ == '__main__':
