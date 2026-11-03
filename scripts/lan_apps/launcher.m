@@ -12,7 +12,14 @@ static int finderAlias(NSString *operation, NSString *file, NSString *app) {
     if ([operation isEqualToString:@"--write-alias"]) {
         NSData *data = [target bookmarkDataWithOptions:NSURLBookmarkCreationSuitableForBookmarkFile
                         includingResourceValuesForKeys:nil relativeToURL:nil error:&error];
-        if (data && [NSURL writeBookmarkData:data toURL:alias options:0 error:&error]) return 0;
+        if (data && [NSURL writeBookmarkData:data toURL:alias options:0 error:&error]) {
+            NSBundle *bundle = [NSBundle bundleWithURL:target];
+            NSString *iconName = [bundle objectForInfoDictionaryKey:@"CFBundleIconFile"];
+            NSURL *iconURL = iconName ? [bundle.resourceURL URLByAppendingPathComponent:iconName] : nil;
+            NSImage *icon = iconURL ? [[NSImage alloc] initWithContentsOfURL:iconURL] : nil;
+            if (icon && [[NSWorkspace sharedWorkspace] setIcon:icon forFile:file options:0]) return 0;
+            fprintf(stderr, "Finderエイリアスにアイコンを設定できませんでした。\n");
+        }
     } else {
         NSNumber *isAlias = nil;
         if (![alias getResourceValue:&isAlias forKey:NSURLIsAliasFileKey error:&error] || !isAlias.boolValue)

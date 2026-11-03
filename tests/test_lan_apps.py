@@ -29,6 +29,9 @@ def prepared(tmp_path, monkeypatch, binary):
     here = root / "lan_apps"
     here.mkdir(parents=True)
     shutil.copy(binary, here / installer.LAUNCHER)
+    (here / "icons").mkdir()
+    for role in ("host", "client"):
+        shutil.copy(SOURCE / "icons" / f"{role}.icns", here / "icons")
     monkeypatch.setattr(installer, "HERE", here)
     for name in ("lan/connection.py", "lan/transport.py", "lan/discovery.py", "family-link/gateway.py",
                  "family-link/log_relay.py", "family-link/minecraft_log_relay.py",
@@ -51,6 +54,8 @@ def test_host_alias_and_idempotent_install(prepared):
     subprocess.run([str(app / "Contents/MacOS/DogidoLauncher"), "--check-alias", alias, app], check=True)
     info = plistlib.loads((app / "Contents/Info.plist").read_bytes())
     assert info["NSBonjourServices"] == ["_dogido._tcp"]
+    assert info["CFBundleIconFile"] == "host.icns"
+    assert (app / "Contents/Resources/host.icns").read_bytes() == (SOURCE / "icons/host.icns").read_bytes()
     installer.install("host", *prepared)
     assert (app.stat().st_ino, alias.stat().st_ino) == initial
 
@@ -93,6 +98,8 @@ def test_client_embeds_runtime_and_targets_kit_python(tmp_path, prepared):
     python.chmod(0o755)
     app, _ = installer.install("client", *prepared, kit)
     resources = app / "Contents/Resources"
+    assert plistlib.loads((app / "Contents/Info.plist").read_bytes())["CFBundleIconFile"] == "client.icns"
+    assert (resources / "client.icns").read_bytes() == (SOURCE / "icons/client.icns").read_bytes()
     config = plistlib.loads((resources / "launch.plist").read_bytes())
     assert config == {"kit": str(kit.resolve()), "python": str(kit.resolve() / "dogido-llm/bin/python")}
     assert (resources / "runtime/dogido-rust").read_bytes() == runtime.read_bytes()

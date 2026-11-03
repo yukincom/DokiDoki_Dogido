@@ -56,6 +56,8 @@ def assemble(app: Path, role: str, kit: Path | None, config: dict, source: Path)
     binary = app / "Contents/MacOS" / LAUNCHER
     binary.parent.mkdir(parents=True)
     resources.mkdir()
+    icon_name = f"{role}.icns"
+    copy_regular(HERE / "icons" / icon_name, resources / icon_name)
     if (HERE / LAUNCHER).is_file():
         copy_regular(HERE / LAUNCHER, binary, executable=True)
     else:
@@ -81,6 +83,7 @@ def assemble(app: Path, role: str, kit: Path | None, config: dict, source: Path)
     info = {
         "CFBundleName": NAMES[role], "CFBundleDisplayName": NAMES[role],
         "CFBundleExecutable": LAUNCHER, "CFBundleIdentifier": "com.dokidoki-dogido.lan." + role,
+        "CFBundleIconFile": icon_name,
         "CFBundlePackageType": "APPL", "CFBundleInfoDictionaryVersion": "6.0",
         "CFBundleVersion": "1", "CFBundleShortVersionString": "1.0",
         "LSMinimumSystemVersion": "14.2", "NSHighResolutionCapable": True,

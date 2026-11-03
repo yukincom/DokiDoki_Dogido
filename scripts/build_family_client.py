@@ -132,6 +132,7 @@ def package_lan_client(source: Path, target: Path) -> None:
     scripts = source / "scripts"
     installer = target / "client_tools/lan_apps"
     copy_file(scripts / "lan_apps/install.py", installer / "install.py")
+    copy_file(scripts / "lan_apps/icons/client.icns", installer / "icons/client.icns")
     subprocess.run([sys.executable, str(scripts / "lan_apps/install.py"), "build-launcher",
                     str(installer / "DogidoLauncher")], check=True)
     for name in ("connection.py", "transport.py", "discovery.py"):
