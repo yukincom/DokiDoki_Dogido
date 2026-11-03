@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import plistlib
 from importlib import metadata
 import json
 import os
@@ -135,6 +136,17 @@ def package_lan_client(source: Path, target: Path) -> None:
     copy_file(scripts / "lan_apps/icons/client.icns", installer / "icons/client.icns")
     subprocess.run([sys.executable, str(scripts / "lan_apps/install.py"), "build-launcher",
                     str(installer / "DogidoLauncher")], check=True)
+    entry = target / "ドギドを起動.app"
+    copy_file(installer / "DogidoLauncher", entry / "Contents/MacOS/DogidoLauncher")
+    copy_file(installer / "icons/client.icns", entry / "Contents/Resources/client.icns")
+    (entry / "Contents/Info.plist").write_bytes(plistlib.dumps({
+        "CFBundleIdentifier": "com.dokidoki-dogido.lan.kit-entry",
+        "CFBundleName": "ドギドを起動", "CFBundlePackageType": "APPL",
+        "CFBundleExecutable": "DogidoLauncher", "CFBundleIconFile": "client.icns",
+        "CFBundleVersion": "1", "CFBundleShortVersionString": "1.0",
+        "LSMinimumSystemVersion": "14.2", "DogidoRole": "kit-entry",
+    }))
+    subprocess.run(["/usr/bin/codesign", "--force", "--sign", "-", str(entry)], check=True)
     for name in ("connection.py", "transport.py", "discovery.py"):
         copy_file(scripts / "lan" / name, target / "lan_tools" / name)
     copy_file(scripts / "family-link/gateway.py", target / "lan_tools/gateway.py")
@@ -180,7 +192,7 @@ def build(args: argparse.Namespace) -> None:
     copy_file(source / "cue_voice/player_names/ushiro_tail.mp3",
               target / "cue_voice/player_names/ushiro_tail.mp3")
     for template in TEMPLATES.iterdir():
-        if not template.is_file() or template.name in {"01_connect.command", "はじめに.md"}:
+        if not template.is_file() or template.name in {"01_connect.command", "ドギドを起動.command", "はじめに.md"}:
             continue
         path = target / ("client_tools" if template.suffix == ".py" else "") / template.name
         copy_file(template, path)

@@ -220,10 +220,62 @@ static int finderAlias(NSString *operation, NSString *file, NSString *app) {
 }
 @end
 
+// The signed entry in the ZIP resolves its kit on the receiving Mac. The
+// installed client retains its own stable app identifier and desktop alias.
+static BOOL isPlayKit(NSURL *folder) {
+    for (NSString *name in @[@"00_setup.command", @"client_tools/lan_apps/install.py", @"manifest.json"])
+        if (![NSFileManager.defaultManager fileExistsAtPath:[folder URLByAppendingPathComponent:name].path])
+            return NO;
+    return YES;
+}
+
+static int openKitEntry(void) {
+    [NSApplication sharedApplication];
+    [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
+    [NSApp activateIgnoringOtherApps:YES];
+    NSURL *kit = NSBundle.mainBundle.bundleURL.URLByDeletingLastPathComponent;
+    if (!isPlayKit(kit)) {
+        // Finder may isolate a downloaded app from its siblings on first open.
+        NSOpenPanel *panel = [NSOpenPanel openPanel];
+        panel.message = @"展開したドギドのフォルダ（00_setup.command がある場所）を選んでください。";
+        panel.canChooseFiles = NO;
+        panel.canChooseDirectories = YES;
+        if ([panel runModal] != NSModalResponseOK) return 0;
+        kit = panel.URL;
+    }
+    if (isPlayKit(kit)) {
+        NSURL *installed = [NSURL fileURLWithPath:@"/Applications/ドギド.app" isDirectory:YES];
+        NSDictionary *config = [NSDictionary dictionaryWithContentsOfURL:
+            [installed URLByAppendingPathComponent:@"Contents/Resources/launch.plist"]];
+        NSString *registered = config[@"kit"];
+        if ([registered isKindOfClass:NSString.class] &&
+            [registered.stringByResolvingSymlinksInPath isEqual:kit.path.stringByResolvingSymlinksInPath] &&
+            [NSFileManager.defaultManager isExecutableFileAtPath:[kit URLByAppendingPathComponent:@"dogido-llm/bin/python"].path]) {
+            if ([NSWorkspace.sharedWorkspace openURL:installed]) return 0;
+        } else {
+            NSAlert *initial = [NSAlert new];
+            initial.messageText = @"ドギドの初期設定";
+            initial.informativeText = @"Minecraftとランチャーを閉じてから「初期設定」を押してください。ターミナルが開いたらEnterで進みます。完了後はデスクトップの「ドギド」から遊べます。";
+            [initial addButtonWithTitle:@"初期設定"];
+            [initial addButtonWithTitle:@"キャンセル"];
+            if ([initial runModal] != NSAlertFirstButtonReturn) return 0;
+            if ([NSWorkspace.sharedWorkspace openFile:[kit URLByAppendingPathComponent:@"00_setup.command"].path
+                                      withApplication:@"Terminal"]) return 0;
+        }
+    }
+    NSAlert *error = [NSAlert new];
+    error.messageText = @"ドギドを開けませんでした";
+    error.informativeText = @"展開したフォルダにある 00_setup.command を開いてください。";
+    [error runModal];
+    return 1;
+}
+
 int main(int argc, const char *argv[]) {
     @autoreleasepool {
         if (argc == 4 && (!strcmp(argv[1],"--write-alias") || !strcmp(argv[1],"--check-alias")))
             return finderAlias(@(argv[1]), @(argv[2]), @(argv[3]));
+        if ([[NSBundle.mainBundle objectForInfoDictionaryKey:@"DogidoRole"] isEqual:@"kit-entry"])
+            return openKitEntry();
         NSApplication *application = [NSApplication sharedApplication];
         signal(SIGPIPE, SIG_IGN);
         __attribute__((objc_precise_lifetime)) Launcher *delegate = [Launcher new];
