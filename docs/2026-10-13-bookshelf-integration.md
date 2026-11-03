@@ -190,3 +190,11 @@ Fetch Metadataはヘッダー無し・同一origin・直接アクセスだけを
 - 実ブラウザー: ゲームセッション無しの試験保管庫で読み訂正、句・写真の削除と復元、保存・再読込、あんちょこ内の配置を確認。
 - 実VOICEVOX: 一時保管庫に保存した訂正を本番の読み生成処理へ通し、VOICEVOX合成とMac音声再生の正常完了を確認。人による聴感評価、更新後のMinecraft接続状態での一連の動作は別途。
 - 利用者の句・写真・読み辞書をテストのために変更しない。稼働中の本体を勝手に停止・再起動しない。
+
+## SSDを個人データの正本にする構成（2026-11-03）
+
+移行済み環境では本体・相談室・本棚の `DOGIDO_MEMORY_DIR` が研究保存先そのものを指す。起動時はMacの個人設定 `DOGIDO_PRIMARY_ARCHIVE_ID`、SSDの識別札、SSD内の `bookshelf/research-archive.json`（`primary: true`）を照合する。句の編集・想起はSSDの `sessions`・`long_term`、メモ・貼り付け・J-lensはSSDの `bookshelf` を使う。評価ログは `DOGIDO_EPISODE_MEMORY_DIR` で個別に指定できる。
+
+研究履歴は原句の日本時間で `YYYY/YYMMDDHHmm` に保存する。旅は開始日時で `journeys/YYMMDDHHmm/<旅ID>.json` に保存し、同じ分に開始した旅もIDで区別する。自動撮影画像は元句の `original-images` に、発句の内部表現は同じ句の `internal-representations` に保持する。既存の完了札、SHA-256、SSDから読み戻した内容を照合してから入力側の対応ファイルを取り除く。句と未結合の採取物はSSDの `capture-inbox` に残す。F2写真は各貼付先に対応記録を置き、同じ内容のPNGはSSD内で一つだけ保持する。
+
+上記は移行済みのSSD用の設定。従来のMac正本と外付け保全を使う環境は、従来のディレクトリを引き続き読み書きする。

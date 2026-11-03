@@ -33,6 +33,8 @@ pub struct Config {
     pub archive_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub volume_uuid: Option<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub primary: bool,
 }
 
 impl Config {
@@ -42,6 +44,7 @@ impl Config {
             root,
             archive_id,
             volume_uuid,
+            primary: false,
         };
         config.validate()?;
         Ok(config)
@@ -257,7 +260,7 @@ impl Archive {
         let parts: Vec<_> = head.relative_path.split('/').collect();
         ensure!(parts.len() == 4
             && parts[0].len() == 4 && parts[0].bytes().all(|b| b.is_ascii_digit())
-            && parts[1].len() == 8 && parts[1].bytes().all(|b| b.is_ascii_digit())
+            && parts[1].len() == if self.config.primary { 10 } else { 8 } && parts[1].bytes().all(|b| b.is_ascii_digit())
             && parts[2] == "snapshots" && parts[3] == format!("{}.json", head.sha256),
             "archive_invalid_snapshot_path");
         #[cfg(unix)]
@@ -302,7 +305,7 @@ impl Archive {
             poem_id: poem_id.into(),
             original_created_at,
             year: jst.format("%Y").to_string(),
-            minute: jst.format("%m%d%H%M").to_string(),
+            minute: jst.format(if self.config.primary { "%y%m%d%H%M" } else { "%m%d%H%M" }).to_string(),
         })
     }
 

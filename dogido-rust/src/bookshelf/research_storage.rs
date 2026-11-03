@@ -81,6 +81,7 @@ impl Store {
         } else {
             json!({"state":"pending","detail":"保全を待っています。"})
         };
+        status["primary"] = json!(config.primary);
         status["root"] = json!(config.root);
         status["archiveId"] = json!(config.archive_id);
         Ok(status)
@@ -96,6 +97,9 @@ impl Store {
             current.as_ref().map(|c| &c.archive_id) == selection.expected_archive_id.as_ref(),
             "archive_config_conflict"
         );
+        if let Some(primary) = current.as_ref().filter(|c| c.primary) {
+            ensure!(selection.root == primary.root, "primary_archive_requires_migration");
+        }
         let next = if current.as_ref().is_some_and(|c| c.root == selection.root) {
             current.clone().unwrap()
         } else {
@@ -242,6 +246,10 @@ impl Store {
             "research_sync_failed: {}",
             failures.join("; ")
         );
+        if config.primary {
+            let archive = archive::open(config)?;
+            self.retire_archived_sources(&archive, &self.read()?)?;
+        }
         Ok(status)
     }
 

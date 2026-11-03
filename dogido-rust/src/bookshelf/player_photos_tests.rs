@@ -470,3 +470,23 @@ async fn f2_save_requires_current_host_token_and_memory_enabled() {
     );
     assert!(path.exists());
 }
+
+// 見込みは同じF2写真の句集・あんちょこへの貼付けが一枚のSSD画像を共有すること。
+// 一時保管庫上で両方の保存札から同じbytesを読め、元画像が消え、共有PNGが一枚だけなら合格。
+#[test]
+fn primary_archive_shares_f2_bytes_between_books() {
+    let f = Fixture::new();
+    let (id, source, bytes) = f2(&f);
+    let s = f.store();
+    let mut cfg = archive::Config::new(s.memory.clone(), uuid::Uuid::new_v4().to_string(), None).unwrap();
+    cfg.primary = true;
+    archive::configure(&s.memory, &cfg).unwrap();
+    attach(&s, &id, &["poems:session:s:hk_new", &catalog_key()]);
+    let store = archive::load(&s.memory).unwrap().unwrap();
+    for i in 0..2 {
+        let record = &s.read().unwrap()["playerPhotos"][&id]["locations"][i]["record"];
+        assert_eq!(store.read_player_photo(&serde_json::from_value(record.clone()).unwrap()).unwrap(), bytes);
+    }
+    assert!(!source.exists());
+    assert_eq!(fs::read_dir(s.memory.join("player-images")).unwrap().count(), 1);
+}

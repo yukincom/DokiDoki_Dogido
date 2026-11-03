@@ -160,6 +160,7 @@ impl Recorder {
                     let result = (|| -> anyhow::Result<()> {
                         let mut line = serde_json::to_vec(&record.payload())?;
                         line.push(b'\n');
+                        crate::poem_trash::verify_primary_volume(&path)?;
                         fs::create_dir_all(path.parent().expect("episode parent"))?;
                         let mut file = OpenOptions::new().create(true).append(true).open(&path)?;
                         file.lock()?;

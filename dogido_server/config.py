@@ -1,6 +1,7 @@
 """Rust起動用の設定を解決する。接続・生成・音声処理の実行はRustが担当する。"""
 from __future__ import annotations
 
+import json
 import os
 from functools import lru_cache
 from pathlib import Path
@@ -84,6 +85,20 @@ class Settings(BaseSettings):
     tts_reading_engine: Literal["auto", "unidic", "off"] = "auto"
     memory_enabled: bool = True
     memory_dir: Path = Path(".dogido_memory")
+    primary_archive_id: str | None = None
+    episode_memory_dir: Path | None = None
+
+    def primary_storage_env(self) -> dict[str, str]:
+        if self.primary_archive_id is None:
+            return {}
+        root = self.memory_dir.resolve(strict=True)
+        marker = json.loads((root / ".dogido-research-archive.json").read_bytes())
+        config = json.loads((root / "bookshelf/research-archive.json").read_bytes())
+        if (marker.get("archive_id") != self.primary_archive_id or config.get("primary") is not True
+                or config.get("archive_id") != self.primary_archive_id or Path(config["root"]) != root):
+            raise ValueError("個人データの保存先SSDを確認してください。")
+        return {"DOGIDO_ACTIVE_PRIMARY_ROOT": str(root), "DOGIDO_ACTIVE_PRIMARY_ID": self.primary_archive_id}
+
     # 未設定ならMinecraftのOS標準screenshots。独自gameDirだけ明示指定する。
     minecraft_screenshots_dir: Path | None = None
 

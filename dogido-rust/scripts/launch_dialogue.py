@@ -217,6 +217,9 @@ def main():
         return
     binary = check_runtime_files(ROOT)
     env = dict(os.environ)
+    env.update(settings.primary_storage_env())
+    if settings.episode_memory_dir is not None:
+        env["DOGIDO_EPISODE_MEMORY_DIR"] = str(settings.episode_memory_dir.resolve())
     # 認証値は引数や端末表示へ出さない。
     for name, value in {"DOGIDO_AUTH_TOKEN": settings.auth_token,
                         "DOGIDO_LLM_API_KEY": settings.llm_chat_api_key or settings.llm_api_key,

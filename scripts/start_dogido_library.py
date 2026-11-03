@@ -18,12 +18,13 @@ def main():
     args = parser.parse_args()
     os.chdir(ROOT)
     settings = get_settings()
+    primary_env = settings.primary_storage_env()
     binary = ROOT / "dogido-rust/target/release/dogido-rust"
     if not binary.is_file():
         raise SystemExit("本棚用の実行ファイルがありません。先に本体をビルドしてください。")
     config = {"memory": str(settings.memory_dir.resolve()), "memory_enabled": settings.memory_enabled,
               "game_port": settings.bind_port,
-              "photos": str(Path.home() / "Pictures/ドギド"), "ui": str(ROOT / "tools/dogido-library")}
+              "photos": str(settings.memory_dir / "library-photos" if primary_env else Path.home() / "Pictures/ドギド"), "ui": str(ROOT / "tools/dogido-library")}
     readout_assets = ROOT / ".dogido_tools/j-lens/assets.json"
     if readout_assets.is_file():
         assets = json.loads(readout_assets.read_text())
@@ -49,7 +50,7 @@ def main():
             command += ["--root", str(args.research_root.absolute())]
     else:
         command += ["--port", str(args.port)]
-    os.execv(str(binary), command)
+    os.execve(str(binary), command, {**os.environ, **primary_env})
 
 if __name__ == "__main__":
     main()

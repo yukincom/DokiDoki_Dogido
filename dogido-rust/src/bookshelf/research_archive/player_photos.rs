@@ -145,8 +145,8 @@ impl Archive {
             &json!({"schema_version":VERSION,"archive_id":self.config.archive_id,
             "target":target,"photo":photo,"origin":"minecraft_f2_filename"}),
         )?;
-        let result = ArchivedPlayerPhoto {
-            schema_version: VERSION,
+        let mut result = ArchivedPlayerPhoto {
+            schema_version: if self.config.primary { 2 } else { VERSION },
             archive_id: self.config.archive_id.clone(),
             target: target.clone(),
             photo: photo.clone(),
@@ -158,19 +158,28 @@ impl Archive {
             let _lock = root.lock(LOCK, false)?;
             let parent = self.player_photo_root(&root, target, true)?;
             let bundle = parent.child(key, true)?;
-            if bundle.read("commit.json", MAX_RECORD)?.is_some() {
-                self.verified_player_photo(&bundle, &result)?;
+            if let Some(saved) = bundle.read("commit.json", MAX_RECORD)? {
+                let saved: ArchivedPlayerPhoto = serde_json::from_slice(&saved)?;
+                result.schema_version = saved.schema_version;
+                ensure!(saved == result, "player_photo_commit_conflict");
+                self.verified_player_photo(&root, &bundle, &result)?;
             }
             // 同一bundleの再送でも全fileと全階層を同期する。前回の同期失敗後に
             // commitだけ見えている状態を、元画像を消せる成功へ昇格させない。
             bundle.once("record.json", &bytes)?;
-            bundle.once("image.png", png)?;
+            if result.schema_version == 2 {
+                let images = root.child("player-images", true)?;
+                images.once(&format!("{}.png", photo.sha256), png)?;
+                images.sync()?;
+            } else {
+                bundle.once("image.png", png)?;
+            }
             bundle.sync()?;
             bundle.once("commit.json", &encoded(&serde_json::to_value(&result)?)?)?;
             bundle.sync()?;
             parent.sync()?;
             root.sync()?;
-            self.verified_player_photo(&bundle, &result)?;
+            self.verified_player_photo(&root, &bundle, &result)?;
             Ok(result)
         }
         #[cfg(not(unix))]
@@ -186,7 +195,7 @@ impl Archive {
         {
             let root = self.checked_root()?;
             let parent = self.player_photo_root(&root, &record.target, false)?;
-            self.verified_player_photo(&parent.child(key, false)?, record)
+            self.verified_player_photo(&root, &parent.child(key, false)?, record)
         }
         #[cfg(not(unix))]
         {
@@ -198,11 +207,12 @@ impl Archive {
     #[cfg(unix)]
     fn verified_player_photo(
         &self,
+        root: &safe::Dir,
         bundle: &safe::Dir,
         wanted: &ArchivedPlayerPhoto,
     ) -> Result<Vec<u8>> {
         ensure!(
-            wanted.schema_version == VERSION && wanted.archive_id == self.config.archive_id,
+            matches!(wanted.schema_version, 1 | 2) && wanted.archive_id == self.config.archive_id,
             "player_photo_archive_mismatch"
         );
         let committed = bundle
@@ -226,9 +236,12 @@ impl Archive {
             "target":wanted.target,"photo":wanted.photo,"origin":"minecraft_f2_filename"}),
             "player_photo_record_conflict"
         );
-        let bytes = bundle
-            .read("image.png", MAX_PNG)?
-            .context("player_photo_incomplete")?;
+        let bytes = if wanted.schema_version == 2 {
+            ensure!(valid_hash(&wanted.photo.sha256), "invalid_player_photo_hash");
+            root.child("player-images", false)?.read(&format!("{}.png", wanted.photo.sha256), MAX_PNG)?
+        } else {
+            bundle.read("image.png", MAX_PNG)?
+        }.context("player_photo_incomplete")?;
         ensure!(
             hash(&bytes) == wanted.photo.sha256
                 && png_dimensions(&bytes)? == (wanted.photo.width, wanted.photo.height),

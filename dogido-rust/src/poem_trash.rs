@@ -11,7 +11,21 @@ use std::{
 };
 pub const RETENTION_DAYS: i64 = 30;
 
+/// 個人保管庫を指定した起動では、切断・同名の別SSDに新しい正本を作らない。
+pub(crate) fn verify_primary_volume(path: &Path) -> Result<()> {
+    let Some(root) = std::env::var_os("DOGIDO_ACTIVE_PRIMARY_ROOT") else { return Ok(()); };
+    let root = Path::new(&root);
+    if path.starts_with(root) {
+        let expected = std::env::var("DOGIDO_ACTIVE_PRIMARY_ID")?;
+        let marker: Value = serde_json::from_slice(&fs::read(root.join(".dogido-research-archive.json"))
+            .context("個人データの保存先SSDが接続されていません")?)?;
+        ensure!(marker["archive_id"] == expected, "個人データの保存先SSDが異なります");
+    }
+    Ok(())
+}
+
 pub(crate) fn regular(path: &Path) -> Result<()> {
+    verify_primary_volume(path)?;
     match fs::symlink_metadata(path) {
         Ok(m) => ensure!(m.is_file() && !m.file_type().is_symlink(), "unsafe_file"),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
@@ -20,6 +34,7 @@ pub(crate) fn regular(path: &Path) -> Result<()> {
     Ok(())
 }
 pub(crate) fn lock(root: &Path) -> Result<File> {
+    verify_primary_volume(root)?;
     let dir = root.join("long_term");
     fs::create_dir_all(&dir)?;
     ensure!(

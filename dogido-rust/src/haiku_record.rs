@@ -223,6 +223,7 @@ impl MemoryStore {
 }
 
 pub(crate) fn locked_file(path: &Path) -> Result<File> {
+    crate::poem_trash::verify_primary_volume(path)?;
     fs::create_dir_all(path.parent().context("memory parent")?)?;
     let file = OpenOptions::new()
         .create(true)

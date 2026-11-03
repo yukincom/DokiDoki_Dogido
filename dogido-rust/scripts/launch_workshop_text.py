@@ -33,9 +33,11 @@ def main():
     if not binary.is_file() or not any((memory / child).is_dir() for child in ('long_term', 'sessions')):
         parser.error('Rust本体のビルドと保存句が必要です。')
     print(f'川柳の相談室: http://127.0.0.1:{args.port} / モデル: {model}', flush=True)
+    primary_env = settings.primary_storage_env() if not args.memory_dir else {}
     if args.check:
         return
     env = dict(os.environ, PYTHONPATH=str(ROOT))
+    env.update(primary_env)
     key = settings.llm_chat_api_key or settings.llm_api_key
     if key:
         env['DOGIDO_LLM_API_KEY'] = key

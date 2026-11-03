@@ -11,6 +11,8 @@
 
 **常用の生成LLM（2026-11-02確認）** は llama.cpp の `llama-server` で動く Gemma 4 26B-A4B のGGUF版。通常会話・画像・川柳には `default_model` を指定し、サーバー側のプロンプトキャッシュを使う。モデルファイルの保存先と確認方法は[共有LLMの運用プロファイル](docs/shared-llm-profile.md)を参照する。
 
+**本棚の個人データ（2026-11-03）**。SSDを正本にした環境では本体・本棚・相談室が同じ `DOGIDO_MEMORY_DIR` を使う。川柳は `YYYY/YYMMDDHHmm`、旅は `journeys/YYMMDDHHmm/<旅ID>.json`（日本時間）。画像・内部表現の一時入力は対応するSSD実体と照合後に整理する。[保存構成](docs/2026-10-13-bookshelf-integration.md#ssdを個人データの正本にする構成2026-11-03)を参照。
+
 ## 作業範囲と完了報告
 
 - Pythonテスト・模擬worker・テストデータは `dogido-rust/tests/python/`（リポジトリ共通のPythonテストは `tests/`）へ置き、本体起動用の `scripts/` に混在させない。

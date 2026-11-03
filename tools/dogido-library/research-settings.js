@@ -9,6 +9,7 @@
   function normalize(value){
     if(!value||typeof value!=='object')return {root:null,archiveId:null,state:'unconfigured',detail:'',lastSync:'',poems:null,captures:null};
     return {
+      primary:value.primary===true,
       root:typeof value.root==='string'?value.root:null,
       archiveId:typeof value.archiveId==='string'?value.archiveId:null,
       state:Object.hasOwn(statusLabels,value.state)?value.state:'error',
@@ -42,12 +43,12 @@
     const counts=[storage.poems===null?null:`句 ${storage.poems}件`,storage.captures===null?null:`写真 ${storage.captures}件`].filter(Boolean).join(' ・ ');
     $('detail').innerHTML=`<section class="research-settings" aria-labelledby="research-settings-title">
       <div class="entry-heading"><div><h2 id="research-settings-title">環境設定</h2><p class="lead">研究データの保存先</p></div></div>
-      <p>句・対話・メモ・写真をまとめて残すフォルダを選びます。外付けSSDや、Macに接続済みのNASを指定できます。</p>
+      <p>${storage.primary?'句・対話・メモ・写真・旅の記録をこのSSDから読み書きします。':'句・対話・メモ・写真をまとめて残すフォルダを選びます。外付けSSDや、Macに接続済みのNASを指定できます。'}</p>
       <p>貼り付けを保存したF2画像は、コピーの検証後にここへ移動します。あんちょこの写真は <code>encyclopedia</code>、句集の写真は各句のフォルダに入ります。</p>
       <section class="research-storage-card" aria-labelledby="research-current-title">
         <div class="research-storage-heading"><h3 id="research-current-title">現在の保存先</h3><span class="research-storage-state" data-state="${storage.state}">${statusLabels[storage.state]}</span></div>
         <p class="research-storage-path">${esc(storage.root||'まだ設定されていません')}</p>
-        ${storage.displaySource?`<p class="research-storage-reading">${storage.displaySource==='archive'?`閲覧元：選択した保存先（${storage.readPoems??0}句を照合済み）`:storage.displaySource==='mixed'?'閲覧元：選択した保存先 ＋ Mac内の保存待ちの変更':storage.displaySource==='unavailable'?'保存先の読み取りに失敗しています。読めない句はMac内の記録で補っています。画像は保存先の接続を確認してください。':'閲覧元：Mac内の記録'}</p>`:''}
+        ${!storage.primary&&storage.displaySource?`<p class="research-storage-reading">${storage.displaySource==='archive'?`閲覧元：選択した保存先（${storage.readPoems??0}句を照合済み）`:storage.displaySource==='mixed'?'閲覧元：選択した保存先 ＋ Mac内の保存待ちの変更':storage.displaySource==='unavailable'?'保存先の読み取りに失敗しています。読めない句はMac内の記録で補っています。画像は保存先の接続を確認してください。':'閲覧元：Mac内の記録'}</p>`:''}
         ${storage.detail?`<p class="research-storage-detail">${esc(storage.detail)}</p>`:''}
         ${storage.lastError?`<details class="research-storage-diagnostic"><summary>接続の確認内容</summary><p class="research-storage-path">${esc(storage.lastError)}</p></details>`:''}
         ${storage.readError?`<details class="research-storage-diagnostic"><summary>読み取りの確認内容</summary><p class="research-storage-path">${esc(storage.readError)}</p></details>`:''}
@@ -55,13 +56,13 @@
       </section>
       ${selection?`<section class="research-storage-pending" aria-labelledby="research-pending-title"><h3 id="research-pending-title">選択したフォルダ <span>未保存</span></h3><p class="research-storage-path">${esc(selection.root)}</p><p>このフォルダを研究データの保存先として確定します。</p></section>`:''}
       <div class="research-settings-actions">
-        <button type="button" data-research-action="choose" ${busy||!nativeAvailable?'disabled':''}>${picking?'フォルダを選択中…':selection?'別のフォルダを選ぶ':'保存先フォルダを選ぶ…'}</button>
+        <button type="button" data-research-action="choose" ${busy||storage.primary||!nativeAvailable?'disabled':''}>${picking?'フォルダを選択中…':selection?'別のフォルダを選ぶ':'保存先フォルダを選ぶ…'}</button>
         ${storage.root&&!selection?`<button type="button" data-research-action="reconnect" ${busy?'disabled':''}>この保存先へ接続し直す</button>`:''}
         ${selection?`<button type="button" data-research-action="save" class="research-save-button" ${busy?'disabled':''}>${saving?'保存中…':'このフォルダへ保存'}</button><button type="button" data-research-action="cancel" ${busy?'disabled':''}>選択を取り消す</button>`:''}
       </div>
       <p class="research-settings-notice" role="status" data-kind="${noticeKind}">${esc(notice)}</p>
       ${nativeAvailable?'':'<p class="research-settings-help">保存先の選択はMac版「ドギドの本棚」で利用できます。</p>'}
-      <div class="research-settings-help"><p>保存する最後のフォルダそのものを選んでください。例：<code>/Volumes/mydata2025/dokidoki_dogido</code></p><p>その中に <code>年 / 月日時分</code>（例：<code>2026/10231430</code>）を自動で作ります。月・日・時・分は2桁で、秒や枝番は付けません。</p><p>保存済みの句と画像は選択した保存先から読みます。ゲームと編集に使うMac内の記録は残します。保存先を切り替えても、以前のフォルダ内のデータは移動・削除しません。</p></div>
+      ${storage.primary?'<p class="research-settings-help">句のフォルダ名は日本時間の年月日時分です。例：2026/2611031410</p>':`<div class="research-settings-help"><p>保存する最後のフォルダそのものを選んでください。例：<code>/Volumes/mydata2025/dokidoki_dogido</code></p><p>その中に <code>年 / 月日時分</code>（例：<code>2026/10231430</code>）を自動で作ります。月・日・時・分は2桁で、秒や枝番は付けません。</p><p>保存済みの句と画像は選択した保存先から読みます。ゲームと編集に使うMac内の記録は残します。保存先を切り替えても、以前のフォルダ内のデータは移動・削除しません。</p></div>`}
     </section>`;
     if(activeAction)document.querySelector(`[data-research-action="${activeAction}"]`)?.focus({preventScroll:true});
   }

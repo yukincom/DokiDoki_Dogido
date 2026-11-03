@@ -1,6 +1,16 @@
 //! ゲーム非依存の本棚。loopback専用で、他のUIへの導線は作らない。
 mod research;
 mod research_storage;
+mod primary_storage;
+
+pub(crate) fn uses_primary_archive(memory: &std::path::Path) -> anyhow::Result<bool> {
+    crate::poem_trash::verify_primary_volume(memory)?;
+    if !memory.join(".dogido-research-archive.json").try_exists()? { return Ok(false); }
+    let archive = research_archive::load(memory)?.ok_or_else(|| anyhow::anyhow!("primary_archive_unconfigured"))?;
+    anyhow::ensure!(archive.config().primary && archive.config().root == memory, "primary_archive_scope");
+    Ok(true)
+}
+
 mod internal_capture;
 mod j_lens;
 mod j_lens_translation;

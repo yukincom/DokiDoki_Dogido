@@ -466,7 +466,7 @@ impl Store {
     }
 }
 
-fn rename_without_replace(source: &Path, destination: &Path) -> Result<()> {
+pub(super) fn rename_without_replace(source: &Path, destination: &Path) -> Result<()> {
     #[cfg(any(target_os = "macos", target_os = "linux"))]
     {
         use std::os::unix::ffi::OsStrExt;

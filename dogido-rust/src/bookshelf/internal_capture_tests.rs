@@ -278,3 +278,54 @@ async fn j_lens_preparation_uses_existing_origin_and_csrf_guard() {
     }
     assert!(!f.store().memory.join("bookshelf/j-lens").exists());
 }
+
+// 一時保管庫で、既存の発句保存と本棚が同じSSDを使う場合の移行後を検査する。
+// 合格は再同期しても数値が一つだけ残り、同じ分の旅が独立して本棚から読めること。実ゲーム・実モデルは使わない。
+#[test]
+fn primary_archive_serves_unique_capture_and_same_minute_journeys() {
+    let f = Fixture::new();
+    let (_, bytes) = captured(&f, "complete");
+    let mut store = f.store();
+    let inbox = store.memory.join("capture-inbox");
+    fs::rename(store.capture_dir.as_ref().unwrap(), &inbox).unwrap();
+    store.capture_dir = Some(inbox.clone());
+    let mut config = research_archive::Config::new(store.memory.clone(), uuid::Uuid::new_v4().to_string(), None).unwrap();
+    config.primary = true;
+    research_archive::configure(&store.memory, &config).unwrap();
+    store.sync_research_storage().unwrap();
+    store.sync_research_storage().unwrap();
+    assert!(!inbox.join("reply_1/hidden.f32").exists());
+    assert_eq!(read(&store, "hidden").unwrap(), bytes);
+    assert!(store.memory.join("2026/2610130900/snapshots").is_dir());
+    let mut one = crate::journey::Record::new("one", "player");
+    one.started_at = "2026-10-13T00:00:00Z".parse().unwrap();
+    one.unfinished = true;
+    let mut two = one.clone();
+    two.id = "journey_another".into();
+    for r in [&one, &two] { crate::journey::save(&store.memory, r).unwrap(); }
+    assert_eq!(fs::read_dir(store.memory.join("journeys/2610130900")).unwrap().count(), 2);
+    assert_eq!(store.library_view().unwrap()["journeys"].as_array().unwrap().len(), 2);
+}
+
+// 見込みはSSDのPNG照合が終わるまで元画像を保持すること。一時ファイルで破損時の保持と復旧後の一件化を確認する。
+#[test]
+fn primary_archive_only_retires_verified_screenshot() {
+    let f = Fixture::new();
+    let (command, receipt) = capture(&f);
+    let mut store = f.store();
+    store.capture_dir = None;
+    let mut cfg = research_archive::Config::new(store.memory.clone(), uuid::Uuid::new_v4().to_string(), None).unwrap();
+    cfg.primary = true;
+    research_archive::configure(&store.memory, &cfg).unwrap();
+    store.register_capture(&command, &receipt).unwrap();
+    let source = receipt.directory.join(&receipt.filename);
+    let bytes = fs::read(&source).unwrap();
+    let archived = store.memory.join("2026/2610130900/original-images").join(command.strip_prefix("shot_").unwrap()).join("image.png");
+    fs::write(&archived, b"changed").unwrap();
+    assert!(store.sync_research_storage().is_err());
+    assert_eq!(fs::read(&source).unwrap(), bytes);
+    fs::write(&archived, &bytes).unwrap();
+    store.sync_research_storage().unwrap();
+    assert!(!source.exists());
+    assert_eq!(store.image_bytes(&format!("minecraft-{command}")).unwrap(), bytes);
+}

@@ -101,50 +101,64 @@ pub fn save(root: &Path, record: &Record) -> Result<()> {
     if !record.has_content() {
         return Ok(());
     }
-    let parent = root.join("long_term");
-    fs::create_dir_all(&parent)?;
-    ensure!(
-        !fs::symlink_metadata(&parent)?.file_type().is_symlink(),
-        "unsafe_directory"
-    );
-    let dir = parent.join("journeys");
-    fs::create_dir_all(&dir)?;
-    ensure!(
-        !fs::symlink_metadata(&dir)?.file_type().is_symlink(),
-        "unsafe_directory"
-    );
+    let dir = if crate::bookshelf::uses_primary_archive(root)? {
+        let parent = root.join("journeys");
+        ensure_directory(&parent)?;
+        parent.join(minute(record))
+    } else {
+        let parent = root.join("long_term");
+        ensure_directory(&parent)?;
+        parent.join("journeys")
+    };
+    ensure_directory(&dir)?;
     crate::poem_trash::atomic(
         &dir.join(format!("{}.json", record.id)),
         &serde_json::to_vec_pretty(record)?,
     )
 }
-/// 本棚から既存の記録だけを読む。ファイル名とIDを照合し、日付の新しい順に返す。
-pub fn load(root: &Path) -> Result<Vec<Record>> {
-    let dir = root.join("long_term/journeys");
-    for parent in [root.join("long_term"), dir.clone()] {
-        if let Ok(meta) = fs::symlink_metadata(&parent) {
-            ensure!(!meta.file_type().is_symlink(), "unsafe_directory");
-        }
-    }
-    let entries = match fs::read_dir(dir) {
-        Ok(entries) => entries,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(vec![]),
-        Err(e) => return Err(e.into()),
-    };
-    let mut records = Vec::new();
-    for entry in entries {
+fn minute(record: &Record) -> String {
+    record.started_at.with_timezone(&chrono::FixedOffset::east_opt(9 * 3600).unwrap())
+        .format("%y%m%d%H%M").to_string()
+}
+fn ensure_directory(dir: &Path) -> Result<()> {
+    fs::create_dir_all(dir)?;
+    ensure!(fs::symlink_metadata(dir)?.file_type().is_dir(), "unsafe_directory");
+    Ok(())
+}
+fn read_records(dir: &Path, date: Option<&str>, records: &mut Vec<Record>) -> Result<()> {
+    for entry in fs::read_dir(dir)? {
         let entry = entry?;
-        if !entry.file_type()?.is_file() || entry.path().extension().is_none_or(|e| e != "json") {
-            continue;
-        }
-        let record: Record = serde_json::from_slice(&fs::read(entry.path())?)?;
-        ensure!(
-            record.schema_version == 1
-                && valid_id(&record.id)
-                && entry.file_name() == format!("{}.json", record.id).as_str(),
-            "invalid_journey"
-        );
+        let path = entry.path();
+        if entry.file_name().to_string_lossy().starts_with('.') || !entry.file_type()?.is_file()
+            || path.extension().is_none_or(|e| e != "json") { continue; }
+        let record: Record = serde_json::from_slice(&fs::read(&path)?)?;
+        ensure!(record.schema_version == 1 && valid_id(&record.id)
+            && entry.file_name() == format!("{}.json", record.id).as_str()
+            && date.is_none_or(|name| name == minute(&record)), "invalid_journey");
         records.push(record);
+    }
+    Ok(())
+}
+pub fn load(root: &Path) -> Result<Vec<Record>> {
+    let mut records = Vec::new();
+    let primary = crate::bookshelf::uses_primary_archive(root)?;
+    let parent = if primary { root.to_path_buf() } else { root.join("long_term") };
+    let dir = parent.join("journeys");
+    for path in [&parent, &dir] {
+        if let Ok(meta) = fs::symlink_metadata(path) { ensure!(meta.is_dir(), "unsafe_directory"); }
+    }
+    if !dir.try_exists()? { return Ok(records); }
+    if primary {
+        for entry in fs::read_dir(dir)? {
+            let entry = entry?;
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if name.starts_with('.') { continue; }
+            ensure!(entry.file_type()?.is_dir() && name.len() == 10
+                && name.bytes().all(|b| b.is_ascii_digit()), "invalid_journey_directory");
+            read_records(&entry.path(), Some(&name), &mut records)?;
+        }
+    } else {
+        read_records(&dir, None, &mut records)?;
     }
     records.sort_by(|a, b| {
         b.started_at
