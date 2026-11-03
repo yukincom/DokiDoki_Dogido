@@ -1,4 +1,4 @@
-//! 見込み: 聴いた音を共通観測へ一度だけ載せ、保持後も時刻と由来を残せば、音源を取り違えにくくなる。合格: 通常・環境の実入力で音種・時刻・確度・由来が一致する。観測は模擬で、Fabric採取と実モデルの返答は別確認。
+//! 見込み: 聴いた音を共通観測へ一度だけ載せ、保持後も時刻と由来を残せば、音源を取り違えにくくなる。合格: 元の聴取時刻を内部で復元でき、通常・環境の実入力には音種・経過時間・確度・由来が一致して載る。観測は模擬で、Fabric採取と実モデルの返答は別確認。
 use super::{Dialogue, DialogueConfig, body_runtime, chat_context, environment_runtime};
 use crate::{
     chat_materials,
@@ -101,21 +101,19 @@ fn requests(d: &Dialogue, raw: &GameEvent) -> Requests {
         environment: environment.request,
         prior_sound_summary: native.snapshot.hearing.summary,
     };
-    // 投影途中だけでなく両方の最終user入力を読む。時刻・確度・由来の欠落も比較する。
+    // 11月2日の入力仕様では絶対時刻を内部に留め、モデルには音の経過時間を渡す。
+    // 通常・環境の両方で、時刻以外の全フィールドが共通聴覚と一致することを確認する。
     let normal = user_material(&result.normal);
-    let world_text = normal
-        .split_once("【現在の環境観測と変化（会話履歴とは別）】\n")
-        .expect("通常入力の観測欄")
-        .1;
-    let normal_world = serde_json::Deserializer::from_str(world_text)
-        .into_iter::<Value>()
-        .next()
-        .unwrap()
-        .unwrap();
-    assert_eq!(normal_world["observations"]["hearing"], *hearing(&result));
+    let normal_world = json_section(&normal, "【現在の環境観測と変化（会話履歴とは別）】\n");
+    let mut expected_hearing = hearing(&result).clone();
+    expected_hearing
+        .as_object_mut()
+        .expect("共通聴覚")
+        .remove("observed_at");
+    assert_eq!(normal_world["observations"]["hearing"], expected_hearing);
     assert_eq!(
         environment_material(&result)["world_context"]["observations"]["hearing"],
-        *hearing(&result)
+        expected_hearing
     );
     result
 }
@@ -167,6 +165,17 @@ fn user_material(request: &GenerationRequest) -> String {
         .join("\n")
 }
 
+fn json_section(prompt: &str, heading: &str) -> Value {
+    let (_, section) = prompt
+        .split_once(heading)
+        .unwrap_or_else(|| panic!("通常入力に {heading} が必要"));
+    serde_json::Deserializer::from_str(section)
+        .into_iter::<Value>()
+        .next()
+        .unwrap()
+        .unwrap()
+}
+
 fn environment_material(result: &Requests) -> Value {
     serde_json::from_str(&user_material(&result.environment)).unwrap()
 }
@@ -210,7 +219,7 @@ async fn ordinary_request_receives_sound_fact_exactly_once() {
     assert_eq!(sounds(&result).len(), 1);
 }
 
-// 見込み: 通常・環境で同じ聴覚を使えば、発話契機が違っても音の事実を共有できる。合格: 環境入力の足音IDが1回、hearing全体が通常の共通観測と一致。確認範囲: 入力生成まで、自発発話の選択は別確認。
+// 見込み: 通常・環境で同じ聴覚を使えば、発話契機が違っても音の事実を共有できる。合格: 環境入力の足音IDが1回、絶対時刻を除いた聴覚が通常入力と一致。確認範囲: 入力生成まで、自発発話の選択は別確認。
 #[tokio::test]
 async fn environment_request_receives_same_sound_fact_exactly_once() {
     let result = capture(&event(|_| {})).await;
@@ -219,10 +228,6 @@ async fn environment_request_receives_same_sound_fact_exactly_once() {
         text.matches(STONE_STEP).count(),
         1,
         "環境生成にも実音の事実が必要"
-    );
-    assert_eq!(
-        environment_material(&result)["world_context"]["observations"]["hearing"],
-        *hearing(&result)
     );
 }
 
@@ -377,7 +382,7 @@ async fn empty_truncated_and_unavailable_hearing_are_distinct() {
     }
 }
 
-// 見込み: 辞書と実観測を分ければ、見えたウシの鳴き声を聞いたとは扱わない。合格: 「もー」は両要求の辞書だけにあり、観測音・実音ID・内部音要約は空。確認範囲: 入力の配置、モデルの読み取りは別確認。
+// 見込み: 辞書と実観測を分ければ、見えたウシの鳴き声を聞いたとは扱わない。合格: 「もー」は通常入力の辞書に残り、ウシが話題でない自発反応には載らない。どちらの聴覚にもウシの実音はない。確認範囲: 入力の配置、モデルの読み取りは別確認。
 #[tokio::test]
 async fn control_catalog_sound_tags_remain_general_without_heard_evidence() {
     let raw = event(|v| {
@@ -398,16 +403,22 @@ async fn control_catalog_sound_tags_remain_general_without_heard_evidence() {
             .is_none_or(Vec::is_empty)
     );
     assert!(result.prior_sound_summary.is_empty());
-    let environment = environment_material(&result);
+    let normal = user_material(&result.normal);
+    let catalog = json_section(&normal, "【対象のカタログ情報（一般的特徴・表現材料）】\n");
     assert!(
-        environment["catalog_knowledge"]
-            .to_string()
-            .contains("もー")
+        catalog["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| { entry["id"] == "cow" && entry.to_string().contains("もー") }),
+        "通常入力では鳴き声の表現をウシの辞書項目として渡す"
     );
-    assert!(environment["world_context"]["catalog_knowledge"].is_null());
+    assert!(
+        !user_material(&result.environment).contains("もー"),
+        "ウシが話題でない自発反応に鳴き声の表現を足さない"
+    );
     for request in [&result.normal, &result.environment] {
         let text = user_material(request);
-        assert!(text.contains("もー"), "表現材料は辞書として利用できる");
         assert!(
             !text.contains("minecraft:entity.cow.ambient"),
             "視認・辞書だけで聴取記録を作らない"
@@ -496,10 +507,6 @@ async fn assert_attribution(raw: &GameEvent, expected: &str, expected_sound: &st
     } else {
         assert_eq!(row["emitter"], "プレイヤー");
     }
-    assert_eq!(
-        environment_material(&result)["world_context"]["observations"]["hearing"],
-        *hearing(&result)
-    );
     for request in [&result.normal, &result.environment] {
         let text = user_material(request);
         assert_eq!(text.matches(expected_sound).count(), 1);
@@ -618,10 +625,6 @@ async fn direct_source_identity_takes_precedence_over_circumstantial_evidence() 
         let row = &sounds(&result)[0];
         assert_eq!(row["emitter_attribution"], "confirmed");
         assert_eq!(row["emitter"], expected);
-        assert_eq!(
-            environment_material(&result)["world_context"]["observations"]["hearing"],
-            *hearing(&result)
-        );
         for request in [&result.normal, &result.environment] {
             assert_eq!(user_material(request).matches(STONE_STEP).count(), 1);
             assert!(user_material(request).contains(expected));
@@ -646,7 +649,7 @@ fn later_without_sounds(first: &GameEvent, unavailable: bool) -> GameEvent {
     GameEvent::parse(value).unwrap()
 }
 
-// 見込み: 音が現在一覧から消えても、保持した元の事実を使えば由来と時刻を若返らせない。合格: 確定・推定・打切り未確定の3条件で、音1件・元時刻・low・由来・調査状態が両要求に残る。確認範囲: 模擬観測2回と実保持経路。
+// 見込み: 音が現在一覧から消えても、保持した元の事実を使えば由来と時刻を若返らせない。合格: 確定・推定・打切り未確定の3条件で、元時刻は保持前後で一致し、両要求に音1件・経過ms・low・由来・調査状態が残る。確認範囲: 模擬観測2回と実保持経路。
 #[tokio::test]
 async fn retained_sounds_preserve_time_certainty_and_attribution_in_both_requests() {
     for (name, source, survey, attribution) in [
@@ -687,10 +690,6 @@ async fn retained_sounds_preserve_time_certainty_and_attribution_in_both_request
                 .num_milliseconds()
                 .abs()
                 <= 10
-        );
-        assert_eq!(
-            environment_material(&result)["world_context"]["observations"]["hearing"],
-            *hearing(&result)
         );
         for request in [&result.normal, &result.environment] {
             assert_eq!(user_material(request).matches(STONE_STEP).count(), 1);
@@ -754,7 +753,7 @@ async fn truncated_sound_keeps_unknown_source_and_exports_both_model_inputs() {
     }
 }
 
-// 見込み: 敵の保持音にも確度と呼称可否を残せば、時間が経っただけで種名を確定しない。合格: 保持後もlow・spoken_name_allowed=false・unknown・元時刻が両要求に残る。確認範囲: 模擬の二回観測から実保持・投影まで。
+// 見込み: 敵の保持音にも確度と呼称可否を残せば、時間が経っただけで種名を確定しない。合格: 元時刻は保持前後で一致し、両要求にlow・spoken_name_allowed=false・unknown・経過msが残る。確認範囲: 模擬の二回観測から実保持・投影まで。
 #[tokio::test]
 async fn retained_hostile_sound_keeps_name_permission_and_original_time() {
     let first = event(|v| {
@@ -783,10 +782,6 @@ async fn retained_hostile_sound_keeps_name_permission_and_original_time() {
             .num_milliseconds()
             .abs()
             <= 10
-    );
-    assert_eq!(
-        environment_material(&result)["world_context"]["observations"]["hearing"],
-        *hearing(&result)
     );
     for request in [&result.normal, &result.environment] {
         assert_eq!(

@@ -1,3 +1,4 @@
+//! 発句時の明示ホットバーとその欠測、元の景色・句の制約を模擬観測で用意し、保持材料と各生成段階への投影を検査する。実機・実モデルは対象外。
 use dogido_rust::{
     chat_catalog,
     events::GameEvent,
@@ -40,6 +41,7 @@ impl Entries for EntryFixture {
 fn entries() -> EntryFixture {
     serde_json::from_str(include_str!("../fixtures/haiku-context-entries.json")).unwrap()
 }
+// 見込み: 持ち物はホットバー、風景は地点の観測による。全394例の材料・出典・三段階の要求と、元材料に沿う場面を固定値で比較する。
 #[test]
 fn canonical_contexts_and_all_detail_projections() {
     let entries = entries();
@@ -94,6 +96,7 @@ fn canonical_contexts_and_all_detail_projections() {
     }
     assert!(count > 300);
 }
+// 見込み: 手持ちの道具と場面のモチーフは語を制約し、lessonは参考だけ。模擬168例の許可・禁止とsoft noteが期待値に一致する。
 #[test]
 fn canonical_constraints_keep_soft_notes_separate() {
     let rows: Vec<Value> =
@@ -136,8 +139,9 @@ fn canonical_irony_mapping() {
         }
     }
 }
+// 見込み: 持ち替えとインベントリ順に左右されず、発句時に確定した材料を保持する。模擬ホットバーでダイヤを選び、次の選択枠をリンゴに変えても前の前置き材料は同じ。
 #[test]
-fn inventory_order_is_required_and_captured_context_is_owned() {
+fn hotbar_selection_ignores_inventory_order_and_captured_context_is_owned() {
     let row: Value = serde_json::from_str(
         include_str!("../fixtures/haiku-context.jsonl")
             .lines()
@@ -146,7 +150,12 @@ fn inventory_order_is_required_and_captured_context_is_owned() {
     )
     .unwrap();
     let e: GameEvent = serde_json::from_value(row["event"].clone()).unwrap();
-    assert!(materials::poem_item(&e, world_catalog::catalog(), &[]).is_err());
+    assert_eq!(
+        materials::poem_item(&e, world_catalog::catalog(), &[])
+            .unwrap()
+            .id,
+        "diamond"
+    );
     let order: Vec<_> = row["event"]["inventory"]
         .as_object()
         .unwrap()
@@ -169,9 +178,9 @@ fn inventory_order_is_required_and_captured_context_is_owned() {
     .unwrap();
     let before = context.irony_details();
     let mut next = row["event"].clone();
-    next["player"]["held_item"] = json!("apple");
+    next["player"]["hotbar"]["selected_slot"] = json!(2);
     let next: GameEvent = serde_json::from_value(next).unwrap();
-    let _other = materials::capture(
+    let other = materials::capture(
         &next,
         RuntimeRead {
             current_structure: None,
@@ -184,6 +193,8 @@ fn inventory_order_is_required_and_captured_context_is_owned() {
         &ReadingSnapshot::default(),
     )
     .unwrap();
+    assert_eq!(other.poem_item_id, "apple");
+    assert_eq!(context.poem_item_id, "diamond");
     assert_eq!(context.irony_details(), before);
 }
 #[test]

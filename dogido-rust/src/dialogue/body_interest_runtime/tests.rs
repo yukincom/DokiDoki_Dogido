@@ -655,7 +655,7 @@ async fn a_queued_return_checks_work_and_departure_again_before_generation() {
     }
 }
 
-// 見込み: 無変化画像と遮蔽下の雨を受けても、無言の振向き選択を実行へ渡せる。合格: 固定HTTP選択からlook_owner一件、入力に無変化・雨・遮蔽を保持し、完了で命令を除く。確認範囲: 模擬応答/結果。
+// 無変化でも今回の画像1枚と雨・葉の遮蔽が一回の要求に届き、模擬silent応答で本人への注視を配送しACKで完了する。実機の姿勢は対象外。
 #[tokio::test]
 async fn model_can_silently_look_at_owner_with_unchanged_image_and_covered_rain() {
     let mock=Mock::new(Duration::ZERO,r#"{"action":"silent","speech":"","body_action":{"action":"look_owner","target_id":null}}"#).await;
@@ -684,12 +684,15 @@ async fn model_can_silently_look_at_owner_with_unchanged_image_and_covered_rain(
     {
         let requests=mock.seen.lock().unwrap();assert_eq!(requests.len(),1);
         let content=&requests[0]["messages"].as_array().unwrap().last().unwrap()["content"];
-        let text=content[0]["text"].as_str().unwrap();assert!(text.contains("変化がない"));
-        let context:Value=serde_json::from_str(text.split_once("\n\nimage_observation: ").unwrap().0).unwrap();
+        let parts=content.as_array().unwrap();
+        let context:Value=serde_json::from_str(parts[0]["text"].as_str().unwrap()).unwrap();
+        assert_eq!(parts.iter().filter(|part| part["text"] == "変わらない").count(), 1);
         assert_eq!(context["body_options"]["available_actions"]["look_owner"],"その場でプレイヤーを見る");
         assert_eq!(context["world_context"]["observations"]["weather"]["label"],"雨");
         assert_eq!(context["world_context"]["observations"]["overhead_cover"],"foliage");
-        assert!(content[1]["image_url"]["url"].as_str().unwrap().starts_with("data:image/png;base64,"));
+        let images:Vec<_>=parts.iter().filter(|part| part["type"] == "image_url").collect();
+        assert_eq!(images.len(), 1);
+        assert!(images[0]["image_url"]["url"].as_str().unwrap().starts_with("data:image/png;base64,"));
     }
     let mut receipt=arrived(&command,2);receipt["command_results"][0]["detail_code"]=json!("facing_target");
     observe(&d,receipt);

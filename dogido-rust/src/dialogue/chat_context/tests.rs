@@ -102,6 +102,7 @@ fn actual_labels_match_canonical_complete_dictionary() {
     );
     assert_eq!(CatalogLabels.mob_label("unknown"), None);
 }
+// 地面にいるゾンビの視認後、音だけのイベントは直前の視認を保持するが川柳の状態は更新しない。模擬受付で保持期限と重複配送も確かめる。
 #[tokio::test]
 async fn admission_partial_memory_and_haiku_state_have_separate_update_boundaries() {
     let d = server(
@@ -114,7 +115,7 @@ async fn admission_partial_memory_and_haiku_state_have_separate_update_boundarie
         1,
         "status_snapshot",
         json!({"world":{"structure":"custom:VILLAGE"},"meta":{"call_name":" 呼称 "},
-        "inventory":{"z:item":1,"a:item":2},"visual_threats":[{"type":"zombie","entity_id":"z","distance":4}]}),
+        "inventory":{"z:item":1,"a:item":2},"visual_threats":[{"type":"zombie","entity_id":"z","distance":4,"environment":{"on_ground":true}}]}),
     );
     d.observe("s", full.clone(), Some("full"));
     let original = {
@@ -159,7 +160,7 @@ async fn admission_partial_memory_and_haiku_state_have_separate_update_boundarie
         at + chrono::Duration::milliseconds(800),
         2,
         "status_snapshot",
-        json!({"world":{"structure":"stronghold"},"visual_threats":[{"type":"creeper","distance":3}]}),
+        json!({"world":{"structure":"stronghold"},"visual_threats":[{"type":"creeper","distance":3,"environment":{"on_ground":true}}]}),
     );
     assert_eq!(
         d.observe("s", poisoned.clone(), Some("new-key"))["deduplicated"],

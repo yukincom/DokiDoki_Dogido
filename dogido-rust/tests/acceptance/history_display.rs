@@ -1,4 +1,4 @@
-//! パート3: 実際の履歴表示と通常／環境の生成要求を通し、時刻・契機・返答先、UUID除外、今回の用件の区別を検査する。保持量やモデルの返答品質は表示改善で代用しない。
+//! 保存用表示には確定時刻を残し、通常／環境の生成要求では絶対時刻とUUIDを外して契機・返答先・今回の用件を区別する。保持量やモデルの返答品質は表示改善で代用しない。
 use super::history::History;
 use crate::types::{ChatMessage, Role};
 use serde_json::{Value, json};
@@ -64,7 +64,13 @@ fn prompt_text(messages: &[ChatMessage]) -> String {
     values.join("\n")
 }
 
-// 同じ本文の自発発話と警告を含む履歴。各行に時刻・契機を示し、返答には元の質問を添え、保存用IDを生成要求へ出さない。
+// このfixtureのモデル向け履歴。本文と順序が同じでも、契機が異なる二行を保持する。
+const EXPECTED_MODEL_HISTORY: &str = "[本人入力] プレイヤー: ドギドどこ？\n\
+[返答 | 返答先: プレイヤー「ドギドどこ？」] ドギド: 右前やで。\n\
+[自発発話] ドギド: 朝になったな。\n\
+[警告] ドギド: 朝になったな。";
+
+// 確定時刻を表示用に保持し、モデルには返答先・契機・本文を時刻やUUIDなしで渡す。確認範囲は固定履歴からの要求構築。
 #[test]
 fn acceptance_history_display_normal_identifies_time_kind_and_reply_target_per_row() {
     let rows = rows();
@@ -91,22 +97,23 @@ fn acceptance_history_display_normal_identifies_time_kind_and_reply_target_per_r
     assert!(repeated[1].contains("警告"));
     let actual = prompt_text(&normal(&rows, CURRENT_QUESTION));
     assert!(
-        actual.contains(&lines),
-        "実際の通常会話builderへ共通表示が届く"
+        actual.contains(EXPECTED_MODEL_HISTORY),
+        "通常会話に発話順と返答先を保った履歴が届く"
     );
+    assert!(!actual.contains("2026-10-28"), "表示用の絶対時刻は送らない");
     for id in [INPUT_ID, AMBIENT_ID, WARNING_ID] {
         assert!(!actual.contains(id));
     }
 }
 
-// 同じ履歴を通常と環境の生成要求へ渡す。両者が共通表示を用い、環境側にもUUIDが残らず、同文の別発話を間引かない。
+// 固定履歴を通常と環境の両builderに渡し、同じ順序・契機・返答先を保つ。環境側にも絶対時刻やUUIDを出さず、同文の二発話を区別する。
 #[test]
 fn acceptance_history_display_environment_uses_same_readable_history_without_uuid() {
     let rows = rows();
-    let common = History::lines_for(&rows);
     let normal = prompt_text(&normal(&rows, CURRENT_QUESTION));
     let ambient = prompt_text(&environment(&rows));
-    assert!(normal.contains(&common));
+    assert!(normal.contains(EXPECTED_MODEL_HISTORY));
+    assert!(!ambient.contains("2026-10-28"));
     for id in [INPUT_ID, AMBIENT_ID, WARNING_ID] {
         assert!(
             !ambient.contains(id),
@@ -114,7 +121,7 @@ fn acceptance_history_display_environment_uses_same_readable_history_without_uui
         );
     }
     assert!(
-        ambient.contains(&common),
+        ambient.contains(EXPECTED_MODEL_HISTORY),
         "通常会話と環境反応で同じ履歴表示を使用する"
     );
     assert_eq!(

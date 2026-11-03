@@ -261,11 +261,13 @@ fn crosshair_keeps_taming_separate_for_two_wolves_and_refreshes_name() {
     assert!(rows[1].get("custom_name").is_none());
 }
 
+// オオカミが話題のとき、通常と環境の要求に飼育状態・名札を載せる。個体IDは内部に保ち、模擬観測から消えた個体は現在表に残さない。
 #[test]
 fn companion_metadata_reaches_chat_and_surroundings_model_inputs_and_expires() {
     let event = frame(json!({"companion_candidates":[{"type":"wolf",
         "identity":{"entity_id":"pet","tamed":true,"custom_name":"クロちゃん"}}]}));
     let world = context(&event);
+    assert_eq!(world.observations["mob_states"][0]["subject"], "pet");
     let chat = crate::chat_prompt::messages(
         &json!({"user_text":"そばのオオカミは？","world_context":world,"dialogue_choice":true}),
     )
@@ -275,7 +277,8 @@ fn companion_metadata_reaches_chat_and_surroundings_model_inputs_and_expires() {
     let prepared = crate::environment::reaction::Prepared::new(
         &json!({"kind":"environment_reaction","model":"fixture","max_tokens":100,
             "fallback_text":"", "details":{"reaction_context":{
-                "topic":"surroundings","world_context":world}}}),
+                "topic":"surroundings","recent":{"conversation":[{"role":"user","text":"そばのオオカミは？"}]},
+                "world_context":world}}}),
         "fixture",
     )
     .unwrap();
@@ -283,7 +286,7 @@ fn companion_metadata_reaches_chat_and_surroundings_model_inputs_and_expires() {
     let pet = &prompt["world_context"]["observations"]["mob_states"][0];
     assert_eq!(pet["tamed"], true);
     assert_eq!(pet["custom_name"], "クロちゃん");
-    assert_eq!(pet["subject"], "pet");
+    assert!(pet.get("subject").is_none());
     let mut state = State::default();
     state.observe(world);
     state.observe(context(&frame(json!({}))));

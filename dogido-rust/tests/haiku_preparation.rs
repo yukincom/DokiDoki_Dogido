@@ -1,3 +1,4 @@
+//! 模擬の観測・確定した対話を使い、発句開始から前置き・固定句の保存データまでを比較する。生成モデル自体と実機での採取は対象外。
 use dogido_rust::{
     haiku::{
         GroundedHaikuResult,
@@ -41,6 +42,7 @@ fn canonical_raw_catalog_entries_are_not_fixture_backed() {
         );
     }
 }
+// 見込み: 発句時のホットバーを使い、同じ候補を前置きと句用の選択へ渡す。固定句は観測時刻・枠・提示した材料を記録し、本文と行出典を変えない。模擬264例で確認する。
 #[tokio::test]
 async fn canonical_capture_and_fixed_emission_traces() {
     let mut n = 0;
@@ -48,22 +50,22 @@ async fn canonical_capture_and_fixed_emission_traces() {
         .lines()
         .enumerate()
     {
-        let mut row: Value = serde_json::from_str(line).unwrap();
-        // 旧収録の材料本文はそのまま照合し、撤去した評価設定と材料割当の記録だけを現行化する。
-        if let Some(input) = row["materials"]["input"].as_object_mut() {
-            input.remove("grounding_max_tokens");
-        }
+        let row: Value = serde_json::from_str(line).unwrap();
         let start: Start = serde_json::from_value(row["start"].clone()).unwrap();
         let (mut prep, context) = Preparation::capture(start).unwrap();
         assert_eq!(json!(context), row["context"], "context {i}");
         if context.fixed_text.is_none() {
-            // 保存oracleのscene→句用資料は旧仕様。前置き本文と予算は維持し、
-            // 新しい材料選択→保存の契約はhaiku_preface_materialsで独立に検査する。
+            // 前置き本文・予算と両段階の候補を検査。生成句の材料選択から保存まではhaiku_preface_materialsで扱う。
             let inspiration = prep.inspiration(&row["irony_payload"]).unwrap();
             assert_eq!(json!(inspiration.text), row["inspiration"]["text"]);
             assert_eq!(
                 json!(inspiration.spoken_text),
                 row["inspiration"]["spoken_text"]
+            );
+            assert_eq!(
+                inspiration.request.details["preface_material_candidates"],
+                row["context"]["request"]["details"]["preface_material_candidates"],
+                "同じ候補から句の材料を選ぶ {i}"
             );
             assert_eq!(
                 json!(inspiration.request.max_tokens),
@@ -258,6 +260,7 @@ fn completed_pet_topic_can_be_primary_and_name_and_species_share_a_source() {
             .any(|a| a.observation_role == "passive_mob" && a.text.contains("追い払"))
     );
 }
+// 見込み: 本人が話した名前は会話由来の材料に残る。読めない個体名は種名で観測へ載せ、登録読みがある場合だけ名前と読みが同じ個体の出典へ届く。完了済み模擬対話で両者を区別する。
 #[test]
 fn pet_name_needs_kana_or_a_registered_reading_and_assistant_cannot_promote_it() {
     let turns = json!([{"turn_id":"pet-turn","player_text":"日差しがいいね","dogido_text":"クロちゃんはかわいいな。"}]);
@@ -267,18 +270,38 @@ fn pet_name_needs_kana_or_a_registered_reading_and_assistant_cannot_promote_it()
         json!([{"turn_id":"pet-turn","player_text":"漆黒が頑張った","dogido_text":"頼もしいな。"}]);
     let mut start = companion_start(turns, "漆黒");
     let (_, context) = Preparation::capture(start.clone()).unwrap();
+    let details = context.request.unwrap().details;
+    let sources = details["catalog_sources"].as_array().unwrap();
+    let cat = sources
+        .iter()
+        .find(|s| s["source_ref"] == "mob_individual:cat")
+        .unwrap();
+    assert_eq!(cat["label"], "ネコ");
+    assert!(!cat["extra_fields"].to_string().contains("name_reading"));
     assert!(
-        !json!(context.request.unwrap().details)
-            .to_string()
-            .contains("漆黒")
+        details["source_atoms"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|atom| {
+                atom["observation_role"] == "player_dialogue_attributed"
+                    && atom["text"].as_str().is_some_and(|t| t.contains("漆黒"))
+            }),
+        "本人の発話は個体名の読みと独立して残す"
     );
     start
         .reading_corrections
         .push(json!({"surface":"漆黒","reading":"くろ","forbidden_readings":[]}));
     let (_, context) = Preparation::capture(start).unwrap();
     let details = json!(context.request.unwrap().details);
-    assert!(details["catalog_sources"].to_string().contains("漆黒"));
-    assert!(details["catalog_sources"].to_string().contains("くろ"));
+    let cat = details["catalog_sources"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["source_ref"] == "mob_individual:cat")
+        .unwrap();
+    assert_eq!(cat["label"], "漆黒（ネコ）");
+    assert!(cat["extra_fields"].to_string().contains("くろ"));
 }
 
 #[test]
