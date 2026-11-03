@@ -852,7 +852,10 @@ impl Dialogue {
                     }
                 }
                 if refreshed.kind == super::body_interest_runtime::KIND
-                    && !refreshed.leaf.as_ref().is_some_and(|l| l.details["reaction_context"]["body_options"].is_object()) {
+                    && !refreshed.leaf.as_ref().is_some_and(|l| {
+                        let context = &l.details["reaction_context"];
+                        context["body_options"].is_object() || context["self_notice"].is_string()
+                    }) {
                     let mut data = self.data.lock().unwrap();
                     Self::cancel_warning(&mut data, &sid, "body_decision_unavailable");
                     anyhow::bail!("body decision unavailable");

@@ -75,7 +75,7 @@ pub(super) fn context_for(s: &Session, event: &GameEvent) -> Context {
     let mut c = with_context(c, event)
         .with_recent_hearing(event, &snapshot, &super::chat_context::CatalogLabels).for_model();
     if let Some(reassurance) = s.body_autonomy.reassurance(Instant::now()) {
-        c.observations["reassurance"] = reassurance_context(serde_json::json!(reassurance));
+        c.observations["owner_observation"] = reassurance.owner_observation();
     }
     if let Some(attention) = s.body_autonomy.attention(Instant::now()) {
         c.observations["attention"] = attention;
@@ -95,12 +95,6 @@ pub(super) fn context_for(s: &Session, event: &GameEvent) -> Context {
         c.observations["body_operation"] = operation;
     }
     c
-}
-/// 共通観測には実測値と尺度のラベルだけを渡す。回復・視野の計算規則は身体コードに置く。
-pub(super) fn reassurance_context(mut value: serde_json::Value) -> serde_json::Value {
-    value["label"] = serde_json::json!("安心度");
-    value["scale"] = serde_json::json!([0,100]);
-    value
 }
 /// 同じ身体材料を共有観測・周期通知にも一回だけ添える。
 pub(super) fn with_context(mut c: Context, event: &GameEvent) -> Context {

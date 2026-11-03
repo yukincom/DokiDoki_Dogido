@@ -58,6 +58,14 @@ pub struct Reassurance {
     pub owner_working: bool,
 }
 
+impl Reassurance {
+    /// 会話・環境判断には相棒の観測事実だけを渡し、安心度は身体内部に保つ。
+    pub fn owner_observation(&self) -> serde_json::Value {
+        serde_json::json!({"owner_distance":self.owner_distance,"owner_visible":self.owner_visible,
+            "face_visible":self.face_visible,"owner_working":self.owner_working})
+    }
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum Mode {

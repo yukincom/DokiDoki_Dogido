@@ -403,7 +403,9 @@ fn direct_decision() -> (Arc<Dialogue>, String) {
     let s=data.sessions.get_mut("s").unwrap();
     attach(s,&turn,&mut action,0);
     assert!(s.body_interest_pending.is_some());
-    assert_eq!(action.leaf.unwrap().details["reaction_context"]["world_context"]["observations"]["reassurance"]["value"],20.0);
+    let observations = &action.leaf.unwrap().details["reaction_context"]["world_context"]["observations"];
+    assert!(observations.get("reassurance").is_none());
+    assert_eq!(observations["owner_observation"]["owner_distance"], 9.0);
     drop(data);
     (d,turn)
 }
@@ -460,6 +462,78 @@ async fn low_reassurance_and_candidates_do_not_start_periodic_model_calls() {
     assert!(mock.seen.lock().unwrap().is_empty());
     assert!(d.data.lock().unwrap().sessions["s"].warning.is_none());
     assert!(!d.data.lock().unwrap().sessions["s"].body_interest_notice.pending);
+    d.shutdown().await;
+}
+
+fn concern_wire(sequence: i64, value: f64, visibility: &str) -> Value {
+    let reason = match visibility {
+        "visible" => "in_view",
+        "not_visible" => "occluded",
+        "unavailable" => "area_unloaded",
+        _ => unreachable!(),
+    };
+    let mut event = inside_wire(sequence);
+    let vision = &mut event["body_observation"]["sample"]["vision"];
+    vision["player_visibility"] = json!(visibility);
+    vision["reason"] = json!(reason);
+    event["body_autonomy"]["reassurance"]["value"] = json!(value);
+    event["body_autonomy"]["reassurance"]["owner_visible"] = json!(visibility == "visible");
+    event["body_autonomy"]["attention"]["expansion"] = json!(value / 100.0);
+    event
+}
+
+// 見込み: 30未満かつ明示的な非視認だけが一回の気づきになる。値は本文・観測・注意範囲に出ない。
+// 合格: 同じ状態と欠測を挟む再観測で増えず、再視認または30への回復で再通知できる。模擬HTTPで沈黙も選べる。
+#[tokio::test]
+async fn owner_concern_only_reaches_the_model_once_per_observed_episode() {
+    let mock = Mock::new(Duration::ZERO,r#"{"action":"silent","speech":""}"#).await;
+    let d = server(&mock,true);
+    for (seq, (value, visibility, expected_calls)) in [
+        (30.0,"not_visible",0), (29.875,"visible",0), (29.875,"unavailable",0),
+        (29.875,"not_visible",1), (29.875,"not_visible",1), (29.875,"unavailable",1), (29.875,"not_visible",1),
+        (29.875,"visible",1), (29.875,"not_visible",2),
+        (30.0,"not_visible",2), (29.875,"not_visible",3),
+    ].into_iter().enumerate() {
+        observe(&d,concern_wire(seq as i64,value,visibility));
+        until(|| d.data.lock().unwrap().sessions["s"].warning.is_none()).await;
+        assert_eq!(mock.seen.lock().unwrap().len(),expected_calls, "frame {seq}");
+    }
+    {
+        let data = d.data.lock().unwrap();
+        assert_eq!(data.rows.iter().filter(|row| row["environment_reaction_outcome"] == "silent").count(), 3);
+        assert!(data.rows.iter().all(|row| !row["text"].as_str().unwrap_or("").contains(OWNER_CONCERN)));
+        let world = super::super::body_runtime::context(&data.sessions["s"]).unwrap();
+        let ordinary = crate::chat_prompt::messages(&json!({"user_text":"いまどこ？","world_context":world})).unwrap();
+        let user = &ordinary[1].content;
+        assert!(user.contains("owner_distance"));
+        assert!(!user.contains("reassurance") && !user.contains("expansion"));
+        assert!(!user.contains("29.875") && !user.contains("0.29875") && !user.contains(OWNER_CONCERN));
+    }
+    for req in mock.seen.lock().unwrap().iter() {
+        let user = req["messages"][1]["content"].as_str().unwrap();
+        let input: Value = serde_json::from_str(user).unwrap();
+        assert_eq!(input["self_notice"], "プレイヤーの様子が気になってきたで。");
+        assert_eq!(user.matches(OWNER_CONCERN).count(), 1);
+        assert!(!user.contains("29.875") && !user.contains("0.29875"));
+        assert!(input.pointer("/world_context/observations/reassurance").is_none());
+        assert!(input.pointer("/world_context/observations/attention/expansion").is_none());
+    }
+    d.shutdown().await;
+}
+
+// 見込み: 生成待ちに相棒を再視認すれば、古い気づきをモデルへ送らない。
+// 合格: 枠の解放後も模擬HTTPが0件で終了。実モデルや音声の試験ではない。
+#[tokio::test]
+async fn owner_concern_is_rechecked_after_waiting_for_the_model() {
+    let mock = Mock::new(Duration::ZERO,INSPECT).await;
+    let d = server(&mock,true);
+    let slot = d.serial.acquire().await.unwrap();
+    observe(&d,concern_wire(1,20.0,"not_visible"));
+    assert!(d.data.lock().unwrap().sessions["s"].warning.is_some());
+    observe(&d,concern_wire(2,20.0,"visible"));
+    drop(slot);
+    until(|| d.data.lock().unwrap().sessions["s"].warning.is_none()).await;
+    assert!(mock.seen.lock().unwrap().is_empty());
     d.shutdown().await;
 }
 
@@ -607,7 +681,7 @@ async fn return_arrival_uses_one_existing_request_with_only_current_body_choices
             if !working { expected["owner_face"]=json!("顔が見える位置へ近づく"); }
             assert_eq!(options["available_actions"],expected);
             assert_current_body_prompt(requests[0]["messages"][0]["content"].as_str().unwrap(), &input);
-            assert_eq!(input["world_context"]["observations"]["reassurance"]["owner_working"],working);
+            assert_eq!(input["world_context"]["observations"]["owner_observation"]["owner_working"],working);
         }
         for seq in 3..12 { assert_eq!(observe(&d,follow_arrival_wire(seq,true,working))["commands"],json!([])); }
         assert_eq!(mock.seen.lock().unwrap().len(),1);

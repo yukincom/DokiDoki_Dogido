@@ -1,4 +1,4 @@
-//! 共有の環境判断へ安心度と身体行動を添える。独立したモデル呼出しは持たない。
+//! 共有の環境判断へ身体行動と、その時だけの気づきを添える。
 //! 警告turnと入力世代に選択を結び、配送前に現在の安全・身体世代を再照合する。
 use super::Session;
 use crate::{body::{autonomy::Prepared, contracts::Context}, combat::model::{Delivery, Speech}};
@@ -6,6 +6,7 @@ use serde_json::{Value, json};
 use std::time::Instant;
 
 pub(super) const KIND: &str = "reassurance_notice";
+const OWNER_CONCERN: &str = "プレイヤーの様子が気になってきたで。";
 
 /// 同じ身体世代・通常追従距離の実測で、安心範囲から外へ出た出来事を一件だけ保持する。
 /// 最初の観測は比較基準。範囲へ戻ると未通知を捨て、次の退出を受け付ける。
@@ -60,8 +61,8 @@ pub(super) struct Pending {
     prepared: Option<Prepared>,
 }
 
-fn eligible(s: &Session, now_ms: u64, turn: Option<&str>) -> bool {
-    s.body_interest_enabled && !s.preview && !s.foreground.game_paused
+fn can_notify(s: &Session, now_ms: u64, turn: Option<&str>) -> bool {
+    !s.preview && !s.foreground.game_paused
         && !s.foreground.combat_active
         && s.warning.as_ref().is_none_or(|w| turn == Some(w.turn.as_str()))
         && s.pending_warning.is_none() && s.cancel.is_none() && s.assist_pending.is_none()
@@ -72,14 +73,19 @@ fn eligible(s: &Session, now_ms: u64, turn: Option<&str>) -> bool {
         && matches!(s.foreground.route, crate::foreground::Route::None | crate::foreground::Route::Casual)
         && s.last_player_input.is_none_or(|at| now_ms.saturating_sub(at) >= 5000)
         && s.body_observation.accepted(Instant::now()).is_some()
-        && s.body_autonomy.available(Instant::now())
+}
+
+fn eligible(s: &Session, now_ms: u64, turn: Option<&str>) -> bool {
+    s.body_interest_enabled && s.body_autonomy.available(Instant::now()) && can_notify(s, now_ms, turn)
 }
 
 /// 既存環境候補が無い時だけ、同じ判断を起こす。周辺に変化があったとは記録しない。
 pub(super) fn opportunity(s: &Session, now_ms: u64) -> Option<Speech> {
-    if !(s.body_interest_notice.pending || s.body_autonomy.owner_arrival_pending(Instant::now()))
-        || !eligible(s, now_ms, None) { return None; }
-    s.body_autonomy.ready_reassurance(Instant::now())?;
+    let now = Instant::now();
+    if !can_notify(s, now_ms, None) { return None; }
+    let body_due = s.body_interest_enabled && (s.body_interest_notice.pending || s.body_autonomy.owner_arrival_pending(now))
+        && s.body_autonomy.ready_reassurance(now).is_some();
+    if !body_due && !s.body_autonomy.owner_concern_pending(now) { return None; }
     let mut action = Speech::new(KIND, "");
     action.scope = crate::combat::model::Scope::Safe;
     Some(action)
@@ -102,9 +108,16 @@ pub(super) fn cancel(s: &mut Session) {
 /// 生成直前の同じ観測に行動候補を添える。準備はこのturnの一回だけで、別のモデルは呼ばない。
 pub(super) fn attach(s: &mut Session, turn: &str, action: &mut Speech, now_ms: u64) {
     if action.delivery != Delivery::Ambient || !crate::environment::reaction::is_model_reaction(action)
-        || s.body_interest_pending.is_some() || !eligible(s, now_ms, Some(turn)) { return; }
+        || s.body_interest_pending.is_some() || !can_notify(s, now_ms, Some(turn)) { return; }
+    // 生成枠を取ってから一度だけ渡す。プレイヤー向け本文や会話履歴には書き込まない。
+    let now = Instant::now();
+    let concern = s.body_autonomy.take_owner_concern(now);
+    if concern {
+        action.leaf.as_mut().unwrap().details["reaction_context"]["self_notice"] = json!(OWNER_CONCERN);
+    }
+    if !s.body_interest_enabled || !s.body_autonomy.available(now) { return; }
     // 共有の生成枠を待つ間にも帰還できる。退出・到着通知は、生成直前にも未消費を確かめる。
-    if action.kind == KIND && !(s.body_interest_notice.pending
+    if action.kind == KIND && !(concern || s.body_interest_notice.pending
         || s.body_autonomy.owner_arrival_pending(Instant::now())) { return; }
     let Some(mut prepared) = s.body_autonomy.prepare(Instant::now()) else { return; };
     // 添付された当回の画像だけを移動申請へ使える。撮影IDはコードが埋め、モデルへUUIDや座標を作らせない。
@@ -117,14 +130,17 @@ pub(super) fn attach(s: &mut Session, turn: &str, action: &mut Speech, now_ms: u
     }
     // 周囲の変化による判断へ同時に添えた場合も、この退出は一回で消費する。
     // stay・沈黙・生成失敗の後に、同じ範囲外滞在を時刻だけで再試行しない。
-    s.body_interest_notice.considered();
     let details = &mut action.leaf.as_mut().unwrap().details["reaction_context"];
     if action.kind == KIND {
-        details["trigger"] = if prepared.after_owner_arrival { json!({"kind":"owner_arrived_near"}) }
-            else { json!({"kind":"owner_left_reassurance_range","range_blocks":s.body_interest_notice.range_blocks}) };
+        if prepared.after_owner_arrival {
+            details["trigger"] = json!({"kind":"owner_arrived_near"});
+        } else if s.body_interest_notice.pending {
+            details["trigger"] = json!({"kind":"owner_left_reassurance_range","range_blocks":s.body_interest_notice.range_blocks});
+        }
     }
+    s.body_interest_notice.considered();
     tracing::info!(event="environment_body_prepared",turn_id=turn,after_owner_arrival=prepared.after_owner_arrival,
-        available_actions=%json!(prepared.available_actions),owner_working=%prepared.reassurance["owner_working"]);
+        available_actions=%json!(prepared.available_actions),owner_working=%prepared.owner_observation["owner_working"]);
     details["body_options"] = json!({"available_actions":prepared.model_actions(),
         "candidates":prepared.model_candidates,"recent_choices":prepared.recent_choices,
         "current_body":s.body_autonomy.current_body(Instant::now())});
@@ -134,7 +150,7 @@ pub(super) fn attach(s: &mut Session, turn: &str, action: &mut Speech, now_ms: u
         observations.remove("current_body");
     }
     if prepared.after_owner_arrival { details["body_options"]["after_owner_arrival"] = json!(true); }
-    details["world_context"]["observations"]["reassurance"] = super::body_runtime::reassurance_context(prepared.reassurance.clone());
+    details["world_context"]["observations"]["owner_observation"] = prepared.owner_observation.clone();
     s.body_interest_pending = Some(Pending { turn: turn.to_owned(), instance: s.instance_id.clone(),
         generation: s.input_generation, image_choice: action.image.is_some(), prepared: Some(prepared) });
 }

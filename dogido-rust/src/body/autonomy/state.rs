@@ -3,7 +3,7 @@
 use super::contracts::{
     Activity, Candidate, CandidateKind, Mode, Observation, Observed, Reassurance, distance_squared, short_text,
 };
-use crate::body::contracts::{Context, Sample};
+use crate::body::contracts::{Context, PlayerVisibility, Sample};
 use crate::events::{AdapterCommandResult, AdapterCommandResultStatus};
 use anyhow::{Result, anyhow, ensure};
 use chrono::{DateTime, Duration as UtcDuration, Utc};
@@ -20,6 +20,7 @@ const ATTEMPT_INTERVAL: Duration = Duration::from_secs(3);
 const EXPLICIT_LOOK_INTERVAL: Duration = Duration::from_secs(5);
 const COMMAND_TTL: Duration = Duration::from_secs(5);
 const RESULT_DEADLINE: Duration = Duration::from_secs(35);
+const OWNER_CONCERN_THRESHOLD: f64 = 30.0;
 const CHOICE_LIMIT: usize = 8;
 const VISIT_LIMIT: usize = 64;
 const REVISIT_INTERVAL: Duration = Duration::from_secs(120);
@@ -57,14 +58,14 @@ struct Visit {
     arrived: Instant,
 }
 
-/// 共通の環境判断へ匿名候補・実測安心度・可能な行動を渡す。不変候補表は実行前照合用。
+/// 共通の環境判断へ匿名候補・相棒の観測・可能な行動を渡す。不変候補表は実行前照合用。
 #[derive(Clone, Debug)]
 pub struct Prepared {
     pub context: Context,
     pub candidates: Vec<Candidate>,
     pub model_candidates: Value,
     pub recent_choices: Value,
-    pub reassurance: Value,
+    pub owner_observation: Value,
     pub available_actions: Vec<String>,
     pub after_owner_arrival: bool,
     pub image_capture: Option<(String, DateTime<Utc>)>,
@@ -105,6 +106,7 @@ pub struct State {
     pending: Option<Pending>,
     diagnostics: Vec<Value>,
     owner_arrival_pending: bool,
+    owner_concern_sent: bool,
 }
 
 #[derive(Deserialize)]
@@ -170,6 +172,10 @@ impl State {
             self.visits.clear();
             self.last_attempt = None;
             self.next_owner_look = None;
+            self.owner_concern_sent = false;
+        }
+        if matches!(accepted.vision.player_visibility, PlayerVisibility::Visible) {
+            self.owner_concern_sent = false;
         }
         self.accepted = Some(accepted.clone());
         let Some(observation) = observation else {
@@ -202,6 +208,9 @@ impl State {
         if age_ms >= FRESH_MS {
             self.lose_current();
             return;
+        }
+        if data.reassurance.value >= OWNER_CONCERN_THRESHOLD {
+            self.owner_concern_sent = false;
         }
         // follow_settlingは初回待機や高速移動でも現れるため、それだけを到着扱いしない。
         // 同一世代のfreshな追従から実到着後の待機へ移った時だけ、一回の相談を保持する。
@@ -273,6 +282,21 @@ impl State {
             .filter(|r| self.accepted.as_ref().is_some_and(|a| a.context == r.data.context))
             .map(|r| &r.data.reassurance)
     }
+    /// 未確認や欠測は通知にも再通知の根拠にも使わない。視認と安心度は同じ身体フレームで照合する。
+    pub fn owner_concern_pending(&self, now: Instant) -> bool {
+        self.current.as_ref().zip(self.accepted.as_ref()).is_some_and(|(reading, sample)| {
+            !self.owner_concern_sent && reading.fresh(now)
+                && reading.data.context == sample.context && reading.data.server_tick == sample.server_tick
+                && reading.data.snapshot_revision == sample.snapshot_revision
+                && reading.data.reassurance.value < OWNER_CONCERN_THRESHOLD
+                && matches!(sample.vision.player_visibility, PlayerVisibility::NotVisible)
+        })
+    }
+    pub fn take_owner_concern(&mut self, now: Instant) -> bool {
+        if !self.owner_concern_pending(now) { return false; }
+        self.owner_concern_sent = true;
+        true
+    }
     /// 同じfreshな身体観測の通常追従距離（block）。近接による安心度回復の距離とは別の設定。
     /// 会話中も境界を比較できるよう、モデル生成の準備可否では制限しない。
     pub fn follow_distance(&self, now: Instant) -> Option<f64> {
@@ -284,9 +308,8 @@ impl State {
     pub fn attention(&self, now: Instant) -> Option<Value> {
         let reading = self.current.as_ref().filter(|r| r.fresh(now))
             .filter(|r| self.accepted.as_ref().is_some_and(|a| a.context == r.data.context))?;
-        let mut value = json!(reading.data.attention);
-        value["basis"] = json!("body_attention");
-        Some(value)
+        // expansion は待機時に安心度/100そのもの。モデルへは注意範囲の種類だけを渡す。
+        Some(json!({"scope":reading.data.attention.scope,"basis":"body_attention"}))
     }
     /// 当回の受理済み身体状態。選択履歴から移動・到着を推定しない。
     pub fn current_body(&self, now: Instant) -> Option<Value> {
@@ -409,7 +432,7 @@ impl State {
             candidates,
             model_candidates,
             recent_choices: self.recent_choices(now),
-            reassurance: json!(data.reassurance),
+            owner_observation: data.reassurance.owner_observation(),
             available_actions,
             after_owner_arrival,
             image_capture: None,
