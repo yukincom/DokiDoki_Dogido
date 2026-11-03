@@ -76,6 +76,8 @@ public final class BodyViewCapture {
         public Camera camera() { return camera; }
     }
     private BodyViewCapture() {}
+    static Path gameDirectory() { return root.getParent(); }
+    static void onIo(Runnable action) { IO.execute(action); }
 
     /** 同じBodyConnectionを再利用し、独立HTTPやbody制御経路を作らずローカルcommandだけを追加する。 */
     public static void register(BodyConnection bodyConnection) {
@@ -424,10 +426,8 @@ public final class BodyViewCapture {
                 var command=frame.request.screenshot;
                 if(command.timeError(frame.capturedAt)!=null)throw new IllegalStateException("invalid_capture_time");
                 JsonObject view=ScreenshotProtocol.captureView(command,data.getAsJsonObject("context"),true);
-                var saved=ScreenshotRuntime.save(root.getParent(),frame.capturedAt,image.getWidth(),image.getHeight(),image.copyPixelsArgb());
-                JsonObject result=ScreenshotProtocol.result(command,"succeeded","saved",Instant.now());
-                result.addProperty("filename",saved.filename());result.addProperty("directory",saved.directory());result.addProperty("sha256",saved.sha256());
-                result.addProperty("captured_at",frame.capturedAt.toString());result.add("capture_view",view);
+                var saved=PoemCaptureJobs.save(gameDirectory(),command,frame.capturedAt,image.getWidth(),image.getHeight(),image.copyPixelsArgb(),view);
+                JsonObject result=saved.receipt();
                 lastResult=saved.filename();LOG.info("Poem body view saved: {}",saved.filename());
                 complete(frame.request,result,null);return;
             }

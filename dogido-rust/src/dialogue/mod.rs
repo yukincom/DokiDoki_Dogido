@@ -193,6 +193,7 @@ struct Session {
     haiku: haiku_runtime::State,
     /// 保存済み発句に固定した自動撮影の依頼と保存ACK。
     screenshots: crate::screenshot::State,
+    artifact_lifecycle: bool,
     /// 一回の通常会話だけで使う画像要求。終了時のACKまで所有する。
     visual: visual_runtime::State,
     /// 戦闘の出来事を保持する短い文脈。combat_runtimeが更新する。
@@ -267,6 +268,9 @@ struct Data {
 /// 共有設定・各I/O実装・接続状態・job寿命を所有する本体ハンドル。
 pub struct Dialogue {
     config: DialogueConfig,
+    artifacts: Option<Arc<crate::haiku_artifacts::Manager>>,
+    artifact_worker: Mutex<Option<tokio::task::JoinHandle<()>>>,
+    artifact_stopped: Arc<std::sync::atomic::AtomicBool>,
     workshop_records: workshop_record::Recorder,
     llm: RigLlm,
     audio: audio::Audio,
@@ -350,7 +354,13 @@ impl Dialogue {
             "invalid voice settings"
         );
         let key = std::env::var("DOGIDO_LLM_API_KEY").ok();
-        Ok(Arc::new(Self {
+        let artifacts = config.haiku.memory_enabled.then(|| crate::haiku_artifacts::Manager::new(
+            config.haiku.memory_dir.clone(), config.haiku.capture_dir.clone(),
+            config.haiku.screenshot_dir.clone().unwrap_or_else(crate::screenshot::default_directory)));
+        let dialogue = Arc::new(Self {
+            artifacts,
+            artifact_worker: Mutex::new(None),
+            artifact_stopped: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             llm: RigLlm::new(
                 &config.base_url,
                 key.as_deref(),
@@ -384,7 +394,23 @@ impl Dialogue {
             turn_serial: Arc::new(Semaphore::new(1)),
             jobs: Mutex::new(vec![]),
             clock: Instant::now(),
-        }))
+        });
+        if dialogue.artifacts.is_some() && tokio::runtime::Handle::try_current().is_ok() {
+            let owner = Arc::downgrade(dialogue.artifacts.as_ref().unwrap());
+            let stopped = dialogue.artifact_stopped.clone();
+            let worker = tokio::spawn(async move {
+                loop {
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    if stopped.load(std::sync::atomic::Ordering::Acquire) { break; }
+                    let Some(manager) = owner.upgrade() else { break; };
+                    if let Err(error) = tokio::task::spawn_blocking(move || manager.reconcile()).await.unwrap_or_else(|e|Err(e.into())) {
+                        tracing::warn!(event="haiku_artifact_reconcile_held", %error);
+                    }
+                }
+            });
+            *dialogue.artifact_worker.lock().unwrap()=Some(worker);
+        }
+        Ok(dialogue)
     }
     /// 接続IDへ空の履歴・観測・判断器を登録し、workshop記録の差分比較状態を初期化する。
     pub fn register(&self, session_id: &str, name: &str, preview: bool) {
@@ -425,6 +451,7 @@ impl Dialogue {
                 pending_vocalization: None,
                 haiku: haiku_runtime::State::default(),
                 screenshots: crate::screenshot::State::default(),
+                artifact_lifecycle: false,
                 visual: visual_runtime::State::default(),
                 combat_digest: VecDeque::new(),
                 combat_input: None,
@@ -629,6 +656,9 @@ impl Dialogue {
         for job in jobs {
             let _ = job.await;
         }
+        self.artifact_stopped.store(true,std::sync::atomic::Ordering::Release);
+        let cleanup=self.artifact_worker.lock().unwrap().take();
+        if let Some(cleanup)=cleanup {let _=cleanup.await;}
         let open_workshops: Vec<_> = {
             let d = self.data.lock().unwrap();
             d.sessions

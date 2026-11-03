@@ -23,6 +23,8 @@ pub enum AdapterCommandResultCommandType {
     BodyRequest,
     #[serde(rename = "capture_screenshot")]
     CaptureScreenshot,
+    #[serde(rename = "dispose_screenshot")]
+    DisposeScreenshot,
     #[serde(rename = "capture_body_view")]
     CaptureBodyView,
 }

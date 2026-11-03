@@ -59,9 +59,11 @@ pub struct PreparedEmission {
     pub route: Option<String>,
 }
 
-#[derive(Clone, Debug, Serialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Emission {
     pub created_at: DateTime<Utc>,
+    #[serde(default,skip_serializing_if="Option::is_none")]
+    pub artifact_job_id: Option<String>,
     #[serde(flatten)]
     pub prepared: PreparedEmission,
     /// raw生成の観測記録。材料・意味・最終句のtoken対応へ昇格させない。
@@ -94,6 +96,7 @@ impl PreparedEmission {
             .context("invalid completion timestamp")?;
         Ok(Emission {
             created_at,
+            artifact_job_id: None,
             prepared: self,
             internal_capture: None,
         })
@@ -131,6 +134,7 @@ impl Emission {
             "trigger":{"event_sequence":e.event_sequence,"route":e.route},
             "materials_snapshot":e.materials,
         });
+        if let Some(job)=&self.artifact_job_id {entry["artifact_job_id"]=job.clone().into();}
         if let Some(capture) = &self.internal_capture {
             entry["internal_capture"] = json!(capture);
         }
@@ -194,13 +198,22 @@ impl MemoryStore {
         let entry_id = emission.entry_id();
         let entry = emission.entry();
         let mut inserted = true;
+        let mut saved_entry=entry.clone();
         for line in BufReader::new(&file).lines() {
             let line = line?;
-            if let Ok(row) = serde_json::from_str::<Value>(&line)
-                && row.get("id").and_then(Value::as_str) == Some(&entry_id)
-            {
+            let row:Value=match serde_json::from_str(&line) {
+                Ok(row)=>row,
+                Err(error) if emission.artifact_job_id.is_some()=>return Err(error).context("haiku_original_record_invalid"),
+                // Legacy callers preserve earlier uninterpretable rows; lifecycle jobs must hold on ambiguous storage.
+                Err(_)=>continue,
+            };
+            if row.get("id").and_then(Value::as_str)==Some(&entry_id) {
+                let mut comparable=row.clone();
+                // Historical resave callers may reconstruct an emission without the optional lifecycle marker.
+                if entry.get("artifact_job_id").is_none() {comparable.as_object_mut().context("haiku_original_record_invalid")?.remove("artifact_job_id");}
+                anyhow::ensure!(comparable == entry && inserted, "haiku_entry_conflict");
                 inserted = false;
-                break;
+                saved_entry=row;
             }
         }
         if inserted {
@@ -216,7 +229,7 @@ impl MemoryStore {
         );
         Ok(SaveResult {
             entry_id,
-            entry,
+            entry: saved_entry,
             inserted,
         })
     }

@@ -42,7 +42,7 @@ impl Store {
             row.as_object().is_some_and(|v| v.len() == 1 && v["note"].as_str().is_some_and(|s| s.chars().count() <= 4000)))), "invalid_journey_metadata");
         Ok(value)
     }
-    pub(super) fn write_lock(&self) -> Result<fs::File> {
+    pub(crate) fn write_lock(&self) -> Result<fs::File> {
         let dir = self.memory.join("bookshelf");
         fs::create_dir_all(&dir)?;
         ensure!(

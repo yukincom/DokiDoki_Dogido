@@ -7,6 +7,9 @@ import java.util.*;
 /** 発句準備に固定した身体視点の原寸撮影命令。保存先・ファイル名をサーバーから指定させない。 */
 public final class ScreenshotProtocol {
     public static final String CAPABILITY = "client.screenshot.body_view.v1";
+    public static final String LIFECYCLE_CAPABILITY = "client.screenshot.lifecycle.v1";
+    private static final Set<String> DISPOSAL_KEYS = Set.of(
+        "type","command_id","session_id","source_session_id","owner_uuid","capture_command_id","action","decision_id");
     private static final Set<String> KEYS = Set.of(
         "type","command_id","session_id","poem_id","dimension","issued_at","expires_at",
         "body_entity_uuid","body_epoch","owner_uuid");
@@ -50,6 +53,43 @@ public final class ScreenshotProtocol {
         } catch (RuntimeException ignored) {}
         return out;
     }
+    public record Disposition(String id, String sessionId, String sourceSessionId, UUID owner,
+                              String captureId, String action, String decisionId) {}
+
+    public static List<Disposition> parseDispositions(JsonObject root) {
+        List<Disposition> out = new ArrayList<>();
+        if (root==null || !(root.get("commands") instanceof JsonArray commands)) return out;
+        for (var item : commands) {
+            try {
+                var c=item.getAsJsonObject();
+                if (!c.keySet().equals(DISPOSAL_KEYS) || !string(c,"type").equals("dispose_screenshot")) continue;
+                String action=string(c,"action"), shot=string(c,"capture_command_id");
+                if (!(action.equals("keep") || action.equals("discard")) || !shotId(shot)) continue;
+                out.add(new Disposition(uuid(c,"command_id").toString(), identifier(c,"session_id"),
+                    identifier(c,"source_session_id"),uuid(c,"owner_uuid"),shot,action,identifier(c,"decision_id")));
+            } catch (RuntimeException ignored) { /* 他種・不正な命令を実行しない。 */ }
+        }
+        return out;
+    }
+    static boolean shotId(String value) {
+        if (value==null || !value.startsWith("shot_")) return false;
+        try { return UUID.fromString(value.substring(5)).toString().equals(value.substring(5)); }
+        catch (IllegalArgumentException invalid) { return false; }
+    }
+    private static String identifier(JsonObject o,String key) {
+        String v=string(o,key);
+        if (v.isBlank() || v.length()>200) throw new IllegalArgumentException(key);
+        return v;
+    }
+    public static JsonObject result(Disposition d,String status,String detail) {
+        JsonObject r=new JsonObject();
+        r.addProperty("command_id",d.id()); r.addProperty("command_type","dispose_screenshot");
+        r.addProperty("status",status); r.addProperty("detail_code",detail); r.addProperty("executed_at",Instant.now().toString());
+        r.addProperty("session_id",d.sessionId()); r.addProperty("source_session_id",d.sourceSessionId());
+        r.addProperty("capture_command_id",d.captureId()); r.addProperty("action",d.action());
+        r.addProperty("decision_id",d.decisionId());
+        return r;
+    }
     private static String string(JsonObject o,String key) {
         var v=o.get(key);
         if (v==null || !v.isJsonPrimitive() || !v.getAsJsonPrimitive().isString()) throw new IllegalArgumentException(key);
@@ -87,19 +127,45 @@ public final class ScreenshotProtocol {
     public static final class State {
         private final LinkedHashSet<String> seen = new LinkedHashSet<>();
         private final LinkedHashMap<String,JsonObject> pending = new LinkedHashMap<>();
+        private final LinkedHashMap<String,JsonObject> receipts = new LinkedHashMap<>();
+        private final Set<String> offered = new HashSet<>();
+        public void rememberReceipt(JsonObject result) {
+            String id=result.get("command_id").getAsString();
+            pending.remove(id);receipts.put(id,result.deepCopy());
+        }
+        public void offered(JsonArray outbound) {
+            for (var elem:outbound) {
+                var item=elem.getAsJsonObject();
+                var id=item.get("command_id");
+                if (id!=null && item.equals(receipts.get(id.getAsString()))) offered.add(id.getAsString());
+            }
+        }
+        public List<JsonObject> acknowledgedReceipts(Collection<String> ids) {
+            return ids.stream().filter(offered::contains).map(receipts::get).filter(Objects::nonNull).map(JsonObject::deepCopy).toList();
+        }
+        public void forgetReceipt(JsonObject result) {
+            var id=result.get("command_id").getAsString();
+            if (receipts.remove(id,result)) offered.remove(id);
+        }
         public boolean claim(String id) {
             if (!seen.add(id)) return false;
             while (seen.size()>2048) seen.remove(seen.iterator().next());
             return true;
         }
         public void remember(JsonObject result) {
-            pending.put(result.get("command_id").getAsString(),result.deepCopy());
+            String id=result.get("command_id").getAsString();
+            if (receipts.containsKey(id)) return;
+            pending.put(id,result.deepCopy());
             while (pending.size()>32) pending.remove(pending.keySet().iterator().next());
         }
-        public void clearResults() { pending.clear(); }
+        public boolean pending(String id) { return pending.containsKey(id); }
+        public void clearResults() { pending.clear(); receipts.clear(); offered.clear(); }
         public void acknowledge(Collection<String> ids) { ids.forEach(pending::remove); }
         public JsonArray results() {
-            JsonArray out=new JsonArray(); pending.values().forEach(r -> out.add(r.deepCopy())); return out;
+            JsonArray transientResults=new JsonArray(),durableResults=new JsonArray();
+            pending.values().forEach(transientResults::add);
+            receipts.values().stream().limit(32).forEach(durableResults::add);
+            return resultBatch(transientResults,durableResults);
         }
     }
 }

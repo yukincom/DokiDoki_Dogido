@@ -4,20 +4,101 @@
 // モデル計算・サンプリング・保存句との結合は各既存所有者が担当する。
 #include "../../src/llama-ext.h"
 #include "log.h"
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <cerrno>
+#include <fcntl.h>
+#include <sys/file.h>
+#include <unistd.h>
 #include <stdexcept>
 extern "C" {
 #include "hash/sha256/sha256.h"
 }
 
+// One response owns the token mapping for its whole lifetime. Failure to publish
+// ownership leaves an ordinary capture that cannot be removed automatically.
+struct dogido_capture_writer {
+    int lock_fd = -1;
+    int index_fd = -1;
+    std::string token;
+    std::string response;
+
+    ~dogido_capture_writer() { release(); }
+    void release() noexcept {
+        if (index_fd >= 0) { ::close(index_fd); index_fd = -1; }
+        if (lock_fd >= 0) { ::close(lock_fd); lock_fd = -1; }
+    }
+    static bool valid_token(const std::string & s) {
+        if (s.size() != 36) { return false; }
+        for (size_t i = 0; i < s.size(); ++i) {
+            const bool sep = i == 8 || i == 13 || i == 18 || i == 23;
+            if (sep ? s[i] != '-' : std::string("0123456789abcdef").find(s[i]) == std::string::npos) {
+                return false;
+            }
+        }
+        return true;
+    }
+    static const std::string & instance() {
+        static const std::string value = std::to_string(::getpid()) + "-" + std::to_string(
+                std::chrono::system_clock::now().time_since_epoch().count());
+        return value;
+    }
+    void publish(const std::string & status, bool closed) const {
+        const std::string name = token + ".json";
+        // Never replace somebody else's initial claim. A crash during that first
+        // write leaves a partial, unusable marker, rather than an orphan guessed by date.
+        const std::string out = closed ? name + ".tmp" : name;
+        const json marker = {{"schema", "dogido.capture_writer.v1"}, {"capture_request_id", token},
+            {"response_id", response}, {"writer_instance", instance()}, {"status", status}, {"writer_closed", closed}};
+        const auto bytes = marker.dump() + "\n";
+        const int fd = ::openat(index_fd, out.c_str(), O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW|O_CLOEXEC, 0600);
+        if (fd < 0) { throw std::runtime_error("cannot exclusively create writer marker"); }
+        bool good = true;
+        for (size_t done = 0; done < bytes.size();) {
+            const auto n = ::write(fd, bytes.data()+done, bytes.size()-done);
+            if (n < 0 && errno == EINTR) { continue; }
+            if (n <= 0) { good = false; break; }
+            done += static_cast<size_t>(n);
+        }
+        good = good && ::fsync(fd) == 0;
+        const bool close_ok = ::close(fd) == 0;
+        if (!good || !close_ok || (closed && ::renameat(index_fd, out.c_str(), index_fd, name.c_str()) != 0)) {
+            throw std::runtime_error("cannot commit writer marker");
+        }
+    }
+    bool start(const std::filesystem::path & directory, const std::string & proposed, const std::string & id) {
+        if (proposed.empty()) { return false; } // Clients without this capability keep the previous format.
+        try {
+            if (!valid_token(proposed)) { throw std::runtime_error("invalid capture token"); }
+            const auto index = directory.parent_path() / "_requests";
+            std::filesystem::create_directory(index);
+            index_fd = ::open(index.c_str(), O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC);
+            lock_fd = ::open((directory / ".writer.lock").c_str(), O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW|O_CLOEXEC, 0600);
+            if (index_fd < 0 || lock_fd < 0 || ::flock(lock_fd, LOCK_EX|LOCK_NB) != 0) {
+                throw std::runtime_error("cannot lock capture writer");
+            }
+            token = proposed;
+            response = id;
+            publish("recording", false);
+            return true;
+        } catch (const std::exception & e) {
+            token.clear();
+            release();
+            LOG_WRN("dogido_capture: cleanup held: %s\n", e.what());
+            return false;
+        }
+    }
+};
+
 struct dogido_capture {
     std::filesystem::path directory;
     std::ofstream hidden;
     json manifest;
+    dogido_capture_writer writer;
     size_t limit = 256;
     int layers = 0;
     int width = 0;
@@ -52,6 +133,7 @@ struct dogido_capture {
             if (!std::filesystem::create_directory(result->directory)) {
                 throw std::runtime_error("capture directory already exists");
             }
+            const bool tracked = result->writer.start(result->directory, task.params.dogido_capture_request_id, id);
             result->layers = llama_model_n_layer(model);
             result->width = llama_model_n_embd(model);
             const auto prompt = task.tokens.get_text_tokens();
@@ -68,6 +150,11 @@ struct dogido_capture {
                 {"implementation", "dogido-gguf-capture-v1"},
                 {"generation_settings", task.params.to_json()},
             };
+            if (tracked) {
+                result->manifest["capture_request_id"] = result->writer.token;
+                result->manifest["writer_instance"] = result->writer.instance();
+                result->manifest["writer_closed"] = false;
+            }
             sha256_init(&result->digest);
             result->hidden.open(result->directory / "hidden.f32", std::ios::binary | std::ios::out);
             result->hidden.exceptions(std::ios::failbit | std::ios::badbit);
@@ -187,6 +274,7 @@ struct dogido_capture {
         }
         finalized = true;
         if (!manifest.is_object()) {
+            writer.release();
             return;
         }
         try {
@@ -209,9 +297,17 @@ struct dogido_capture {
                 manifest["status"] = !completed ? "cancelled" :
                     manifest["positions"].size() < manifest["total_generated_tokens"].get<size_t>() ? "partial" : "complete";
             }
+            if (!writer.token.empty()) { manifest["writer_closed"] = true; }
             save_manifest();
+            if (!writer.token.empty()) {
+                writer.publish(manifest.at("status").get<std::string>(), true);
+            }
         } catch (const std::exception & e) {
+            // No terminal index on I/O failure. The reader requires both records
+            // as well as an unlocked writer before it can act on this response.
+            if (!writer.token.empty()) { manifest["writer_closed"] = false; }
             fail(e.what());
         }
+        writer.release();
     }
 };

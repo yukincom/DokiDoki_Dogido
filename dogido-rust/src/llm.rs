@@ -13,6 +13,12 @@ use tracing::instrument::WithSubscriber;
 
 use crate::types::{GeneratedText, GenerationReport, GenerationRequest, Role};
 
+/// 採取あり・送信前の帰属記録なしは、旧形式の採取だけを行う。
+pub(crate) enum CaptureMode<'a> {
+    Off,
+    Record { request_id: Option<&'a str> },
+}
+
 /// この段階では一要求を一回だけ生成する。会話の状態・記憶は所有しない。
 pub struct RigLlm {
     client: openai::CompletionsClient,
@@ -61,7 +67,7 @@ impl RigLlm {
     }
 
     pub async fn generate(&self, input: &GenerationRequest) -> Result<GenerationReport> {
-        Ok(self.complete(input, &[], &[], false, None, false).await?.0)
+        Ok(self.complete(input, &[], &[], false, None, CaptureMode::Off).await?.0)
     }
 
     /// 照合済みの時系列画像を同じ会話・環境反応の要求へ添え、一回だけ送信する。
@@ -72,7 +78,7 @@ impl RigLlm {
         image: &crate::chat_image::Attachment,
     ) -> Result<GenerationReport> {
         Ok(self
-            .complete(input, &[], &[], false, Some(image), false)
+            .complete(input, &[], &[], false, Some(image), CaptureMode::Off)
             .await?
             .0)
     }
@@ -86,7 +92,7 @@ impl RigLlm {
         tool_messages: &[Value],
         allow_call: bool,
     ) -> Result<(GenerationReport, Option<Value>)> {
-        self.complete(input, tools, tool_messages, allow_call, None, false)
+        self.complete(input, tools, tool_messages, allow_call, None, CaptureMode::Off)
             .await
     }
 
@@ -94,10 +100,10 @@ impl RigLlm {
     pub(crate) async fn generate_with_capture(
         &self,
         input: &GenerationRequest,
-        capture: bool,
+        capture: CaptureMode<'_>,
     ) -> Result<GenerationReport> {
         ensure!(
-            !capture || crate::haiku_capture::supports(&input.kind),
+            matches!(capture, CaptureMode::Off) || crate::haiku_capture::supports(&input.kind),
             "unsupported_capture_kind"
         );
         Ok(self
@@ -242,12 +248,15 @@ impl RigLlm {
         tool_messages: &[Value],
         allow_call: bool,
         image: Option<&crate::chat_image::Attachment>,
-        capture: bool,
+        capture: CaptureMode<'_>,
     ) -> Result<(GenerationReport, Option<Value>)> {
         ensure!(self.enabled, "LLM disabled by configuration");
         input.validate()?;
         let mut request = request_with_image(input, image)?;
-        if capture {
+        if let CaptureMode::Record { request_id } = capture {
+            if let Some(token) = request_id {
+                request.additional_params.as_mut().unwrap()["dogido_capture_request_id"] = token.into();
+            }
             request.additional_params.as_mut().unwrap()["dogido_capture"] = true.into();
             if input.kind == "haiku_irony" {
                 request.additional_params.as_mut().unwrap()["dogido_capture_full"] = true.into();
@@ -408,6 +417,8 @@ pub fn decode_response(body: &Value) -> Result<GeneratedText> {
 mod tests {
     use super::*;
 
+    // 見込み: 取消前に生成したIDはHTTPの採取メタデータだけに属する。
+    // 合格: 模擬窓口の各要求ペアで本文不変・旧フラグと同じ要求にIDが一度だけ付く。実モデルは使わない。
     #[tokio::test]
     async fn capture_flag_uses_one_existing_request_and_never_changes_messages() {
         use std::sync::{Arc, Mutex};
@@ -430,6 +441,7 @@ mod tests {
             axum::serve(listener, app).await.unwrap();
         });
         let llm = RigLlm::new(&format!("http://{address}"), None, Duration::from_secs(2)).unwrap();
+        let token = uuid::Uuid::new_v4().to_string();
         for kind in [
             "haiku_irony",
             "haiku_scene",
@@ -439,19 +451,22 @@ mod tests {
             let mut input = chat_request();
             input.kind = kind.into();
             llm.generate(&input).await.unwrap();
-            llm.generate_with_capture(&input, true).await.unwrap();
+            llm.generate_with_capture(&input, CaptureMode::Record { request_id: Some(&token) }).await.unwrap();
+            llm.generate_with_capture(&input, CaptureMode::Record { request_id: None }).await.unwrap();
         }
         for kind in ["player_chat", "haiku_workshop_revision"] {
             let mut input = chat_request();
             input.kind = kind.into();
-            assert!(llm.generate_with_capture(&input, true).await.is_err());
+            assert!(llm.generate_with_capture(&input, CaptureMode::Record { request_id: Some(&token) }).await.is_err());
         }
         let rows = seen.lock().unwrap();
-        assert_eq!(rows.len(), 8);
-        for (index, pair) in rows.as_chunks::<2>().0.iter().enumerate() {
+        assert_eq!(rows.len(), 12);
+        for (index, pair) in rows.as_chunks::<3>().0.iter().enumerate() {
             assert!(pair[0].get("dogido_capture").is_none());
             assert!(pair[0].get("dogido_capture_full").is_none());
             let mut captured = pair[1].clone();
+            assert_eq!(captured.as_object_mut().unwrap().remove("dogido_capture_request_id"), Some(json!(token)));
+            assert_eq!(pair[2], captured, "untracked requests keep the old capture flag");
             assert_eq!(
                 captured.as_object_mut().unwrap().remove("dogido_capture"),
                 Some(json!(true))

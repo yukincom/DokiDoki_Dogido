@@ -42,6 +42,25 @@ impl Dialogue {
         let mut screenshot_acks = Vec::new();
         let mut assist_results = Vec::new();
         for result in &event.command_results {
+            if result.command_type == crate::events::AdapterCommandResultCommandType::DisposeScreenshot {
+                if let Some(manager) = &self.artifacts {
+                    if manager.disposition_acknowledged(s.player_uuid.as_deref(),result) { screenshot_acks.push(result.command_id.clone()); continue; }
+                    let manager=manager.clone(); let result=result.clone(); let owner=s.player_uuid.clone();
+                    jobs.push(tokio::spawn(async move {
+                        let saved=tokio::task::spawn_blocking(move||manager.receive_disposition(owner.as_deref(),&result)).await;
+                        if let Ok(Err(error))=saved {tracing::warn!(event="haiku_photo_disposition_held",%error);}
+                    }));
+                }
+                continue;
+            }
+            if result.command_type == crate::events::AdapterCommandResultCommandType::CaptureScreenshot
+                && let Some(manager)=&self.artifacts {
+                let manager=manager.clone(); let result=result.clone(); let owner=s.player_uuid.clone();
+                jobs.push(tokio::spawn(async move {
+                    let saved=tokio::task::spawn_blocking(move||manager.receive_photo(owner.as_deref(),&result)).await;
+                    if let Ok(Err(error))=saved {tracing::warn!(event="haiku_photo_receipt_held",%error);}
+                }));
+            }
             if result.command_type
                 == crate::events::AdapterCommandResultCommandType::CaptureBodyView
                 || s.visual.owns(&result.command_id)
@@ -54,7 +73,8 @@ impl Dialogue {
                 || s.screenshots.owns(&result.command_id)
             {
                 let (ack, receipt) = s.screenshots.receive(result, chrono::Utc::now());
-                if ack {
+                let durable=self.artifacts.as_ref().is_none_or(|m|!m.photo_tracked(&result.command_id) || m.photo_acknowledged(s.player_uuid.as_deref(),result));
+                if ack && durable {
                     screenshot_acks.push(result.command_id.clone());
                 }
                 if let Some(receipt) = receipt {
@@ -369,6 +389,9 @@ impl Dialogue {
                     commands.extend(s.body_autonomy.commands(Instant::now(),utc));
                     commands.extend(super::body_request_runtime::commands(s));
                     commands.extend(s.screenshots.commands(utc));
+                    if s.artifact_lifecycle && let Some(manager)=&self.artifacts {
+                        commands.extend(manager.commands(session_id,s.player_uuid.as_deref()));
+                    }
                     let capture_context = (self.config.chat_image.enabled && !s.preview && !s.foreground.game_paused
                         && !workshop_focus::owns_input(s) && !s.latest.as_ref().is_some_and(|e| e.meta.workshop_observation))
                         .then(|| s.body_observation.accepted(Instant::now()).map(|v| v.context.clone())).flatten();

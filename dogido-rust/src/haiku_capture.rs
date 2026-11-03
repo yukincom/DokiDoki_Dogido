@@ -2,6 +2,9 @@
 //! 入力は既存の生成要求・応答と明示設定された保存先。出力は発句entryに添える観測記録だけ。
 //! 推論・再試行・数値ファイルの作成は行わず、採取失敗を会話失敗へ伝播させない。
 //! 保存句との結合はhaiku_runtimeの現行世代確認とMemoryStoreの保存が所有する。
+mod archived_writer;
+pub(crate) use archived_writer::retire_archived_writer;
+
 use crate::{
     haiku::StructuredRequest,
     types::{GeneratedText, GenerationReport, GenerationRequest},
@@ -34,6 +37,8 @@ pub struct Observation {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct RequestObservation {
     pub request_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub capture_request_id: Option<String>,
     pub request_index: usize,
     pub kind: String,
     pub route: String,
@@ -69,6 +74,7 @@ pub struct Artifact {
 /// 設定された採取先を一件の発句だけに保持する。workshopや通常会話へは渡さない。
 pub struct Capture {
     root: PathBuf,
+    job: Option<crate::haiku_artifacts::Job>,
     observation: Observation,
 }
 
@@ -83,6 +89,7 @@ impl Capture {
     pub fn new(root: PathBuf, session_id: &str, job_id: &str) -> Self {
         Self {
             root,
+            job: None,
             observation: Observation {
                 schema_version: 1,
                 session_id: session_id.into(),
@@ -91,6 +98,15 @@ impl Capture {
                 requests: vec![],
             },
         }
+    }
+
+    pub fn with_job(mut self, job: Option<crate::haiku_artifacts::Job>) -> Self {
+        self.job = job;
+        self
+    }
+
+    pub fn token(&self, slot: usize) -> Option<&str> {
+        self.observation.requests[slot].capture_request_id.as_deref()
     }
 
     /// 同じHTTP要求を送る直前に採取要求を記録する。promptへ識別子を混ぜない。
@@ -102,8 +118,21 @@ impl Capture {
     ) -> Result<usize> {
         ensure!(supports(&request.kind), "unsupported_capture_kind");
         let slot = self.observation.requests.len();
+        let request_id = format!("{}:request:{index}", self.observation.job_id);
+        // 台帳を書けなければ通常の採取だけを送り、自動削除できるIDを発行しない。
+        let token = self.job.as_ref().and_then(|job| {
+            let token = uuid::Uuid::new_v4().to_string();
+            match job.request(&request_id, &token) {
+                Ok(()) => Some(token),
+                Err(error) => {
+                    tracing::warn!(event="capture_cleanup_held", %request_id, %error, "採取要求の帰属を書けなかった");
+                    None
+                }
+            }
+        });
         self.observation.requests.push(RequestObservation {
-            request_id: format!("{}:request:{index}", self.observation.job_id),
+            request_id,
+            capture_request_id: token,
             request_index: index,
             kind: request.kind.clone(),
             route: request.route.clone(),
@@ -122,6 +151,11 @@ impl Capture {
     /// 数値ファイルの検査はblocking workerへ分離する。欠落・不整合は観測結果にだけ残す。
     /// 取消でこのfutureが破棄された場合、ファイルが完成しても次の発句に引き継がれない。
     pub async fn finish(&mut self, slot: usize, report: &GenerationReport) {
+        if let (Some(job), Some(token)) = (&self.job, self.token(slot))
+            && let Err(error) = job.response(token, &report.response_id)
+        {
+            tracing::warn!(event="capture_cleanup_held", token, %error, "応答の帰属を確定できなかった");
+        }
         let duplicates: Vec<_> = self
             .observation
             .requests
@@ -219,6 +253,18 @@ fn inspect(root: &Path, response_id: &str, api_text: &str) -> Result<Artifact> {
     directory(root)?;
     let folder = root.join(response_id);
     directory(&folder)?;
+    // A cancelled outer future may leave its blocking inspection running. Pin that reader too.
+    #[cfg(unix)]
+    let _reader = {
+        use std::os::{fd::AsRawFd,unix::fs::OpenOptionsExt};
+        let lease=folder.join(".writer.lock");
+        if lease.try_exists()? {
+            regular(&lease)?;
+            let file=fs::OpenOptions::new().read(true).custom_flags(libc::O_NOFOLLOW).open(&lease)?;
+            ensure!(unsafe{libc::flock(file.as_raw_fd(),libc::LOCK_SH|libc::LOCK_NB)}==0,"capture_writer_busy");
+            Some(file)
+        } else {None}
+    };
     let path = folder.join("manifest.json");
     ensure!(
         regular(&path)?.len() <= MANIFEST_LIMIT,

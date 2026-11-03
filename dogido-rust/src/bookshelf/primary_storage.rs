@@ -69,11 +69,27 @@ impl Store {
                 let at = chrono::DateTime::parse_from_rfc3339(record["original"]["created_at"].as_str().context("missing_date")?)?;
                 let poem = archive.for_poem(&head.poem_id, at.into())?;
                 let receipt = &saved["receipt"];
+                let capture_token=req["capture_request_id"].as_str();
+                let archived_manifest=poem.internal_capture_file(req,receipt,"manifest")?.manifest;
+                let has_payload=pending(&source.join("hidden.f32"))? || pending(&source.join("manifest.json"))?;
+                let writer=if let Some(token)=capture_token.filter(|_|has_payload) {
+                    match crate::haiku_artifacts::completed_writer(input,token,response,&archived_manifest) {
+                        Ok(Some(writer))=>Some(writer),
+                        Ok(None)=>continue,
+                        Err(error)=>{tracing::warn!(event="haiku_archived_writer_held",response_id=response,%error);continue;},
+                    }
+                } else {None};
                 for (kind, name, field) in [("hidden", "hidden.f32", "hidden_sha256"), ("manifest", "manifest.json", "manifest_sha256")] {
                     let path = source.join(name);
                     if let Some(expected) = receipt[field].as_str() && pending(&path)? {
                         poem.internal_capture_file(req, receipt, kind)?;
                         retire(&path, expected)?;
+                    }
+                }
+                drop(writer);
+                if let Some(token)=capture_token {
+                    if let Err(error)=crate::haiku_capture::retire_archived_writer(input,token,response,&archived_manifest) {
+                        tracing::warn!(event="haiku_archived_writer_held",response_id=response,%error);
                     }
                 }
                 if fs::read_dir(&source)?.next().is_none() { fs::remove_dir(&source)?; }

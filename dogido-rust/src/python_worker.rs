@@ -7,7 +7,7 @@ use crate::{
         self, Backend, GroundedHaikuResult, Input, LineForm, StructuredRequest, TransformRequest,
     },
     haiku_response,
-    llm::RigLlm,
+    llm::{CaptureMode, RigLlm},
     types::{ChatMessage, GenerationRequest},
 };
 use anyhow::{Context, Result, ensure};
@@ -361,9 +361,13 @@ impl Backend for LiveBackend<'_> {
             .filter(|_| crate::haiku_capture::supports(&request.kind))
             .map(|capture| capture.begin(self.requests.len(), &request, &input))
             .transpose()?;
+        let capture_mode = match self.capture.as_ref().zip(capture_slot) {
+            Some((capture, slot)) => CaptureMode::Record { request_id: capture.token(slot) },
+            None => CaptureMode::Off,
+        };
         match route
             .llm
-            .generate_with_capture(&input, capture_slot.is_some())
+            .generate_with_capture(&input, capture_mode)
             .await
         {
             Ok(report) => {

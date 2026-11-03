@@ -65,14 +65,17 @@ impl Store {
         let id = format!("minecraft-{command}");
         let _state_lock = self.write_lock()?;
         let mut d = self.read()?;
+        let (root, poem_id) = trash::resolve(&self.memory, &receipt.poem_id)?;
+        let _poem_lock = trash::lock(&root)?;
+        let matches:Vec<_>=trash::raw_rows(&root,"haiku_entries.jsonl")?
+            .into_iter().filter(|p|p["id"]==poem_id).collect();
+        ensure!(matches.len()<=1,"capture_target_conflict");
+        let original_poem=matches.into_iter().next();
+        crate::haiku_artifacts::validate_photo_target(&self.memory,command,&receipt.poem_id,original_poem.as_ref())?;
         if let Some(existing) = d["minecraftPhotos"].get(&id) {
             ensure!(existing["receipt"] == json!(receipt), "capture_conflict");
             return Ok(());
         }
-        let (root, poem_id) = trash::resolve(&self.memory, &receipt.poem_id)?;
-        let _poem_lock = trash::lock(&root)?;
-        let original_poem = trash::raw_rows(&root, "haiku_entries.jsonl")?
-            .into_iter().find(|p| p["id"] == poem_id);
         ensure!(
             !trash::is_deleted(&root, &poem_id)? && original_poem.is_some(),
             "capture_target_missing"

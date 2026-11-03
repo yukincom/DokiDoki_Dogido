@@ -61,4 +61,35 @@ class ScreenshotProtocolTest {
         assertEquals("s0",batch.get(1).getAsString());
         assertEquals(32,ordinary.size());assertEquals(32,shots.size());
     }
+    // 見込み: 決定はIDで照合し、パスを受け取らない。合格: 正規命令だけを解析し、結果の元shotとdecisionを復元。wire JSON・Minecraftなし。
+    @Test void disposalProtocolDistinguishesDeliveryFromSourceAndRejectsPaths() {
+        JsonObject d=new JsonObject();
+        d.addProperty("type","dispose_screenshot");d.addProperty("command_id",java.util.UUID.randomUUID().toString());
+        d.addProperty("session_id","new");d.addProperty("source_session_id","old");
+        d.add("owner_uuid",command().get("owner_uuid")); d.add("capture_command_id",command().get("command_id"));
+        d.addProperty("action","discard");d.addProperty("decision_id","outcome:1");
+        JsonObject root=new JsonObject();JsonArray list=new JsonArray(); list.add(d);root.add("commands",list);
+        var parsed=ScreenshotProtocol.parseDispositions(root).getFirst();
+        var result=ScreenshotProtocol.result(parsed,"succeeded","discarded");
+        for (String k : List.of("command_id","session_id","source_session_id","capture_command_id","action","decision_id"))
+            assertEquals(d.get(k),result.get(k));
+        assertEquals("dispose_screenshot",result.get("command_type").getAsString());
+        d.addProperty("filename","dogido_2026-10-21_13.01.01.png");
+        assertTrue(ScreenshotProtocol.parseDispositions(root).isEmpty());
+    }
+    // 見込み: 再起動で32件を超えても未送信受領を失わない。合格: 未提示IDのACKを除き、確定32件を外した後の8件を提示。wire配送枠だけ。
+    @Test void restoredReceiptsStayQueuedAcrossWireBatchesAndOnlySentIdsCanBeAcked() {
+        var state=new ScreenshotProtocol.State();
+        java.util.List<String> ids=new java.util.ArrayList<>();
+        for (int i=0;i<40;i++) {
+            var r=new JsonObject();String id="shot_"+java.util.UUID.randomUUID();ids.add(id);
+            r.addProperty("command_id",id);state.rememberReceipt(r);
+        }
+        var first=state.results();assertEquals(32,first.size());state.offered(first);
+        var acked=state.acknowledgedReceipts(ids);assertEquals(32,acked.size());
+        state.acknowledge(ids);assertEquals(32,state.results().size());
+        acked.forEach(state::forgetReceipt);
+        var next=state.results();assertEquals(8,next.size());
+        assertEquals(ids.get(32),next.get(0).getAsJsonObject().get("command_id").getAsString());
+    }
 }

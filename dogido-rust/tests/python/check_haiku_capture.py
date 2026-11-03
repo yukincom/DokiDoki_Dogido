@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """既存の模擬発句で採取フラグ・応答ID・保存・取消を検査する。実モデルは呼ばない。"""
 from contextlib import contextmanager
+import fcntl
 import hashlib
 import json
 from pathlib import Path
@@ -14,8 +15,14 @@ from check_haiku_runtime import fixture
 KINDS = {.15: "haiku_irony", .2: "haiku_scene", .6: "haiku_draft", .3: "haiku_line_regeneration"}
 
 
+def publish_json(path, value):
+    tmp = path.with_suffix(".writing")
+    tmp.write_text(json.dumps(value))
+    tmp.replace(path)
+
+
 @contextmanager
-def captured(*, modes=None, **settings):
+def captured(*, modes=None, tracked=False, **settings):
     with tempfile.TemporaryDirectory(prefix="dogido-capture-artifacts-") as tmp:
         root = Path(tmp) / "raw"
         root.mkdir()
@@ -24,21 +31,44 @@ def captured(*, modes=None, **settings):
             original = control["structured_handler"]
             outputs = {}
             calls = []
+            writers = {}
+            writer_instance = str(uuid.uuid4())
+            if tracked:
+                (root / "_requests").mkdir()
 
             def structured(incoming):
+                if tracked and incoming.get("dogido_capture") is True:
+                    # 要求を受けた時点でwriter札を置く。応答IDをRustがまだ知らない取消も検査できる。
+                    token = incoming["dogido_capture_request_id"]
+                    assert str(uuid.UUID(token)) == token
+                    response_id = "capture_" + uuid.uuid4().hex
+                    kind = KINDS[incoming["temperature"]]
+                    calls.append({"id": response_id, "kind": kind, "request": incoming})
+                    artifact_dir = root / response_id
+                    artifact_dir.mkdir()
+                    lease = (artifact_dir / ".writer.lock").open("xb")
+                    fcntl.flock(lease, fcntl.LOCK_EX)
+                    marker = {"schema": "dogido.capture_writer.v1", "capture_request_id": token,
+                              "response_id": response_id, "writer_instance": writer_instance,
+                              "status": "writing", "writer_closed": False}
+                    writers[id(incoming)] = (marker, lease)
+                    (artifact_dir / "hidden.f32").write_bytes(struct.pack("<f", 0))
+                    publish_json(root / "_requests" / (token + ".json"), marker)
                 value = original(incoming)
                 outputs[id(incoming)] = value
                 return value
 
             def response(incoming):
                 content = json.dumps(outputs.pop(id(incoming)), ensure_ascii=False)
-                response_id = "capture_" + uuid.uuid4().hex
+                writer = writers.pop(id(incoming), None)
+                response_id = writer[0]["response_id"] if writer else "capture_" + uuid.uuid4().hex
                 kind = KINDS.get(incoming["temperature"])
                 mode = (modes or {}).get(kind, "complete")
-                calls.append({"id": response_id, "kind": kind, "request": incoming})
+                if writer is None:
+                    calls.append({"id": response_id, "kind": kind, "request": incoming})
                 if incoming.get("dogido_capture") is True and mode != "missing":
                     folder = root / response_id
-                    folder.mkdir()
+                    folder.mkdir(exist_ok=writer is not None)
                     raw = struct.pack("<8f", *range(8))
                     (folder / "hidden.f32").write_bytes(raw)
                     manifest = {
@@ -56,7 +86,25 @@ def captured(*, modes=None, **settings):
                         # native chat parserの前後で本文が異なっても、同じ応答IDを結合根拠にする。
                         "rendered_text": "<channel|>" + content, "finish_reason": "stop",
                     }
-                    (folder / "manifest.json").write_text(json.dumps(manifest))
+                    if writer is not None:
+                        marker, lease = writer
+                        marker.update(status=manifest["status"], writer_closed=True)
+                        manifest.update({k: marker[k] for k in ("capture_request_id", "writer_instance", "writer_closed")})
+                        manifest["backend"] = "llama.cpp"
+                        try:
+                            publish_json(folder / "manifest.json", manifest)
+                            publish_json(root / "_requests" / (marker["capture_request_id"] + ".json"), marker)
+                            barrier = control.get("capture_release", {}).get(kind)
+                            if barrier:
+                                ready, release = barrier
+                                ready.set()
+                                assert release.wait(12), "mock capture lease was not released by its test"
+                        finally:
+                            lease.close()
+                    else:
+                        (folder / "manifest.json").write_text(json.dumps(manifest))
+                elif writer is not None:
+                    writer[1].close()
                 return {"id": response_id, "object": "chat.completion", "created": 0, "model": "mock-model",
                         "choices": [{"index": 0, "message": {"role": "assistant", "content": content},
                                      "finish_reason": "stop"}],
@@ -64,7 +112,12 @@ def captured(*, modes=None, **settings):
 
             control["structured_handler"] = structured
             control["completion_override"] = response
-            yield environment, root, calls
+            try:
+                yield environment, root, calls
+            finally:
+                environment[5].set()
+                for _, release in control.get("capture_release", {}).values():
+                    release.set()
 
 
 def main():

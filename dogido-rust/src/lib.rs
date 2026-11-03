@@ -23,6 +23,7 @@ pub mod events;
 pub mod foreground;
 pub mod haiku;
 pub mod haiku_capture;
+pub mod haiku_artifacts;
 pub mod haiku_memory;
 pub mod haiku_prompt;
 pub mod haiku_record;

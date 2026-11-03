@@ -668,7 +668,7 @@ fn crc32(bytes: &[u8]) -> u32 {
 /// Directoryを開いたまま相対I/Oを行う。全祖先と最終要素のsymlinkを辿らず、
 /// 外付けの切断後に同名のローカルdirectoryへmkdir_allで落下する経路を持たない。
 #[cfg(unix)]
-mod safe {
+pub(crate) mod safe {
     use super::*;
     use std::{
         ffi::CString,
@@ -680,9 +680,9 @@ mod safe {
         },
         path::Component,
     };
-    pub(super) struct Dir(File);
+    pub(crate) struct Dir(File);
     impl Dir {
-        pub(super) fn open(path: &Path) -> Result<Self> {
+        pub(crate) fn open(path: &Path) -> Result<Self> {
             let full = if path.is_absolute() {
                 path.to_path_buf()
             } else {
@@ -732,7 +732,7 @@ mod safe {
             ensure!(file.metadata()?.is_file(), "archive_unsafe_file");
             Ok(file)
         }
-        pub(super) fn child(&self, name: &str, create: bool) -> Result<Self> {
+        pub(crate) fn child(&self, name: &str, create: bool) -> Result<Self> {
             self.child_os(name.as_ref(), create)
         }
         fn child_os(&self, name: &std::ffi::OsStr, create: bool) -> Result<Self> {
@@ -758,18 +758,18 @@ mod safe {
             }
             Ok(Self(unsafe { File::from_raw_fd(fd) }))
         }
-        pub(super) fn existing_file(&self, name: &str) -> Result<File> {
+        pub(crate) fn existing_file(&self, name: &str) -> Result<File> {
             self.fd(name, libc::O_RDONLY)
         }
-        pub(super) fn new_file(&self, name: &str) -> Result<File> {
+        pub(crate) fn new_file(&self, name: &str) -> Result<File> {
             self.fd(name, libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL)
         }
-        pub(super) fn lock(&self, name: &str, create: bool) -> Result<File> {
+        pub(crate) fn lock(&self, name: &str, create: bool) -> Result<File> {
             let file = self.fd(name, libc::O_RDWR | if create { libc::O_CREAT } else { 0 })?;
             file.lock().context("archive_lock_failed")?;
             Ok(file)
         }
-        pub(super) fn read(&self, name: &str, limit: usize) -> Result<Option<Vec<u8>>> {
+        pub(crate) fn read(&self, name: &str, limit: usize) -> Result<Option<Vec<u8>>> {
             let file = match self.existing_file(name) {
                 Ok(file) => file,
                 Err(error) if not_found(&error) => return Ok(None),
@@ -784,7 +784,7 @@ mod safe {
             ensure!(bytes.len() <= limit, "archive_file_too_large");
             Ok(Some(bytes))
         }
-        pub(super) fn once(&self, name: &str, bytes: &[u8]) -> Result<()> {
+        pub(crate) fn once(&self, name: &str, bytes: &[u8]) -> Result<()> {
             if let Some(old) = self.read(name, bytes.len())? {
                 ensure!(old == bytes, "archive_existing_file_conflict");
                 // 前回がwrite後・sync前に失敗した場合も、同じbytesの再送で同期だけ完了させる。
@@ -796,7 +796,7 @@ mod safe {
             file.sync_all()?;
             Ok(())
         }
-        pub(super) fn replace_config(&self, bytes: &[u8]) -> Result<()> {
+        pub(crate) fn replace_config(&self, bytes: &[u8]) -> Result<()> {
             let temp = format!(".research-config-{}.tmp", uuid::Uuid::new_v4());
             self.once(&temp, bytes)?;
             let source = Self::name(temp.as_ref())?;
@@ -815,7 +815,57 @@ mod safe {
             }
             self.sync()
         }
-        pub(super) fn sync(&self) -> Result<()> {
+        pub(crate) fn names(&self) -> Result<Vec<String>> {
+            use std::ffi::CStr;
+            use std::os::fd::IntoRawFd;
+            let fd=self.0.try_clone()?.into_raw_fd();
+            let stream=unsafe{libc::fdopendir(fd)};
+            if stream.is_null() {unsafe{libc::close(fd);}; return Err(std::io::Error::last_os_error().into());}
+            let result=(||->Result<Vec<String>> {
+                let mut names=vec![];
+                loop {
+                    #[cfg(target_os="macos")] unsafe{*libc::__error()=0;}
+                    #[cfg(target_os="linux")] unsafe{*libc::__errno_location()=0;}
+                    let entry=unsafe{libc::readdir(stream)};
+                    if entry.is_null() {
+                        let error=std::io::Error::last_os_error();
+                        ensure!(error.raw_os_error()==Some(0),error); break;
+                    }
+                    let name=unsafe{CStr::from_ptr((*entry).d_name.as_ptr())}.to_str()?;
+                    if name!="." && name!=".." {names.push(name.to_owned());}
+                }
+                Ok(names)
+            })();
+            unsafe{libc::closedir(stream);};result
+        }
+        pub(crate) fn unlink_owned(&self,name:&str,expected:&File)->Result<()> {
+            use std::os::unix::fs::MetadataExt;
+            let current=self.existing_file(name)?;
+            let a=current.metadata()?;let b=expected.metadata()?;
+            ensure!(a.dev()==b.dev() && a.ino()==b.ino() && a.len()==b.len(),"artifact_cleanup_file_changed");
+            self.unlink(name,false)
+        }
+        pub(crate) fn same_directory(&self, other: &Self) -> Result<bool> {
+            use std::os::unix::fs::MetadataExt;
+            let a=self.0.metadata()?; let b=other.0.metadata()?;
+            Ok(a.dev()==b.dev() && a.ino()==b.ino())
+        }
+        pub(crate) fn rename_child(&self, source: &str, target: &str) -> Result<()> {
+            let source=Self::name(source.as_ref())?; let target=Self::name(target.as_ref())?;
+            #[cfg(target_os="macos")]
+            let result=unsafe { libc::renameatx_np(self.0.as_raw_fd(),source.as_ptr(),self.0.as_raw_fd(),target.as_ptr(),libc::RENAME_EXCL) };
+            #[cfg(target_os="linux")]
+            let result=unsafe { libc::syscall(libc::SYS_renameat2,self.0.as_raw_fd(),source.as_ptr(),self.0.as_raw_fd(),target.as_ptr(),libc::RENAME_NOREPLACE) as i32 };
+            #[cfg(not(any(target_os="macos", target_os="linux")))]
+            anyhow::bail!("artifact_rename_platform_unsupported");
+            if result!=0 {return Err(std::io::Error::last_os_error().into());} self.sync()
+        }
+        pub(crate) fn unlink(&self, name: &str, directory: bool) -> Result<()> {
+            let name=Self::name(name.as_ref())?;
+            let result=unsafe {libc::unlinkat(self.0.as_raw_fd(),name.as_ptr(),if directory {libc::AT_REMOVEDIR} else {0})};
+            if result!=0 {return Err(std::io::Error::last_os_error().into());} self.sync()
+        }
+        pub(crate) fn sync(&self) -> Result<()> {
             // 一部FAT系driverはdirectory fsyncを提供しない。個別fileは必ずsync_all済み。
             // その場合も次回読込時にcommit・記録・画像の全hashを照合し、不完全な物を公開しない。
             match self.0.sync_all() {

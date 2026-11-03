@@ -65,7 +65,7 @@ pub struct CaptureView {
     pub camera_restored: bool,
 }
 impl CaptureView {
-    fn matches(&self, context: &Context) -> bool {
+    pub(crate) fn matches(&self, context: &Context) -> bool {
         self.viewpoint == "dogido_client_render_eye"
             && self.camera_restored
             && self.body_entity_uuid == context.body_id
@@ -107,6 +107,10 @@ impl State {
         issued: DateTime<Utc>,
         generation_timeout_ms: u64,
     ) {
+        self.prepare_owned(sid, job, context, issued, generation_timeout_ms, None);
+    }
+    pub fn prepare_owned(&mut self, sid: &str, job: &str, context: &Context,
+        issued: DateTime<Utc>, generation_timeout_ms: u64, command_id: Option<String>) {
         self.expire(issued);
         if !self.enabled
             || self.pending.len() >= 8
@@ -121,7 +125,7 @@ impl State {
         let retain_until = Duration::from_std(timeout).ok()
             .and_then(|d| issued.checked_add_signed(d)).unwrap_or(DateTime::<Utc>::MAX_UTC);
         self.pending.push(Pending {
-            command: json!({"type":"capture_screenshot","command_id":format!("shot_{}",uuid::Uuid::new_v4()),
+            command: json!({"type":"capture_screenshot","command_id":command_id.unwrap_or_else(||format!("shot_{}",uuid::Uuid::new_v4())),
                 "session_id":sid,"poem_id":format!("session:{sid}:capture:{job}"),"dimension":context.dimension,
                 "body_entity_uuid":context.body_id,"body_epoch":context.epoch,"owner_uuid":context.owner_id,"issued_at":issued,
                 "expires_at":issued+Duration::seconds(START_SECONDS)}),

@@ -615,7 +615,15 @@ impl Dialogue {
         sid: &str,
         job: &str,
         observation: &Observation,
+        artifact_job: Option<&crate::haiku_artifacts::Job>,
     ) -> Result<()> {
+        let issued=chrono::Utc::now();
+        let command_id=if let (Some(job),Some(context))=(artifact_job,observation.event.body_origin().and_then(|o|o.context.as_ref())) {
+            match job.photo(context,issued) {
+                Ok(id)=>Some(id),
+                Err(error)=>{tracing::warn!(event="haiku_artifact_photo_held",%error);None}
+            }
+        } else {None};
         {
             let mut data = self.data.lock().unwrap();
             let s = data.sessions.get_mut(sid).context("haiku session closed")?;
@@ -636,13 +644,7 @@ impl Dialogue {
             else {
                 return Ok(());
             };
-            s.screenshots.prepare(
-                sid,
-                job,
-                context,
-                chrono::Utc::now(),
-                self.config.haiku.job_timeout_ms,
-            );
+            s.screenshots.prepare_owned(sid,job,context,issued,self.config.haiku.job_timeout_ms,command_id);
         }
         loop {
             {
@@ -670,6 +672,7 @@ impl Dialogue {
         completed: Vec<Value>,
         helper: &mut Helper,
         cancel: &mut watch::Receiver<bool>,
+        artifact_job: Option<&crate::haiku_artifacts::Job>,
     ) -> Result<()> {
         // AI/補助のfutureは取消で捨て、その後run_haikuがhelperを必ずkill+waitする。
         // 音声は外側selectで捨てず、Audio自身の取消・player waitを最後まで待つ。
@@ -677,7 +680,7 @@ impl Dialogue {
         let h = &self.config.haiku;
         let corrections = step!(self.reading_overlay());
         let lessons = step!(self.active_lessons());
-        step!(self.prepare_haiku_photo(sid, job, &observation));
+        step!(self.prepare_haiku_photo(sid, job, &observation, artifact_job));
         let (mut preparation, context) = Preparation::capture(haiku::preparation::Start {
             event: observation.event,
             runtime: observation.runtime,
@@ -704,7 +707,7 @@ impl Dialogue {
                     h.capture_dir.clone().expect("validated capture directory"),
                     sid,
                     job,
-                )
+                ).with_job(artifact_job.cloned())
             }),
         };
         let generated = if let Some(fixed) = context.fixed_text.as_deref() {
@@ -747,6 +750,7 @@ impl Dialogue {
         }
         let prepared: PreparedEmission = step!(preparation.emission(&generated, backend.helper));
         let mut emission = prepared.complete(completed_at)?;
+        emission.artifact_job_id=Some(job.into());
         // このjobの採取だけを既存保存へ渡す。以降のcurrent検査に失敗すればentryは作られない。
         emission.internal_capture = backend
             .capture
@@ -778,6 +782,9 @@ impl Dialogue {
             s.haiku.material_turns.clear();
             let player_name = s.name.clone();
             let capture_instance = s.instance_id.clone();
+            if let Some(lifecycle)=artifact_job && let Err(error)=lifecycle.save_pending(&emission) {
+                tracing::warn!(event="haiku_artifact_save_intent_held",%error);
+            }
             d.revision += 1;
             tracing::info!(event="haiku_workshop_opened",session_id=sid,job_id=job,created_at=%completed_at);
             // 保存は実再生成功とは別。音声取消後も完成句の保存jobは継続する。
@@ -787,6 +794,7 @@ impl Dialogue {
                 let save_sid = sid.to_owned();
                 let owner = self.clone();
                 let save_job = job.to_owned();
+                let lifecycle=artifact_job.cloned();
                 jobs.push(tokio::spawn(async move {
                     let write_sid=save_sid.clone();
                     let saved=tokio::task::spawn_blocking(move||{
@@ -797,6 +805,9 @@ impl Dialogue {
                     }).await;
                     match saved {
                         Ok(Ok(saved))=>{
+                            if let Some(lifecycle)=&lifecycle && let Err(error)=lifecycle.saved_entry(&saved.entry) {
+                                tracing::warn!(event="haiku_artifact_saved_held",%error);
+                            }
                             let mut d=owner.data.lock().unwrap();
                             if let Some(s)=d.sessions.get_mut(&save_sid) && s.instance_id==capture_instance {
                                 if saved.inserted {
@@ -807,6 +818,7 @@ impl Dialogue {
                             }
                         },
                         error=>{
+                            if let Some(lifecycle)=&lifecycle {let _=lifecycle.save_failed(&format!("{error:?}"));}
                             tracing::error!(event="haiku_save_failed",session_id=save_sid,?error);
                             if let Some(s)=owner.data.lock().unwrap().sessions.get_mut(&save_sid)
                                 && s.instance_id==capture_instance { s.screenshots.discard_unbound(&save_job); }
@@ -835,6 +847,16 @@ impl Dialogue {
         completed: Vec<Value>,
         mut cancel: watch::Receiver<bool>,
     ) {
+        let artifact_job=if let Some(manager)=&self.artifacts {
+            let identity=self.data.lock().unwrap().sessions.get(&sid).filter(|s|!s.preview && !s.text_workshop)
+                .map(|s|(s.instance_id.clone(),s.name.clone()));
+            if let Some((instance,player))=identity {
+                match manager.start(&sid,&job,&instance,&player) {
+                    Ok(job)=>Some(job),
+                    Err(error)=>{tracing::warn!(event="haiku_artifact_start_held",%error);None}
+                }
+            } else {None}
+        } else {None};
         let owner = self.clone();
         let monitor_sid = sid.clone();
         let monitor_job = job.clone();
@@ -855,10 +877,13 @@ impl Dialogue {
             let _permit=tokio::select!{biased;_=bridge::cancelled(&mut cancel)=>anyhow::bail!("haiku cancelled"),p=self.serial.acquire()=>p?};
             let script=self.config.helper.with_file_name("haiku_tokens.py");
             let mut helper=Helper::start(&self.config.python,&script)?;
-            let result=self.haiku_pipeline(&sid,&job,observation,completed,&mut helper,&mut cancel).await;
+            let result=self.haiku_pipeline(&sid,&job,observation,completed,&mut helper,&mut cancel,artifact_job.as_ref()).await;
             let cleanup=helper.finish(result.is_err()).await;result?;cleanup
         }.await;
         monitor.finish().await;
+        if let Some(lifecycle)=&artifact_job && let Err(error)=lifecycle.discard() {
+            tracing::warn!(event="haiku_artifact_finish_held",%error);
+        }
         {
             let mut d = self.data.lock().unwrap();
             if let Some(s) = d.sessions.get_mut(&sid)

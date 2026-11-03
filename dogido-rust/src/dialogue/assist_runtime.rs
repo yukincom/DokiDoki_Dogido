@@ -20,6 +20,7 @@ impl Dialogue {
     pub fn set_execution_capabilities(&self, sid: &str, capabilities: &[String]) {
         if let Some(s) = self.data.lock().unwrap().sessions.get_mut(sid) {
             s.assist = assist::AssistState::new(capabilities.iter().cloned());
+            s.artifact_lifecycle = capabilities.iter().any(|c|c==crate::haiku_artifacts::CAPABILITY);
             s.screenshots.enabled = capabilities
                 .iter()
                 .any(|c| c == crate::screenshot::CAPABILITY);

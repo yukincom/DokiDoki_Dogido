@@ -158,7 +158,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.eventClient = new DogidoEventClient(LOGGER,
             new DogidoEventClient.ConnectionSettings(this.config.enabled, this.config.serverBaseUrl, this.config.authToken),
             hotbarCommands::handleSelectHotbarCommand, this.horseRecall::handle, this.horseRecall::available, this.bodyInspect::handle,
-            (command,ref) -> screenshots.execute(command,ref,this.eventClient),
+            screenshots,
             (command,ref) -> dogido.fabric.screenshot.BodyViewCapture.request(command,
                 () -> this.eventClient.isCurrent(ref) && (command.afterLook()==null
                     || this.eventClient.isCurrentBodyRequest(ref,command.afterLook().inputGeneration())),
