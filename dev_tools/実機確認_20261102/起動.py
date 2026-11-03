@@ -9,7 +9,8 @@ ROOT = Path(__file__).resolve().parents[2]
 MAIN = ROOT.parent.parent  # 書類側の .dogido_tools/abcdef-playtest-20261102
 JAR = "dogido-fabric-client-0.1.0.jar"
 NORMAL = "aef328603fc9d27a70323f4b92e4b50b4900ae78d30bab4085f76f3aa64f0106"
-TRIAL = "789c388735f3f6db680e072ba0842fbcec7da4dce9b9df1d710bee4af7921716"
+PREVIOUS_TRIAL = "789c388735f3f6db680e072ba0842fbcec7da4dce9b9df1d710bee4af7921716"
+TRIAL = "97e7bbdab93758030fbee0a15b7d049ff314a531057f604f63a637d6230a6187"
 
 
 def read_known(path, allowed):
@@ -22,7 +23,7 @@ def read_known(path, allowed):
 
 def switch_mod(game, restore=False):
     installed = game / "mods" / JAR
-    _, current = read_known(installed, {NORMAL, TRIAL})
+    _, current = read_known(installed, {NORMAL, PREVIOUS_TRIAL, TRIAL})
     target = NORMAL if restore else TRIAL
     if current == target:
         return

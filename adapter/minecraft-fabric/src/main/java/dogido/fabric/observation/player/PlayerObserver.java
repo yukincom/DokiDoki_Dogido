@@ -282,7 +282,7 @@ public final class PlayerObserver {
             Identifier blockId = Registries.BLOCK.getId(state.getBlock());
             JsonObject json = new JsonObject();
             json.addProperty("kind", "block");
-            // nearby_resources と同様 path ベース（サーバ catalog が path キー）
+            // サーバ catalog の path キーを使う
             json.addProperty("name", blockId.getPath());
             double distance = Math.sqrt(
                 player.squaredDistanceTo(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5)

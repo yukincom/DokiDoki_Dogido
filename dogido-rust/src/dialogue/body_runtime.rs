@@ -32,6 +32,10 @@ pub(super) fn observe(s: &mut Session, event: &GameEvent) {
         transport_age,
     );
     let now = Instant::now();
+    // 通常の再送/短い欠測では忘れず、別の身体epochに結び直さない。
+    if let Some(sample)=s.body_observation.accepted(now) {
+        s.haiku.forget_other_body(Some(&sample.context));
+    }
     s.body_autonomy.observe(event.body_autonomy.as_ref(),s.body_observation.accepted(now),now,transport_age);
 }
 /// 姿勢の受理台帳から、その判断一回分の身体感覚を固定する。
@@ -50,7 +54,7 @@ pub(super) fn context_for(s: &Session, event: &GameEvent) -> Context {
     if s.foreground.game_paused {
         return Context {
             observations: serde_json::json!({"body_observation":{"status":"unavailable","reason":"game_paused"},
-                "observer":"dogido","sensory_status":"unavailable","hearing":{"status":"unavailable","reason":"game_paused","sounds":[]}}),
+                "observer":"dogido","sensory_status":"unavailable","weather":{"precipitation_kind":"unknown"},"hearing":{"status":"unavailable","reason":"game_paused","sounds":[]}}),
             ..Context::default()
         };
     }
@@ -104,7 +108,7 @@ pub(super) fn with_context(mut c: Context, event: &GameEvent) -> Context {
     let mut observations = serde_json::json!({
         "body_observation":origin.body,
         "observer":"dogido",
-        "sensory_status":if origin.available {"observed"} else {"unavailable"},
+        "sensory_status":if !origin.available {"unavailable"} else if origin.incomplete.is_empty() {"observed"} else {"partial"},
     });
     if let Some(facts) = c.observations.as_object() {
         for (key, value) in facts {
@@ -117,6 +121,7 @@ pub(super) fn with_context(mut c: Context, event: &GameEvent) -> Context {
         }
     }
     if !origin.available {
+        observations["weather"] = serde_json::json!({"precipitation_kind":"unknown"});
         observations["hearing"] = serde_json::json!({"status":"unavailable","reason":origin.body["reason"],"sounds":[]});
     }
     c.observations = observations;

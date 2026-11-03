@@ -53,7 +53,7 @@ public final class EventWireFixture {
         return JsonParser.parseString("{\"entries\":[{\"id\":\"villager\",\"quantity\":1,\"professions\":[]}],\"truncated\":false}").getAsJsonObject();
     }
     public static JsonObject blocks(boolean includeTypes) {
-        JsonObject blocks = new JsonObject(); blocks.add("resources", array("resources"));
+        JsonObject blocks = new JsonObject();
         if (includeTypes) blocks.add("types", JsonParser.parseString("{\"ids\":[\"minecraft:stone\"],\"truncated\":false}"));
         return blocks;
     }

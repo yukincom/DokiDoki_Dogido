@@ -123,6 +123,16 @@ fn chat_world_current_inventory_and_look_material_match_actual_narration() {
 #[test]
 fn chat_world_place_and_weather_match_canonical_complete_event_projection() {
     let c = world_catalog::catalog();
+    // 旧fixtureの落下物だけが違う対照例は、落下物のない方の固定期待値を使う。
+    // 同じ観測・構造物・距離なら同じ場所になる。実装側の採掘判定を期待値に使わない。
+    let without_drops = |row: &Value| {
+        let mut input = value(row, 0).clone();
+        input.as_object_mut().unwrap().remove("dropped_items");
+        (input.to_string(), row[1].as_u64().unwrap(), row[2].as_u64().unwrap())
+    };
+    let controls: std::collections::HashMap<_, _> = FIXTURE["places"].as_array().unwrap().iter()
+        .filter(|r| value(r, 0)["dropped_items"].as_array().is_none_or(Vec::is_empty))
+        .map(|r| (without_drops(r), value(r, 3))).collect();
     for (i, row) in FIXTURE["places"].as_array().unwrap().iter().enumerate() {
         let event: GameEvent = serde_json::from_value(value(row, 0).clone()).unwrap();
         let before = serde_json::to_value(&event).unwrap();
@@ -134,7 +144,19 @@ fn chat_world_place_and_weather_match_canonical_complete_event_projection() {
             value(row, 2).as_f64().unwrap(),
         )
         .unwrap();
-        let mut expected = value(row, 3).clone();
+        let mut expected = controls.get(&without_drops(row)).copied().unwrap_or(value(row, 3)).clone();
+        // 対照例がない境界値3件。落下物を外すと、3173/3258は空の見えない場所、
+        // 3327はディープダーク。その他の観測と表示は凍結fixtureのまま照合する。
+        let correction = match i {
+            3173 | 3258 => Some(("sky_hidden", "空が見えない空間")),
+            3327 => Some(("cave_biome", "洞窟バイオームの中")),
+            _ => None,
+        };
+        if let Some((kind, label)) = correction {
+            assert_eq!(expected["space_kind"], "active_mining");
+            expected["space_kind"] = json!(kind);
+            expected["place_line"] = json!(expected["place_line"].as_str().unwrap().replace("採掘中", label));
+        }
         // 凍結fixtureは接水を水中と呼んでいた。眼の水没が未測定の旧caseだけを
         // 固定期待値から補正する。現在の場所判定を使って期待値を逆算しない。
         if expected["space_kind"] == "underwater" {
@@ -176,17 +198,16 @@ fn chat_world_place_and_weather_match_canonical_complete_event_projection() {
     for (i, row) in FIXTURE["weather"].as_array().unwrap().iter().enumerate() {
         let event: GameEvent = serde_json::from_value(value(row, 0).clone()).unwrap();
         let cl = c.climate(event.world.biome.as_deref()).unwrap();
-        // 凍結fixtureの砂漠・雨（210..=224）と砂漠・雷（225..=239）の旧期待値だけを補正する。
+        // 凍結fixtureのバイオーム未取得と乾燥地の旧期待値を、地点の降水へ合わせる。
         // 実装の降水判定から期待値を逆算せず、入力が固定されたcase IDで変更範囲を明示する。
         let expected_label = match i {
+            30..=59 => "不明", // 雨・雷のワールド、地点の気候が不明
+            180..=194 => "降水なし", // 天候が未取得でも砂漠には降らない
             210..=239 => "曇り（この場所では降水なし）",
             _ => value(row, 1).as_str().unwrap(),
         };
-        assert_eq!(
-            chat_world::weather_label(&event, &cl).unwrap(),
-            expected_label,
-            "weather {i}"
-        );
+        let label = chat_world::weather_label(&event, &cl).unwrap();
+        assert_eq!(label, expected_label, "weather {i}");
         assert_eq!(
             chat_world::weather_fact(&event),
             value(row, 2).as_str().unwrap(),
@@ -212,7 +233,7 @@ fn weather_labels_follow_resolved_precipitation_without_changing_unknown_weather
             "曇り（この場所では降水なし）",
         ),
         ("savanna", Some("clear"), PrecipitationKind::None, "晴れ"),
-        ("savanna", None, PrecipitationKind::None, "不明"),
+        ("savanna", None, PrecipitationKind::None, "降水なし"),
         ("river", Some("rain"), PrecipitationKind::Rain, "雨"),
         ("river", Some("thunder"), PrecipitationKind::Rain, "雷"),
         ("river", Some("clear"), PrecipitationKind::None, "晴れ"),
@@ -224,8 +245,8 @@ fn weather_labels_follow_resolved_precipitation_without_changing_unknown_weather
             PrecipitationKind::Snow,
             "雪",
         ),
-        ("unknown", Some("rain"), PrecipitationKind::Unknown, "雨"),
-        ("unknown", Some("thunder"), PrecipitationKind::Unknown, "雷"),
+        ("unknown", Some("rain"), PrecipitationKind::Unknown, "不明"),
+        ("unknown", Some("thunder"), PrecipitationKind::Unknown, "不明"),
         ("unknown", Some("clear"), PrecipitationKind::None, "晴れ"),
         ("unknown", None, PrecipitationKind::Unknown, "不明"),
     ] {
@@ -257,12 +278,7 @@ fn weather_labels_follow_resolved_precipitation_without_changing_unknown_weather
             context.observations["weather"]["precipitation_kind"],
             json!(kind)
         );
-        if biome == "savanna" {
-            assert_eq!(
-                context.observations["weather"]["precipitation_possible"],
-                json!(false)
-            );
-        }
+        assert!(context.observations["weather"].get("precipitation_possible").is_none());
     }
 }
 
@@ -281,7 +297,6 @@ fn measured_surface_leaves_keep_taiga_instead_of_inventing_underground() {
             "depth_below_surface":depth,"ceiling_height":2.0,"enclosure_score":0.4,
             "local_light":13,"danger_darkness_score":0.3});
         raw["recent_block_breaks"] = json!([]);
-        raw["dropped_items"] = json!([]);
         let e = GameEvent::parse(raw).unwrap();
         let p = chat_world::place_context(
             world_catalog::catalog(),

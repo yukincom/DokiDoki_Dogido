@@ -58,7 +58,6 @@ public final class EventObservationCapture {
                 var owned = this.playerObserver.observe(player, world);
                 return new WorldObservationFrame.Materials(owned.player(), owned.inventory(),
                     captureNearbyKinds ? this.ambientMobObserver.copyNearbyComposition() : null,
-                    this.worldObserver.buildDroppedItems(player, world),
                     this.worldObserver.buildRecentBlockBreaks(tick), this.playerObserver.buildLookTarget(player, world));
             }, bounds -> world.getOtherEntities(null, bounds).stream().map(entity ->
                 new WorldObservationFrame.EntitySample(MobIdentityObservation.entityTypeName(entity),
@@ -76,8 +75,7 @@ public final class EventObservationCapture {
         root.player(materials.player());
         root.world(frame.copy());
         root.inventory(materials.inventory());
-        root.nearbyMaterials(blocks, materials.nearbyMobs());
-        root.droppedItems(materials.droppedItems());
+        root.nearbyComposition(blocks, materials.nearbyMobs());
         root.recentBlockBreaks(materials.recentBlockBreaks());
         root.lookTarget(materials.lookTarget());
         return root;

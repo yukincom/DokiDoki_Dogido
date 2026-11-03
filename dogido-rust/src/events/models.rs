@@ -384,7 +384,7 @@ pub enum VerticalRelation {
     Below,
 }
 /// Fabricのworld天候フラグに対応する晴れ・雨・雷。
-/// 局所的な降雪や積雪はこのenumだけでは表さず、降水判定側が他の実測も合わせる。
+/// 局所の雨・雪はバイオームの気候と必要な標高を使って降水判定側が確定する。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Weather {
     #[serde(rename = "clear")]
@@ -614,31 +614,6 @@ impl Default for Direction {
         serde_json::from_str("{}").expect("model defaults")
     }
 }
-/// buildDroppedItemsが近接するItemEntityをitem IDごとに合算した観測。
-/// 個数は合計、距離と経過時間はその種類の最小値で、採掘や川柳の材料に使う。
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct DroppedItem {
-    /// Fabricはitemのregistry IDから名前空間を除いたpathを送る。
-    pub name: String,
-    /// 同種類のItemEntityが持つstack個数の合計。1以上。
-    pub count: i64,
-    /// 合算したItemEntityの数。個数とは別で、省略時の互換値は1。
-    #[serde(default = "default_droppeditem_entity_count")]
-    pub entity_count: i64,
-    /// 同種類の最寄りItemEntityまでの距離（ブロック）。未送信ならNone。
-    #[serde(default)]
-    pub distance: Option<f64>,
-    /// 同種類の最も新しいItemEntityの経過時間。Fabricのitem age tick×50ミリ秒。
-    #[serde(default)]
-    pub age_ms: Option<i64>,
-    #[serde(default)]
-    pub block_item: bool,
-    /// item・ブロック種類による採掘材料候補。実際に今回掘って得たことの証拠ではない。
-    #[serde(default)]
-    pub mining_related: bool,
-    #[serde(flatten)]
-    pub extra: BTreeMap<String, Value>,
-}
 /// baseEnvelopeが付けるイベントの契機・根拠・優先度の記述。状態判断は本文の観測と合わせて行う。
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EventDescriptor {
@@ -790,22 +765,6 @@ pub struct MobIdentity {
     /// 手懐け可能な個体の実状態。省略時の互換値はfalse。
     #[serde(default)]
     pub tamed: bool,
-    #[serde(flatten)]
-    pub extra: BTreeMap<String, Value>,
-}
-/// buildNearbyResourcesが周辺から選ぶ資源候補。露出した対象ブロックや羊の毛色を
-/// 種類ごとに最寄り距離へまとめ、会話・川柳で周囲の材料として使う。
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct NearbyResource {
-    /// 現Fabricの候補元はblockまたはmob。mobは羊の毛色などを資源へ投影する。
-    pub r#type: String,
-    pub name: String,
-    /// 同じ資源名で最寄りの候補までの距離（ブロック）。未送信ならNone。
-    #[serde(default)]
-    pub distance: Option<f64>,
-    /// 省略時は各軸None。現FabricのbuildNearbyResourcesは距離までを送る。
-    #[serde(default)]
-    pub direction: Direction,
     #[serde(flatten)]
     pub extra: BTreeMap<String, Value>,
 }
@@ -1361,10 +1320,6 @@ pub struct EventData {
     #[serde(default)]
     pub inventory: BTreeMap<String, i64>,
     #[serde(default)]
-    pub nearby_resources: Vec<NearbyResource>,
-    #[serde(default)]
-    pub dropped_items: Vec<DroppedItem>,
-    #[serde(default)]
     pub recent_block_breaks: Vec<RecentBlockBreak>,
     /// クロスヘア命中先。FabricはMISS等で省略し、任意の周辺対象へ置き換えない。
     #[serde(default)]
@@ -1388,9 +1343,6 @@ fn default_ambientsound_certainty() -> Certainty {
 }
 fn default_auditorythreat_certainty() -> Certainty {
     Certainty::Low
-}
-fn default_droppeditem_entity_count() -> i64 {
-    1
 }
 fn default_hotbarslot_weapon_kind() -> HotbarSlotWeaponKind {
     HotbarSlotWeaponKind::Empty
@@ -1522,22 +1474,6 @@ impl Validate for Direction {
         Ok(())
     }
 }
-impl Validate for DroppedItem {
-    fn validate(&self) -> Result<(), String> {
-        ensure(self.count >= 1, "DroppedItem.count: minimum 1")?;
-        ensure(
-            self.entity_count >= 1,
-            "DroppedItem.entity_count: minimum 1",
-        )?;
-        if let Some(value) = &self.distance {
-            ensure(*value >= 0.0, "DroppedItem.distance: minimum 0")?;
-        }
-        if let Some(value) = &self.age_ms {
-            ensure(*value >= 0, "DroppedItem.age_ms: minimum 0")?;
-        }
-        Ok(())
-    }
-}
 impl Validate for EventDescriptor {
     fn validate(&self) -> Result<(), String> {
         Ok(())
@@ -1618,12 +1554,6 @@ impl Validate for MobIdentity {
                 "MobIdentity.custom_name: maxLength 64",
             )?;
         }
-        Ok(())
-    }
-}
-impl Validate for NearbyResource {
-    fn validate(&self) -> Result<(), String> {
-        self.direction.validate()?;
         Ok(())
     }
 }
@@ -1746,12 +1676,6 @@ impl Validate for EventData {
             }),
             "EventData.companion_candidates: named or tamed identity required",
         )?;
-        self.nearby_resources.validate()?;
-        ensure(
-            (self.dropped_items).len() <= 32,
-            "EventData.dropped_items: maxItems 32",
-        )?;
-        self.dropped_items.validate()?;
         ensure(
             (self.recent_block_breaks).len() <= 32,
             "EventData.recent_block_breaks: maxItems 32",

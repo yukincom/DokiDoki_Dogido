@@ -53,6 +53,11 @@ pub fn snapshot(context: &Context) -> Snapshot {
         "nearby_mob_types".into(),
         mob_kind_signature(&observations["nearby_mob_types"]),
     );
+    for key in ["nearby_mob_types", "nearby_block_types"] {
+        if observations[format!("{key}_partial")] == true {
+            table.insert(key.into(), Value::Null);
+        }
+    }
     let hearing = &observations["hearing"];
     if hearing["observer"] == "dogido" && let Some(sounds) = hearing["sounds"].as_array() {
         // 時刻・方向・距離・個体IDでは同じ声を毎回新規扱いしない。呼称の確度は既存の聴覚表現に従う。
@@ -114,6 +119,7 @@ pub fn changes(previous: &Snapshot, current: &Context) -> Vec<Change> {
             "heard_hostile_sounds" => before.as_array().zip(value.as_array()).is_some_and(|(a, b)| {
                 b.iter().any(|description| !a.contains(description))
             }),
+            "nearby_mob_types" | "nearby_block_types" if current.observations[format!("{key}_partial")] == true => false,
             _ => before != value,
         };
         if noticed {

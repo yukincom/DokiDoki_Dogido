@@ -213,6 +213,7 @@ fn light_generated_for_an_old_body_epoch_is_discarded() {
                 position: None,
                 stationary: None,
                 available: true,
+                incomplete: vec![],
                 age_ms: 0,
                 body: json!({}),
                 player_safety: e.world.clone(),

@@ -10,21 +10,13 @@ import dogido.fabric.observation.world.PortalObservationScanner.PortalObservatio
 import dogido.fabric.observation.world.PortalObservationTracker;
 import dogido.fabric.observation.world.ShelterObservation.LocalSpaceObservation;
 import java.util.ArrayDeque;
-import java.util.Comparator;
 import java.util.Deque;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.ItemEntity;
-import net.minecraft.entity.passive.SheepEntity;
-import net.minecraft.item.BlockItem;
-import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
@@ -43,14 +35,11 @@ import net.minecraft.world.World;
 import static dogido.fabric.observation.MobIdentityObservation.entityTypeName;
 import static dogido.fabric.observation.ObservationNumbers.round;
 import static dogido.fabric.observation.ObservationTime.ticksSince;
-import static dogido.fabric.observation.player.ItemIdentity.itemId;
 import static dogido.fabric.observation.sound.WorldSoundFacts.ENDER_EYE_LAUNCH_TTL_TICKS;
 import static dogido.fabric.observation.sound.WorldSoundFacts.OMINOUS_SOUND_TTL_TICKS;
 import static dogido.fabric.observation.sound.WorldSoundFacts.WEATHER_SOUND_TTL_TICKS;
 import static dogido.fabric.observation.world.BlockMaterials.classifyBrokenBlockMaterial;
-import static dogido.fabric.observation.world.BlockMaterials.isAirExposedNearbyResource;
-import static dogido.fabric.observation.world.BlockMaterials.mergeNearbyResource;
-import static dogido.fabric.observation.world.BlockMaterials.nearbyResourceNameForBlock;
+import static dogido.fabric.observation.world.BlockMaterials.isAirExposed;
 import static dogido.fabric.observation.world.BossSceneObservation.detectBossOmenKind;
 import static dogido.fabric.observation.world.LightObservation.observeNearbyDamagingLightSources;
 import static dogido.fabric.observation.world.LightObservation.observeNearbyLightSources;
@@ -76,8 +65,6 @@ import static dogido.fabric.observation.world.WaterObservation.isWaterContext;
 public final class WorldObserver {
     private static final int LIGHTNING_STRIKE_TTL_TICKS = 40;
     private static final int RECENT_BLOCK_BREAK_TTL_TICKS = 200;
-    private static final double DROPPED_ITEM_SCAN_RADIUS = 8.0;
-    private static final int MAX_DROPPED_ITEM_KINDS = 16;
     private final Deque<BlockBreakObservation> recentBlockBreakObservations = new ArrayDeque<>();
     private long lastNearbyLightningObservedTick = -1000;
     private double lastNearbyLightningDistance = 99.0;
@@ -107,18 +94,12 @@ public final class WorldObserver {
     }
     /** 環境の受け手だけを切り替える共通収集。酸素・リスポーン等のplayer所有情報は身体へ投影しない。 */
     public JsonObject buildWorld(ObservationOrigin receiver, ClientWorld world, long tickCounter) {
+        return buildWorld(receiver,world,tickCounter,buildClimate(world,receiver.blockPosition(),true));
+    }
+    public JsonObject buildWorld(ObservationOrigin receiver, ClientWorld world, long tickCounter, JsonObject json) {
         BlockPos pos = receiver.blockPosition();
         LocalSpaceObservation space = observeLocalSpace(world, pos);
-        JsonObject json = new JsonObject();
-        long timeOfDay = world.getTimeOfDay() % 24000L;
         boolean submerged = receiver.touchingWater(world) || receiver.submerged(world);
-
-        if (usesDayNightCycle(world)) {
-            json.addProperty("time_of_day", (int) timeOfDay);
-            json.addProperty("time_phase", classifyTimePhase(timeOfDay));
-        }
-        json.addProperty("weather", classifyWeather(world));
-        json.addProperty("biome", resolveBiomeName(world, pos));
         String structureName = this.structureAtPlayer;
         if (receiver.body()) {
             StructureAtOrigin observed = this.structureAtBody;
@@ -246,24 +227,38 @@ public final class WorldObserver {
         return json;
     }
 
+    /** 広域走査が未完でも世界時刻・天候と、読み込まれた現在地のバイオームは独立して採れる。 */
+    public JsonObject buildClimate(ClientWorld world, BlockPos pos, boolean positionLoaded) {
+        JsonObject json = new JsonObject();
+        long timeOfDay = world.getTimeOfDay() % 24000L;
+
+        if (usesDayNightCycle(world)) {
+            json.addProperty("time_of_day", (int) timeOfDay);
+            json.addProperty("time_phase", classifyTimePhase(timeOfDay));
+        }
+        json.addProperty("weather", classifyWeather(world));
+        if (positionLoaded) json.addProperty("biome", resolveBiomeName(world, pos));
+        return json;
+    }
+
     /** 直前の身体用種類走査で実際に見えた各種類の最寄り一点。player観測へは混ぜない。 */
     public record VisibleBlock(BlockPos position,String typeId,String label) {}
     private java.util.List<VisibleBlock> bodyVisibleBlocks = java.util.List.of();
     public java.util.List<VisibleBlock> bodyVisibleBlocks() { return bodyVisibleBlocks; }
 
     public JsonObject buildNearbyBlocks(ClientPlayerEntity player, ClientWorld world, boolean captureNearbyKinds) {
-        return buildNearbyBlocks(ObservationOrigin.player(player),world,captureNearbyKinds);
+        return buildNearbyBlocks(ObservationOrigin.player(player),world,captureNearbyKinds,() -> true);
     }
-    /** 種類・資源の分類は共有し、身体の資源は範囲・FOV・見通しを満たす対象だけにする。 */
-    public JsonObject buildNearbyBlocks(ObservationOrigin receiver, ClientWorld world, boolean captureNearbyKinds) {
-        BlockPos origin = receiver.blockPosition();
-        Map<String, Double> nearestDistances = new LinkedHashMap<>();
-        Map<String, String> resourceTypes = new LinkedHashMap<>();
-        java.util.Set<String> observedTypes = new java.util.TreeSet<>();
-
+    /** 実視認したブロックの種類表と注視候補を採る。モデルが多数の観測から自律的に優先順位を選べる段階で、
+     * 周辺資源・落下物の専用一覧を再検討する。 */
+    public JsonObject buildNearbyBlocks(ObservationOrigin receiver, ClientWorld world, boolean captureNearbyKinds,
+            java.util.function.BooleanSupplier completeScan) {
         bodyVisibleBlocks = java.util.List.of();
+        if (!captureNearbyKinds) return new JsonObject();
+        BlockPos origin = receiver.blockPosition();
+        java.util.Set<String> observedTypes = new java.util.TreeSet<>();
         java.util.List<VisibleBlock> visibleBlocks = new java.util.ArrayList<>();
-        int margin = captureNearbyKinds ? NearbyComposition.BLOCK_MARGIN : 0;
+        int margin = NearbyComposition.BLOCK_MARGIN;
         java.util.List<BlockPos> samples = new java.util.ArrayList<>();
         for (int dx = -8 - margin; dx <= 8 + margin; dx += 1) {
             for (int dy = -3 - margin; dy <= 4 + margin; dy += 1) {
@@ -280,155 +275,27 @@ public final class WorldObserver {
             if (state.isAir()) continue;
             double padding = NearbyComposition.blockPadding(dx, dy, dz);
             String blockId = Registries.BLOCK.getId(state.getBlock()).toString();
-            boolean candidate = captureNearbyKinds && !observedTypes.contains(blockId)
-                && this.nearbyBlockKinds.allows(blockId, padding);
-            if ((padding > 0 && !candidate) || !isAirExposedNearbyResource(world, sample)) continue;
-            String resourceName = nearbyResourceNameForBlock(state);
-            boolean visible = !receiver.body();
-            if (receiver.body() && (candidate || padding == 0 && resourceName != null)) {
+            if (observedTypes.contains(blockId) || !this.nearbyBlockKinds.allows(blockId, padding)
+                    || !isAirExposed(world, sample)) continue;
+            boolean visible;
+            if (receiver.body()) {
                 visible = receiver.visible(world,Vec3d.ofCenter(sample),sample,21.0);
-            } else if (candidate) {
+            } else {
                 // player経路のOUTLINE/流体条件は従来通り。身体は共有Body APIの視認判定を使う。
                 BlockHitResult hit = world.raycast(new RaycastContext(receiver.eyePosition(),
                     Vec3d.ofCenter(sample), RaycastContext.ShapeType.OUTLINE,
                     RaycastContext.FluidHandling.ANY, receiver.player()));
                 visible = hit.getType() == HitResult.Type.MISS || hit.getBlockPos().equals(sample);
             }
-            if (candidate && visible) {
+            if (visible) {
                 observedTypes.add(blockId);
                 if (receiver.body()) visibleBlocks.add(new VisibleBlock(sample.toImmutable(),blockId,state.getBlock().getName().getString()));
             }
-            if (receiver.body() && !visible) continue;
-            if (padding == 0 && resourceName != null) {
-                double distance = Math.sqrt(sample.getSquaredDistance(origin));
-                mergeNearbyResource(resourceTypes, nearestDistances, "block", resourceName, distance);
-            }
         }
         bodyVisibleBlocks = java.util.List.copyOf(visibleBlocks);
-
-        for (Entity entity : world.getOtherEntities(receiver.player(), new net.minecraft.util.math.Box(
-            origin.getX() - 8.0, origin.getY() - 3.0, origin.getZ() - 8.0,
-            origin.getX() + 9.0, origin.getY() + 5.0, origin.getZ() + 9.0
-        ))) {
-            if (!(entity instanceof SheepEntity sheep) || !sheep.isAlive()) {
-                continue;
-            }
-            if (receiver.body() && !receiver.visible(world,sheep,16.0)) continue;
-            String resourceName = sheep.getColor().asString() + "_wool";
-            double distance = receiver.distanceTo(sheep);
-            mergeNearbyResource(resourceTypes, nearestDistances, "mob", resourceName, distance);
-        }
-
-        JsonArray array = new JsonArray();
-        nearestDistances.entrySet().stream()
-            .sorted(Map.Entry.comparingByValue())
-            .limit(16)
-            .forEach(entry -> {
-                JsonObject item = new JsonObject();
-                item.addProperty("type", resourceTypes.get(entry.getKey()));
-                item.addProperty("name", entry.getKey());
-                item.addProperty("distance", round(entry.getValue()));
-                array.add(item);
-            });
         JsonObject result = new JsonObject();
-        result.add("resources", array);
-        if (captureNearbyKinds) result.add("types", this.nearbyBlockKinds.finish(observedTypes));
+        result.add("types", this.nearbyBlockKinds.finish(observedTypes, completeScan.getAsBoolean()));
         return result;
-    }
-
-    public JsonArray buildDroppedItems(ClientPlayerEntity player, ClientWorld world) {
-        return buildDroppedItems(ObservationOrigin.player(player),world);
-    }
-    /** 同じ品目集約を使い、身体経路では視認できた落下物だけを材料にする。 */
-    public JsonArray buildDroppedItems(ObservationOrigin receiver, ClientWorld world) {
-        BlockPos origin = receiver.blockPosition();
-        double radius = DROPPED_ITEM_SCAN_RADIUS;
-        Map<String, DroppedItemObservation> byItemId = new LinkedHashMap<>();
-        for (Entity entity : world.getOtherEntities(receiver.player(), new net.minecraft.util.math.Box(
-            origin.getX() - radius,
-            origin.getY() - radius,
-            origin.getZ() - radius,
-            origin.getX() + radius + 1.0,
-            origin.getY() + radius + 1.0,
-            origin.getZ() + radius + 1.0
-        ))) {
-            if (!(entity instanceof ItemEntity itemEntity) || !itemEntity.isAlive()) {
-                continue;
-            }
-            if (receiver.body() && !receiver.visible(world,itemEntity,DROPPED_ITEM_SCAN_RADIUS)) continue;
-            ItemStack stack = itemEntity.getStack();
-            if (stack.isEmpty()) {
-                continue;
-            }
-            String itemId = Registries.ITEM.getId(stack.getItem()).getPath();
-            double distance = receiver.distanceTo(itemEntity);
-            int ageTicks = Math.max(0, itemEntity.getItemAge());
-            boolean blockItem = stack.getItem() instanceof BlockItem;
-            boolean miningRelated = isMiningRelatedDroppedItem(stack, itemId);
-            DroppedItemObservation previous = byItemId.get(itemId);
-            if (previous == null) {
-                byItemId.put(
-                    itemId,
-                    new DroppedItemObservation(
-                        itemId,
-                        stack.getCount(),
-                        1,
-                        distance,
-                        ageTicks,
-                        blockItem,
-                        miningRelated
-                    )
-                );
-                continue;
-            }
-            byItemId.put(
-                itemId,
-                new DroppedItemObservation(
-                    itemId,
-                    previous.count() + stack.getCount(),
-                    previous.entityCount() + 1,
-                    Math.min(previous.distance(), distance),
-                    Math.min(previous.ageTicks(), ageTicks),
-                    previous.blockItem() || blockItem,
-                    previous.miningRelated() || miningRelated
-                )
-            );
-        }
-
-        JsonArray array = new JsonArray();
-        byItemId.values().stream()
-            .sorted(Comparator.comparingDouble(DroppedItemObservation::distance))
-            .limit(MAX_DROPPED_ITEM_KINDS)
-            .forEach(observation -> {
-                JsonObject item = new JsonObject();
-                item.addProperty("name", observation.itemId());
-                item.addProperty("count", observation.count());
-                item.addProperty("entity_count", observation.entityCount());
-                item.addProperty("distance", round(observation.distance()));
-                item.addProperty("age_ms", observation.ageTicks() * 50L);
-                item.addProperty("block_item", observation.blockItem());
-                item.addProperty("mining_related", observation.miningRelated());
-                array.add(item);
-            });
-        return array;
-    }
-
-    private boolean isMiningRelatedDroppedItem(ItemStack stack, String itemId) {
-        if (stack.getItem() instanceof BlockItem blockItem) {
-            return !"other".equals(classifyBrokenBlockMaterial(blockItem.getBlock().getDefaultState()));
-        }
-        return Set.of(
-            "coal",
-            "raw_copper",
-            "raw_gold",
-            "raw_iron",
-            "diamond",
-            "emerald",
-            "lapis_lazuli",
-            "redstone",
-            "quartz",
-            "flint"
-        ).contains(itemId);
     }
 
     public void rememberBlockBreak(BlockState state, long tickCounter) {
@@ -595,18 +462,7 @@ public final class WorldObserver {
     ) {
     }
 
-    private record DroppedItemObservation(
-        String itemId,
-        int count,
-        int entityCount,
-        double distance,
-        int ageTicks,
-        boolean blockItem,
-        boolean miningRelated
-    ) {
-    }
-
-    public void resetRangeTracking() { this.nearbyBlockKinds.reset(); }
+    public void resetRangeTracking() { this.nearbyBlockKinds.reset(); bodyVisibleBlocks = java.util.List.of(); }
     public void resetPortalTracking() { this.portalObservationTracker.reset(); }
     public void resetBlockBreaks() { this.recentBlockBreakObservations.clear(); }
     public void resetEnvironmentHistory() {

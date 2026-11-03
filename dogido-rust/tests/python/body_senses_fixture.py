@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 OWNER_ID = "11111111-1111-4111-8111-111111111111"
 SENSE_FIELDS = (
-    "world", "environment", "passive_mobs", "visual_threats", "nearby_resources", "dropped_items",
+    "world", "environment", "passive_mobs", "visual_threats",
     "nearby_composition", "smell_observation", "auditory_threats", "ambient_sounds",
 )
 

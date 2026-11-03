@@ -74,3 +74,110 @@ pub(super) fn vision(vision: &Value) -> Value {
     fields.insert("fact".into(), fact.into());
     result
 }
+
+/// 直近の移動を一行にする。内部座標は載せず、北=-Z、東=+XのMinecraft方位を使う。
+pub(super) fn motion(kind: &str, before: &Value, now: &Value) -> Value {
+    let who = if kind.starts_with("body_self_") {
+        "ドギド"
+    } else {
+        "プレイヤー"
+    };
+    let delta = |key: &str| Some(now[key].as_f64()? - before[key].as_f64()?);
+    let mut parts = Vec::new();
+    if kind.ends_with("_position") {
+        if let (Some(dx), Some(dy), Some(dz)) = (delta("x"), delta("y"), delta("z")) {
+            let flat = dx.hypot(dz);
+            if flat >= 0.1 {
+                let i = ((dx.atan2(-dz).to_degrees().rem_euclid(360.) + 22.5) / 45.).floor()
+                    as usize
+                    % 8;
+                parts.push(format!(
+                    "{}へ約{flat:.1}ブロック",
+                    ["北", "北東", "東", "南東", "南", "南西", "西", "北西"][i]
+                ));
+            }
+            if dy.abs() >= 0.1 {
+                parts.push(format!(
+                    "{}へ約{:.1}ブロック",
+                    if dy > 0. { "上" } else { "下" },
+                    dy.abs()
+                ));
+            }
+        }
+    } else {
+        let yaw = if who == "ドギド" {
+            "view_yaw"
+        } else {
+            "yaw"
+        };
+        let pitch = if who == "ドギド" {
+            "view_pitch"
+        } else {
+            "pitch"
+        };
+        if let Some(y) = delta(yaw) {
+            let y = (y + 180.).rem_euclid(360.) - 180.;
+            if y.abs() >= 1. {
+                parts.push(format!(
+                    "{}へ約{:.0}度",
+                    if y > 0. { "右" } else { "左" },
+                    y.abs()
+                ));
+            }
+        }
+        if let Some(p) = delta(pitch)
+            && p.abs() >= 1.
+        {
+            parts.push(format!(
+                "{}へ約{:.0}度",
+                if p > 0. { "下" } else { "上" },
+                p.abs()
+            ));
+        }
+    }
+    // 身体だけが旋回して眼の向きを保った場合、視線の変化とは言わない。
+    if parts.is_empty()
+        && kind == "body_self_orientation"
+        && let Some(y) = delta("yaw")
+    {
+        let y = (y + 180.).rem_euclid(360.) - 180.;
+        if y.abs() >= 1. {
+            return json!({"fact":format!("ドギドが{}へ約{:.0}度、身体の向きを変えた。",if y>0. {"右"} else {"左"},y.abs())});
+        }
+    }
+    if parts.is_empty() {
+        return Value::Null;
+    }
+    let verb = if kind.ends_with("_position") {
+        "動いた"
+    } else {
+        "視線を変えた"
+    };
+    json!({"fact":format!("{who}が{}{verb}。",parts.join("、"))})
+}
+
+#[cfg(test)]
+mod motion_tests {
+    use super::*;
+    // 見込み: 軌跡全体ではなく測れた一歩だけを表す。合格: 北東1.4・上1と、±180度をまたいだ右2度を正しい主語で渡す。
+    // 範囲: 投影の数値と向きの検査。実際の発話や描画は対象外。
+    #[test]
+    fn observed_steps_hide_coordinates_and_take_the_short_turn() {
+        assert_eq!(
+            motion(
+                "body_player_position",
+                &json!({"x":1,"y":64,"z":0}),
+                &json!({"x":2,"y":65,"z":-1})
+            )["fact"],
+            "プレイヤーが北東へ約1.4ブロック、上へ約1.0ブロック動いた。"
+        );
+        assert_eq!(
+            motion(
+                "body_self_orientation",
+                &json!({"view_yaw":179,"view_pitch":2}),
+                &json!({"view_yaw":-179,"view_pitch":2})
+            )["fact"],
+            "ドギドが右へ約2度視線を変えた。"
+        );
+    }
+}

@@ -297,19 +297,14 @@ pub(crate) fn weather_label_from_context(
     event: &GameEvent,
     context: &precipitation::PrecipitationContext,
 ) -> String {
-    if context.precipitation_kind == precipitation::PrecipitationKind::Snow {
-        return "雪".into();
-    }
-    if context.precipitation_kind == precipitation::PrecipitationKind::None
-        && matches!(event.world.weather, Some(Weather::Rain | Weather::Thunder))
-    {
-        return "曇り（この場所では降水なし）".into();
-    }
-    match event.world.weather {
-        Some(Weather::Clear) => "晴れ",
-        Some(Weather::Rain) => "雨",
-        Some(Weather::Thunder) => "雷",
-        None => "不明",
+    match context.weather_key(event.world.weather) {
+        "snow" => "雪",
+        "rain" => "雨",
+        "thunder" => "雷",
+        "clear" => "晴れ",
+        "none" if event.world.weather.is_some() => "曇り（この場所では降水なし）",
+        "none" => "降水なし",
+        _ => "不明",
     }
     .into()
 }

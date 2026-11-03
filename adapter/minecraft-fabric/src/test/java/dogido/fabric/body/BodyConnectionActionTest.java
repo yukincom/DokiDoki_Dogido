@@ -58,7 +58,7 @@ class BodyConnectionActionTest {
             context.ownerId(),context.dimension(),BodyRequestProtocol.Mode.LOOK_PLAYER,context);
         var pendingClass=Class.forName("dogido.fabric.body.BodyRequestRuntime$Pending");
         var constructor=pendingClass.getDeclaredConstructors()[0]; constructor.setAccessible(true);
-        var pending=constructor.newInstance(command,new dogido.fabric.protocol.DogidoEventClient.SessionRef("session",1),UUID.randomUUID(),201L,java.time.Instant.now().plusSeconds(35),look);
+        var pending=constructor.newInstance(command,new dogido.fabric.protocol.DogidoEventClient.SessionRef("session",1),UUID.randomUUID(),201L,java.time.Instant.now().plusSeconds(35),look,null);
         var field=BodyRequestRuntime.class.getDeclaredField("pending"); field.setAccessible(true); field.set(runtime,pending);
         runtime.tick(BodyConnection.Frame.unavailable("test")); // stale generation is rejected before touching MinecraftClient
         var move=new BodyConnection.MoveRequest(context,202,UUID.randomUUID(),100,100,new Point(2,65,3),Purpose.INSPECT);

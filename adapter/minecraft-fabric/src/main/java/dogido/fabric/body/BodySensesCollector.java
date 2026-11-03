@@ -10,9 +10,16 @@ import dogido.fabric.observation.mobs.ThreatObserver;
 import dogido.fabric.observation.player.PlayerObserver;
 import dogido.fabric.observation.smell.SmellObserver;
 import dogido.fabric.observation.sound.SoundObserver;
+import dogido.fabric.observation.sound.AudioThreatObservation;
 import dogido.fabric.observation.world.WorldObserver;
 import dogido.fabric.protocol.EventJsonBuilder;
+import java.util.List;
 import java.util.Map;
+import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
+import dogido.fabric.observation.NearbyComposition;
+import dogido.fabric.observation.mobs.AmbientMobObservation;
+import dogido.fabric.observation.mobs.ThreatObservation;
 import java.util.UUID;
 import java.util.function.LongSupplier;
 import net.minecraft.client.MinecraftClient;
@@ -89,62 +96,112 @@ public final class BodySensesCollector {
                 return unavailable(observation,serverTick,invalid,key);
             }
             BodyOriginVision vision = inspectionVision(sample,frame.autonomy());
-            BodyOriginVision safetyVision = vision.withoutAttention();
+            BodyOriginVision safetyVision = vision.forThreats();
             ObservationOrigin origin = origin(sample,body,vision);
-            if (origin == null || !BodyOriginVision.loaded(client.world,origin.bounds().expand(31,24,31))) {
+            if (origin == null) {
                 clearCollectors();
                 return unavailable(observation,serverTick,"area_unloaded",key);
             }
-            if (!frame.hearing().observed() || frame.hearing().serverTick() != serverTick) {
-                clearCollectors();
-                return unavailable(observation,serverTick,"not_sampled",key);
-            }
-            observeServerSounds(frame,origin,client.world,serverTick,outerAge);
-            sounds.expireSoundObservations();
-            worldObserver.probeStructureAtOrigin(client,origin,client.world,ticks.getAsLong());
-            worldObserver.observeNearbyLightning(origin,client.world,ticks.getAsLong());
-            // 毎fresh snapshotで種類表を実視認し直す。player側のcaptureNearbyKindsや前の種類表で補完しない。
-            var passive = mobs.scanAmbientMobs(origin,client.world,true);
-            // 注意を絞っても敵の取得範囲は狭めない。同じ身体姿勢・既存FOVで危険だけを別に照合する。
-            var hostile = threats.scanThreats(origin(sample,body,safetyVision),client.world);
-            JsonObject blocks = worldObserver.buildNearbyBlocks(origin,client.world,true);
-            JsonArray dropped = worldObserver.buildDroppedItems(origin,client.world);
-            JsonObject localWorld = worldObserver.buildWorld(origin,client.world,ticks.getAsLong());
-            localWorld.addProperty("visible_villager_count",passive.stream().filter(m -> "villager".equals(m.type())).count());
-            smell.observe(origin,client.player,client.world,ticks.getAsLong(),snapshotInterval);
-            JsonArray heardThreats = EventJsonBuilder.buildAuditoryThreats(sounds.scanAuditoryThreats(origin,Map.of()).stream().limit(64).toList());
-            var ambientSounds = sounds.scanAmbientSounds(origin,Map.of());
-            JsonArray ambient = EventJsonBuilder.buildAmbientSounds(ambientSounds);
-            if (vision.unavailable() || vision.exhausted() || safetyVision.unavailable() || safetyVision.exhausted()) {
-                clearCollectors();
-                return unavailable(observation,serverTick,vision.unavailable() || safetyVision.unavailable() ? "area_unloaded" : "budget_exhausted",key);
-            }
-            long ageAtCapture = outerAge+Math.max(0,(System.nanoTime()-started)/1_000_000L);
-            // 内側の音年齢はsource_server_tick時点。Rustが外側ageを一度足すので、ここで二重加算しない。
-            referenceSoundAges(heardThreats,ageAtCapture);
-            referenceSoundAges(ambient,ageAtCapture);
-            referenceWorldSoundAges(localWorld,ageAtCapture);
             JsonObject senses = new JsonObject();
             senses.addProperty("version",1);
             senses.addProperty("status","observed");
             senses.addProperty("basis","body_pose_client_world");
             senses.addProperty("source_server_tick",serverTick);
-            senses.add("world",localWorld);
-            senses.add("environment",origin.environment(client.world));
-            senses.add("passive_mobs",EventJsonBuilder.buildPassiveMobs(passive.stream().limit(64).toList()));
+
+            // 現在姿勢のモブを先に照合する。敵には広い視野、非敵対と注視対象には身体の注意範囲を使う。
+            int beforeThreats = vision.missedRays();
+            var hostileOrigin = origin(sample,body,safetyVision);
+            List<ThreatObservation> hostile = measure(senses,"visual_threats",() -> threats.scanThreats(hostileOrigin,client.world),List.of());
+            if (vision.missedRays() != beforeThreats || !BodyOriginVision.loaded(client.world,origin.bounds().expand(threats.scanDistance()))
+                    || hostile.size() > 64) BodySenseCapacity.incomplete(senses,"visual_threats");
             senses.add("visual_threats",EventJsonBuilder.buildVisualThreats(hostile.stream().limit(64).toList()));
-            senses.add("nearby_resources",blocks.get("resources"));
-            senses.add("dropped_items",dropped);
-            senses.add("nearby_composition",composition(blocks,mobs.copyNearbyComposition()));
-            senses.add("smell_observation",EventJsonBuilder.buildSmellObservation(smell.current()));
+
+            int beforePassive = vision.missedRays();
+            BooleanSupplier passiveComplete = () -> vision.missedRays() == beforePassive
+                && BodyOriginVision.loaded(client.world,origin.bounds().expand(NearbyComposition.MOB_EXIT));
+            List<AmbientMobObservation> passive = measure(senses,"passive_mobs",
+                () -> mobs.scanAmbientMobs(origin,client.world,true,passiveComplete),null);
+            boolean allPassiveSeen = passive != null && passiveComplete.getAsBoolean();
+            if (passive == null) {
+                mobs.resetRangeTracking();
+                passive = List.of();
+            }
+            if (!allPassiveSeen || passive.size() > 64) BodySenseCapacity.incomplete(senses,"passive_mobs");
+            senses.add("passive_mobs",EventJsonBuilder.buildPassiveMobs(passive.stream().limit(64).toList()));
+
+            boolean positionLoaded = BodyOriginVision.loaded(client.world,origin.bounds());
+            JsonObject climate = measure(senses,"world",() -> worldObserver.buildClimate(client.world,origin.blockPosition(),positionLoaded),new JsonObject());
+            JsonObject localWorld = climate;
+            if (positionLoaded) {
+                JsonObject contact = measure(senses,"world",() -> origin.environment(client.world),null);
+                if (contact != null) senses.add("environment",contact);
+            }
+            boolean serverHeard = frame.hearing().observed() && frame.hearing().serverTick() == serverTick;
+            if (serverHeard) serverHeard = measure(senses,"hearing",() -> {
+                observeServerSounds(frame,origin,client.world,serverTick,ageNow(outerAge,started));
+                return true;
+            },false);
+            sounds.expireSoundObservations();
+            var audioThreats = measure(senses,"hearing",() -> sounds.scanAuditoryThreats(origin,Map.of()),List.<AudioThreatObservation>of());
+            JsonArray heardThreats = EventJsonBuilder.buildAuditoryThreats(audioThreats.stream().limit(64).toList());
+            var ambientSounds = measure(senses,"hearing",() -> sounds.scanAmbientSounds(origin,Map.of()),List.<AudioThreatObservation>of());
+            JsonArray ambient = EventJsonBuilder.buildAmbientSounds(ambientSounds);
+            // 取得時点の年齢をsource_server_tickへ戻す。後続の地形走査や送信整形の時間は外側ageにだけ足す。
+            long hearingAge = ageNow(outerAge,started);
+            referenceSoundAges(heardThreats,hearingAge);
+            referenceSoundAges(ambient,hearingAge);
+            boolean hearingTruncated = !serverHeard || BodySenseCapacity.isIncomplete(senses,"hearing") || frame.hearing().truncated() || sounds.bodyHearingTruncated()
+                || audioThreats.size() > heardThreats.size() || ambientSounds.size() > ambient.size();
+            senses.addProperty("hearing_basis","body_server_and_positioned_client_sounds");
+            senses.addProperty("hearing_truncated",hearingTruncated);
+            if (hearingTruncated) BodySenseCapacity.incomplete(senses,"hearing");
+
+            // 地形や匂いの外周が未ロードでも、読めた地点の天候・biome、視認した個体、実音は維持する。
+            if (BodyOriginVision.loaded(client.world,origin.bounds().expand(31,24,31))) {
+                int beforeWorld = vision.missedRays();
+                localWorld = measure(senses,"world",() -> {
+                    worldObserver.probeStructureAtOrigin(client,origin,client.world,ticks.getAsLong());
+                    worldObserver.observeNearbyLightning(origin,client.world,ticks.getAsLong());
+                    return worldObserver.buildWorld(origin,client.world,ticks.getAsLong(),climate.deepCopy());
+                },climate);
+                if (vision.missedRays() != beforeWorld) BodySenseCapacity.incomplete(senses,"world");
+            } else BodySenseCapacity.incomplete(senses,"world");
+            referenceWorldSoundAges(localWorld,ageNow(outerAge,started));
+            if (allPassiveSeen) localWorld.addProperty("visible_villager_count",passive.stream().filter(m -> "villager".equals(m.type())).count());
+            if (BodyOriginVision.loaded(client.world,origin.bounds().expand(SmellObserver.scanRadius()))) {
+                JsonObject observedSmell = measure(senses,"smell_observation",() -> {
+                    smell.observe(origin,client.player,client.world,ticks.getAsLong(),snapshotInterval);
+                    return EventJsonBuilder.buildSmellObservation(smell.current());
+                },null);
+                if (observedSmell != null) senses.add("smell_observation",observedSmell);
+                else smell.reset();
+            } else {
+                smell.reset();
+                BodySenseCapacity.incomplete(senses,"smell_observation");
+            }
+
+            int beforeBlocks = vision.missedRays();
+            // 種類表の水平方向は内側8 + 外周5 + 空気露出を調べる隣接1ブロック。
+            BooleanSupplier blocksComplete = () -> vision.missedRays() == beforeBlocks
+                && BodyOriginVision.loaded(client.world,origin.bounds().expand(8 + NearbyComposition.BLOCK_MARGIN + 1));
+            JsonObject blocks = measure(senses,"nearby_composition",() -> worldObserver.buildNearbyBlocks(origin,client.world,true,blocksComplete),null);
+            if (blocks == null) {
+                worldObserver.resetRangeTracking();
+                blocks = new JsonObject();
+                var missing = NearbyComposition.types(List.of());
+                missing.addProperty("truncated",true);
+                blocks.add("types",missing);
+            }
+            JsonObject composition = composition(blocks,mobs.copyNearbyComposition());
+            if (!allPassiveSeen) composition.addProperty("mobs_truncated",true);
+            if (composition.get("blocks_truncated").getAsBoolean() || composition.get("mobs_truncated").getAsBoolean())
+                BodySenseCapacity.incomplete(senses,"nearby_composition");
+            senses.add("nearby_composition",composition);
+
+            senses.add("world",localWorld);
             senses.add("auditory_threats",heardThreats);
             senses.add("ambient_sounds",ambient);
-            senses.addProperty("hearing_basis","body_server_and_positioned_client_sounds");
-            senses.addProperty("hearing_truncated",frame.hearing().truncated() || sounds.bodyHearingTruncated() || ambientSounds.size() > ambient.size());
-            if (senses.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 65_536) {
-                clearCollectors();
-                return unavailable(observation,serverTick,"budget_exhausted",key);
-            }
+            BodySenseCapacity.fit(senses);
             retainedCandidates = candidates(client,frame.autonomy());
             var gaze = new java.util.ArrayList<BodySpeechGaze.Target>();
             for (var mob : mobs.bodyVisibleMobs()) gaze.add(new BodySpeechGaze.Target("body","entity",mob.entityId().toString(),mob.position()));
@@ -152,12 +209,23 @@ public final class BodySensesCollector {
             speechVisuals=java.util.List.copyOf(gaze);
             retainedSenses = senses.deepCopy(); frameKey = key;
             sample.add("senses",senses);
-            observation.addProperty("age_ms",ageAtCapture);
+            observation.addProperty("age_ms",ageNow(outerAge,started));
             return observation;
         } catch (RuntimeException | LinkageError error) {
             logger.warn("Body sensory capture unavailable: {}",error.toString());
             clearCollectors();
             return unavailable(observation,serverTick,"invalid_pose",frameKey(sample));
+        }
+    }
+
+    /** 同じframeの一系列だけが失敗した時、他の系列の取得値・履歴は維持する。 */
+    private <T> T measure(JsonObject senses, String section, Supplier<T> read, T missing) {
+        try {
+            return read.get();
+        } catch (RuntimeException | LinkageError error) {
+            logger.warn("Body {} observation incomplete: {}",section,error.toString());
+            BodySenseCapacity.incomplete(senses,section);
+            return missing;
         }
     }
 
@@ -272,6 +340,9 @@ public final class BodySensesCollector {
         composition.add("blocks_truncated",blocks.getAsJsonObject("types").get("truncated"));
         return composition;
     }
+    private static long ageNow(long outerAge, long started) {
+        return outerAge + Math.max(0,(System.nanoTime()-started)/1_000_000L);
+    }
     private static void referenceSoundAges(JsonArray sounds, long outerAge) {
         for (var sound : sounds) {
             var row = sound.getAsJsonObject();
@@ -286,7 +357,7 @@ public final class BodySensesCollector {
         JsonObject vision = sample.getAsJsonObject("vision");
         return "body_downed".equals(string(vision,"reason")) ? "body_downed" : null;
     }
-    private static BodyOriginVision vision(JsonObject sample, BodyAttention.View attention) {
+    static BodyOriginVision vision(JsonObject sample, BodyAttention.View attention) {
         JsonObject pose = sample.getAsJsonObject("self_pose");
         return new BodyOriginVision(sample.get("server_tick").getAsLong(),point(pose.getAsJsonObject("eye_position")),
             pose.get("view_yaw").getAsDouble(),pose.get("view_pitch").getAsDouble(),attention);

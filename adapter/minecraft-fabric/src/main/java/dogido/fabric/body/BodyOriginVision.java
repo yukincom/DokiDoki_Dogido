@@ -24,23 +24,25 @@ final class BodyOriginVision implements ObservationOrigin.Sight {
     private final Vec3d eye;
     private final double yaw, pitch;
     private final BodyAttention.View attention;
-    private static final class Budget { int rays; boolean unavailable, exhausted; }
+    private static final class Budget { int rays, missed; }
+    private final int rayLimit;
     private final Budget budget;
     BodyOriginVision(long tick, Vec3d eye, double yaw, double pitch) {
         this(tick,eye,yaw,pitch,null);
     }
     BodyOriginVision(long tick, Vec3d eye, double yaw, double pitch, BodyAttention.View attention) {
-        this(tick,eye,yaw,pitch,attention,new Budget());
+        this(tick,eye,yaw,pitch,attention,new Budget(),MAX_RAYS);
     }
-    private BodyOriginVision(long tick, Vec3d eye, double yaw, double pitch, BodyAttention.View attention, Budget budget) {
+    private BodyOriginVision(long tick, Vec3d eye, double yaw, double pitch, BodyAttention.View attention, Budget budget, int rayLimit) {
         this.tick = tick; this.eye = eye; this.yaw = yaw; this.pitch = pitch;
-        this.attention = attention; this.budget = budget;
+        this.attention = attention; this.budget = budget; this.rayLimit = rayLimit;
     }
-    /** 同じframeの敵観測と近傍注意で4096本の上限を共有する。視野を分けても走査予算を増やさない。 */
-    BodyOriginVision withoutAttention() { return new BodyOriginVision(tick,eye,yaw,pitch,null,budget); }
-    boolean unavailable() { return budget.unavailable; }
-    boolean exhausted() { return budget.exhausted; }
-    int rayCount() { return budget.rays; }
+    /** 敵を先に照合しつつ、非敵対のモブにも最大送信64個体分（各3本）の視線を予約する。 */
+    BodyOriginVision forThreats() {
+        return new BodyOriginVision(tick,eye,yaw,pitch,null,budget,MAX_RAYS - 64 * 3);
+    }
+    /** 全frameの共通予算。section前後の差だけが、その走査で測れなかったrayを表す。 */
+    int missedRays() { return budget.missed; }
 
     /** clientの実chunk cacheを見る。World.isChunkLoadedの既定trueを観測済み扱いしない。 */
     static boolean loaded(ClientWorld world, Box area) {
@@ -72,12 +74,16 @@ final class BodyOriginVision implements ObservationOrigin.Sight {
             BodyVisionGeometry.HORIZONTAL_FOV,BodyVisionGeometry.VERTICAL_FOV,targets,target -> trace(world,target,allowedBlock));
         return observation.playerVisibility() == Visibility.VISIBLE;
     }
-    private BodyVisibility.Trace trace(ClientWorld world, Vec3d target, BlockPos allowedBlock) {
-        if (budget.rays >= MAX_RAYS) { budget.exhausted = true; return BodyVisibility.Trace.UNAVAILABLE; }
+    boolean takeRay() {
+        if (budget.rays >= rayLimit) { budget.missed++; return false; }
         budget.rays++;
+        return true;
+    }
+    private BodyVisibility.Trace trace(ClientWorld world, Vec3d target, BlockPos allowedBlock) {
+        if (!takeRay()) return BodyVisibility.Trace.UNAVAILABLE;
         var result=BodyVisibility.trace(world,area -> loaded(world,area),eye,target,
             ShapeContext.absent(),BodyVisibility.Purpose.VISION,allowedBlock);
-        if (result == BodyVisibility.Trace.UNAVAILABLE) budget.unavailable=true;
+        if (result == BodyVisibility.Trace.UNAVAILABLE) budget.missed++;
         return result;
     }
 }

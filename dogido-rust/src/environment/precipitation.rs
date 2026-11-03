@@ -1,4 +1,4 @@
-//! Local precipitation resolved from current altitude, catalog climate and observed blocks.
+//! Local precipitation resolved from current altitude, catalog climate and world weather.
 //! The full context contains internal numbers; only to_prompt_details is prompt material.
 use crate::events::{GameEvent, Weather};
 use anyhow::{Result, bail};
@@ -14,7 +14,6 @@ pub struct Input {
     pub biome_downfall: Option<f64>,
     pub weather: String,
     pub dimension: Option<String>,
-    pub nearby_block_names: Vec<String>,
 }
 
 /// Values already resolved by the existing biome catalog. Unknown values stay None.
@@ -34,14 +33,6 @@ pub enum PrecipitationKind {
     None,
     Unknown,
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum SnowEvidence {
-    ObservedSurface,
-    ActiveSnowfall,
-    None,
-}
-
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct PrecipitationContext {
     // Number retains integral JSON representation without silently saturating large finite Y.
@@ -52,67 +43,29 @@ pub struct PrecipitationContext {
     pub precipitation_kind: PrecipitationKind,
     pub precipitation_possible: bool,
     pub thunder_active: bool,
-    pub surface_snow_observed: bool,
-    pub snow_evidence: SnowEvidence,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct PromptDetails {
     pub precipitation_kind: PrecipitationKind,
-    pub precipitation_possible: bool,
-    pub thunder_active: bool,
-    pub snowfall_environment: &'static str,
-    pub surface_snow_observed: bool,
-    pub weather_context: String,
 }
 
 impl PrecipitationContext {
-    pub fn snow_can_be_scene_material(&self) -> bool {
-        self.snow_evidence != SnowEvidence::None
-    }
-    pub fn prompt_line(&self) -> String {
-        let mut parts = vec![match self.precipitation_kind {
-            PrecipitationKind::Snow => "現在の降水は雪",
-            PrecipitationKind::Rain => "現在の降水は雨",
-            PrecipitationKind::None => "現在は降水なし",
-            PrecipitationKind::Unknown => "現在の降水種別は不明",
-        }];
-        if self.thunder_active {
-            parts.push("雷鳴あり");
+    /// 表示と川柳の規則の両方で、ワールド天候より観測地点の降水を優先する。
+    pub(crate) fn weather_key(&self, world_weather: Option<Weather>) -> &'static str {
+        match (self.precipitation_kind, world_weather) {
+            (PrecipitationKind::Snow, _) => "snow",
+            (PrecipitationKind::Rain, Some(Weather::Thunder)) => "thunder",
+            (PrecipitationKind::Rain, _) => "rain",
+            (PrecipitationKind::None, Some(Weather::Clear)) => "clear",
+            (PrecipitationKind::None, _) => "none",
+            _ => "unknown",
         }
-        parts.push(if !self.precipitation_possible {
-            "降水環境なし"
-        } else {
-            match self.snowfall_zone {
-                Some(true) => "降雪環境あり",
-                Some(false) => "降雪環境なし",
-                None => "降雪環境は不明",
-            }
-        });
-        if self.surface_snow_observed {
-            parts.extend(["地表の積雪を実測", "地表の雪を現在場面の材料にできる"]);
-        } else if self.precipitation_kind == PrecipitationKind::Snow {
-            parts.extend([
-                "地表の積雪は未観測",
-                "降っている雪だけを現在場面の材料にできる",
-            ]);
-        } else {
-            parts.extend(["周辺の積雪は未観測", "雪や積雪を現在場面の材料にしない"]);
-        }
-        parts.join("。") + "。"
     }
+
     pub fn to_prompt_details(&self) -> PromptDetails {
         PromptDetails {
             precipitation_kind: self.precipitation_kind,
-            precipitation_possible: self.precipitation_possible,
-            thunder_active: self.thunder_active,
-            snowfall_environment: match self.snowfall_zone {
-                Some(true) => "yes",
-                Some(false) => "no",
-                None => "unknown",
-            },
-            surface_snow_observed: self.surface_snow_observed,
-            weather_context: self.prompt_line(),
         }
     }
 }
@@ -162,12 +115,6 @@ pub fn resolve_precipitation_context(input: &Input) -> Result<PrecipitationConte
     let dimension = remove_namespace_lower(input.dimension.as_deref().unwrap_or(""));
     let weather = input.weather.to_lowercase();
     let group = input.biome_group_id.to_lowercase();
-    let surface_snow_observed = input.nearby_block_names.iter().any(|name| {
-        matches!(
-            remove_namespace_lower(name).as_str(),
-            "snow" | "snow_block" | "powder_snow"
-        )
-    });
     let disabled = matches!(dimension.as_str(), "the_nether" | "the_end")
         || group == "dry"
         || input.biome_downfall.is_some_and(|n| n <= 0.0);
@@ -191,13 +138,6 @@ pub fn resolve_precipitation_context(input: &Input) -> Result<PrecipitationConte
     } else {
         PrecipitationKind::Unknown
     };
-    let snow_evidence = if surface_snow_observed {
-        SnowEvidence::ObservedSurface
-    } else if precipitation_kind == PrecipitationKind::Snow {
-        SnowEvidence::ActiveSnowfall
-    } else {
-        SnowEvidence::None
-    };
     Ok(PrecipitationContext {
         current_y,
         biome_temperature: input.biome_temperature,
@@ -206,31 +146,28 @@ pub fn resolve_precipitation_context(input: &Input) -> Result<PrecipitationConte
         precipitation_kind,
         precipitation_possible: !disabled,
         thunder_active: weather == "thunder" && !disabled,
-        surface_snow_observed,
-        snow_evidence,
     })
 }
 
 /// 現在イベントと呼出側が取得した気候を、降水判定への入力に投影する。
-/// カタログ検索・状態変更は行わない。積雪の実測根拠にはtypeがblockの近接資源だけを使う。
+/// カタログ検索・状態変更は行わない。
 pub fn from_event(event: &GameEvent, climate: &Climate) -> Result<PrecipitationContext> {
     from_observation(
         &event.world,
-        event.player.dimension.as_deref(),
+        event.body_origin().and_then(|o| o.context.as_ref()).map(|c| c.dimension.as_str())
+            .or(event.player.dimension.as_deref()),
         event.observer_y(),
         climate,
-        &event.nearby_resources,
     )
 }
 
 
-/// 一人分の世界・高さ・気候・近接資源を既存の降水判定へ渡す。主体を跨いで値を補完しない。
+/// 一人分の世界・高さ・気候を既存の降水判定へ渡す。主体を跨いで値を補完しない。
 pub fn from_observation(
     world: &crate::events::WorldState,
     dimension: Option<&str>,
     current_y: Option<f64>,
     climate: &Climate,
-    nearby_resources: &[crate::events::NearbyResource],
 ) -> Result<PrecipitationContext> {
     resolve_precipitation_context(&Input {
         current_y,
@@ -246,11 +183,6 @@ pub fn from_observation(
         }
         .into(),
         dimension: dimension.map(str::to_owned),
-        nearby_block_names: nearby_resources
-            .iter()
-            .filter(|r| r.r#type.to_lowercase() == "block")
-            .map(|r| r.name.clone())
-            .collect(),
     })
 }
 

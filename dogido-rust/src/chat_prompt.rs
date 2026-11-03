@@ -384,6 +384,7 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
         let current_topics = crate::conversation_observation::chat_topic_mobs(
             text(d, "user_text", ""), "", false);
         crate::conversation_observation::select_chat_mobs(&mut world, &current_topics, flag(d, "combat_active"));
+        crate::conversation_observation::dialogue_capacity::compact(&mut world);
         let named_description = serde_json::from_str::<Value>(text(d, "named_entity_description_hints", "")).ok();
         if let Some(entries) = world.pointer_mut("/catalog_knowledge/entries").and_then(Value::as_array_mut) {
             entries.retain(|entry| {

@@ -302,54 +302,9 @@ pub fn inventory_values(
         items,
     }
 }
-/// 距離順に表示名の重複を除いて最大6件を取り、その6件の中で自然ブロックを前へ並べる。
-/// 遠い自然ブロックを探して候補枠へ割り込ませる処理ではない。距離不明は末尾へ送る。
-pub fn nearby_blocks(
-    event: &GameEvent,
-    world: &WorldCatalog,
-    entries: &impl Entries,
-) -> Vec<String> {
-    let mut resources: Vec<_> = event.nearby_resources.iter().collect();
-    resources.sort_by(|a, b| distance_cmp(a.distance, b.distance));
-    let mut natural = vec![];
-    let mut other = vec![];
-    let mut seen = HashSet::new();
-    for r in resources {
-        let label = world.block_label(Some(&r.name));
-        if label.is_empty() || !seen.insert(label.clone()) {
-            continue;
-        }
-        let entry = entries.block_entry(&r.name).unwrap_or(&Value::Null);
-        if entry["section"] == "natural_blocks" {
-            natural.push(label);
-        } else {
-            other.push(label);
-        }
-        if natural.len() + other.len() >= 6 {
-            break;
-        }
-    }
-    natural.extend(other);
-    natural
-}
-/// 近い落下物を表示名で重複排除し、最大4件を「地面に〜が落ちている」という観測文へ変える。
-/// 所持品と混同しないよう落下状態を残し、距離不明の候補は後ろへ置く。
-pub fn dropped_items(event: &GameEvent, world: &WorldCatalog) -> Vec<String> {
-    let mut dropped: Vec<_> = event.dropped_items.iter().collect();
-    dropped.sort_by(|a, b| distance_cmp(a.distance, b.distance));
-    let mut values = vec![];
-    let mut seen = HashSet::new();
-    for d in dropped {
-        let label = world.item_label(Some(&d.name));
-        if label.is_empty() || !seen.insert(label.clone()) {
-            continue;
-        }
-        values.push(format!("地面に{label}が落ちている"));
-        if values.len() >= 4 {
-            break;
-        }
-    }
-    values
+/// 現在の一般ブロック観測だけを使う。専用の資源探索や距離の推定は行わない。
+pub(super) fn observed_block_ids(event: &GameEvent) -> impl Iterator<Item = &String> {
+    event.nearby_composition.iter().flat_map(|c| &c.blocks).take(6)
 }
 
 /// 欠測・全枠空では手持ちや全inventoryから補わない。

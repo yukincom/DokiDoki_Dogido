@@ -178,6 +178,10 @@ pub(super) fn context(kind: &str, d: &Value) -> Result<Value> {
     }
     crate::catalog_knowledge::separate(context.as_object_mut().unwrap());
     crate::villager_routines::separate(context.as_object_mut().unwrap());
+    if let Some(world) = context.get_mut("world_context") {
+        crate::conversation_observation::strip_model_bookkeeping(world);
+        crate::conversation_observation::dialogue_capacity::compact(world);
+    }
     Ok(context)
 }
 

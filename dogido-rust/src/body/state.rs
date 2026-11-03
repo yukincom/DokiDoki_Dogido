@@ -58,6 +58,7 @@ impl State {
                 position: sample.map(|s| s.self_pose.position),
                 stationary,
                 available: senses.is_some(),
+                incomplete: senses.map(|s| s.incomplete.clone()).unwrap_or_default(),
                 age_ms: reading.map(|r| r.age(now)).unwrap_or(0),
                 body: self
                     .project(now)

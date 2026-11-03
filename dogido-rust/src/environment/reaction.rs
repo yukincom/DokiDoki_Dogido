@@ -328,6 +328,7 @@ impl Prepared {
         crate::catalog_knowledge::separate(&mut context);
         crate::villager_routines::separate(&mut context);
         select_reaction_knowledge(&mut context);
+        if let Some(world) = context.get_mut("world_context") {crate::conversation_observation::dialogue_capacity::compact(world);}
         if let Some(kind) = match context.get("topic").and_then(Value::as_str) {
             Some("thunder") => Some("thunder_reaction"),
             _ => None,

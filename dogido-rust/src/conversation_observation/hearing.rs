@@ -54,12 +54,13 @@ pub(crate) fn project(event: &GameEvent, weather_age_ms: u64) -> Value {
         if seen.insert(json!(["threat", sound]).to_string()) { sounds.push(threat(event, sound)); }
     }
     let recent = |age: Option<i64>| age.is_some_and(|v| v >= 0 && v as u64 <= weather_age_ms);
-    json!({"status":"observed","observer":if origin.is_some() {"dogido"} else {"player"},
+    let incomplete = origin.is_some_and(|o| o.incomplete.contains(&crate::body::senses::Incomplete::Hearing));
+    json!({"status":if incomplete {"partial"} else {"observed"},"observer":if origin.is_some() {"dogido"} else {"player"},
         "observed_at":event.observed_at,
         "basis":origin.map(|o| &o.body["current"]["senses"]["hearing_basis"]),
         "truncated":origin.is_some_and(|o| o.body["current"]["senses"]["hearing_truncated"] == true),
-        "rain_heard":recent(event.world.rain_sound_recent_ms),
-        "thunder_heard":recent(event.world.thunder_sound_recent_ms),"sounds":sounds})
+        "rain_heard":if incomplete && event.world.rain_sound_recent_ms.is_none() {None} else {Some(recent(event.world.rain_sound_recent_ms))},
+        "thunder_heard":if incomplete && event.world.thunder_sound_recent_ms.is_none() {None} else {Some(recent(event.world.thunder_sound_recent_ms))},"sounds":sounds})
 }
 
 #[derive(Deserialize)]
@@ -121,7 +122,7 @@ fn attribution(observed_at: DateTime<FixedOffset>, age: Option<i64>, owner: Opti
 
 /// 元の聴取時刻を使い、現在の音と既存保持の音を重ねない。旧メモにない確度は補わない。
 pub(crate) fn append_recent(hearing: &mut Value, event: &GameEvent, snapshot: &crate::chat_observation::Snapshot, labels: &impl crate::chat_observation::Labels) {
-    if hearing["status"] != "observed" { return; }
+    if !matches!(hearing["status"].as_str(), Some("observed" | "partial")) { return; }
     let now = hearing["observed_at"].as_str().and_then(|s| DateTime::parse_from_rfc3339(s).ok()).unwrap_or(event.observed_at);
     let Some(rows) = hearing["sounds"].as_array_mut() else { return; };
     for memo in chat_observation::retained_hearing(event, snapshot, labels) {

@@ -6,7 +6,21 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+/** 種類の数・外周・走査途中の保持を固定入力で検査する。Minecraftの実視認は別確認。 */
 class NearbyCompositionTest {
+    // 見込み: 部分走査では前回の牛を消失扱いにも現在の目撃にもせず、外周での再確認は引き続き可能。
+    // 合格: 未確認回は空・truncatedで、次の20ブロックの照合を許し、完備の空走査後にだけ許可を解除する。
+    @Test void partialScanKeepsRangeEligibilityWithoutReportingAnUnseenKind() {
+        var tracker = new NearbyComposition.RangeTracker(16,21);
+        tracker.finish(List.of("cow"));
+        var partial = tracker.finish(List.of(),false);
+        assertTrue(partial.getAsJsonArray("ids").isEmpty());
+        assertTrue(partial.get("truncated").getAsBoolean());
+        assertTrue(tracker.allows("cow",20));
+        tracker.finish(List.of(),true);
+        assertFalse(tracker.allows("cow",20));
+    }
+
     @Test void orderAndDuplicatesDoNotChangeTheKinds() {
         assertEquals(NearbyComposition.types(List.of("cow","pig","cow")), NearbyComposition.types(List.of("pig","cow")));
         assertFalse(NearbyComposition.types(List.of()).get("truncated").getAsBoolean());

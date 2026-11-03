@@ -42,6 +42,7 @@ struct Pending {
     issued: Instant,
     utc: DateTime<Utc>,
     original: String,
+    conversation_recall: bool,
 }
 
 /// 同じ命令・入力世代・身体の実行成功を照合した、撮影予約用の事実。
@@ -60,6 +61,7 @@ pub struct Report {
     pub value: Value,
     pub feedback: Option<&'static str>,
     pub completed_look: Option<CompletedLook>,
+    pub jointly_seen: Option<String>,
 }
 
 /// 既存の受付・終端処理が確定した直近一件の表示用記録。命令照合や再実行には使わない。
@@ -96,7 +98,31 @@ impl State {
         }
     }
 
-    /// BERTへ変更済み。旧判定へ戻さない。呼出元で分類と原文を確認した依頼だけ受ける。
+    pub fn available(&self) -> bool {
+        self.enabled && self.pending.is_none()
+    }
+
+    /// 普通の返答から選んだ接近を、明示の身体依頼と同じ発行・期限・実結果へ渡す。
+    pub fn conversation_recall(
+        &mut self, generation: u64, context: &Context, original: &str, now: Instant,
+    ) -> Result<Value> {
+        ensure!(self.available(), "body_request_unavailable");
+        let command = self.issue(Mode::Recall, generation, &context.owner_id, &context.dimension,
+            Some(context.clone()), original, now, Utc::now())?;
+        self.pending.as_mut().unwrap().conversation_recall = true;
+        Ok(command)
+    }
+
+    pub fn cancel_conversation_recall(&mut self) -> bool {
+        if self.pending.as_ref().is_some_and(|p| p.conversation_recall) {
+            self.cancel();
+            true
+        } else {
+            false
+        }
+    }
+
+    /// 明示依頼の分類または一回生成の二択は呼出元が所有する。原文は実行結果と結び付ける。
     #[allow(clippy::too_many_arguments)]
     pub fn issue(
         &mut self,
@@ -146,6 +172,7 @@ impl State {
             issued: now,
             utc,
             original: original.to_owned(),
+            conversation_recall: false,
         });
         Ok(command)
     }
@@ -164,6 +191,7 @@ impl State {
                     "input_generation":p.generation,"status":status,"detail_code":detail}),
                 feedback,
                 completed_look: None,
+                jointly_seen: None,
             });
             while self.reports.len() > 16 {
                 self.reports.pop_front();
@@ -299,6 +327,11 @@ impl State {
                     continue;
                 }
             }
+            let jointly_seen = (success && p.mode == Mode::LookTarget).then(|| {
+                r.extra.get("jointly_seen")?.as_str().map(str::trim).filter(|v| {
+                    !v.is_empty() && v.chars().count() <= 64 && !v.chars().any(char::is_control)
+                }).map(str::to_owned)
+            }).flatten();
             let completed_look = (success && p.mode != Mode::Recall).then(|| CompletedLook {
                 command_id: r.command_id.clone(),
                 context: p.context.clone().unwrap(),
@@ -342,6 +375,7 @@ impl State {
             }
             if let Some(report) = self.reports.back_mut() {
                 report.completed_look = completed_look;
+                report.jointly_seen = jointly_seen;
             }
         }
         self.reports.drain(..).collect()
@@ -446,6 +480,22 @@ mod tests {
                 self.utc + UtcDuration::milliseconds(millis as i64),
             )
         }
+    }
+
+    // 見込み: 雑談で選んだ移動の割込みは、明示呼出しを取り消さない。
+    // 合格: 明示呼出しでは取消零件、雑談の移動だけ一度取り消し、重複発行も止める。確認範囲: Rustの命令台帳。
+    #[test]
+    fn cancel_only_the_recall_selected_in_conversation() {
+        let mut f = Fixture::new();
+        f.issue(Mode::Recall);
+        assert!(!f.state.cancel_conversation_recall());
+        assert!(f.state.conversation_recall(GENERATION, &f.context, "話そう", f.now).is_err());
+        f.state.cancel();
+        let selected = f.state.conversation_recall(GENERATION, &f.context, "話そう", f.now).unwrap();
+        assert_eq!(selected["mode"], "recall");
+        assert!(f.state.cancel_conversation_recall());
+        assert!(!f.state.cancel_conversation_recall());
+        assert!(f.state.available());
     }
 
     #[test]
@@ -716,6 +766,25 @@ mod tests {
             assert_eq!(reports[0].feedback, Some("そっち向いたで。"));
             assert_eq!(reports[0].original, "身体への原文の依頼");
             assert!(f.observe(vec![good]).is_empty());
+        }
+    }
+
+    // 見込み: ＋に実際に向いて見た一件だけを採用する。合格: 同一ACKは一回、失敗・別mode・見えない場合は材料なし。
+    // 範囲: Fabricの最終視認を模擬したRust受付。実機の照射は含まない。
+    #[test]
+    fn confirmed_joint_sight_requires_the_successful_pointed_command() {
+        for (mode,status,detail,label,expected) in [
+            (Mode::LookTarget,"succeeded","facing_target",Some("羊"),Some("羊")),
+            (Mode::LookTarget,"succeeded","facing_target",None,None),
+            (Mode::LookTarget,"failed","occluded",Some("羊"),None),
+            (Mode::LookDirection,"succeeded","facing_target",Some("羊"),None),
+        ] {
+            let mut f = Fixture::new();
+            let cmd=f.issue(mode); let mut ack=f.result(&cmd,status,detail);
+            ack["jointly_seen"]=json!(label);
+            let reports=f.observe(vec![ack.clone(),ack]);
+            assert_eq!(reports.len(),1);
+            assert_eq!(reports[0].jointly_seen.as_deref(),expected);
         }
     }
 

@@ -77,7 +77,9 @@ class EventJsonBuilderTest {
         return builder.finish();
     }
 
-    @Test void eightEventsMatchPreSplitPayloadsWithAndWithoutOptionalObservations() throws Exception {
+    // 見込み・合格: 8種類のイベントで専用資源・落下物のキーは無く、通常の種類表を含む残りの送信値は正本と一致する。
+    // 確認範囲は固定入力に対するJSON構築。実際の世界の走査は含まない。
+    @Test void eightEventsMatchExpectedPayloadsWithAndWithoutOptionalObservations() throws Exception {
         try (var stream = getClass().getResourceAsStream("event-wire-baseline.json")) {
             assertNotNull(stream);
             JsonArray cases = JsonParser.parseReader(new InputStreamReader(stream, StandardCharsets.UTF_8)).getAsJsonArray();
@@ -91,7 +93,7 @@ class EventJsonBuilderTest {
                 String[] descriptor = EVENTS[index];
                 WorldObservationFrame frame = new WorldObservationFrame(() -> object("world"), () -> blocks(detail),
                     () -> new WorldObservationFrame.Materials(object("player"), object("inventory"),
-                        detail ? mobComposition() : null, array("dropped"), array("breaks"), detail ? object("look") : null), area -> List.of());
+                        detail ? mobComposition() : null, array("breaks"), detail ? object("look") : null), area -> List.of());
                 var materials = frame.materials();
                 JsonObject nearby = frame.blocks();
                 EventJsonBuilder builder = new EventJsonBuilder(descriptor[0], descriptor[1], descriptor[2], descriptor[3],
@@ -105,8 +107,7 @@ class EventJsonBuilderTest {
                 if (index == 0) builder.ambientSounds(SOUNDS);
                 builder.passiveMobs(MOBS);
                 builder.inventory(materials.inventory());
-                builder.nearbyMaterials(nearby, materials.nearbyMobs());
-                builder.droppedItems(materials.droppedItems());
+                builder.nearbyComposition(nearby, materials.nearbyMobs());
                 builder.recentBlockBreaks(materials.recentBlockBreaks());
                 builder.lookTarget(materials.lookTarget());
                 JsonObject combat = object("combat");

@@ -13,7 +13,7 @@ use std::{
     },
     thread::JoinHandle,
 };
-pub const SCHEMA_VERSION: u64 = 5;
+pub const SCHEMA_VERSION: u64 = 6;
 fn observed_at(event: &GameEvent) -> String {
     event.observed_at.to_rfc3339_opts(
         if event.observed_at.nanosecond() == 0 {
@@ -84,13 +84,11 @@ pub fn observation(event: &GameEvent) -> Value {
         &e["ambient_sounds"],
         "type source_id sound_event direction distance_band certainty",
     );
-    let mut resources = rows(&e["nearby_resources"], "type name distance direction");
     for row in visual
         .iter_mut()
         .chain(auditory.iter_mut())
         .chain(passive.iter_mut())
         .chain(ambient.iter_mut())
-        .chain(resources.iter_mut())
     {
         row["direction"] = pick(&row["direction"], "horizontal cardinal vertical");
     }
@@ -120,7 +118,7 @@ pub fn observation(event: &GameEvent) -> Value {
         "auditory_threats":{"count":auditory.len(),"labels":unique(&auditory,"label"),"distance_bands":unique(&auditory,"distance_band"),"items":auditory},
         "smell_observation":e["smell_observation"],"ambient_sounds":ambient,
         "passive_mobs":{"count":passive.len(),"types":unique(&passive,"type"),"items":passive},
-        "inventory":e["inventory"],"nearby_resources":resources,"dropped_items":e["dropped_items"],"recent_block_breaks":e["recent_block_breaks"],
+        "inventory":e["inventory"],"recent_block_breaks":e["recent_block_breaks"],
         "look_target":if e["look_target"].is_null(){Value::Null}else{pick(&e["look_target"],"kind name distance")},
         "combat":combat})
 }
@@ -205,11 +203,15 @@ impl Recorder {
 mod tests {
     use super::*;
     #[test]
-    fn schema_five_matches_fixture_observations_actions_and_receipts() {
+    fn schema_six_keeps_fixture_actions_and_receipts_without_legacy_resource_lists() {
         let fixtures: Vec<Value> =
             serde_json::from_str(include_str!("../fixtures/episode-records.json")).unwrap();
         for fixture in fixtures {
             let mut e = fixture["expected"].clone();
+            e["schema_version"] = json!(6);
+            for key in ["nearby_resources", "dropped_items"] {
+                e["observation"].as_object_mut().unwrap().remove(key);
+            }
             for key in [
                 "nearby_damaging_light_source_count",
                 "nearest_damaging_light_source_distance",

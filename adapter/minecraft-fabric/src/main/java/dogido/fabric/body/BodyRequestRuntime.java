@@ -21,7 +21,7 @@ public final class BodyRequestRuntime {
         String submit(SessionRef session,Command command,Supplier<String> action);
     }
     private record Pending(Command command,SessionRef session,UUID connectionId,long sequence,Instant deadline,
-                           BodyConnection.LookRequest look) {}
+                           BodyConnection.LookRequest look, BodyPointedTarget pointed) {}
     private final BodyConnection connection;
     private final BiPredicate<SessionRef,Long> current;
     private final Sender sender;
@@ -57,7 +57,7 @@ public final class BodyRequestRuntime {
         if (pending != null) { finish(command,session,"rejected","body_action_pending",command.context()); return; }
         try {
             UUID connectionId=UUID.nameUUIDFromBytes((session.sessionId()+":"+session.worldEpoch()).getBytes(StandardCharsets.UTF_8));
-            long sequence=-1; String submission;
+            long sequence=-1; String submission; BodyPointedTarget pointed=null;
             if (command.mode()==Mode.RECALL) {
                 var request=new BodyConnection.RecallRequest(command.ownerId(),connectionId,command.commandId(),command.dimension());
                 submission=sender.submit(session,command,() -> connection.recall(request));
@@ -67,7 +67,9 @@ public final class BodyRequestRuntime {
                 if (command.mode()==Mode.LOOK_PLAYER) result=look.player(command.context(),command.commandId());
                 else if (command.mode()==Mode.LOOK_TARGET || command.mode()==Mode.LOOK_DIRECTION) {
                     var direction=client.player.getRotationVec(1.0f);
-                    result=look.scene(command.context(),command.commandId(),new Point(direction.x,direction.y,direction.z),hitPoint(client,command));
+                    HitResult hit=command.mode()==Mode.LOOK_TARGET ? client.crosshairTarget : null;
+                    if(hit!=null) pointed=BodyPointedTarget.from(client,hit);
+                    result=look.scene(command.context(),command.commandId(),new Point(direction.x,direction.y,direction.z),hitPoint(hit));
                 } else result=look.direction(command.context(),command.commandId(),
                     BodyLookController.Direction.valueOf(command.mode().name().substring("LOOK_RELATIVE_".length())));
                 sequence=result.sequence(); submission=result.status();
@@ -78,22 +80,16 @@ public final class BodyRequestRuntime {
                 return;
             }
             // queuedは成功ではない。同じ実行IDの終端結果を待つ。
-            pending=new Pending(command,session,connectionId,sequence,command.issuedAt().plusSeconds(35),dispatchLook);
+            pending=new Pending(command,session,connectionId,sequence,command.issuedAt().plusSeconds(35),dispatchLook,pointed);
         } catch (RuntimeException | LinkageError error) {
             connection.release(command.commandId());
             finish(command,session,"failed","bridge_error",command.context());
         } finally { dispatchCommand=null; dispatchSession=null; dispatchLook=null; }
     }
-    private static Point hitPoint(MinecraftClient client,Command command) {
-        Point hitPoint=null;
-        if (command.mode()==Mode.LOOK_TARGET) {
-            HitResult hit=client.crosshairTarget;
-            if(hit!=null && hit.getType()!=HitResult.Type.MISS) {
-                var p=hit.getPos();hitPoint=new Point(p.x,p.y,p.z);
-            }
-            // 景色・空・遠景は物体への命中を必要としない。本人が向いている方向を使う。
-        }
-        return hitPoint;
+    private static Point hitPoint(HitResult hit) {
+        // 景色・空・遠景は命中を必要としない。従来どおり本人が向いている方向を使う。
+        if (hit==null || hit.getType()==HitResult.Type.MISS) return null;
+        var p=hit.getPos(); return new Point(p.x,p.y,p.z);
     }
     /** 完了確認はrootが取得した現在frameを使い、照会済みのRECALL結果も共有する。 */
     public void tick(BodyConnection.Frame frame) {
@@ -133,7 +129,16 @@ public final class BodyRequestRuntime {
                 if("succeeded".equals(status) && "facing_target".equals(reason) && completedFrame!=null)
                     lookCaptures.completed(work.session(),work.command(),work.look(),executedAt);
                 discardPending();
-                finish(work.command(),work.session(),status,reason,resolved,executedAt);
+                String shared=null;
+                if ("succeeded".equals(status) && completedFrame!=null && work.pointed()!=null) {
+                    try { shared=work.pointed().seen(MinecraftClient.getInstance(),completedFrame.observation()); }
+                    catch (RuntimeException | LinkageError unavailable) { /* 注目先の観測失敗で操作の結果を変えない。 */ }
+                }
+                if (current.test(work.session(),work.command().inputGeneration())) {
+                    var row=BodyRequestProtocol.result(work.command(),status,reason==null?"unknown":reason,executedAt,resolved);
+                    if (shared!=null && !shared.isBlank() && shared.length()<=64) row.addProperty("jointly_seen",shared);
+                    resultSink.accept(work.session(),row);
+                }
             }
         } catch (RuntimeException | LinkageError error) { discardPending(); finish(work.command(),work.session(),"failed","bridge_error",work.command().context()); }
     }

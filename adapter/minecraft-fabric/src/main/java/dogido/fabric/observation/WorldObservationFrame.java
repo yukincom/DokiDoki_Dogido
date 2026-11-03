@@ -18,10 +18,10 @@ import net.minecraft.util.math.Vec3d;
 public final class WorldObservationFrame {
     /** playerと所持品は同じinventory読取りから構成する。lookTargetと種類表は未取得時null。 */
     public record Materials(JsonObject player, JsonObject inventory, JsonObject nearbyMobs,
-            JsonArray droppedItems, JsonArray recentBlockBreaks, JsonObject lookTarget) {
+            JsonArray recentBlockBreaks, JsonObject lookTarget) {
         private Materials copy() {
             return new Materials(player.deepCopy(), inventory.deepCopy(),
-                nearbyMobs == null ? null : nearbyMobs.deepCopy(), droppedItems.deepCopy(),
+                nearbyMobs == null ? null : nearbyMobs.deepCopy(),
                 recentBlockBreaks.deepCopy(), lookTarget == null ? null : lookTarget.deepCopy());
         }
     }

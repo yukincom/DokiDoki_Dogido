@@ -1,23 +1,19 @@
 use super::*;
 use serde_json::{Value, json};
 
-fn output(context: &PrecipitationContext) -> Value {
-    json!({"context":context,"snow_can_be_scene_material":context.snow_can_be_scene_material(),
-        "prompt_line":context.prompt_line(),"prompt_details":context.to_prompt_details()})
-}
-fn check_public_details(context: &PrecipitationContext) {
-    let details = serde_json::to_value(context.to_prompt_details()).unwrap();
-    assert_eq!(details.as_object().unwrap().len(), 6);
-    for hidden in [
-        "current_y",
-        "biome_temperature",
-        "snow_start_y",
-        "biome_downfall",
-        "snowfall_zone",
-    ] {
-        assert!(details.get(hidden).is_none(), "{details}");
+// 移植時fixtureの気候、天候、Yの全組合せを使う。現在地の降水を照合し、旧地表観測は期待値から外す。
+// Minecraftの実降雪や画像認識はここでは扱わない。
+fn check_context(context: &PrecipitationContext, expected: &Value, index: usize) {
+    let mut canonical = expected["context"].clone();
+    for key in ["surface_snow_observed", "snow_evidence"] {
+        canonical.as_object_mut().unwrap().remove(key);
     }
+    assert_eq!(json!(context), canonical, "case {index}");
+    assert_eq!(json!(context.to_prompt_details()),
+        json!({"precipitation_kind":expected["context"]["precipitation_kind"]}), "case {index}");
 }
+
+// 気候と高度で局所種別が決まる。晴れに雪の注釈が入らず、温度・閾値も会話へ渡らないことをJSONで照合。
 #[test]
 fn precipitation_and_prompt_facts_match_fixture() {
     let cases = include_str!("../../fixtures/precipitation.jsonl");
@@ -25,18 +21,12 @@ fn precipitation_and_prompt_facts_match_fixture() {
         let case: Value = serde_json::from_str(line).unwrap();
         let input: Input = serde_json::from_value(case["input"].clone()).unwrap();
         let context = resolve_precipitation_context(&input).unwrap();
-        assert_eq!(
-            output(&context),
-            case["expected"],
-            "precipitation case {index}: {}",
-            case["input"]
-        );
-        check_public_details(&context);
+        check_context(&context, &case["expected"], index);
     }
     assert_eq!(cases.lines().count(), 1271);
 }
 #[test]
-fn frame_adapter_reuses_catalog_values_and_only_observed_blocks() {
+fn frame_adapter_uses_catalog_and_weather_independently_of_legacy_resources() {
     let cases = include_str!("../../fixtures/precipitation-frame.jsonl");
     for (index, line) in cases.lines().enumerate() {
         let case: Value = serde_json::from_str(line).unwrap();
@@ -44,14 +34,8 @@ fn frame_adapter_reuses_catalog_values_and_only_observed_blocks() {
         let climate: Climate = serde_json::from_value(case["climate"].clone()).unwrap();
         let before = serde_json::to_value(&event).unwrap();
         let context = from_event(&event, &climate).unwrap();
-        assert_eq!(
-            output(&context),
-            case["expected"],
-            "frame case {index}: {}",
-            case["event"]
-        );
+        check_context(&context, &case["expected"], index);
         assert_eq!(serde_json::to_value(&event).unwrap(), before);
-        check_public_details(&context);
     }
     assert_eq!(cases.lines().count(), 896);
 }

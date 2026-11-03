@@ -1,6 +1,5 @@
 package dogido.fabric.observation.world;
 
-import java.util.Map;
 import java.util.Set;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.world.ClientWorld;
@@ -69,23 +68,7 @@ final class BlockMaterials {
         return "other";
     }
 
-    static String nearbyResourceNameForBlock(BlockState state) {
-        String blockId = Registries.BLOCK.getId(state.getBlock()).getPath();
-        // 地表の積雪は、バイオーム名や気温から推測せず実ブロックを送る。
-        // サーバー側で標高・天気と合わせ、川柳と雑談の共通材料にする。
-        if ("snow".equals(blockId) || "snow_block".equals(blockId) || "powder_snow".equals(blockId)) {
-            return blockId;
-        }
-        if (blockId.endsWith("_log") || blockId.endsWith("_planks") || blockId.endsWith("_wool")) {
-            return blockId;
-        }
-        if ("coal_ore".equals(blockId) || "deepslate_coal_ore".equals(blockId)) {
-            return "coal_ore";
-        }
-        return null;
-    }
-
-    static boolean isAirExposedNearbyResource(ClientWorld world, BlockPos pos) {
+    static boolean isAirExposed(ClientWorld world, BlockPos pos) {
         for (Direction direction : Direction.values()) {
             if (world.getBlockState(pos.offset(direction)).isAir()) {
                 return true;
@@ -94,18 +77,4 @@ final class BlockMaterials {
         return false;
     }
 
-    static void mergeNearbyResource(
-        Map<String, String> resourceTypes,
-        Map<String, Double> nearestDistances,
-        String type,
-        String resourceName,
-        double distance
-    ) {
-        Double previous = nearestDistances.get(resourceName);
-        if (previous != null && previous <= distance) {
-            return;
-        }
-        resourceTypes.put(resourceName, type);
-        nearestDistances.put(resourceName, distance);
-    }
 }

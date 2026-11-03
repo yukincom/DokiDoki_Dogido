@@ -274,7 +274,7 @@ impl Preparation {
         let request = if job.settings.llm_enabled {
             Some(job.request("haiku_irony", job.preface_details()))
         } else {
-            job.fixed_text = Some(fallback::fixed_text(&job.event));
+            job.fixed_text = Some(fallback::fixed_text_with_weather(&job.event, &job.context.weather));
             job.seed(Irony::default(), None);
             job.stage = Stage::Fixed;
             None

@@ -57,8 +57,6 @@
       },
       "passive_mobs": [],
       "visual_threats": [],
-      "nearby_resources": [],
-      "dropped_items": [],
       "nearby_composition": {
         "mobs": [],
         "blocks": [],

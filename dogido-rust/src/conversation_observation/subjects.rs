@@ -41,11 +41,6 @@ pub(crate) fn player_state(event: &GameEvent) -> anyhow::Result<Value> {
             event.player.dimension.as_deref(),
             event.player.position.y,
             &climate,
-            if event.body_origin().is_some() {
-                &[]
-            } else {
-                &event.nearby_resources
-            },
         )?
     };
     let player_time = event

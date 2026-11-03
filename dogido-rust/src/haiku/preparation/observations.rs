@@ -17,6 +17,10 @@ fn observation(reference: String, text: String, role: &str) -> SourceAtom {
     }
 }
 
+pub(crate) fn joint_look(reference: String, label: &str) -> SourceAtom {
+    observation(reference, format!("さっき相棒が指して、ドギドも向き直って見た{label}"), "shared_past_sight")
+}
+
 pub(super) fn current_atoms(event: &GameEvent) -> Vec<SourceAtom> {
     let at = event.observed_at.timestamp_micros();
     let mut atoms = vec![];

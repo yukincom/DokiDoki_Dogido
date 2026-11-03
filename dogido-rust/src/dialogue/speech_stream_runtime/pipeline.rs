@@ -5,7 +5,7 @@ use crate::types::GenerationReport;
 use std::future::Future;
 
 enum Event {
-    Begin(Vec<String>),
+    Begin(Vec<String>, Option<Arc<AtomicBool>>),
     Delta(String),
     Barrier(oneshot::Sender<()>),
     Validate(String, oneshot::Sender<Result<()>>),
@@ -17,6 +17,7 @@ pub(in crate::dialogue) struct Sink {
     sent: Arc<AtomicBool>,
     stop: watch::Receiver<bool>,
     audio_stop: watch::Receiver<bool>,
+    pub(super) approach: Option<super::super::player_approach::Source>,
 }
 impl Sink {
     pub(in crate::dialogue) fn has_speech(&self) -> bool {
@@ -44,8 +45,9 @@ impl Sink {
         actions: Vec<String>,
     ) -> Result<(GenerationReport, Option<Value>)> {
         ensure!(!self.has_speech(), "cannot regenerate streamed speech");
+        let speech_ready = self.approach.as_ref().map(|_| Arc::new(AtomicBool::new(false)));
         self.tx
-            .send(Event::Begin(actions))
+            .send(Event::Begin(actions, speech_ready.clone()))
             .await
             .context("speech stream ended")?;
         let (tx, mut rx) = mpsc::channel(crate::llm::stream_text_limit(request.max_tokens));
@@ -54,8 +56,10 @@ impl Sink {
             tokio::select! { biased;
                 _ = bridge::cancelled(&mut stop) => anyhow::bail!("cancelled"),
                 result = async {
-                    if tools.is_empty() {
-                        llm.generate_stream(request, image, tx).await.map(|r| (r, None))
+                    if let Some(approach) = &self.approach {
+                        approach.generate(llm, request, image, Some(tx), &self.stop, speech_ready.as_deref()).await.map(|r| (r, None))
+                    } else if tools.is_empty() {
+                        llm.generate_stream(request, image, Some(tx), |_| Ok(())).await.map(|r| (r, None))
                     } else {
                         llm.generate_stream_with_tools(request, tools, messages, allow_call, tx).await
                     }
@@ -127,6 +131,7 @@ where
         sent: sent.clone(),
         stop: model_stop,
         audio_stop: audio_stop.clone(),
+        approach: None,
     };
     let generation = async {
         let result = generate(sink.clone()).await;
@@ -160,9 +165,9 @@ where
                     next = rx.recv() => next,
                 };
                 match next {
-                    Some(Event::Begin(allowed)) => {
+                    Some(Event::Begin(allowed, speech_ready)) => {
                         ensure!(prefix.sent.is_empty(), "cannot replace streamed speech");
-                        prefix = Prefix::default();
+                        prefix = Prefix { speech_ready, ..Default::default() };
                         actions = allowed;
                     }
                     Some(Event::Delta(delta)) => {

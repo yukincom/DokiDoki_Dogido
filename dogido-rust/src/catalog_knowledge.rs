@@ -303,9 +303,6 @@ pub fn for_event(event: &GameEvent, structure: Option<&str>) -> Knowledge {
                 .or_else(|| thing("item", &vehicle.vehicle_id, "player_riding")),
         );
     }
-    for resource in &event.nearby_resources {
-        out.add(thing("block", &resource.name, "nearby_resource"));
-    }
     out
 }
 

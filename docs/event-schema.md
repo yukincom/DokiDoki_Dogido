@@ -46,8 +46,6 @@
   "smell_observation": {"status": "none", "components": [], "temperature_modifier": 0, "rain_after_active": false, "basis": "smell_policy_v2"},
   "passive_mobs": [],
   "inventory": {},
-  "nearby_resources": [],
-  "dropped_items": [],
   "recent_block_breaks": [],
   "look_target": null,
   "combat": {},
@@ -89,8 +87,6 @@
 ### 任意
 
 - `passive_mobs`
-- `nearby_resources`
-- `dropped_items` … 周囲8ブロック以内の落下アイテム。同種は集約する
 - `recent_block_breaks` … ローカルプレイヤーが直近10秒に実際に壊したブロック
 - `look_target` … クロスヘア（＋）が刺さっているブロック/エンティティ。MISS 時は省略可
 - `meta`
@@ -249,7 +245,7 @@ Fabric adapter が実際に送る中心は次のとおり。
 
 #### 継続観測
 
-暗所・周辺資源・時間帯は `status_snapshot` の `world`・`nearby_resources` で継続更新する。暗所反応は `danger_darkness_score` 等と server 内の多段状態（`dark_push` / shelter 等）で扱う。経緯は [現行仕様 §6](current-spec.md)。接近通知は `threat_approaching`、音の通知は `hostile_audio_detected` を使う。
+暗所・地点の天候・時間帯は `status_snapshot` の `world` で継続更新する。暗所反応は `danger_darkness_score` 等と server 内の多段状態（`dark_push` / shelter 等）で扱う。経緯は [現行仕様 §6](current-spec.md)。接近通知は `threat_approaching`、音の通知は `hostile_audio_detected` を使う。
 
 ## 9. `player` オブジェクト
 
@@ -622,62 +618,21 @@ Rustが同じ生成の保存成功後だけ実際の正本IDへ対応付け、�
 - serverはcommand IDで発行記録と相関し、`acknowledged_command_ids`をgame-event応答へ返す
 - server → adapter のcommand本文はイベントではなく [Adapter API §8](adapter-api.md#8-post-apiv1game-events) の応答に載る
 
-## 15. `nearby_resources`
+## 15. 周辺ブロックと落下物
 
-周辺にある取得候補ブロックや資源。
+一般のブロックは、見通しの通った種類を `nearby_composition.blocks` に載せる。資源と落下物の専用一覧は送らない。プレイヤーの＋の対象は `look_target`、ドギドが向き直って自分の眼で見たものは身体側の観測として扱う。地点の降水と地面の積雪は別の事実。[2026-11-03の変更](2026-11-03-body-observation-dialogue.md)
 
-```json
-[
-  {
-    "type": "block",
-    "name": "coal_ore",
-    "distance": 4.0,
-    "direction": { "horizontal": "right", "vertical": "below" }
-  },
-  {
-    "type": "block",
-    "name": "oak_log",
-    "distance": 9.0,
-    "direction": { "horizontal": "front", "vertical": "same" }
-  }
-]
-```
-
-現行 adapter は用途限定フィルタ（原木・板・羊毛・石炭鉱石に加え、
-積雪の実測用 `snow` / `snow_block` / `powder_snow`）。雪は標高やバイオーム名だけで
-「積もっている」と推測せず、この実ブロック観測を川柳・雑談の共通根拠にする。
-**指差しの花・感圧板等は `look_target` を使う**（[look-target-observation-plan.md](look-target-observation-plan.md)）。
-
-## 15a. `dropped_items` / `recent_block_breaks`
-
-`dropped_items` はクライアントに読み込まれている周囲8ブロック以内の落下物を、
-item IDごとに集約した観測。`age_ms` は同種のうち最も新しい個体を表す。
+## 15a. `recent_block_breaks`
 
 ```json
-{
-  "dropped_items": [
-    {
-      "name": "cobblestone",
-      "count": 3,
-      "entity_count": 2,
-      "distance": 1.4,
-      "age_ms": 850,
-      "block_item": true,
-      "mining_related": true
-    }
-  ],
-  "recent_block_breaks": [
-    { "name": "stone", "material": "stone", "age_ms": 900 }
-  ]
-}
+{ "recent_block_breaks": [{ "name": "stone", "material": "stone", "age_ms": 900 }] }
 ```
 
-- `dropped_items` だけで採掘中とは断定しない。投棄・爆発・別原因の可能性がある
 - `recent_block_breaks.material` は `stone | earth | ore | other`
 - serverは、空が見えないこと、採掘道具、直近の破壊実績を主根拠に「採掘中」を確定する
 - 会話・川柳の入力材料から、コード独自の「坑道らしい」という判定を外す。既存の頭上材質と空の可視性を観測として渡す（例:「空は見えず、頭上に土がある」）。材料からの自然な解釈や表現はモデルへ任せる
 - 実破壊に基づく「採掘中」は行動として保持し、「地下」を補わない。構造物として観測された `mineshaft`（廃坑）は既存の構造物情報として別に扱う（[変更記録](2026-10-11-observed-terrain-materials.md)）
-- 時刻・天候と非洞窟バイオームは、空が見えない場面の対話・川柳材料へ投影しない
+- ドギド地点の雨・雪・降水なし・不明と、屋外の空が見えるかは別に扱う。
 
 ## 15b. `look_target`
 
@@ -794,9 +749,9 @@ MISS・空気のときは **フィールド自体を省略**する。
 - `player`
 - `world`（暗所スコア・`time_phase` 等）
 - `inventory`
-- 任意で `nearby_resources`
+- 任意で `nearby_composition`
 
-暗所判定は、このsnapshotおよび他イベント同梱の `world` の現在値を使う。資源・時間帯も同じ継続観測から判断する。
+暗所判定は、このsnapshotおよび他イベント同梱の `world` の現在値を使う。時間帯も同じ継続観測から判断する。
 
 ### `ambient_mob_detected`
 
@@ -997,14 +952,7 @@ adapter は `status_snapshot` に暗所スコアを載せる。以下はその�
     "coal": 3,
     "stick": 2
   },
-  "nearby_resources": [
-    {
-      "type": "block",
-      "name": "coal_ore",
-      "distance": 4.0,
-      "direction": { "horizontal": "right", "vertical": "below" }
-    }
-  ]
+  "nearby_composition": { "mobs": [], "blocks": ["minecraft:coal_ore"], "mobs_truncated": false, "blocks_truncated": false }
 }
 ```
 

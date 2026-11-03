@@ -237,16 +237,6 @@
       "inventory": {
         "fixture": "inventory"
       },
-      "nearby_resources": [
-        {
-          "fixture": "resources"
-        }
-      ],
-      "dropped_items": [
-        {
-          "fixture": "dropped"
-        }
-      ],
       "recent_block_breaks": [
         {
           "fixture": "breaks"
@@ -488,16 +478,6 @@
       "inventory": {
         "fixture": "inventory"
       },
-      "nearby_resources": [
-        {
-          "fixture": "resources"
-        }
-      ],
-      "dropped_items": [
-        {
-          "fixture": "dropped"
-        }
-      ],
       "recent_block_breaks": [
         {
           "fixture": "breaks"
@@ -709,16 +689,6 @@
       "inventory": {
         "fixture": "inventory"
       },
-      "nearby_resources": [
-        {
-          "fixture": "resources"
-        }
-      ],
-      "dropped_items": [
-        {
-          "fixture": "dropped"
-        }
-      ],
       "recent_block_breaks": [
         {
           "fixture": "breaks"
@@ -916,16 +886,6 @@
       "inventory": {
         "fixture": "inventory"
       },
-      "nearby_resources": [
-        {
-          "fixture": "resources"
-        }
-      ],
-      "dropped_items": [
-        {
-          "fixture": "dropped"
-        }
-      ],
       "recent_block_breaks": [
         {
           "fixture": "breaks"
@@ -1167,16 +1127,6 @@
       "inventory": {
         "fixture": "inventory"
       },
-      "nearby_resources": [
-        {
-          "fixture": "resources"
-        }
-      ],
-      "dropped_items": [
-        {
-          "fixture": "dropped"
-        }
-      ],
       "recent_block_breaks": [
         {
           "fixture": "breaks"
@@ -1419,16 +1369,6 @@
       "inventory": {
         "fixture": "inventory"
       },
-      "nearby_resources": [
-        {
-          "fixture": "resources"
-        }
-      ],
-      "dropped_items": [
-        {
-          "fixture": "dropped"
-        }
-      ],
       "recent_block_breaks": [
         {
           "fixture": "breaks"
@@ -1678,16 +1618,6 @@
       "inventory": {
         "fixture": "inventory"
       },
-      "nearby_resources": [
-        {
-          "fixture": "resources"
-        }
-      ],
-      "dropped_items": [
-        {
-          "fixture": "dropped"
-        }
-      ],
       "recent_block_breaks": [
         {
           "fixture": "breaks"
@@ -1893,16 +1823,6 @@
       "inventory": {
         "fixture": "inventory"
       },
-      "nearby_resources": [
-        {
-          "fixture": "resources"
-        }
-      ],
-      "dropped_items": [
-        {
-          "fixture": "dropped"
-        }
-      ],
       "recent_block_breaks": [
         {
           "fixture": "breaks"
@@ -2158,11 +2078,6 @@
       "inventory": {
         "fixture": "inventory"
       },
-      "nearby_resources": [
-        {
-          "fixture": "resources"
-        }
-      ],
       "nearby_composition": {
         "mobs": [
           {
@@ -2177,11 +2092,6 @@
         ],
         "blocks_truncated": false
       },
-      "dropped_items": [
-        {
-          "fixture": "dropped"
-        }
-      ],
       "recent_block_breaks": [
         {
           "fixture": "breaks"
@@ -2426,11 +2336,6 @@
       "inventory": {
         "fixture": "inventory"
       },
-      "nearby_resources": [
-        {
-          "fixture": "resources"
-        }
-      ],
       "nearby_composition": {
         "mobs": [
           {
@@ -2445,11 +2350,6 @@
         ],
         "blocks_truncated": false
       },
-      "dropped_items": [
-        {
-          "fixture": "dropped"
-        }
-      ],
       "recent_block_breaks": [
         {
           "fixture": "breaks"
@@ -2664,11 +2564,6 @@
       "inventory": {
         "fixture": "inventory"
       },
-      "nearby_resources": [
-        {
-          "fixture": "resources"
-        }
-      ],
       "nearby_composition": {
         "mobs": [
           {
@@ -2683,11 +2578,6 @@
         ],
         "blocks_truncated": false
       },
-      "dropped_items": [
-        {
-          "fixture": "dropped"
-        }
-      ],
       "recent_block_breaks": [
         {
           "fixture": "breaks"
@@ -2888,11 +2778,6 @@
       "inventory": {
         "fixture": "inventory"
       },
-      "nearby_resources": [
-        {
-          "fixture": "resources"
-        }
-      ],
       "nearby_composition": {
         "mobs": [
           {
@@ -2907,11 +2792,6 @@
         ],
         "blocks_truncated": false
       },
-      "dropped_items": [
-        {
-          "fixture": "dropped"
-        }
-      ],
       "recent_block_breaks": [
         {
           "fixture": "breaks"
@@ -3156,11 +3036,6 @@
       "inventory": {
         "fixture": "inventory"
       },
-      "nearby_resources": [
-        {
-          "fixture": "resources"
-        }
-      ],
       "nearby_composition": {
         "mobs": [
           {
@@ -3175,11 +3050,6 @@
         ],
         "blocks_truncated": false
       },
-      "dropped_items": [
-        {
-          "fixture": "dropped"
-        }
-      ],
       "recent_block_breaks": [
         {
           "fixture": "breaks"
@@ -3425,11 +3295,6 @@
       "inventory": {
         "fixture": "inventory"
       },
-      "nearby_resources": [
-        {
-          "fixture": "resources"
-        }
-      ],
       "nearby_composition": {
         "mobs": [
           {
@@ -3444,11 +3309,6 @@
         ],
         "blocks_truncated": false
       },
-      "dropped_items": [
-        {
-          "fixture": "dropped"
-        }
-      ],
       "recent_block_breaks": [
         {
           "fixture": "breaks"
@@ -3701,11 +3561,6 @@
       "inventory": {
         "fixture": "inventory"
       },
-      "nearby_resources": [
-        {
-          "fixture": "resources"
-        }
-      ],
       "nearby_composition": {
         "mobs": [
           {
@@ -3720,11 +3575,6 @@
         ],
         "blocks_truncated": false
       },
-      "dropped_items": [
-        {
-          "fixture": "dropped"
-        }
-      ],
       "recent_block_breaks": [
         {
           "fixture": "breaks"
@@ -3933,11 +3783,6 @@
       "inventory": {
         "fixture": "inventory"
       },
-      "nearby_resources": [
-        {
-          "fixture": "resources"
-        }
-      ],
       "nearby_composition": {
         "mobs": [
           {
@@ -3952,11 +3797,6 @@
         ],
         "blocks_truncated": false
       },
-      "dropped_items": [
-        {
-          "fixture": "dropped"
-        }
-      ],
       "recent_block_breaks": [
         {
           "fixture": "breaks"

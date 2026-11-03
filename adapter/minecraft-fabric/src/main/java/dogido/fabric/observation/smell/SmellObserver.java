@@ -37,6 +37,8 @@ public final class SmellObserver {
     private long rainAfterSmellUntilTick = -1;
     private String previousLocalSmellWeather = null;
 
+    public static double scanRadius() { return Math.max(SmellPolicy.MAX_SCAN_DISTANCE, ZombieScentPolicy.MAX_DISTANCE); }
+
     // 嗅覚候補は敵対判定・視認・聴取とは独立。個体や位置は送信しない。
     // scanThreatsを流用すると中立中のゾンビピグリンが抜け、視認後に匂いが消えてしまう。
     // この走査は候補収集だけで、戦闘追跡や敵対判定の一覧には何も追加しない。

@@ -153,3 +153,32 @@ fn observed_mineshaft_structure_keeps_its_own_identity() {
             .any(|f| f.key == "structure" && f.label == "廃坑")
     );
 }
+
+
+// 見込み: 同じ雨のワールドでも標高・地点の気候で雨／雪／降水なし／不明に分かれる。
+// 合格: 模擬観測の会話・川柳で種別と表示が一致し、晴れでも一般視認の雪は残る。地表の推測・実機・生成結果は使わない。
+#[test]
+fn local_precipitation_agrees_across_chat_and_verse_without_a_surface_snow_scan() {
+    for (biome, weather, y, kind) in [
+        ("taiga", "rain", 64, "rain"),
+        ("taiga", "rain", 250, "snow"),
+        ("desert", "rain", 64, "none"),
+        ("unknown", "rain", 64, "unknown"),
+        ("snowy_plains", "clear", 64, "none"),
+    ] {
+        let mut raw = json!(frame("none", f64::from(y), None));
+        raw["world"] = json!({"biome":biome,"sky_visible":true,"weather":weather});
+        raw["nearby_composition"] = json!({"blocks":["snow_block"],"mobs":[],"blocks_truncated":false,"mobs_truncated":false});
+        let event = GameEvent::parse(raw).unwrap();
+        let chat = conversation_observation::project(&event, None, 32., 7., 5000).unwrap();
+        let poem = materials(&event);
+        let details = poem.base_details();
+        assert_eq!(chat.observations["weather"]["precipitation_kind"], kind);
+        assert_eq!(details["precipitation_kind"], kind);
+        assert_eq!(details["weather_label"], chat.observations["weather"]["label"]);
+        assert!(chat.observations["weather"].get("surface_snow_observed").is_none());
+        assert!(!details.contains_key("surface_snow_observed"));
+        assert_eq!(chat.observations["nearby_block_types"][0]["id"], "snow_block");
+        assert!(!poem.nearby_blocks.is_empty());
+    }
+}

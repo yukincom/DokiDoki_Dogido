@@ -18,11 +18,15 @@ pub(super) struct Input {
     pub visual: Option<super::visual_runtime::Source>,
     pub speech_stream: Option<super::speech_stream_runtime::Source>,
     pub after_look: Option<super::visual_runtime::LookCapture>,
-    // 受付済みlook_playerの成功結果だけを、同じ返答での移動選択へ結ぶ。
-    pub player_approach: Option<crate::body::requests::CompletedLook>,
+    // 通常入力または明示注視の元turnに、同じ一回生成での移動選択を結び付ける。
+    pub player_approach: Option<super::player_approach::Source>,
 }
 
 impl Input {
+    pub fn follows_look(&self) -> bool {
+        self.after_look.is_some() || self.player_approach.as_ref().is_some_and(|s| s.follows_look())
+    }
+
     pub fn native(
         frame: Value,
         event: crate::events::GameEvent,

@@ -108,11 +108,6 @@ fn normalize_id(s: &str) -> String {
 fn biome_id(s: Option<&str>) -> String {
     strip(s.unwrap_or("")).to_lowercase()
 }
-fn distance_cmp(a: Option<f64>, b: Option<f64>) -> std::cmp::Ordering {
-    a.unwrap_or(f64::INFINITY)
-        .partial_cmp(&b.unwrap_or(f64::INFINITY))
-        .unwrap_or(std::cmp::Ordering::Equal)
-}
 /// 所持数の多い順、同数ならID順へ揃える。所持品の近い二品・異なる一品を選ぶ際の同点順になる。
 fn sorted_inventory(event: &GameEvent) -> Vec<(&String, &i64)> {
     let mut values: Vec<_> = event
@@ -140,28 +135,12 @@ fn phase(event: &GameEvent) -> &'static str {
         None => "unknown",
     }
 }
-fn weather(event: &GameEvent) -> &'static str {
-    match event.world.weather {
-        Some(Weather::Clear) => "clear",
-        Some(Weather::Rain) => "rain",
-        Some(Weather::Thunder) => "thunder",
-        None => "unknown",
-    }
-}
 fn time_label(s: &str) -> &'static str {
     match s {
         "morning" => "朝",
         "day" => "昼",
         "evening" => "夕方",
         "night" => "夜",
-        _ => "不明",
-    }
-}
-fn weather_label(s: &str) -> &'static str {
-    match s {
-        "clear" => "晴れ",
-        "rain" => "雨",
-        "thunder" => "雷",
         _ => "不明",
     }
 }
@@ -422,8 +401,7 @@ pub fn capture(
     let environment = project_environment(event);
     let poem = poem_item(event, world, runtime.inventory_order)?;
     let inventory = inventory_values(event, world, entries);
-    let nearby = nearby_blocks(event, world, entries);
-    let dropped = dropped_items(event, world);
+    let nearby = unique(observed_block_ids(event).map(|id| world.block_label(Some(id))));
     let passive = unique(
         event
             .passive_mobs
@@ -453,7 +431,6 @@ pub fn capture(
         &poem,
         &inventory.items,
         &nearby,
-        &dropped,
         &passive,
         &precipitation,
         &environment,
@@ -502,7 +479,7 @@ pub fn capture(
     );
     let id = biome_id(event.world.biome.as_deref());
     let phase = phase(event);
-    let weather = weather(event);
+    let weather = precipitation.weather_key(event.world.weather);
     Ok(Context {
         body_observer: event.body_origin().is_some(),
         player_name: runtime.player_name.into(),
@@ -517,11 +494,7 @@ pub fn capture(
         time_phase: phase.into(),
         time_label: time_label(phase).into(),
         weather: weather.into(),
-        weather_label: if precipitation.precipitation_kind == PrecipitationKind::Snow {
-            "雪".into()
-        } else {
-            weather_label(weather).into()
-        },
+        weather_label: crate::chat_world::weather_label_from_context(event, &precipitation),
         precipitation_context: precipitation,
         poem_item_id: poem.id,
         held_item: poem.label,
@@ -530,7 +503,6 @@ pub fn capture(
         inventory_close_pair: inventory.close_pair,
         inventory_far_item: inventory.far_item,
         nearby_blocks: nearby,
-        dropped_items: dropped,
         passive_mobs: passive,
         haiku_tags: tags(event, &features, &covered, catalog),
         feature_candidates: features,
@@ -554,7 +526,6 @@ fn features(
     poem: &PoemItem,
     inventory: &[String],
     nearby: &[String],
-    dropped: &[String],
     passive: &[String],
     precipitation: &precipitation::PrecipitationContext,
     environment: &crate::environment::projection::EnvironmentProjection,
@@ -592,14 +563,6 @@ fn features(
     }
     for (i, label) in nearby.iter().take(6).enumerate() {
         add("周辺", format!("nearby_{}", i + 1), label.clone(), vec![]);
-    }
-    for (i, label) in dropped.iter().take(4).enumerate() {
-        add(
-            "落下物",
-            format!("dropped_{}", i + 1),
-            label.clone(),
-            vec![],
-        );
     }
     if !poem.label.is_empty() {
         let (source, key) = if poem.source == "pocket" {
@@ -710,12 +673,7 @@ fn features(
         add(
             "天気",
             "weather".into(),
-            if snow {
-                "雪"
-            } else {
-                weather_label(weather(event))
-            }
-            .into(),
+            crate::chat_world::weather_label_from_context(event, precipitation),
             vec![],
         );
         add(
@@ -726,7 +684,7 @@ fn features(
         );
     }
     if event.body_origin().is_some() {
-        // 種類の多い所持品や落下物で、生きもの・土地の候補枠を埋めない。
+        // 種類の多い所持品で、生きもの・土地の候補枠を埋めない。
         // 各群内は既存順序を保つ。持ち物自体はContextにも残り、句での使用は必須・禁止にしない。
         out.sort_by_key(|row| {
             if row.key == "portal" {
@@ -740,8 +698,6 @@ fn features(
                 "biome" | "biome_group" | "trait_1" | "structure" | "climate"
             ) {
                 3
-            } else if row.key.starts_with("dropped_") {
-                4
             } else if row.key == "held_item"
                 || row.key == "pocket_item"
                 || row.key.starts_with("inventory_")
@@ -757,7 +713,7 @@ fn features(
 }
 #[allow(clippy::too_many_arguments)]
 /// 選択材料に対応するカタログ項目を、観測上の役割を添えた出典snapshotへ変換する。
-/// 周辺・落下物・選択品・所持品・場所・Mobの順に集め、同じsource_refは先に現れた役割を残す。
+/// 周辺・選択品・所持品・場所・Mobの順に集め、同じsource_refは先に現れた役割を残す。
 /// 個体ID付きMobは最後に個体出典を足し、読みが分かる個体名は種名と同じ出典へまとめる。
 fn catalog_sources(
     event: &GameEvent,
@@ -782,27 +738,9 @@ fn catalog_sources(
             sources.push(source);
         }
     };
-    let mut nearby: Vec<_> = event.nearby_resources.iter().collect();
-    nearby.sort_by(|a, b| distance_cmp(a.distance, b.distance));
-    for r in nearby.into_iter().take(6) {
-        append(
-            "block",
-            &normalize_id(&r.name),
-            entries.block_entry(&r.name),
-            "nearby_block",
-            &world.block_label(Some(&r.name)),
-        );
-    }
-    let mut dropped: Vec<_> = event.dropped_items.iter().collect();
-    dropped.sort_by(|a, b| distance_cmp(a.distance, b.distance));
-    for d in dropped.into_iter().take(4) {
-        append(
-            "item",
-            &normalize_id(&d.name),
-            entries.item_entry(&d.name),
-            "dropped_item",
-            &world.item_label(Some(&d.name)),
-        );
+    for id in observed_block_ids(event) {
+        append("block", &normalize_id(id), entries.block_entry(id), "nearby_block",
+            &world.block_label(Some(id)));
     }
     if !poem.id.is_empty() && poem.id != "air" {
         append(
@@ -898,7 +836,7 @@ fn tensions(
     if biome_visible
         && sky_visible
         && group == "dry"
-        && ["rain", "thunder"].contains(&weather(event))
+        && matches!(event.world.weather, Some(Weather::Rain | Weather::Thunder))
     {
         out.push("乾いた土地やのに空だけ荒れとる".into());
     }

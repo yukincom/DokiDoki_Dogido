@@ -6,7 +6,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 mod body_changes;
+pub(crate) mod dialogue_capacity;
 mod body_facts;
+pub(crate) mod image_timing;
 pub(crate) mod hearing;
 pub(crate) mod subjects;
 
@@ -138,8 +140,12 @@ impl Context {
     pub fn for_model(mut self) -> Self {
         if let Some(body) = self.observations.get_mut("body_observation") {
             *body = if body["status"] == "observed" {
+                let mut senses = body["current"]["senses"].clone();
+                if let Some(fields) = senses.as_object_mut() {
+                    fields.retain(|key, _| matches!(key.as_str(), "status" | "incomplete" | "reason"));
+                }
                 json!({"status":"observed", "current":{
-                    "vision":body_facts::vision(&body["current"]["vision"]), "senses":body["current"]["senses"],
+                    "vision":body_facts::vision(&body["current"]["vision"]), "senses":senses,
                     "position_relation":body_facts::position(&body["current"]["position_relation"])}})
             } else { json!({"status":"unavailable","reason":body["reason"]}) };
         }
@@ -150,8 +156,11 @@ impl Context {
         }
         for change in &mut self.changes {
             if matches!(change.kind.as_str(), "body_self_position" | "body_player_position" | "body_self_orientation" | "body_player_orientation") {
-                change.before = Value::Null;
-                change.now = json!({"changed":true});
+                // 既に表示用に変換した差分は、反応用コピーを作るときにも保持する。
+                if change.before.is_object() {
+                    change.now = body_facts::motion(&change.kind, &change.before, &change.now);
+                    change.before = Value::Null;
+                }
             } else if change.kind == "body_position_relation" {
                 change.before = body_facts::position(&change.before);
                 change.now = body_facts::position(&change.now);
@@ -164,6 +173,7 @@ impl Context {
                 change.now = body_facts::vision(&change.now);
             }
         }
+        self.changes.retain(|c| !c.now.is_null() || !matches!(c.kind.as_str(), "body_self_position" | "body_player_position" | "body_self_orientation" | "body_player_orientation"));
         self
     }
     /// 同じ観測時刻の共通事実へ、既存の保持期間内の音だけを添える。
@@ -188,7 +198,7 @@ pub fn project(
 ) -> anyhow::Result<Context> {
     if event.body_origin().is_some_and(|o| !o.available) {
         return Ok(Context {
-            observations: json!({"observer":"dogido","sensory_status":"unavailable","hearing":hearing::project(event, thunder_age_ms)}),
+            observations: json!({"observer":"dogido","sensory_status":"unavailable","weather":{"precipitation_kind":"unknown"},"hearing":hearing::project(event, thunder_age_ms)}),
             ..Context::default()
         });
     }
@@ -206,15 +216,8 @@ pub fn project(
     let precipitation = environment::precipitation::from_event(event, &climate)?;
     // 空の可視性・頭上の遮蔽は別項目。木下へ入っても観測済みの雨を消さず、
     // 雨からnullへの差分を「雨が止んだ」と解釈させない。未取得だけは不明のまま残す。
-    let weather = if event.world.weather.is_some() || projection.include_sky_context {
-        // 気候と高度で雨雪を区別する。世界の雷設定は実際に聞いた雷鳴ではない。
-        json!({"label":chat_world::weather_label_from_context(event,&precipitation),
-            "precipitation_kind":precipitation.precipitation_kind,
-            "precipitation_possible":precipitation.precipitation_possible,
-            "surface_snow_observed":precipitation.surface_snow_observed})
-    } else {
-        Value::Null
-    };
+    let weather = json!({"label":chat_world::weather_label_from_context(event,&precipitation),
+        "precipitation_kind":precipitation.precipitation_kind});
     let smell = if let Some(mut present) = environment::ambient::smell_context(event) {
         present["status"] = "present".into();
         present
@@ -224,7 +227,7 @@ pub fn project(
         json!({"status":"unknown"})
     };
     let knowledge = crate::catalog_knowledge::for_event(event, structure);
-    let mob_list = event.nearby_composition.as_ref().filter(|c| !c.mobs_truncated).map(|c| {
+    let mob_list = event.nearby_composition.as_ref().filter(|c| !c.mobs_truncated || !c.mobs.is_empty()).map(|c| {
         let mut mobs: Vec<_> = c.mobs.iter().collect();
         mobs.sort_by_key(|m| &m.id);
         mobs.into_iter().map(|mob| {
@@ -246,7 +249,7 @@ pub fn project(
     let block_list = event
         .nearby_composition
         .as_ref()
-        .filter(|c| !c.blocks_truncated)
+        .filter(|c| !c.blocks_truncated || !c.blocks.is_empty())
         .map(|c| {
             let mut ids = c.blocks.clone();
             ids.sort();
@@ -254,13 +257,14 @@ pub fn project(
                 .map(|id| json!({"label":catalog.block_label(Some(&id)),"id":id}))
                 .collect::<Vec<_>>()
         });
-    Ok(Context {
+    let mut context = Context {
         catalog_knowledge: (!knowledge.is_empty()).then_some(knowledge),
         villager_routines: crate::villager_routines::project(event),
         observations: json!({
             "observed_at":event.observed_at,
             "hearing":hearing::project(event, thunder_age_ms),
-            "visible_hostiles":event.body_origin().map(|_| notice::visible_hostiles(event)),
+            "visible_hostiles":event.body_origin().filter(|o| !o.incomplete.contains(&crate::body::senses::Incomplete::VisualThreats)
+                || !event.visual_threats.is_empty()).map(|_| notice::visible_hostiles(event)),
             "dimension":event.player.dimension,
             "subject_states":subjects::project(event, &precipitation)?,
             "place":place.place_line,
@@ -282,7 +286,12 @@ pub fn project(
             "mob_states":crate::mob_environment::project(event)
         }),
         ..Context::default()
-    })
+    };
+    if let Some(c) = &event.nearby_composition {
+        if c.mobs_truncated { context.observations["nearby_mob_types_partial"] = json!(true); }
+        if c.blocks_truncated { context.observations["nearby_block_types_partial"] = json!(true); }
+    }
+    Ok(context)
 }
 
 fn quantity(value: &crate::events::NearbyQuantity) -> Value {
@@ -439,6 +448,12 @@ impl State {
                 "darkness_observed",
                 "subject_states",
             ] {
+                if matches!(key, "nearby_mob_types" | "nearby_block_types") {
+                    let partial = format!("{key}_partial");
+                    if previous.observations[&partial] == true || next.observations[&partial] == true {
+                        continue;
+                    }
+                }
                 let before = &previous.observations[key];
                 let after = &next.observations[key];
                 // Smell direction may move while the identity stays the same. The

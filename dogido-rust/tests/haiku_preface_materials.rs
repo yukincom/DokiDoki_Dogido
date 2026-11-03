@@ -305,7 +305,7 @@ fn panda_start() -> Start {
     use dogido_rust::chat_observation::{ChatObservationMemory, NameOutcomeUpdate};
     let mut start = change_start(|v| {
         v["event"]["world"]["biome"] = json!("bamboo_jungle");
-        v["event"]["nearby_resources"] = json!([{"type":"block","name":"bamboo","distance":2}]);
+        v["event"]["nearby_composition"] = json!({"blocks":["bamboo"],"mobs":[],"mobs_truncated":false,"blocks_truncated":false});
         v["completed_turns"] = json!([{"turn_id":"panda-turn","player_text":"パンダさんかわいいね", "dogido_text":"竹を食べる姿がええなあ"}]);
     });
     let mut seen = serde_json::to_value(&start.event).unwrap();
@@ -494,10 +494,10 @@ async fn selected_panda_sources_and_hotbar_snapshot_survive_regeneration_and_sav
     std::fs::remove_dir_all(root).unwrap();
 }
 
-// 見込み: 現在のモブと落下物は、持ち物や過去の視認とは別の由来を持つ材料になる。
-// 合格: パンダ・敵・周辺走査の種類が候補にあり、枠外の骨は落下物としてだけ残る。模擬観測を使用。
+// 見込み: 旧落下物を含む観測でも、生成材料には現在の視認と周辺の種類だけを加える。
+// 合格: パンダ・敵・周辺観測を別の由来で含み、落下物と枠外の骨を除く。固定入力と資料JSONを確認する。
 #[test]
-fn current_mobs_and_dropped_items_keep_their_observation_source() {
+fn current_mobs_keep_their_observation_source_and_legacy_drops_are_ignored() {
     let start = change_start(|v| {
         v["event"]["player"]["held_item"] = json!("minecraft:torch");
         v["event"]["player"]["hotbar"] =
@@ -528,9 +528,7 @@ fn current_mobs_and_dropped_items_keep_their_observation_source() {
             .any(|a| a["observation_role"] == "current_surroundings")
     );
     assert!(
-        atoms
-            .iter()
-            .any(|a| a["source_ref"] == "item:bone" && a["observation_role"] == "dropped_item")
+        !atoms.iter().any(|a| a["source_ref"] == "item:bone" || a["observation_role"] == "dropped_item")
     );
     assert!(!atoms.iter().any(|a| a["source_ref"] == "item:rotten_flesh"));
     assert_eq!(

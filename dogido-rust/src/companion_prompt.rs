@@ -24,8 +24,8 @@ pub fn image_move_notice() -> &'static str {
 pub fn image_body_contract() -> &'static str {
     TEXT["image_body_contract"].as_str().unwrap()
 }
-pub fn look_player_contract() -> &'static str {
-    TEXT["look_player_contract"].as_str().unwrap()
+pub fn player_approach_contract() -> &'static str {
+    TEXT["player_approach_contract"].as_str().unwrap()
 }
 pub fn chat_image() -> &'static str {
     TEXT["chat_image"].as_str().unwrap()

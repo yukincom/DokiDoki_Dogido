@@ -29,10 +29,11 @@ pub struct Sample {
     pub environment: Option<events::MobEnvironment>,
     pub passive_mobs: Vec<events::PassiveMob>,
     pub visual_threats: Vec<events::VisualThreat>,
-    pub nearby_resources: Vec<events::NearbyResource>,
-    pub dropped_items: Vec<events::DroppedItem>,
     pub nearby_composition: events::NearbyComposition,
-    pub smell_observation: events::SmellObservation,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub smell_observation: Option<events::SmellObservation>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub incomplete: Vec<Incomplete>,
     pub auditory_threats: Vec<events::AuditoryThreat>,
     pub ambient_sounds: Vec<events::AmbientSound>,
     pub hearing_basis: HearingBasis,
@@ -58,6 +59,17 @@ pub enum UnavailableReason {
     BudgetExhausted,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Incomplete {
+    PassiveMobs,
+    VisualThreats,
+    NearbyComposition,
+    World,
+    SmellObservation,
+    Hearing,
+}
+
 /// 受理済み身体snapshotから作った読み取り用metadata。通信のfieldとしては公開しない。
 /// positionは身体の足元、bodyは生成時に診断へ残す同じ現在・前回の投影。
 #[derive(Clone, Debug)]
@@ -68,6 +80,7 @@ pub(crate) struct Origin {
     /// 既存の身体活動から判定した停止状態。Noneは未取得で、通常浮遊は停止に含む。
     pub stationary: Option<bool>,
     pub available: bool,
+    pub incomplete: Vec<Incomplete>,
     pub age_ms: u64,
     pub body: Value,
     pub player_safety: events::WorldState,
@@ -78,8 +91,12 @@ impl Senses {
     /// モデルへは採取の状態と根拠だけを渡す。感覚本文は共通observationsで一回だけ投影する。
     pub(crate) fn summary(&self) -> Value {
         match self {
-            Self::Observed(s) => json!({"status":"observed","version":s.version,"basis":s.basis,
-                "source_server_tick":s.source_server_tick,"hearing_basis":s.hearing_basis,"hearing_truncated":s.hearing_truncated}),
+            Self::Observed(s) => {
+                let mut facts = json!({"status":"observed","version":s.version,"basis":s.basis,
+                    "source_server_tick":s.source_server_tick,"hearing_basis":s.hearing_basis,"hearing_truncated":s.hearing_truncated});
+                if !s.incomplete.is_empty() { facts["incomplete"] = json!(s.incomplete); }
+                facts
+            }
             Self::Unavailable {
                 version,
                 basis,
@@ -108,8 +125,6 @@ impl Senses {
         if [
             s.passive_mobs.len(),
             s.visual_threats.len(),
-            s.nearby_resources.len(),
-            s.dropped_items.len(),
             s.auditory_threats.len(),
             s.ambient_sounds.len(),
         ]
@@ -141,16 +156,17 @@ impl Senses {
         }
         s.passive_mobs.validate()?;
         s.visual_threats.validate()?;
-        s.nearby_resources.validate()?;
-        s.dropped_items.validate()?;
+        if s.incomplete.len() > 6 || s.incomplete.iter().enumerate()
+            .any(|(i, kind)| s.incomplete[..i].contains(kind))
+            || (s.smell_observation.is_none() && !s.incomplete.contains(&Incomplete::SmellObservation))
+            || (s.incomplete.contains(&Incomplete::Hearing) && !s.hearing_truncated)
+        {
+            return Err("invalid incomplete body senses".into());
+        }
         s.nearby_composition.validate()?;
         s.smell_observation.validate()?;
         s.auditory_threats.validate()?;
         s.ambient_sounds.validate()?;
-        // 既存型が拡張fieldを保持しても、感覚一件が無制限に会話材料を占めないようにする。
-        if serde_json::to_vec(s).map_err(|e| e.to_string())?.len() > 65_536 {
-            return Err("body senses encoded size limit".into());
-        }
         Ok(())
     }
 }

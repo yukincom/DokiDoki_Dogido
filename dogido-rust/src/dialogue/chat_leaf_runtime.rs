@@ -33,13 +33,18 @@ pub(super) async fn render_image(
     llm: &RigLlm,
     cancel: &mut watch::Receiver<bool>,
     image: Option<&crate::chat_image::Attachment>,
+    approach: Option<&super::player_approach::Source>,
 ) -> Result<Run> {
-    if image.is_none() { return render(request, llm, cancel).await; }
-    if let Some(system) = request.messages.iter_mut().find(|m| m.role == crate::types::Role::System) {
+    if image.is_none() && approach.is_none() { return render(request, llm, cancel).await; }
+    if image.is_some() && let Some(system) = request.messages.iter_mut().find(|m| m.role == crate::types::Role::System) {
         system.content.push('\n');
         system.content.push_str(crate::companion_prompt::chat_image());
     }
+    let selection_cancel = cancel.clone();
     render_with(request, cancel, |request| async move {
+        if let Some(approach) = approach {
+            return approach.generate(llm, &request, image, None, &selection_cancel, None).await;
+        }
         match image {
             Some(image) => llm.generate_with_image(&request, image).await,
             None => llm.generate(&request).await,

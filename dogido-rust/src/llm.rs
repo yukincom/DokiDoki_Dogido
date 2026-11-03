@@ -112,9 +112,11 @@ impl RigLlm {
         &self,
         input: &GenerationRequest,
         image: Option<&crate::chat_image::Attachment>,
-        deltas: tokio::sync::mpsc::Sender<String>,
+        deltas: Option<tokio::sync::mpsc::Sender<String>>,
+        received: impl FnMut(&str) -> Result<()>,
     ) -> Result<GenerationReport> {
-        Ok(self.stream(input, image, &[], &[], false, deltas).await?.0)
+        // Rig受信futureは大きい。音声・文字の両経路で再生workerのstackへ積み重ねない。
+        Ok(Box::pin(self.stream(input, image, &[], &[], false, deltas, received)).await?.0)
     }
 
     /// 相談の同じ一要求をstreamで受け取る。道具の差分は発話へ送らず、完成した呼出しだけ返す。
@@ -126,7 +128,7 @@ impl RigLlm {
         allow_call: bool,
         deltas: tokio::sync::mpsc::Sender<String>,
     ) -> Result<(GenerationReport, Option<Value>)> {
-        self.stream(input, None, tools, tool_messages, allow_call, deltas)
+        Box::pin(self.stream(input, None, tools, tool_messages, allow_call, Some(deltas), |_| Ok(())))
             .await
     }
 
@@ -137,7 +139,8 @@ impl RigLlm {
         tools: &[Value],
         tool_messages: &[Value],
         allow_call: bool,
-        deltas: tokio::sync::mpsc::Sender<String>,
+        deltas: Option<tokio::sync::mpsc::Sender<String>>,
+        mut received: impl FnMut(&str) -> Result<()>,
     ) -> Result<(GenerationReport, Option<Value>)> {
         use futures_util::StreamExt;
         use rig_core::{completion::CompletionModel, streaming::StreamedAssistantContent};
@@ -164,7 +167,10 @@ impl RigLlm {
                         );
                         text.push_str(&delta);
                         if !delta.is_empty() {
-                            deltas.send(delta).await.context("speech stream closed")?;
+                            received(&text)?;
+                            if let Some(deltas) = &deltas {
+                                deltas.send(delta).await.context("speech stream closed")?;
+                            }
                         }
                     }
                     StreamedAssistantContent::Final(response) => terminal = Some(response.raw),

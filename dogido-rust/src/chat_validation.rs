@@ -10,7 +10,7 @@ pub struct Outcome {
     pub action: &'static str,
     pub status: &'static str,
     pub reason: Option<&'static str>,
-    // 実行はlook_playerの所有者だけ。本文の補完から操作を推測しない。
+    // 二択を提示した通常返答だけが実行に使う。本文の補完から操作を推測しない。
     pub body_action: Option<Value>,
 }
 

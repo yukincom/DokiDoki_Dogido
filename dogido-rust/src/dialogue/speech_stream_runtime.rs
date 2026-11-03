@@ -54,6 +54,7 @@ impl Source {
     pub(super) async fn render(
         &self,
         mut request: GenerationRequest,
+        approach: Option<&super::player_approach::Source>,
         llm: &RigLlm,
         image: Option<&crate::chat_image::Attachment>,
         corrections: Vec<Value>,
@@ -84,6 +85,7 @@ impl Source {
                 request: &request,
                 image,
                 corrections,
+                approach,
             },
             cancel,
             || {
@@ -140,6 +142,8 @@ impl Source {
 struct Prefix {
     raw: String,
     sent: String,
+    // 二択を提示した場合は、その選択を受理した時点から先行発話できる。
+    speech_ready: Option<Arc<AtomicBool>>,
 }
 impl Prefix {
     #[cfg(test)]
@@ -158,6 +162,9 @@ impl Prefix {
         let Some(value) = chat_validation::complete_json(raw) else {
             return Ok(vec![]);
         };
+        if self.speech_ready.as_ref().is_some_and(|ready| !ready.load(Ordering::Acquire)) {
+            return Ok(vec![]);
+        }
         let Some(action) = confirmed_action(raw) else {
             return Ok(vec![]);
         };
@@ -292,6 +299,7 @@ struct SpeechInput<'a> {
     request: &'a GenerationRequest,
     image: Option<&'a crate::chat_image::Attachment>,
     corrections: Vec<Value>,
+    approach: Option<&'a super::player_approach::Source>,
 }
 
 async fn pipeline(
@@ -309,11 +317,14 @@ async fn pipeline(
         request,
         image,
         corrections,
+        approach,
     } = input;
+    let selection_cancel = cancel.clone();
     run_pipeline(
         config, dictionary, audio, serial, corrections,
         crate::llm::stream_text_limit(request.max_tokens), cancel, started,
-        |sink| async move {
+        |mut sink| async move {
+            sink.approach = approach.cloned();
             let report = sink.generate(llm, request, image, &[], &[], false, vec!["speak".into()]).await;
             let (output, reports) = match report {
                 Ok((report, _)) => (
@@ -327,7 +338,10 @@ async fn pipeline(
             };
             Ok(Run { output, reports, streamed: true })
         },
-        |run, sink| async move {
+        |mut run, sink| async move {
+            if let Some(approach) = approach {
+                approach.finish(&mut run.output, &selection_cancel)?;
+            }
             let speech = if run.output.action == "silent" { None } else {
                 sink.validate_text(&run.output.text).await?;
                 ready(&run.output, &run.reports)?;
@@ -388,6 +402,18 @@ mod tests {
                 .unwrap()
                 .is_empty()
         );
+    }
+
+    // 見込み: 二択の受付後なら本文生成中の一文目を読み、拒否時は台詞を差し替えられる。
+    // 合格: 同じ本文は受付前に零文、受付後に一文。確認範囲: 音声差分の抽出。実発行はHTTP試験で確認。
+    #[test]
+    fn approach_speech_waits_only_for_a_movement_decision() {
+        let ready = Arc::new(AtomicBool::new(false));
+        let mut prefix = Prefix { speech_ready: Some(ready.clone()), ..Default::default() };
+        assert!(prefix.feed(r#"{"action":"speak","speech":"行くで。"#).unwrap().is_empty());
+        assert!(prefix.check_final("今はそっちへ行けへんわ。").is_ok());
+        ready.store(true, Ordering::Release);
+        assert_eq!(prefix.feed(r#""}"#).unwrap(), ["行くで。"]);
     }
 
     #[test]

@@ -324,7 +324,8 @@ pub(super) fn refresh_dialogue_context(s: &Session, actions: &mut [Speech]) -> b
                 }
             }
         }
-        if action.image.is_some() {
+        if let Some(image) = &action.image {
+            crate::conversation_observation::image_timing::attach(&mut leaf.details[key]["world_context"], image);
             leaf.details[key]["visual_capture"] = leaf.details["visual_capture"].clone();
         }
         if action.rain_after_window.is_some() {

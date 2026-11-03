@@ -69,19 +69,11 @@ pub fn project_environment(event: &GameEvent) -> EnvironmentProjection {
             .evidence
             .push(format!("recent_terrain_breaks:{breaks}"));
     }
-    let drops = event
-        .dropped_items
-        .iter()
-        .filter(|d| d.mining_related && d.age_ms.is_none_or(|age| age <= 15_000))
-        .count();
-    if drops > 0 {
-        result.evidence.push(format!("fresh_mining_drops:{drops}"));
-    }
     let actively_breaking = event.player.block_breaking_active == Some(true);
     if actively_breaking {
         result.evidence.push("block_breaking_active".into());
     }
-    if mining_tool && (breaks >= 2 || (breaks >= 1 && (actively_breaking || drops > 0))) {
+    if mining_tool && (breaks >= 2 || (breaks >= 1 && actively_breaking)) {
         result.mining_state = MiningState::Active;
         result.mining_label = "プレイヤーは採掘している".into();
         return result;

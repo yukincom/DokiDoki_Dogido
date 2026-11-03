@@ -94,12 +94,8 @@ impl GameEvent {
         data.world = senses.map(|s| s.world.clone()).unwrap_or_default();
         data.passive_mobs = senses.map(|s| s.passive_mobs.clone()).unwrap_or_default();
         data.visual_threats = senses.map(|s| s.visual_threats.clone()).unwrap_or_default();
-        data.nearby_resources = senses
-            .map(|s| s.nearby_resources.clone())
-            .unwrap_or_default();
-        data.dropped_items = senses.map(|s| s.dropped_items.clone()).unwrap_or_default();
         data.nearby_composition = senses.map(|s| s.nearby_composition.clone());
-        data.smell_observation = senses.map(|s| s.smell_observation.clone());
+        data.smell_observation = senses.and_then(|s| s.smell_observation.clone());
         data.auditory_threats = senses
             .map(|s| s.auditory_threats.clone())
             .unwrap_or_default();
@@ -188,7 +184,19 @@ impl GameEvent {
     /// 元JSONの所持品順を取り出し、型・範囲と再帰的検証に成功した場合だけGameEventを返す。
     /// JSON numberはserde_jsonで有限値に限られ、整数・実数・真偽値はmodelsの型で照合する。
     /// 不正な入力は理由文字列で拒否し、未検査のEventDataを通常の観測処理へ渡さない。
-    pub fn parse(value: Value) -> Result<Self, String> {
+    pub fn parse(mut value: Value) -> Result<Self, String> {
+        // 古いsnapshotの専用一覧を読捨てる。拡張field・身体感覚・決定記録へ引き継がない。
+        for scope in ["", "/body_observation/sample/senses"] {
+            if let Some(fields) = value.pointer_mut(scope).and_then(Value::as_object_mut) {
+                fields.remove("nearby_resources");
+                fields.remove("dropped_items");
+            }
+        }
+        if let Some(senses) = value.pointer("/body_observation/sample/senses")
+            && serde_json::to_vec(senses).map_err(|e| e.to_string())?.len() > 65_536
+        {
+            return Err("body senses encoded size limit".into());
+        }
         let inventory_order = value
             .get("inventory")
             .and_then(Value::as_object)

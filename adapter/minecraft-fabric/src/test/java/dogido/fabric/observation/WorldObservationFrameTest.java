@@ -45,9 +45,8 @@ class WorldObservationFrameTest {
         JsonObject player = new JsonObject(); player.addProperty("health", 20);
         JsonObject inventory = new JsonObject(); inventory.addProperty("torch", 3);
         JsonObject mobs = new JsonObject(); mobs.addProperty("type", "cow");
-        JsonArray drops = new JsonArray(); drops.add("stone");
         JsonArray breaks = new JsonArray(); breaks.add("dirt");
-        return new WorldObservationFrame.Materials(player, inventory, mobs, drops, breaks, null);
+        return new WorldObservationFrame.Materials(player, inventory, mobs, breaks, null);
     }
 
     @Test void eightEventCopiesUseOneReadAndCannotMutateSharedMaterials() {
@@ -61,11 +60,10 @@ class WorldObservationFrameTest {
             assertEquals(20, value.player().get("health").getAsInt());
             assertEquals(3, value.inventory().get("torch").getAsInt());
             assertEquals("cow", value.nearbyMobs().get("type").getAsString());
-            assertEquals("stone", value.droppedItems().get(0).getAsString());
             assertEquals("dirt", value.recentBlockBreaks().get(0).getAsString());
             assertNull(value.lookTarget());
             value.player().addProperty("health", 1); value.inventory().addProperty("torch", 0);
-            value.nearbyMobs().addProperty("type", "pig"); value.droppedItems().remove(0); value.recentBlockBreaks().remove(0);
+            value.nearbyMobs().addProperty("type", "pig"); value.recentBlockBreaks().remove(0);
         }
         assertEquals(1, reads.get(), "missing look target must not trigger a new read");
     }

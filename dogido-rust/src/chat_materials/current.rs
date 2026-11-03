@@ -255,7 +255,7 @@ pub(super) fn frame_details(
             "include_biome_context": !place.biome_label.is_empty(),
             "include_sky_context": env.include_sky_context,
             "time_phase": if env.include_sky_context{serde_json::to_value(event.world.time_phase)?.as_str().unwrap_or("").to_owned()}else{String::new()},
-            "weather": if env.include_sky_context{serde_json::to_value(event.world.weather)?.as_str().unwrap_or("").to_owned()}else{String::new()},
+            "weather": if env.include_sky_context{precipitation.weather_key(event.world.weather).to_owned()}else{String::new()},
             "weather_label": if env.include_sky_context{crate::chat_world::weather_label_from_context(event,&precipitation)}else{String::new()},
             "weather_fact": if env.include_sky_context{crate::chat_world::weather_fact(event)}else{""},
         }).as_object().unwrap().clone());

@@ -146,10 +146,10 @@ pub(super) fn craftable(e: &GameEvent) -> bool {
         && e.inventory.get("stick").copied().unwrap_or(0) > 0
 }
 pub(super) fn materials(e: &GameEvent) -> bool {
-    e.nearby_resources.iter().any(|r| {
-        matches!(r.name.as_str(), "coal_ore" | "coal" | "charcoal")
-            || r.name.ends_with("_log")
-            || r.name.ends_with("_planks")
+    e.nearby_composition.iter().flat_map(|c| &c.blocks).any(|id| {
+        let name = id.trim_start_matches("minecraft:");
+        matches!(name, "coal_ore" | "deepslate_coal_ore")
+            || name.ends_with("_log") || name.ends_with("_planks")
     })
 }
 pub(super) fn weapon(e: &GameEvent) -> bool {

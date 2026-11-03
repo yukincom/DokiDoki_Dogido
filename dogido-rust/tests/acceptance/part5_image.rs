@@ -552,7 +552,7 @@ async fn acceptance_image_three_routes_send_verified_frames_in_one_generation() 
             .expect("同じ現在画像")
             .image;
         assert_eq!(image.sha256, action.image.as_ref().unwrap().sha256);
-        super::super::chat_leaf_runtime::render_image(normal.clone(), &llm, &mut cancel, Some(&image))
+        super::super::chat_leaf_runtime::render_image(normal.clone(), &llm, &mut cancel, Some(&image), None)
             .await
             .unwrap();
         {
@@ -563,7 +563,7 @@ async fn acceptance_image_three_routes_send_verified_frames_in_one_generation() 
             data.rows.push_back(json!({"session_id":"s","turn_id":"acceptance-turn","epoch":7,"playback_status":"generating"}));
         }
         let stream = super::super::speech_stream_runtime::Source::new(&d, "s", "acceptance-turn", 7).unwrap();
-        stream.render(normal, &llm, Some(&image), vec![], Value::Null, &mut cancel).await.unwrap();
+        stream.render(normal, None, &llm, Some(&image), vec![], Value::Null, &mut cancel).await.unwrap();
         let config = super::super::DialogueConfig {
             model: "fixture".into(),
             reading_engine: "off".into(),

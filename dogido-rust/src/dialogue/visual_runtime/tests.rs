@@ -203,7 +203,7 @@ async fn image_notice_refreshes_all_current_facts_and_history_in_the_common_cont
 }
 
 // 見込み: 環境判断一回に前後画像と変化一文を渡し、必要な観測と履歴を保つ。
-// 合格: 模擬HTTP一件でsilent、カメ・天候・匂い・履歴を保持し、撮影台帳・内部revisionを送らない。実モデルは対象外。
+// 合格: 模擬HTTP一件でsilent、カメ・天候・匂い・履歴と撮影との時間差を保持し、撮影台帳・内部revisionを送らない。実モデルは対象外。
 #[tokio::test]
 async fn existing_environment_model_gets_one_image_request_and_can_select_silence() {
     let sent=Arc::new(std::sync::Mutex::new(Vec::<Value>::new()));let recorded=sent.clone();
@@ -230,6 +230,8 @@ async fn existing_environment_model_gets_one_image_request_and_can_select_silenc
     assert!(!image_text.contains("image_observation"));
     assert_eq!(image_text.matches("変わった").count(), 1);
     let observations = &context["world_context"]["observations"];
+    assert!(observations["image_timing"][0].as_str().is_some_and(|fact| fact.starts_with("今の観測は撮影")));
+    assert!(observations.get("observed_at").is_none());
     assert_eq!(observations["nearby_mob_types"][0]["id"], "turtle");
     assert_eq!(observations["nearby_mob_types"][0]["quantity"], 3);
     assert_eq!(observations["weather"], "rain");
@@ -287,7 +289,7 @@ async fn image_movement_uses_one_reply_and_only_available_image_guidance() {
         assert_eq!(result["body_action"],choice);
         let requests=sent.lock().unwrap();assert_eq!(requests.len(),1);
         let system=requests[0]["messages"][0]["content"].as_str().unwrap();
-        assert_eq!(system.matches("これは今あんたが見とる風景やで。").count(),1);
+        assert_eq!(system.matches(crate::companion_prompt::chat_image()).count(),1);
         assert!(system.contains(crate::companion_prompt::image_move_notice()));
         assert_eq!(system.contains(crate::companion_prompt::image_body_contract()),inspect);
         assert!(!system.contains("対象がある行動の target_id") && !system.contains("x は左0") && !system.contains("たとえば"));

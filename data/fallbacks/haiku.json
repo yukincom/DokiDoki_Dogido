@@ -63,8 +63,7 @@
     },
     {
       "line": "しらかばの　ふしめがちょっと　目にみえる",
-      "nearby_resource_names_any": ["birch_leaves"],
-      "nearby_resource_distance_max": 32,
+      "nearby_block_names_any": ["birch_leaves"],
       "weather": "clear",
       "time_phase": "day"
     },

@@ -128,6 +128,8 @@ pub(super) struct State {
     pub last_activity: Instant,
     pub material_turns: VecDeque<Value>,
     workshop_generation: String,
+    // 同じ身体で共に見た直近の一件。発句開始時に一度だけ渡し、現在の視認とは区別する。
+    jointly_seen: Option<(crate::body::contracts::Context, haiku::SourceAtom)>,
 }
 impl Default for State {
     fn default() -> Self {
@@ -137,10 +139,22 @@ impl Default for State {
             last_activity: Instant::now(),
             material_turns: VecDeque::new(),
             workshop_generation: String::new(),
+            jointly_seen: None,
         }
     }
 }
 impl State {
+    pub(super) fn remember_joint_look(&mut self, look: &crate::body::requests::CompletedLook, label: &str) {
+        let reference = format!("joint_look:{}",look.command_id);
+        self.jointly_seen=Some((look.context.clone(), haiku::preparation::observations::joint_look(reference,label)));
+    }
+    pub(super) fn forget_other_body(&mut self, context: Option<&crate::body::contracts::Context>) {
+        if self.jointly_seen.as_ref().is_some_and(|(bound,_)|Some(bound)!=context) { self.jointly_seen=None; }
+    }
+    fn take_joint_look(&mut self, context: Option<&crate::body::contracts::Context>) -> Option<haiku::SourceAtom> {
+        self.forget_other_body(context);
+        self.jointly_seen.take().map(|(_,atom)|atom)
+    }
     pub fn foreground(&self) -> bool {
         self.active.is_some() || self.workshop.as_ref().is_some_and(Workshop::is_open)
     }
@@ -367,7 +381,10 @@ impl Dialogue {
         }
         let runtime = s.haiku_context.clone();
         let snapshot = s.chat_observation.snapshot_body(&event, &super::chat_context::CatalogLabels);
-        let recent_observation_atoms = haiku::preparation::observations::recent_atoms(&event, &snapshot);
+        let mut recent_observation_atoms = haiku::preparation::observations::recent_atoms(&event, &snapshot);
+        if let Some(atom) = s.haiku.take_joint_look(s.body_observation.accepted(Instant::now()).map(|sample| &sample.context)) {
+            recent_observation_atoms.insert(0,atom);
+        }
         let observation = Observation { event, runtime, recent_observation_atoms };
         let completed = if casual {
             s.haiku.material_turns.iter().cloned().collect()
@@ -1071,5 +1088,30 @@ mod completion_tests {
                 d.shutdown().await;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod joint_look_tests {
+    use super::*;
+    // 見込み: 新しい共同注目を次の発句に一度だけ渡す。合格: 最新の羊が選択候補になり、二度目・別の身体には残らない。
+    // 範囲: 実際の発句用状態と材料選択。LLMが句に採用するかは実機で見る。
+    #[test]
+    fn latest_joint_sight_is_offered_once_with_past_attribution_in_its_body() {
+        let mut s=State::default();
+        let context=crate::body::contracts::Context{owner_id:"owner".into(),body_id:"body".into(),epoch:"1".into(),dimension:"overworld".into()};
+        let mut look=crate::body::requests::CompletedLook{command_id:"oak".into(),context:context.clone(),input_generation:1,executed_at:chrono::Utc::now()};
+        s.remember_joint_look(&look,"原木");
+        look.command_id="sheep".into();
+        s.remember_joint_look(&look,"羊");
+        let atom=s.take_joint_look(Some(&context)).unwrap();
+        assert_eq!(atom.source_ref,"joint_look:sheep");
+        assert_eq!(atom.text,"さっき相棒が指して、ドギドも向き直って見た羊");
+        assert_eq!(atom.observation_role,"shared_past_sight");
+        assert!(s.take_joint_look(Some(&context)).is_none());
+        s.remember_joint_look(&look,"羊");
+        let mut other=context.clone(); other.epoch="2".into();
+        assert!(s.take_joint_look(Some(&other)).is_none());
+        assert!(s.take_joint_look(Some(&context)).is_none());
     }
 }

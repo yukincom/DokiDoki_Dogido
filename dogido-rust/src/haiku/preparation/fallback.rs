@@ -20,6 +20,12 @@ pub fn strip_preface(text: &str) -> &str {
     )
 }
 pub fn fixed_text(event: &GameEvent) -> String {
+    let weather = crate::world_catalog::catalog().climate(event.world.biome.as_deref()).ok()
+        .and_then(|climate| crate::environment::precipitation::from_event(event, &climate).ok());
+    fixed_text_with_weather(event, weather.as_ref().map_or("unknown", |p| p.weather_key(event.world.weather)))
+}
+
+pub(super) fn fixed_text_with_weather(event: &GameEvent, local_weather: &str) -> String {
     let sky = event.world.sky_visible == Some(true);
     let raw = strip(event.world.biome.as_deref().unwrap_or("")).to_lowercase();
     let biome = if sky || raw == "deep_dark" || raw.ends_with("_caves") {
@@ -33,7 +39,7 @@ pub fn fixed_text(event: &GameEvent) -> String {
         Value::Null
     };
     let weather = if sky {
-        serde_json::to_value(event.world.weather).unwrap()
+        json!(local_weather)
     } else {
         Value::Null
     };
@@ -95,35 +101,9 @@ pub fn fixed_text(event: &GameEvent) -> String {
                 return false;
             }
         }
-        let names = rule["nearby_resource_names_any"].as_array();
-        let suffixes = rule["nearby_resource_suffixes_any"].as_array();
-        if names.is_some_and(|a| !a.is_empty()) || suffixes.is_some_and(|a| !a.is_empty()) {
-            return event.nearby_resources.iter().any(|r| {
-                if r.name.is_empty() {
-                    return false;
-                }
-                if let Some(max) = rule["nearby_resource_distance_max"].as_f64()
-                    && r.distance.is_none_or(|d| d > max)
-                {
-                    return false;
-                }
-                let name = strip(r.name.rsplit(':').next().unwrap_or("")).to_lowercase();
-                names.is_some_and(|a| {
-                    a.iter().any(|v| {
-                        strip(
-                            text_format::value_text(v, QuotedRepr)
-                                .rsplit(':')
-                                .next()
-                                .unwrap_or(""),
-                        )
-                        .to_lowercase()
-                            == name
-                    })
-                }) || suffixes.is_some_and(|a| {
-                    a.iter()
-                        .any(|v| name.ends_with(&text_format::value_text(v, QuotedRepr)))
-                })
-            });
+        if let Some(names) = rule["nearby_block_names_any"].as_array() {
+            return event.nearby_composition.iter().flat_map(|c| &c.blocks)
+                .any(|id| names.iter().any(|name| name.as_str() == Some(id.trim_start_matches("minecraft:"))));
         }
         true
     };

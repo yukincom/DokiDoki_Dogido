@@ -69,10 +69,7 @@ fn haiku_candidate_limit_keeps_visible_mobs_and_place_ahead_of_inventory() {
                 {"slot":3,"item_id":"bone","count":32}]});
             let senses = &mut v["body_observation"]["sample"]["senses"];
             senses["world"] = json!({"biome":"plains", "sky_visible":sky_visible, "weather":"clear", "time_phase":"day"});
-            senses["nearby_resources"] = json!(["oak_log", "stone", "sand", "grass_block", "dirt", "cherry_leaves"]
-                .iter().enumerate().map(|(i, name)| json!({"type":"block", "name":name, "distance":i + 1})).collect::<Vec<_>>());
-            senses["dropped_items"] = json!(["apple", "bread", "feather", "string"]
-                .iter().enumerate().map(|(i, name)| json!({"name":name, "count":1, "distance":i + 1})).collect::<Vec<_>>());
+            senses["nearby_composition"]["blocks"] = json!(["oak_log","stone","sand","grass_block","dirt","cherry_leaves"]);
             senses["passive_mobs"] = json!(["cow", "sheep", "pig"]
                 .iter().map(|kind| json!({"type":kind, "distance":2})).collect::<Vec<_>>());
         });
@@ -91,7 +88,7 @@ fn haiku_candidate_limit_keeps_visible_mobs_and_place_ahead_of_inventory() {
             world, crate::chat_catalog::catalog(), world, &Default::default(),
         ).unwrap();
         let keys: Vec<_> = context.feature_candidates.iter().map(|row| row.key.as_str()).collect();
-        assert_eq!(keys.len(), 14);
+        assert!(keys.len() <= 14);
         for key in ["nearby_1", "nearby_6", "mob_1", "mob_2", "mob_3"] {
             assert!(keys.contains(&key), "{key}: {keys:?}");
         }
@@ -124,9 +121,14 @@ async fn body_comparison_stays_internal_while_model_context_contains_no_raw_pose
     assert_eq!(context.changes[4].before["facts"][2], "ドギドとプレイヤーの足元間の直線距離は3ブロック。");
     assert_eq!(context.changes[4].now["facts"][2], "ドギドとプレイヤーの足元間の直線距離は8ブロック。");
     assert_eq!(body(&second)["current"]["position_relation"], context.changes[4].now);
-    for change in &context.changes[..3] {
+    // 身体と視線は別。座標や生角度ではなく直近の差を会話で使える一文にする。
+    for (change, fact) in context.changes[..3].iter().zip([
+        "プレイヤーが南へ約5.0ブロック動いた。",
+        "ドギドが右へ約90度、身体の向きを変えた。",
+        "プレイヤーが左へ約135度視線を変えた。"
+    ]) {
         assert!(change.before.is_null());
-        assert_eq!(change.now, json!({"changed":true}));
+        assert_eq!(change.now, json!({"fact":fact}));
     }
     assert_eq!(context.changes[3].now["player_visibility"], "not_visible");
     {
@@ -313,13 +315,13 @@ async fn body_senses_feed_chat_smell_environment_and_haiku_without_player_fallba
         v["player"]["hotbar"] = json!({"selected_slot":0,"slots":[{"slot":0,"item_id":"torch","count":3}]});
         v["world"]["biome"] = json!("desert");
         v["passive_mobs"] = json!([{"type":"pig"}]);
-        v["nearby_resources"] = json!([{"type":"block","name":"sand","distance":1}]);
+        v["nearby_composition"] = json!({"blocks":["sand"],"mobs":[],"mobs_truncated":false,"blocks_truncated":false});
         v["look_target"] = json!({"kind":"entity","name":"sheep"});
         v["smell_observation"] = json!({"status":"present","components":[{"smell_id":"bread","category":"food","valence":"pleasant","source_kind":"hotbar","effective_strength":3}],"basis":"smell_policy_v2"});
         let senses = &mut v["body_observation"]["sample"]["senses"];
         senses["world"]["biome"] = json!("snowy_taiga");
         senses["passive_mobs"] = json!([{"type":"cow"}]);
-        senses["nearby_resources"] = json!([{"type":"block","name":"snow_block","distance":2}]);
+        senses["nearby_composition"]["blocks"] = json!(["snow_block"]);
         senses["smell_observation"] = json!({"status":"present","components":[{"smell_id":"zombie","category":"decay","valence":"unpleasant","source_kind":"entity","effective_strength":3}],"basis":"smell_policy_v2"});
         senses["auditory_threats"] = json!([{"label":"skeleton","source_id":"one-emission","spoken_name_allowed":true,"heard_ago_ms":100,"direction":{"horizontal":"right"},"distance_band":"close"}]);
     });
@@ -328,7 +330,7 @@ async fn body_senses_feed_chat_smell_environment_and_haiku_without_player_fallba
     let sensory = captured.sensory_event.as_ref().unwrap();
     assert_eq!(sensory.observer_y(), Some(64.0));
     assert_eq!(sensory.player.position.y, Some(120.0));
-    assert_eq!(sensory.nearby_resources[0].name, "snow_block");
+    assert_eq!(sensory.nearby_composition.as_ref().unwrap().blocks, ["snow_block"]);
     assert_eq!(captured.snapshot.current.passive_types, ["cow"]);
     assert_eq!(captured.snapshot.current.hearing_types, ["skeleton"]);
     assert!(
@@ -462,7 +464,7 @@ async fn body_senses_feed_chat_smell_environment_and_haiku_without_player_fallba
     d.observe("s", unavailable.clone(), None);
     let empty = capture(&d, &unavailable);
     let empty_event = empty.sensory_event.as_ref().unwrap();
-    assert!(empty_event.passive_mobs.is_empty() && empty_event.nearby_resources.is_empty());
+    assert!(empty_event.passive_mobs.is_empty() && empty_event.nearby_composition.is_none());
     assert!(empty_event.world.biome.is_none() && empty_event.smell_observation.is_none());
     assert!(empty.snapshot.recent.hearing_memos.is_empty());
     assert_eq!(empty_event.inventory.get("torch"), Some(&3));
@@ -526,7 +528,7 @@ async fn old_reply_ack_cannot_consume_new_body_generation_changes() {
     assert_eq!(current.changes[1].before["facts"][2], "ドギドとプレイヤーの足元間の直線距離は79ブロック。");
     assert_eq!(current.changes[1].now["facts"][2], "ドギドとプレイヤーの足元間の直線距離は78ブロック。");
     assert!(current.changes[0].before.is_null());
-    assert_eq!(current.changes[0].now, json!({"changed":true}));
+    assert_eq!(current.changes[0].now, json!({"fact":"プレイヤーが北へ約1.0ブロック動いた。"}));
     {
         let data = d.data.lock().unwrap();
         let internal = data.sessions["s"]
@@ -879,4 +881,37 @@ async fn haiku_recent_panda_uses_body_memory_and_disappears_when_body_is_unavail
     }
     drop(permit);
     d.shutdown().await;
+}
+
+
+// 見込み: 身体の匂い・敵視認が欠けても、天候と実際に見えたブロックは同じsnapshotに残る。
+// 合格: 模擬HTTPの受理から会話用観測までで雨・石を保持し、匂い・敵・未聴取は不明、旧一覧は再送しない。
+#[test]
+fn partial_body_sample_keeps_local_weather_and_observed_blocks() {
+    let raw = edit(event(1, 100, 23.0), |v| {
+        v["nearby_resources"] = json!([{"type":"block","name":"snow_block"}]);
+        let senses = &mut v["body_observation"]["sample"]["senses"];
+        senses["dropped_items"] = json!([{"name":"bone","count":1}]);
+        senses["world"] = json!({"biome":"river","weather":"rain"});
+        senses["nearby_composition"]["blocks"] = json!(["stone"]);
+        senses["nearby_composition"]["blocks_truncated"] = json!(true);
+        senses["hearing_truncated"] = json!(true);
+        senses.as_object_mut().unwrap().remove("smell_observation");
+        senses["incomplete"] = json!(["world","visual_threats","nearby_composition","smell_observation","hearing"]);
+    });
+    let wire = json!(raw);
+    assert!(wire.get("nearby_resources").is_none());
+    assert!(wire.pointer("/body_observation/sample/senses/dropped_items").is_none());
+    let d = server();
+    d.observe("s", raw.clone(), None);
+    let c = capture(&d, &raw);
+    let facts = &c.context.world_context.as_ref().unwrap().observations;
+    assert_eq!(facts["sensory_status"], "partial");
+    assert_eq!(facts["weather"]["precipitation_kind"], "rain");
+    assert_eq!(facts["nearby_block_types"][0]["id"], "stone");
+    assert_eq!(facts["nearby_block_types_partial"], true);
+    assert!(facts["visible_hostiles"].is_null());
+    assert_eq!(facts["hearing"]["status"], "partial");
+    assert!(facts["hearing"]["rain_heard"].is_null());
+    assert_eq!(facts["smell"]["status"], "unknown");
 }

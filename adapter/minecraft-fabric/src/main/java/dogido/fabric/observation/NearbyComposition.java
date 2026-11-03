@@ -28,9 +28,16 @@ public final class NearbyComposition {
             return Double.isFinite(distance) && distance >= 0
                 && distance <= (previous.contains(id) ? exit : enter);
         }
+        public JsonObject finish(Collection<String> actuallyVisible, boolean complete) {
+            Set<String> retained = new TreeSet<>(actuallyVisible);
+            if (!complete) retained.addAll(previous);
+            previous = Set.copyOf(retained);
+            JsonObject result = types(actuallyVisible);
+            if (!complete) result.addProperty("truncated", true);
+            return result;
+        }
         public JsonObject finish(Collection<String> actuallyVisible) {
-            previous = Set.copyOf(actuallyVisible);
-            return types(previous);
+            return finish(actuallyVisible, true);
         }
         public void reset() { previous = Set.of(); }
     }

@@ -286,7 +286,7 @@ fn shelter_and_rain_sound_expiry_never_turn_world_rain_into_weather_ending() {
     assert!(changes(&snapshot(&sheltered),&cleared).iter().any(|c|c.kind=="weather"));
     assert_eq!(cleared.observations["weather"]["precipitation_kind"],"none");
     wire["world"].as_object_mut().unwrap().remove("weather");
-    assert!(project(wire).observations["weather"].is_null());
+    assert_eq!(project(wire).observations["weather"]["precipitation_kind"],"unknown");
 }
 
 #[test]
@@ -298,6 +298,6 @@ fn covered_weather_preserves_dry_biome_and_dimension_boundaries() {
             "world":{"biome":biome,"weather":"rain","sky_visible":false,"overhead_cover_type":"stone"}})).unwrap();
         let context=conversation_observation::project(&event,None,32.0,7.0,5000).unwrap();
         assert_eq!(context.observations["weather"]["precipitation_kind"],"none");
-        assert_eq!(context.observations["weather"]["precipitation_possible"],false);
+        assert!(context.observations["weather"].get("precipitation_possible").is_none());
     }
 }

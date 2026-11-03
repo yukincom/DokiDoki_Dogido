@@ -193,7 +193,6 @@ pub struct Context {
     pub inventory_close_pair: Vec<String>,
     pub inventory_far_item: String,
     pub nearby_blocks: Vec<String>,
-    pub dropped_items: Vec<String>,
     pub passive_mobs: Vec<String>,
     pub haiku_tags: Vec<String>,
     pub feature_candidates: Vec<Feature>,
@@ -216,7 +215,7 @@ impl Context {
             "biome_context_visible":self.include_biome_context,"sky_context_visible":self.include_sky_context,
             "poem_item_id":self.poem_item_id,"held_item":self.held_item,"poem_item_source":self.poem_item_source,
             "inventory_items":self.inventory_items,"inventory_close_pair":self.inventory_close_pair,"inventory_far_item":self.inventory_far_item,
-            "nearby_blocks":self.nearby_blocks,"dropped_items":self.dropped_items,"passive_mobs":self.passive_mobs,
+            "nearby_blocks":self.nearby_blocks,"passive_mobs":self.passive_mobs,
             "haiku_tags":self.haiku_tags,"poetic_lines":self.poetic_lines,"feature_candidates":self.feature_candidates.iter().map(Feature::prompt_label).collect::<Vec<_>>(),
             "candidate_tensions":self.candidate_tensions,"catalog_notes":self.catalog_notes,
             "catalog_sources":self.catalog_sources.iter().map(CatalogSourceSnapshot::to_dict).collect::<Vec<_>>(),"source_atoms":self.source_atoms}).as_object().unwrap().clone();
@@ -238,7 +237,6 @@ impl Context {
             let mut ordered = Map::new();
             for key in [
                 "nearby_blocks",
-                "dropped_items",
                 "passive_mobs",
                 "feature_candidates",
             ] {

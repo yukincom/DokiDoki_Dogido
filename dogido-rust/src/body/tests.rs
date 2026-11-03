@@ -416,8 +416,6 @@ pub(crate) fn with_senses(mut event: Value, tick: u64) -> crate::events::GameEve
     for key in [
         "passive_mobs",
         "visual_threats",
-        "nearby_resources",
-        "dropped_items",
         "ambient_sounds",
         "auditory_threats",
         "nearby_composition",

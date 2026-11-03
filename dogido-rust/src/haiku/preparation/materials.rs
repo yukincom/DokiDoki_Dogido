@@ -232,7 +232,6 @@ pub(super) fn seed(
     for (key, values) in [
         ("inventory_items", &context.inventory_items),
         ("nearby_blocks", &context.nearby_blocks),
-        ("dropped_items", &context.dropped_items),
         ("passive_mobs", &context.passive_mobs),
     ] {
         let mut labels = vec![];

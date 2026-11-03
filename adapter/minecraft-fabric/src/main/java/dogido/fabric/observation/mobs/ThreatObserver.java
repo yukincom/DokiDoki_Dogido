@@ -202,7 +202,7 @@ public final class ThreatObserver {
     }
 
     /** 追跡用の走査外周。新規発見と敵数の集計は従来の通常範囲。単位はブロック。 */
-    private double scanDistance() {
+    public double scanDistance() {
         return acquisitionDistance() + VISUAL_RANGE_MARGIN;
     }
 
@@ -229,6 +229,7 @@ public final class ThreatObserver {
                     || this.encounterOpponents.contains(e.getUuid()))
         );
 
+        if (origin.body()) entities = entities.stream().sorted(Comparator.comparingDouble(origin::distanceTo)).toList();
         this.formerOpponentNearby = false;
         List<ThreatObservation> threats = new ArrayList<>();
         for (Entity entity : entities) {

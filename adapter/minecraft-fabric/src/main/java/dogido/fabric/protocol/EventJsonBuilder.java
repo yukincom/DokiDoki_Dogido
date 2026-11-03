@@ -40,7 +40,6 @@ public final class EventJsonBuilder {
     public void ambientSounds(List<AudioThreatObservation> sounds) { root.add("ambient_sounds", buildAmbientSounds(sounds)); }
     public void passiveMobs(List<AmbientMobObservation> mobs) { attachPassiveMobs(root, mobs); }
     public void inventory(JsonObject inventory) { root.add("inventory", inventory); }
-    public void droppedItems(JsonArray droppedItems) { root.add("dropped_items", droppedItems); }
     public void recentBlockBreaks(JsonArray breaks) { root.add("recent_block_breaks", breaks); }
     public void lookTarget(JsonObject target) { if (target != null) root.add("look_target", target); }
     public void combat(JsonObject combat) { root.add("combat", combat); }
@@ -51,15 +50,14 @@ public final class EventJsonBuilder {
     public void meta(JsonObject meta) { root.add("meta", meta); }
     public JsonObject finish() { return root; }
 
-    public void nearbyMaterials(JsonObject nearbyResources, JsonObject nearbyMobComposition) {
-        root.add("nearby_resources", nearbyResources.get("resources"));
+    public void nearbyComposition(JsonObject blocks, JsonObject nearbyMobComposition) {
         // 拡張した気づき表は全snapshotの周期だけ採る。緊急の部分通知へ古い表を転記しない。
-        if (nearbyResources.has("types")) {
+        if (blocks.has("types")) {
             JsonObject composition = new JsonObject();
             composition.add("mobs", nearbyMobComposition.get("entries").deepCopy());
             composition.add("mobs_truncated", nearbyMobComposition.get("truncated").deepCopy());
-            composition.add("blocks", nearbyResources.getAsJsonObject("types").get("ids"));
-            composition.add("blocks_truncated", nearbyResources.getAsJsonObject("types").get("truncated"));
+            composition.add("blocks", blocks.getAsJsonObject("types").get("ids"));
+            composition.add("blocks_truncated", blocks.getAsJsonObject("types").get("truncated"));
             root.add("nearby_composition", composition);
         }
     }

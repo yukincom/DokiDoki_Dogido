@@ -50,16 +50,18 @@ public final class AmbientMobObserver {
     public JsonObject copyNearbyComposition() { return this.nearbyMobComposition.deepCopy(); }
 
     public List<AmbientMobObservation> scanAmbientMobs(ClientPlayerEntity player, ClientWorld world, boolean captureNearbyKinds) {
-        return scanAmbientMobs(ObservationOrigin.player(player),world,captureNearbyKinds);
+        return scanAmbientMobs(ObservationOrigin.player(player),world,captureNearbyKinds,() -> true);
     }
     /** 受け手の範囲・視線から実視認だけを集める。種類保持はこのcollectorの所有者ごとに独立する。 */
-    public List<AmbientMobObservation> scanAmbientMobs(ObservationOrigin origin, ClientWorld world, boolean captureNearbyKinds) {
+    public List<AmbientMobObservation> scanAmbientMobs(ObservationOrigin origin, ClientWorld world, boolean captureNearbyKinds,
+            java.util.function.BooleanSupplier completeScan) {
         List<Entity> entities = world.getOtherEntities(
             origin.player(),
             origin.bounds().expand(captureNearbyKinds ? NearbyComposition.MOB_EXIT : AMBIENT_MOB_DISTANCE),
             MobClassifier::isAmbientMobCandidate
         );
 
+        if (origin.body()) entities = entities.stream().sorted(Comparator.comparingDouble(origin::distanceTo)).toList();
         List<AmbientMobObservation> mobs = new ArrayList<>();
         List<VisibleMob> visibleMobs = new ArrayList<>();
         this.bodyVisibleMobs = List.of();
@@ -112,15 +114,17 @@ public final class AmbientMobObserver {
 
         this.bodyVisibleMobs = List.copyOf(visibleMobs);
         // Routine encounter priority stays unchanged. Extra companions are retained only as conversation candidates.
-        mobs.sort(Comparator.comparing((AmbientMobObservation mob) -> mob.identity().tamed())
+        if (!origin.body()) mobs.sort(Comparator.comparing((AmbientMobObservation mob) -> mob.identity().tamed())
             .thenComparingDouble(AmbientMobObservation::distance));
         if (captureNearbyKinds) {
             var visible = mobs.stream()
                 .filter(mob -> this.nearbyMobKinds.allows(mob.type(), mob.distance())).toList();
-            this.nearbyMobKinds.finish(visible.stream().map(AmbientMobObservation::type).toList());
+            boolean complete = completeScan.getAsBoolean();
+            this.nearbyMobKinds.finish(visible.stream().map(AmbientMobObservation::type).toList(), complete);
             this.nearbyMobComposition = NearbyComposition.mobs(visible.stream()
                 .map(mob -> new NearbyComposition.Mob(mob.type(), Boolean.TRUE.equals(mob.isBaby()), mob.profession()))
                 .toList());
+            if (!complete) this.nearbyMobComposition.addProperty("truncated",true);
         }
         // 会話の種類表だけ外周まで保つ。個体一覧・村人数・従来の材料の範囲は変えない。
         return mobs.stream().filter(mob -> mob.distance() <= AMBIENT_MOB_DISTANCE).toList();

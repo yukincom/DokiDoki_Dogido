@@ -202,8 +202,7 @@ impl Dialogue {
             }
         });
         let mut completed = false;
-        // 移動選択は受付結果を確定してから発話する。同じ一回生成で追加の返答は作らない。
-        if input["workshop"].is_null() && input.player_approach.is_none() {
+        if input["workshop"].is_null() && (!input.follows_look() || input.player_approach.is_some()) {
             input.speech_stream =
                 super::speech_stream_runtime::Source::new(&self, &sid, &turn, epoch)
                     .map(|source| source.with_generation_permit(permit.clone()));
@@ -215,7 +214,7 @@ impl Dialogue {
             } else {
                 save.await
             }
-        } else if input.after_look.is_none() && input.player_approach.is_none()
+        } else if !input.follows_look()
             && input["workshop"].is_null()
             && crate::haiku_memory::clear_requested(input["text"].as_str().unwrap_or(""))
         {
@@ -336,12 +335,6 @@ impl Dialogue {
                 if let Some(source) = &continuation
                     && source.ready(&permit).await.is_err()
                 {
-                    self.update(&sid, &turn, epoch, PlaybackStatus::Cancelled, None);
-                    monitor.finish().await;
-                    return;
-                }
-                let approach = self.apply_player_approach(&sid, &turn, epoch, &input, &mut result, *cancel.borrow());
-                if approach.is_err() {
                     self.update(&sid, &turn, epoch, PlaybackStatus::Cancelled, None);
                     monitor.finish().await;
                     return;

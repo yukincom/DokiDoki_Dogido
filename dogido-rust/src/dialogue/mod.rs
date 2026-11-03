@@ -12,6 +12,7 @@ mod audio;
 mod body_gaze_runtime;
 mod body_interest_runtime;
 mod body_request_runtime;
+mod player_approach;
 mod body_runtime;
 mod bridge;
 mod chat_context;

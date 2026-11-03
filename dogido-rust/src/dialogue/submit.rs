@@ -722,6 +722,9 @@ impl Dialogue {
         input.retained_history_count = s.history.retained_count();
         input.request_classification =
             super::request_runtime::classification(s, text, source).cloned();
+        if ordinary_reply && self.config.llm_enabled {
+            input.player_approach = super::player_approach::Source::ordinary(self, s, &session_id, &turn);
+        }
         if workshop.is_none()
             && poem_input.is_none()
             && !crate::haiku_memory::memory_candidate(text)

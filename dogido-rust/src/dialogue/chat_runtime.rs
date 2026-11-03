@@ -121,7 +121,7 @@ async fn body(
         .into();
     // 一句の相談中は過去句を検索しない。戦闘pauseと通常会話への寄り道も、
     // 受付時にコードが確定したworkshopのopen状態を引き継ぐ。
-    if input.after_look.is_none() && input.player_approach.is_none() {
+    if !input.follows_look() {
         if context.asks_haiku_recall
             && input["poem_reference"]["open"] != true
             && input["workshop_fallback"] != true
@@ -279,12 +279,16 @@ async fn body(
                     json!({"op":"result","text":"そっち向いたで。","look_image_status":"unavailable","llm_reports":[]}),
                 );
             }
+            if let Some(capture) = &image {
+                crate::conversation_observation::image_timing::attach(&mut reply.details["world_context"], &capture.image);
+            }
             let mut streamed = false;
             let output = if config.llm_enabled {
                 let mut request = reply.request(&config.model, config.max_tokens)?;
-                if input.player_approach.is_some() {
-                    super::body_request_runtime::prepare_player_approach(&mut request);
-                }
+                let approach = input.player_approach.as_ref().filter(|source| {
+                    !context.asks_mob_information && input["workshop_fallback"] != true
+                        && source.offer(&mut request)
+                });
                 if context.asks_mob_information {
                     tracing::info!(
                         event = "mob_chat_request",
@@ -301,6 +305,7 @@ async fn body(
                     stream
                         .render(
                             request,
+                            approach,
                             llm,
                             image.as_ref().map(|capture| &capture.image),
                             input["reading_corrections"]
@@ -312,13 +317,18 @@ async fn body(
                         )
                         .await?
                 } else {
-                    super::chat_leaf_runtime::render_image(
+                    let mut run = super::chat_leaf_runtime::render_image(
                         request,
                         llm,
                         cancel,
                         image.as_ref().map(|capture| &capture.image),
+                        approach,
                     )
-                    .await?
+                    .await?;
+                    if let Some(approach) = approach {
+                        approach.finish(&mut run.output, cancel)?;
+                    }
+                    run
                 };
                 streamed = run.streamed;
                 reports.extend(run.reports);
@@ -331,9 +341,6 @@ async fn body(
                 "dialogue_action":output.action,"dialogue_outcome":output.status,
                 "dialogue_reason":output.reason,
                 "observation_revision":reply.details["world_context"]["revision"]});
-            if input.player_approach.is_some() {
-                result["body_action"] = json!(output.body_action);
-            }
             if let Some(request) = &input.after_look {
                 result["look_image_status"] = json!(if image.is_some() { "captured" } else { "unavailable" });
                 result["look_capture_id"] = json!(request.capture_id);
