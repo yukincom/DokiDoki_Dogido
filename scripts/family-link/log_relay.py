@@ -1,7 +1,9 @@
 """Show child process output locally and relay debug lines without blocking it."""
 from __future__ import annotations
 import argparse
+from contextlib import contextmanager
 from datetime import datetime
+import fcntl
 import http.client
 import json
 import os
@@ -13,6 +15,94 @@ import sys
 import threading
 import time
 import uuid
+
+LOG_RETENTION_SECONDS = 24 * 60 * 60
+
+
+def _active_marker(path):
+    return path.with_name(path.name + '.active')
+
+
+def _is_active(path):
+    """Return true only while another process holds this log's marker lock."""
+    marker = _active_marker(path)
+    flags = os.O_RDWR | getattr(os, 'O_NOFOLLOW', 0)
+    try:
+        descriptor = os.open(marker, flags)
+    except FileNotFoundError:
+        return False
+    except OSError:
+        # A malformed or inaccessible marker must make cleanup conservative.
+        return True
+    try:
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return True
+        return False
+    finally:
+        os.close(descriptor)
+
+
+@contextmanager
+def managed_log(path):
+    """Create one log and hold a cross-process marker until its writer closes."""
+    marker = _active_marker(path)
+    marker_flags = os.O_RDWR | os.O_CREAT | getattr(os, 'O_NOFOLLOW', 0)
+    marker_descriptor = os.open(marker, marker_flags, 0o600)
+    marker_stat = os.fstat(marker_descriptor)
+    log = None
+    locked = False
+    try:
+        fcntl.flock(marker_descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        locked = True
+        os.fchmod(marker_descriptor, 0o600)
+        os.ftruncate(marker_descriptor, 0)
+        os.write(marker_descriptor, f'{os.getpid()}\n'.encode('ascii'))
+        log = os.fdopen(
+            os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, 'O_NOFOLLOW', 0), 0o600),
+            'w',
+        )
+        yield log
+    finally:
+        if log is not None:
+            try:
+                log.close()
+            except OSError:
+                pass
+        if locked:
+            try:
+                if marker.stat().st_ino == marker_stat.st_ino:
+                    marker.unlink()
+            except (FileNotFoundError, OSError):
+                pass
+        os.close(marker_descriptor)
+
+
+def prune_logs(directory, suffix, *, now=None, exclude=()):
+    """Remove only expired, unlocked regular files from the managed folder."""
+    now = time.time() if now is None else now
+    excluded = {Path(path) for path in exclude}
+    if directory.is_symlink() or not directory.is_dir():
+        return 0
+    removed = 0
+    for path in directory.glob('*' + suffix):
+        if path in excluded or path.is_symlink() or _is_active(path):
+            continue
+        try:
+            stat = path.stat()
+            if path.is_file() and now - stat.st_mtime > LOG_RETENTION_SECONDS:
+                path.unlink()
+                marker = _active_marker(path)
+                try:
+                    if not marker.is_symlink():
+                        marker.unlink()
+                except FileNotFoundError:
+                    pass
+                removed += 1
+        except FileNotFoundError:
+            pass
+    return removed
 
 
 def process_snapshot():
@@ -109,7 +199,7 @@ class Relay:
                 except queue.Empty:
                     break
             dropped = self.dropped
-            batch = ([f'[ログ転送] 混雑により {dropped} 行省略。息子Macのログには保存済み。']
+            batch = ([f'[ログ転送] 混雑により {dropped} 行省略。クライアントPCのログには保存済み。']
                      if dropped else []) + pending
             payload = encoded_logs(self.source, batch)
             count = len(pending)
@@ -129,11 +219,11 @@ class Relay:
                 self.dropped -= dropped
                 del pending[:count]
                 if offline:
-                    print('[ログ転送] 親Macへの転送が復旧しました。', flush=True)
+                    print('[ログ転送] LANサーバーPCへの転送が復旧しました。', flush=True)
                 offline = False
             except (OSError, http.client.HTTPException):
                 if not offline:
-                    print('[ログ転送] 親Macへの転送を待っています。息子Macへの保存は継続します。', flush=True)
+                    print('[ログ転送] LANサーバーPCへの転送を待っています。クライアントPCへの保存は継続します。', flush=True)
                 offline = True
                 if self.done.wait(0.5):
                     break
@@ -151,6 +241,7 @@ def run(source, root):
     validate_runtime(root)
     log_dir = root / 'logs/family-client'
     log_dir.mkdir(parents=True, exist_ok=True)
+    prune_logs(log_dir, '.log')
     path = log_dir / (datetime.now().strftime('%Y%m%d-%H%M%S-') + source + '-' + uuid.uuid4().hex[:6] + '.log')
     relay = Relay(source)
     process = None
@@ -161,8 +252,14 @@ def run(source, root):
     env = dict(os.environ, PYTHONUNBUFFERED='1', PYTHONDONTWRITEBYTECODE='1', DOGIDO_ENV_PROFILE='shared')
     commands = [[sys.executable, '-u', 'client_tools/check.py', '--network' if source == 'server' else '--server'],
                 launch_command(root, voice=source == 'voice')]
-    with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), 'w') as log:
+    with managed_log(path) as log:
         def output(line):
+            # At startup every older file was checked. If this foreground run
+            # stays open for days, repeat the bounded cleanup at most daily.
+            nonlocal next_maintenance
+            if time.monotonic() >= next_maintenance:
+                prune_logs(log_dir, '.log', exclude=(path,))
+                next_maintenance = time.monotonic() + LOG_RETENTION_SECONDS
             print(line, flush=True)
             if not log.closed:
                 try:
@@ -173,10 +270,11 @@ def run(source, root):
                         log.close()
                     except OSError:
                         pass
-                    print('[ログ保存] 保存に失敗しました。画面表示と親への転送は継続します。', flush=True)
+                    print('[ログ保存] 保存に失敗しました。画面表示とLANサーバーPCへの転送は継続します。', flush=True)
             relay.put(line)
         try:
-            output(f'[起動] {source} / 息子Macの保存先: {path}')
+            next_maintenance = time.monotonic() + LOG_RETENTION_SECONDS
+            output(f'[起動] {source} / クライアントPCの保存先: {path}')
             for stage, argv in enumerate(commands):
                 if stage == 0:
                     output(f'[事前確認] {source} / 接続を確認します')
@@ -207,7 +305,7 @@ def run(source, root):
             return 0
         finally:
             # The foreground command owns this child only; never terminate other
-            # Minecraft, Qwen, VOICEVOX or Dogido instances by process name.
+            # Minecraft, shared-model, VOICEVOX or Dogido instances by process name.
             for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
                 signal.signal(sig, signal.SIG_IGN)
             if process is not None:

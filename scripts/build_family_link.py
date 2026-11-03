@@ -1,4 +1,4 @@
-"""Build the small Qwen connection updater; no keys, processes or OS changes."""
+"""Build the small LAN-model connection updater; no keys, processes or OS changes."""
 from __future__ import annotations
 import argparse
 import hashlib
@@ -25,13 +25,21 @@ def build(target):
         copy(SCRIPTS / 'family-link' / name, 'client-package/' + name)
     copy(SCRIPTS / 'family-client/family_runtime.py', 'client-package/family_runtime.py')
     for name in ('00_setup.command', '01_connect.command', '02_server.command', '03_voice.command',
-                 'ドギドを起動.command', 'はじめに.md', 'Minecraft設定.txt'):
+                 'ドギドを起動.command', '呼び名を設定.command', 'はじめに.md', 'Minecraft設定.txt'):
         copy(SCRIPTS / 'family-client' / name, 'client-package/updates/' + name)
-    for name in ('check.py', 'install_fabric.py', 'family_runtime.py'):
+    for name in ('check.py', 'configure_call_name.py', 'install_fabric.py', 'family_runtime.py'):
         copy(SCRIPTS / 'family-client' / name, 'client-package/updates/client_tools/' + name)
     for source, name in (('client.py', 'family_link.py'), ('log_relay.py', 'log_relay.py'),
+                         ('minecraft_log_relay.py', 'minecraft_log_relay.py'),
                          ('start_client.py', 'start_client.py')):
         copy(SCRIPTS / 'family-link' / source, 'client-package/updates/client_tools/' + name)
+    client_package = target / 'client-package'
+    client_manifest = {
+        path.relative_to(client_package).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in sorted(client_package.rglob('*')) if path.is_file()
+    }
+    (client_package / 'manifest.json').write_text(
+        json.dumps(client_manifest, ensure_ascii=False, indent=2) + '\n')
     manifest = {p.relative_to(target).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in sorted(target.rglob('*')) if p.is_file()}
     (target / 'manifest.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + '\n')

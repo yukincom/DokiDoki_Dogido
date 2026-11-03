@@ -119,7 +119,7 @@ def test_real_gateway_restricts_ssh_http_and_stops_active_connections(stop_signa
             assert request('POST', '/v1/chat/completions', dict(payload, **extra))[0] == 400
         assert request('GET', '/etc/passwd')[0] == 404
         assert request('POST', '/v1/models', payload)[0] == 404
-        assert len(received) == 1, 'Rejected requests must never reach Qwen'
+        assert len(received) == 1, 'Rejected requests must never reach the shared model'
         assert request('POST', '/dogido/client-logs',
                        {'source': 'server', 'lines': ['INFO: 動作確認', '\u001b[31mWARNING: 音声確認']})[0] == 202
         assert request('POST', '/dogido/client-logs',
@@ -145,11 +145,11 @@ def test_real_gateway_restricts_ssh_http_and_stops_active_connections(stop_signa
         assert any('INFO: relay_process_sample' in p.read_text() for p in (child / 'logs/family-client').glob('*.log'))
         records = [json.loads(line) for path in (state / 'logs').glob('*.jsonl')
                    for line in path.read_text().splitlines()]
-        assert any(r['source'] == '息子/server' and r['message'] == 'INFO: 動作確認' for r in records)
-        assert any(r['source'] == 'Qwen' and 'elapsed_ms' in r for r in records)
-        assert any(r['source'] == '息子/server' and r['message'] == 'INFO: relay_process_sample' for r in records)
+        assert any(r['source'] == 'クライアント/server' and r['message'] == 'INFO: 動作確認' for r in records)
+        assert any(r['source'] == 'モデル' and 'elapsed_ms' in r for r in records)
+        assert any(r['source'] == 'クライアント/server' and r['message'] == 'INFO: relay_process_sample' for r in records)
         assert all('\u001b' not in r['message'] for r in records)
-        assert len(received) == 1, 'Logs must never reach Qwen'
+        assert len(received) == 1, 'Logs must never reach the shared model'
         for arguments in ([target, 'printf UNEXPECTED_SHELL'], ['-s', target, 'sftp'],
                           ['-W', '127.0.0.1:8080', target], ['-W', '127.0.0.1:5055', target],
                           ['-N', '-R', '0:127.0.0.1:8080', target]):

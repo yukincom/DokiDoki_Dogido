@@ -7,7 +7,7 @@ if [[ "$(uname -m)" != arm64 ]]; then
   print -u2 -- "このセットは Apple Silicon の Mac 用です。"
   exit 1
 fi
-print -- "息子さん用ドギドの準備をします。"
+print -- "このクライアントPC用ドギドの準備をします。"
 print -- "Minecraft と Minecraft Launcher を、それぞれ ⌘Q で終了してください。"
 read -r "reply?終了したらこの画面へ戻り、Enter で初期設定を開始します（中止は Ctrl+C）: "
 sh ./.dogido_tools/check_uv.sh ./.dogido_tools/uv
@@ -31,7 +31,8 @@ task_stage="3/3 Fabricの確認・配置"
 print -- "$task_stage"
 ./dogido-llm/bin/python client_tools/install_fabric.py
 task_stage="完了"
-print -- "このMacの導入準備が完了しました。親MacへのSSH接続・Minecraft・実音声は次の手順で確認します。"
+print -- "このMacの導入準備が完了しました。呼び名は『呼び名を設定.command』で変更できます。"
+print -- "LANサーバーPCへの専用接続・Minecraft・実音声は次の手順で確認します。"
 print -- "このフォルダの『Minecraft設定.txt』を開きます。"
 /usr/bin/open -t "$PWD/Minecraft設定.txt" || print -- "Minecraft設定.txt を手動で開いてください。"
 read -r "reply?Enter で終了: "

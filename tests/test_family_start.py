@@ -50,7 +50,7 @@ def test_one_click_waits_for_readiness_and_stops_only_owned_children(tmp_path, m
         bind_host='127.0.0.1', bind_port=5111, voicevox_url='http://127.0.0.1:50021')))
     def response(url):
         if url.endswith('/models'):
-            events.append('qwen-ready'); return {'data': []}
+            events.append('model-ready'); return {'data': []}
         if url.endswith('/version'):
             events.append('voicevox-ready'); return '1.0'
         assert url == 'http://127.0.0.1:5111/healthz'
@@ -58,9 +58,12 @@ def test_one_click_waits_for_readiness_and_stops_only_owned_children(tmp_path, m
     monkeypatch.setattr(launcher, 'json_response', response)
     with pytest.raises(RuntimeError, match='音声入力が終了'):
         launcher.run(tmp_path)
-    assert events.index('qwen-ready') < events.index('spawn:server')
+    assert launcher.os.environ['DOGIDO_CHAT_IMAGE_ENABLED'] == 'true'
+    assert launcher.os.environ['DOGIDO_HAIKU_INTERNAL_CAPTURE_ENABLED'] == 'false'
+    assert events.index('model-ready') < events.index('spawn:server')
     assert events.index('server-ready') < events.index('spawn:voice')
-    assert [e for e in events if e.startswith('stop:')] == ['stop:voice', 'stop:server', 'stop:ssh']
+    assert [e for e in events if e.startswith('stop:')] == [
+        'stop:voice', 'stop:server', 'stop:client_tools/minecraft_log_relay.py', 'stop:ssh']
 
 
 def test_single_click_runs_the_shared_launcher_source():

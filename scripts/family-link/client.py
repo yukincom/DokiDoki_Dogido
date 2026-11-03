@@ -42,8 +42,8 @@ def main():
     root = Path(__file__).resolve().parents[1]
     try:
         argv = command(root)
-        print('ドギド専用の鍵で接続します。親Macのパスワードは入力しません。')
-        print('親Macの「親Macで起動.command」を開いた状態で使ってください。')
+        print('ドギド専用の鍵でLANサーバーPCへ接続します。ログインパスワードは入力しません。')
+        print('LANサーバーPCの「親Macで起動.command」を開いた状態で使ってください。')
         print('Authenticated to ... の後、02_server.command へ進みます。終了は Ctrl+C。', flush=True)
         if args.dry_run:
             print('設定確認のみ。SSHを開始していません。')

@@ -23,6 +23,9 @@ ENV = """# このフォルダ専用。個人の .env はコピーしない。
 DOGIDO_BIND_HOST=127.0.0.1
 DOGIDO_BIND_PORT=5055
 DOGIDO_MEMORY_DIR=.dogido_memory
+DOGIDO_DEFAULT_CALL_NAME=プレイヤー
+DOGIDO_CHAT_IMAGE_ENABLED=true
+DOGIDO_HAIKU_INTERNAL_CAPTURE_ENABLED=false
 DOGIDO_REQUEST_CLASSIFIER_SENRYU_MODEL_ROOT=models/dogido-senryu424-seed42
 DOGIDO_REQUEST_CLASSIFIER_NORMAL_MODEL_ROOT=models/dogido-normal16-seed48-mob
 DOGIDO_REQUEST_CLASSIFIER_PYTHON=dogido-llm/bin/python
@@ -170,12 +173,14 @@ def build(args: argparse.Namespace) -> None:
         if template.suffix == ".command":
             path.chmod(0o755)
     for source_name, installed in (("client.py", "family_link.py"), ("log_relay.py", "log_relay.py"),
+                                   ("minecraft_log_relay.py", "minecraft_log_relay.py"),
                                    ("start_client.py", "start_client.py")):
         copy_file(TEMPLATES.parent / "family-link" / source_name, target / "client_tools" / installed)
     (target / ".env").write_text(ENV, encoding="utf-8")
+    (target / ".env").chmod(0o600)
     copy_file(source / ".env.shared.example", target / ".env.shared")
     (target / "connection.txt").write_text(
-        "親Macで専用接続を起動し、息子Macへ渡す.zip を適用してください。パスワードは不要です。\n",
+        "LANサーバーPCで専用接続を起動し、息子Macへ渡す.zip を適用してください。パスワードは不要です。\n",
         encoding="utf-8")
     copy_file(source / "LICENSE.md", target / "LICENSE.md")
     copy_file(source / "LICENSE-CHARACTER.md", target / "LICENSE-CHARACTER.md")
@@ -201,7 +206,7 @@ def build(args: argparse.Namespace) -> None:
         "- Rust本体: 同梱LICENSE.md、組込み素材: rust-third-party/、依存版: rust-Cargo.lock\n"
         "- 詩資料: reference/language_education_and_poetry/README.md、sources.json\n"
         "- Python / WebRTC 等は初期設定時に各パッケージから取得します。\n"
-        "\nこのセットは家庭内テスト用です。Qwen・VOICEVOX・Minecraft本体は含みません。\n",
+        "\nこのセットは家庭内テスト用です。共有生成モデル・VOICEVOX・Minecraft本体は含みません。\n",
         encoding="utf-8")
     copy_file(source / "adapter/minecraft-fabric/build/libs/dogido-fabric-client-0.1.0.jar",
               target / "minecraft/mods/dogido-fabric-client-0.1.0.jar")
@@ -218,7 +223,7 @@ def build(args: argparse.Namespace) -> None:
     manifest = {
         "source_head": output("git", "-C", source, "rev-parse", "HEAD").strip(),
         "source": "main working tree including current local fixes",
-        "mode": "Rust independent single player; remote Qwen; local VOICEVOX and STT",
+        "mode": "Rust client; LAN shared model; local VOICEVOX and STT",
         "runtime": "rust",
         "uv_version": uv_version,
         "files": {},

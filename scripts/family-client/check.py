@@ -89,7 +89,7 @@ def main() -> None:
     subprocess.run(command + ["--check"], check=True)
     print(f"OK: Rust本体・接続補助・読み辞書・音声認識・AEC（録音なし、モデル {model.name}）")
     print(f"本体: {base_url} / 記憶: {settings.memory_dir}")
-    print("Qwen は親Mac、会話処理・VOICEVOX・再生はこのMacです。")
+    print("生成モデルはLANサーバーPC、会話処理・VOICEVOX・再生はこのクライアントPCです。")
 
 
 if __name__ == "__main__":

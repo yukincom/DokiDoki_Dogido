@@ -2,10 +2,9 @@
 
 **2026-10-03: 旧Python本体の配布・起動と、起動時のconfig/audio書換えは終了。現行はRust本体・Rust音声入力へ統一する。起動の正本は[本体の起動手順](../dogido-rust/README.md)、家庭用の操作は[同梱案内](../scripts/family-client/はじめに.md)。今回の家庭用Rustセットの実機確認は未実施。**
 
-親子はそれぞれのMinecraftアカウントとシングルプレイのワールドで遊ぶ。
-各Macに一つずつのドギド本体と記憶を置き、親Macの共有LLMだけを借りる。
-息子側に既にあるVOICEVOXを使い、Whisper・AEC・マイク・再生も息子側で動かす。
-MinecraftのLAN公開や、一つのドギドサーバーでの同時マルチセッションは使わない。
+各クライアントPCに一つずつのドギド本体と記憶を置き、LANサーバーPCの共有LLMだけを借りる。
+VOICEVOX、Whisper、AEC、マイク、再生も実際に遊ぶクライアントPCで動かす。
+同じMinecraftアカウントを複数PCで使う場合は交代利用とし、同一identityの同時参加は前提にしない。
 既存の[テナンシー計画](multi-user-tenancy.md)を実装したものではない。
 
 ## 接続
@@ -25,8 +24,9 @@ VOICEVOXは息子Macの `127.0.0.1:50021`、ドギドとFabricは既定で同じ
 - 鍵認証だけを許可し、専用の親ホスト鍵を子側に同梱して照合する。
 - `MaxSessions 0` でシェル・コマンド・SFTPを拒否し、転送先も固定窓口一つに限定する。
 - LLMの生APIはモデル指定から別モデルや追加コードを読めるため、直接は公開しない。
-  固定モデル・文字列メッセージ・既存のtemperature/max_tokensをコードで検証・再構築して送る。
-  任意URL、モデル/adapter切替、tools、追加テンプレート、他のAPIを受け付けない。
+  固定モデル・現行message・temperature/max_tokens・usage付きstreamをコードで検証・再構築して送る。
+  画像はinline PNGを最大2枚・各192pxまで、toolは `inspect_verse` と `stage_player_edit` の現行schemaだけ許可する。
+  任意URL、file参照、モデル/adapter切替、未知tool、追加テンプレート、他のAPIを受け付けない。
 - デバッグログ用POSTはsourceと文字列行だけを受け取る。クライアントはファイルパスを指定できない。
   ターミナル制御文字を除去し、親が選んだ一つの起動別JSONLに保存する。ログをLLMへ送らない。
 - Ctrl+C/SIGHUPでは専用sshdの子接続も停止する。OpenSSHの子は別プロセスグループへ移る場合があるため、
@@ -51,9 +51,12 @@ Finderの `.DS_Store`・AppleDouble・`__MACOSX` は適用対象にしない。�
 ## 親側デバッグログ
 
 親の専用接続画面にSSH接続/切断、LLM開始/終了/所要時間/usage、息子側02/03の標準出力・エラーを表示する。
-保存先は `~/Library/Application Support/Dogido-Qwen-Link/logs/` の起動別JSONL。
-息子側にも `logs/family-client/` にログを保存する。発話・句など既存の出力を含み、録音データは転送しない。
-Minecraft/Fabric自身のログは対象外。
+保存先は `~/Library/Application Support/Dogido-LAN-Server/logs/` の起動別JSONL。
+クライアントPCにも `logs/family-client/` にログを保存する。発話・句など既存の出力を含み、録音データは転送しない。
+Minecraft/Fabricは、全 `latest.log` ではなく実際のFabric形式でDogido専用の先頭文を持つ行と、旧logger表記、直後のstackだけを第三sourceとして送る。
+両PCとも期限超過した管理対象ログだけを24時間で削除し、現在書込み中・Minecraft本体・記憶・研究データには触れない。
+
+既存の `Dogido-Qwen-Link` 状態フォルダがあるLANサーバーPCでは、接続鍵を作り直さず同じフォルダを継続利用する。新規導入だけが `Dogido-LAN-Server` を使う。
 
 子側は非同期・有界キューで転送し、通信断時も本体を待たせない。長い通信断・混雑・終了直前には
 親へ届かない行があり得るため、完全な調査には息子側のログも使う。親のログには混雑による省略行数を通知する。
@@ -72,7 +75,7 @@ Minecraft/Fabric自身のログは対象外。
 - 作成元ではCargoのrelease依存情報で本体の更新を確認する。共有設定JSONも必須部品として同梱し、欠けたセットを接続更新で補ったことにはしない。
 - Whisperの実行ファイルと依存ライブラリはコピーしたものだけの参照先を相対化して署名し直す。
   Kotoba Whisperの量子化モデルとSilero VAD、AECのネイティブ実行ファイルも同梱する。
-- uvを同梱し、息子MacでPython 3.11と必要な依存を取得する。MLX/LLMは導入しない。
+- uvを同梱し、クライアントPCでPython 3.11と必要な依存を取得する。MLX/LLMは導入しない。
 - 個人の `.env`・仮想環境・記憶・ログ・名前音声・アカウント情報・セーブデータをコピーしない。
 - Fabric公式のランチャー用ZIPから既知の2ファイルだけを取り出し、バージョンを配置する。
   同版で起動内容が一致する既存設定は再利用する。公式APIの生成日時とインストーラの日時差、
@@ -87,6 +90,9 @@ Minecraft/Fabric自身のログは対象外。
 起動や接続更新では、記憶・ワールドを移動・削除・コピーせず、複数の記憶を自動統合しない。
 旧PythonとRustの別々の保存先がある場合は、使用する正本を明示する。
 
+クライアントPC用の `DOGIDO_MEMORY_DIR` を正本とし、LANサーバーPCへ将来置く閲覧用snapshotを第二の正本にしない。
+SSD正本を使う別環境とはarchive IDと保存領域を分離する。閲覧用コピーの同期は別実装で、現時点の家庭用中継には含まれない。
+
 ## 確認範囲
 
 2026-09-18の旧Python配布セットでは、隔離した導入・Fabric配置と既存設定保持、
@@ -98,16 +104,19 @@ Minecraft/Fabric自身のログは対象外。
 録音・モデル生成・サーバー起動のない導入確認は `client_tools/check.py`。
 `--network` は既存APIへの応答確認、`--server` はRust本体の準備完了確認に分かれる。
 
-息子Macの家庭内LAN接続、OS音声権限、Minecraftと2D UI、実際の再生、8GBでのメモリ余裕、
-親子同時使用時の待ち時間は実機確認が必要。
+クライアントPCの家庭内LAN接続、OS音声権限、Minecraftと2D UI、実際の再生、16GBでのメモリ余裕、
+複数クライアント要求時の待ち時間は実機確認が必要。
 
 ## 一括起動
 
-息子側は「ドギドを起動.command」一つで専用SSH→LLM確認→VOICEVOX確認/起動→Rust本体→healthz確認→Rust音声入力へ進む。
+クライアント側は「ドギドを起動.command」一つで専用SSH→LLM確認→限定Minecraftログ→VOICEVOX確認/起動→Rust本体→healthz確認→Rust音声入力へ進む。
 `client_tools/start_client.py` を一つの正本として使い、commandに同じPython本文を埋め込まない。
 本体のhealthは `runtime=rust` と `dialogue_ready=true` まで確認し、旧Pythonや接続試験だけの本体を採用しない。
 一つのターミナルが所有した子だけを停止し、既存01/02の接続や本体は自動停止・流用しない。
 本体がまだ準備中なら03を開始しない。設定ミス・子終了時も所有した残りを終了する。
+
+呼び名は `呼び名を設定.command` がkit内 `.env` の `DOGIDO_DEFAULT_CALL_NAME` 一項目だけを更新する。
+Minecraftのアカウント名・UUID・所有者確認・記憶先は変更しない。会話画像は有効、川柳内部表現採取は明示的に無効とする。
 
 **終了した仕様:** `voicevox_prewarm_enabled` を追加するため旧config.py/audio.pyを起動時に修正する処理は撤去。
 変更先はRustの音声配送と、この文書の現行起動経路。既存音源は保持する。

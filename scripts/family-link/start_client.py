@@ -1,4 +1,4 @@
-"""Single visible launcher for the son's Qwen connection, Dogido and microphone."""
+"""Single visible launcher for the client PC's model link, Dogido and microphone."""
 from __future__ import annotations
 import fcntl
 import json
@@ -39,7 +39,7 @@ def wait_ready(label, check, children, say, timeout=None):
             pass
         elapsed = time.monotonic() - started
         if timeout is not None and elapsed >= timeout:
-            raise RuntimeError(f'{label}が応答しません。親Macの接続画面とQwenを確認してください。')
+            raise RuntimeError(f'{label}が応答しません。LANサーバーPCの接続画面と共有モデルを確認してください。')
         if elapsed - announced >= 10:
             say(f'[準備中] {label} / {int(elapsed)}秒（終了はCtrl+C）')
             announced = elapsed
@@ -49,6 +49,7 @@ def wait_ready(label, check, children, say, timeout=None):
 def run(root):
     os.chdir(root)
     os.environ.update(DOGIDO_ENV_PROFILE='shared', DOGIDO_VOICE_ECHO_CANCELLATION='webrtc',
+                      DOGIDO_CHAT_IMAGE_ENABLED='true', DOGIDO_HAIKU_INTERNAL_CAPTURE_ENABLED='false',
                       PYTHONDONTWRITEBYTECODE='1', PYTHONUNBUFFERED='1')
     sys.path.insert(0, str(root / 'client_tools'))
     sys.path.insert(0, str(root))
@@ -58,7 +59,7 @@ def run(root):
     settings = get_settings()
     base_url = server_url(settings)
     if not (root / '.dogido_tools/family-link/connection.json').is_file():
-        raise RuntimeError('最初に親Macから受け取った接続更新を適用してください。')
+        raise RuntimeError('最初にLANサーバーPCから受け取った接続更新を適用してください。')
     # Do not adopt or kill independently started processes. Old 01/02/03 must
     # be stopped once when switching from the old manual launch procedure.
     for host, port, label in (('127.0.0.1', 8080, '01の接続'),
@@ -81,14 +82,16 @@ def run(root):
         children.append((name, child))
         return child
     try:
-        say('[1/3] 親Macへ専用鍵で接続します。パスワードは入力しません。')
+        say('[1/3] LANサーバーPCへ専用鍵で接続します。パスワードは入力しません。')
         spawn('専用接続', command(root))
-        def qwen_ready():
+        def model_ready():
             status = json_response('http://127.0.0.1:8080/v1/models')
             return isinstance(status, dict) and isinstance(status.get('data'), list)
-        wait_ready('親MacのQwen', qwen_ready,
+        wait_ready('LANサーバーPCの共有モデル', model_ready,
                    children, say, timeout=30)
         relay = Relay('server')
+        spawn('Minecraftログ', [sys.executable, '-u', 'client_tools/minecraft_log_relay.py'])
+        say('[ログ] MinecraftはDogidoが付けた行だけを確認します。全ログは転送しません。')
         version_url = settings.voicevox_url.rstrip('/') + '/version'
         def voicevox_ready():
             value = json_response(version_url)

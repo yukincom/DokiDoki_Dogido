@@ -1,4 +1,4 @@
-# Rust本体の設定・辞書・AEC接続補助。MLX/Qwen はこのMacへ入れない。
+# Rust本体の設定・辞書・AEC接続補助。生成LLMはこのクライアントPCへ入れない。
 pydantic==2.13.4
 pydantic-settings==2.14.1
 httpx==0.28.1
