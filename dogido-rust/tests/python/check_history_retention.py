@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """戦闘前の合成会話と保持期限を、実HTTP・模擬音声の配送で確認する。"""
+from datetime import datetime
 import json
 from check_dialogue import register, request, row, snapshot, submit, wait_for
 from check_haiku_runtime import fixture
@@ -17,10 +18,16 @@ def main():
         completed_rows = []
         comparisons = 0
 
+        # 見込み: 戦闘前後も配送済み発話の順序・契機・返答先と確定時刻を保持する。
+        # 合格: HTTP履歴の全行が期待と一致し、退避件数・残ターンが規定値に遷移する。音声は模擬再生。
         def compare(expected, *, danger=False, retained=0, remaining=0):
             nonlocal comparisons
             actual = session(base, sid)
-            assert actual["history"] == expected, (actual, expected)
+            assert len(actual["history"]) == len(expected), (actual["history"], expected)
+            for item, want in zip(actual["history"], expected):
+                assert {key: item[key] for key in want} == want, (item, want)
+                at = datetime.fromisoformat(item["occurred_at"].replace("Z", "+00:00"))
+                assert at.utcoffset() is not None, item
             assert actual["history_retention"] == {
                 "danger_active": danger, "retained_utterances": retained,
                 "remaining_player_turns": remaining}, actual
@@ -35,8 +42,10 @@ def main():
             # These short synthetic utterances need no normalization oracle.
             assert len(text) < 80 and len(reply["text"]) < 80
             completed_rows.extend([
-                {"turn_id": turn, "role": "user", "text": text},
-                {"turn_id": turn + ":reply", "role": "assistant", "text": reply["text"]},
+                {"turn_id": turn, "role": "user", "text": text,
+                 "utterance_kind": "player_input", "reply_to_turn_id": None},
+                {"turn_id": turn + ":reply", "role": "assistant", "text": reply["text"],
+                 "utterance_kind": "reply", "reply_to_turn_id": turn},
             ])
             expected = completed_rows  # この試験は20ターン未満なので通常履歴にも全件残る。
             compare(expected, retained=10 if retain_seed else 0, remaining=remaining)
@@ -53,10 +62,11 @@ def main():
         enter(send, rows, sid)
         warning = next(r for r in rows(sid) if r["playback_status"] == "completed" and r.get("combat_actions"))
         completed_rows.append({"turn_id": warning["turn_id"] + ":reply",
-                               "role": "assistant", "text": warning["text"]})
+                               "role": "assistant", "text": warning["text"],
+                               "utterance_kind": "warning", "reply_to_turn_id": None})
         compare(completed_rows, danger=True, retained=10)
         for _ in range(12):
-            send(sid, visual_threats=[MOB], combat={"combat_active_hint": True})
+            send(sid, visual_threats=[MOB], combat={"combat_active_hint": True, "player_engaged": True})
         compare(completed_rows, danger=True, retained=10)
         end(send, rows, sid)
         # 安堵の固定音声はない。戦闘終了後の履歴には実際に届いた警告と会話だけが残る。
@@ -89,7 +99,7 @@ def main():
         wait_for(lambda: row(base, cancelled, {"started"}))
         send(sid, visual_threats=[{"type":"creeper", "entity_id":"urgent-fuse",
                                  "distance":3, "fuse_active":True}],
-             combat={"combat_active_hint": True})
+             combat={"combat_active_hint": True, "player_engaged": True})
         wait_for(lambda: row(base, cancelled, {"cancelled"}))
         (folder / "player_mode").write_text("ok")
         current = session(base, sid)
@@ -115,7 +125,7 @@ def main():
         assert current["history_retention"]["retained_utterances"] == 0
         # death / dimension release use the same transition as combat_ended.
         drive(send, sid, lambda: all(r["playback_status"] in {"completed", "cancelled", "failed"} for r in rows(sid)))
-        send(sid, visual_threats=[MOB])
+        send(sid, visual_threats=[MOB], combat={"player_engaged": True})
         assert session(base, sid)["history_retention"]["danger_active"]
         send(sid, player={"name": "試験", "dimension": "minecraft:the_nether"})
         assert session(base, sid)["history_retention"]["retained_utterances"] == 0

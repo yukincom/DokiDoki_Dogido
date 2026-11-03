@@ -16,8 +16,6 @@
         "observation_summary": "視認: ウシ。性質: passive。",
         "has_visual_threats": false,
         "nearby_hostile_types": [],
-        "player_chat_plan_action": "continue_conversation",
-        "entity_grounding_status": "not_applicable",
         "world_context": {
           "observations": {},
           "changes": [],
@@ -38,8 +36,6 @@
         "observation_summary": "視認: ヒツジ。性質: passive。",
         "has_visual_threats": false,
         "nearby_hostile_types": [],
-        "player_chat_plan_action": "continue_conversation",
-        "entity_grounding_status": "not_applicable",
         "world_context": {
           "observations": {},
           "changes": [],
@@ -60,8 +56,6 @@
         "observation_summary": "視認: ブタ。性質: passive。",
         "has_visual_threats": false,
         "nearby_hostile_types": [],
-        "player_chat_plan_action": "continue_conversation",
-        "entity_grounding_status": "not_applicable",
         "world_context": {
           "observations": {},
           "changes": [],
@@ -82,8 +76,6 @@
         "observation_summary": "視認: ニワトリ。性質: passive。",
         "has_visual_threats": false,
         "nearby_hostile_types": [],
-        "player_chat_plan_action": "continue_conversation",
-        "entity_grounding_status": "not_applicable",
         "world_context": {
           "observations": {},
           "changes": [],
@@ -104,8 +96,6 @@
         "observation_summary": "視認: ウサギ。性質: passive。",
         "has_visual_threats": false,
         "nearby_hostile_types": [],
-        "player_chat_plan_action": "continue_conversation",
-        "entity_grounding_status": "not_applicable",
         "world_context": {
           "observations": {},
           "changes": [],
@@ -126,8 +116,6 @@
         "observation_summary": "視認: オオカミ。性質: neutral。",
         "has_visual_threats": false,
         "nearby_hostile_types": [],
-        "player_chat_plan_action": "continue_conversation",
-        "entity_grounding_status": "not_applicable",
         "world_context": {
           "observations": {},
           "changes": [],
@@ -148,8 +136,6 @@
         "observation_summary": "視認: ミツバチ。性質: neutral。",
         "has_visual_threats": false,
         "nearby_hostile_types": [],
-        "player_chat_plan_action": "continue_conversation",
-        "entity_grounding_status": "not_applicable",
         "world_context": {
           "observations": {},
           "changes": [],
@@ -170,8 +156,6 @@
         "observation_summary": "視認: エンダーマン。性質: neutral。",
         "has_visual_threats": false,
         "nearby_hostile_types": [],
-        "player_chat_plan_action": "continue_conversation",
-        "entity_grounding_status": "not_applicable",
         "world_context": {
           "observations": {},
           "changes": [],
@@ -192,8 +176,6 @@
         "observation_summary": "視認: ゾンビピグリン。性質: neutral。",
         "has_visual_threats": false,
         "nearby_hostile_types": [],
-        "player_chat_plan_action": "continue_conversation",
-        "entity_grounding_status": "not_applicable",
         "world_context": {
           "observations": {},
           "changes": [],
@@ -214,8 +196,6 @@
         "observation_summary": "視認: シロクマ。性質: neutral。",
         "has_visual_threats": false,
         "nearby_hostile_types": [],
-        "player_chat_plan_action": "continue_conversation",
-        "entity_grounding_status": "not_applicable",
         "world_context": {
           "observations": {},
           "changes": [],
@@ -238,8 +218,6 @@
         "nearby_hostile_types": [
           "zombie"
         ],
-        "player_chat_plan_action": "continue_conversation",
-        "entity_grounding_status": "not_applicable",
         "world_context": {
           "observations": {},
           "changes": [],
@@ -262,8 +240,6 @@
         "nearby_hostile_types": [
           "skeleton"
         ],
-        "player_chat_plan_action": "continue_conversation",
-        "entity_grounding_status": "not_applicable",
         "world_context": {
           "observations": {},
           "changes": [],
@@ -286,8 +262,6 @@
         "nearby_hostile_types": [
           "creeper"
         ],
-        "player_chat_plan_action": "continue_conversation",
-        "entity_grounding_status": "not_applicable",
         "world_context": {
           "observations": {},
           "changes": [],
@@ -310,8 +284,6 @@
         "nearby_hostile_types": [
           "witch"
         ],
-        "player_chat_plan_action": "continue_conversation",
-        "entity_grounding_status": "not_applicable",
         "world_context": {
           "observations": {},
           "changes": [],
@@ -334,8 +306,6 @@
         "nearby_hostile_types": [
           "pillager"
         ],
-        "player_chat_plan_action": "continue_conversation",
-        "entity_grounding_status": "not_applicable",
         "world_context": {
           "observations": {},
           "changes": [],

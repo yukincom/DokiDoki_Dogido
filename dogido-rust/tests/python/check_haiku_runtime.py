@@ -35,7 +35,7 @@ def fixture(*, combat_settings=None, extra_args=(), initial_lines=None, **settin
             if temperature == .15:
                 return {"found": True, "kind": "juxtaposition", "description": DESCRIPTION,
                         "elements": ["サクラの葉", "ネザライトの斧"], "focus": ["サクラの葉"], "confidence": .95}
-            if temperature == .2:
+            if temperature == .2 and any("【元の材料】" in m.get("content", "") for m in incoming["messages"]):
                 # 見込み: 現行の選択応答ならWS準備を生成失敗で止めない。合格: 実要求の候補2件を選択し、保存句へ渡す。選択の意味判断は固定。
                 prompt = "\n".join(m["content"] for m in incoming["messages"])
                 candidates, _ = json.JSONDecoder().raw_decode(prompt.split("【元の材料】\n", 1)[1])

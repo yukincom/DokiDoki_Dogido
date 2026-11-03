@@ -20,14 +20,22 @@ ROOT = Path(__file__).resolve().parents[3]
 
 def main():
     seen = []
+    small_talk = ("今日は楽しかったね", "明日も一緒に遊ぼうね")
     proposal_text = 'じゃあ、のくさふゆむをくささむしに変更しよう！どう？'
     class Model(BaseHTTPRequestHandler):
         def do_POST(self):
             body = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
             seen.append(body)
             prompt = '\n'.join(m.get('content') or '' for m in body['messages'])
-            question = re.search(r'今回のプレイヤー発話（会話理解用）: ([^\n]+)', prompt).group(1)
-            reply = step(question, speech='静かな夜の草を思い浮かべた読みやな。')
+            question_match = re.search(r'今回のプレイヤー発話（会話理解用）: ([^\n]+)', prompt)
+            question = question_match.group(1) if question_match else None
+            if question is None:
+                assert any(text in prompt for text in small_talk), prompt
+                reply = {"action": "speak", "speech": "うん、また一緒に遊ぼな。"}
+            elif question in small_talk:
+                reply = step(question, 'unrelated')
+            else:
+                reply = step(question, speech='静かな夜の草を思い浮かべた読みやな。')
             if question == proposal_text:
                 reply = edit(question, index=2, replacement='くささむし', reference='のくさふゆむ', fragment='のくさふゆむ')
                 reply.update(action='ask', purpose='improve_wording', speech='下五をその言葉に変えるんやな？')
@@ -155,9 +163,17 @@ def main():
                 assert stale['workshop']['canonical_lines'][-1] == 'のくさふゆむ', stale
                 assert stale['workshop']['pending_lines'][-1] == 'くささむし', stale
                 assert len(revision_file.read_text().splitlines()) == 1
-                close = speak(sid, '終了でいいよ', base)
-                assert close['turn']['workshop_action'] == 'close_workshop', close
-                assert close['turn']['text_delivery_acknowledged'], close
+                # 終了をモデル単独で決める旧actionは不採用。窓口の模擬モデルから、BERTの終了判定を代行しない。
+                rejected = speak(sid, '終了でいいよ', base)
+                assert rejected['turn']['workshop_reason'] == 'action_not_allowed', rejected
+                assert rejected['turn']['text_delivery_acknowledged'] and rejected['workshop']['state'] == 'open'
+                # 相談外の話題二往復で実際に閉じた相談を保存し、再起動後にも閉じた状態と履歴を復元する。
+                for i, text in enumerate(small_talk):
+                    reply = speak(sid, text, base)
+                    assert reply['turn']['workshop_action'] == 'unrelated', reply
+                    assert reply['turn']['text_delivery_acknowledged'], reply
+                    state = call('snapshot', {'session_id': sid}, base)['workshop']['state']
+                    assert state == ('open' if i == 0 else 'closed'), state
                 closed = call('snapshot', {'session_id': sid}, base)
                 assert closed['workshop']['state'] == 'closed'
                 assert closed['dialogue']['utterances'][-1]['playback_status'] == 'audio_disabled'
@@ -196,7 +212,7 @@ def main():
                     'question_retains_player_candidate', 'restore_recovers_discussed_candidate_without_editing',
                     'short_refusal_keeps_original', 'confirmed_revision_saved_once', 'poem_book_reads_latest', 'stale_window_preserves_pending',
                     'closed_conversation_restored', 'unsaved_pending_restored', 'adopted_poem_reopened_after_restart',
-                    'model_close_display_acknowledged', 'owned_server_shutdown']}, ensure_ascii=False, indent=2))
+                    'unclassified_model_close_cannot_end_workshop', 'two_displayed_unrelated_replies_end_workshop', 'owned_server_shutdown']}, ensure_ascii=False, indent=2))
             finally:
                 if process.poll() is None:
                     process.terminate()

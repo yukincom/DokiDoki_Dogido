@@ -55,12 +55,12 @@ def main():
                        "combat": {"combat_active_hint": False},
                        "world": {"biome": "desert", "weather": "clear", "time_phase": "day", "local_light": 15, "sky_visible": True},
                        "passive_mobs": [{"type": "pig", "distance": 2}],
-                       "nearby_composition": {"mobs": [{"id": "pig", "quantity": 1}], "blocks": ["minecraft:cactus"],
+                       "nearby_composition": {"mobs": [{"id": "pig", "quantity": 1}], "blocks": ["minecraft:cactus"], "least_common_blocks": ["minecraft:cactus"],
                                               "mobs_truncated": False, "blocks_truncated": False},
                        "smell_observation": {"status": "none", "components": [], "basis": "smell_policy_v2"}}
                 senses = {"world": {"biome": "plains", "weather": "clear", "time_phase": "day", "local_light": 15, "sky_visible": True},
                           "passive_mobs": [{"type": "cow", "distance": 3}],
-                          "nearby_composition": {"mobs": [{"id": "cow", "quantity": 1}], "blocks": ["minecraft:oak_log"],
+                          "nearby_composition": {"mobs": [{"id": "cow", "quantity": 1}], "blocks": ["minecraft:oak_log"], "least_common_blocks": ["minecraft:oak_log"],
                                                  "mobs_truncated": False, "blocks_truncated": False},
                           "smell_observation": {"status": "present", "basis": "smell_policy_v2", "components": [
                               {"smell_id": "bread", "category": "food", "valence": "pleasant", "source_kind": "hotbar", "effective_strength": 2}]}}
@@ -93,7 +93,9 @@ def main():
             assert "self" not in current and "player" not in current, current
             assert obs["location_biome"]["id"] == "plains", obs
             assert "cow" in json.dumps(obs) and "pig" not in json.dumps(obs), obs
-            assert "oak_log" in json.dumps(obs) and "cactus" not in json.dumps(obs), obs
+            # ドギド視界の実測候補だけを表示名で渡す。プレイヤー側のサボテンと種類台帳は出さない。
+            assert obs["今いる場所にある少し特別なもの"] == ["オークの原木"], obs
+            assert "nearby_block_types" not in obs and "サボテン" not in json.dumps(obs, ensure_ascii=False), obs
             assert "bread" in json.dumps(obs["smell"]), obs
             assert "world" not in current["senses"], current
             assert reply["body_observation_input"] == obs["body_observation"], reply
@@ -108,7 +110,7 @@ def main():
             assert changes["body_player_visibility"]["before"]["player_visibility"] == "visible", changes
             assert changes["body_player_visibility"]["now"]["player_visibility"] == "not_visible", changes
             assert changes["body_self_orientation"]["before"] is None, changes
-            assert changes["body_self_orientation"]["now"] == {"changed": True}, changes
+            assert changes["body_self_orientation"]["now"] == {"fact": "ドギドが左へ約180度視線を変えた。"}, changes
             passed.append("current_visibility_switch_and_orientation_changes_reach_normal_reply")
 
             # 一回の入力に現在値を固定し、生成中の更新は次の判断へ渡す。
@@ -120,19 +122,25 @@ def main():
                 assert "get_body_position" not in json.dumps(incoming), incoming
                 context = world_context(incoming)
                 current = context["observations"]["body_observation"]["current"]["position_relation"]
-                assert current["distance_blocks"] == (3.0 if len(position_calls) == 1 else 9.0), context
+                distance = 3 if len(position_calls) == 1 else 9
+                assert f"ドギドとプレイヤーの足元間の直線距離は{distance}ブロック。" in current["facts"], context
                 if len(position_calls) == 1:
                     newer = event()
                     newer["body_observation"]["sample"]["player_pose"]["position"]["z"] = 29
                     send(newer)
-                return {"action": "speak", "speech": f"オレから見て前、{current['distance_blocks']:.1f}ブロックやで。"}
+                return {"action": "speak", "speech": f"オレから見て前、{distance}ブロックやで。"}
             control["structured_handler"] = position_handler
             first, reply = ask("今はどのくらい離れてる？")
-            assert reply["body_observation_input"]["current"]["position_relation"]["distance_blocks"] == 3.0, reply
+            assert reply["body_observation_input"]["current"]["position_relation"] == first["observations"]["body_observation"]["current"]["position_relation"], reply
             second, reply = ask("今はどのくらい離れてる？")
             relation_changes = [c for c in second["changes"] if c["kind"] == "body_position_relation"]
-            assert len(relation_changes) == 1 and relation_changes[0]["now"]["distance_blocks"] == 9.0, second
-            assert reply["body_position_changes_input"] == relation_changes, reply
+            assert len(relation_changes) == 1 and "ドギドとプレイヤーの足元間の直線距離は9ブロック。" in relation_changes[0]["now"]["facts"], second
+            # 診断には受付時の版と観測時計が残る。モデルにはその二項目を除いた同じ変化が一件だけ届く。
+            diagnostics = reply["body_position_changes_input"]
+            assert len(diagnostics) == 1, diagnostics
+            recorded = diagnostics[0]
+            assert recorded["revision"] > 0 and datetime.fromisoformat(recorded["observed_at"]).tzinfo, recorded
+            assert {k: v for k, v in recorded.items() if k not in ("observed_at", "revision")} == relation_changes[0], second
             third, reply = ask("今はどのくらい離れてる？")
             assert not [c for c in third["changes"] if c["kind"] == "body_position_relation"], third
             assert len(position_calls) == 3, position_calls
@@ -160,7 +168,7 @@ def main():
                     assert state["subject"] == name and state["precipitation_kind"] == "rain", state
                     assert state["contact"]["touching_rain"] == (who != sheltered), state
                     assert "木の葉の下" in state["relations"]["rain_and_cover"] if who == sheltered else "雨が当たっている" in state["relations"]["rain_and_cover"], state
-                    assert state["observed_at"], state
+                    assert "observed_at" not in state, state
                 passed.append(f"{sheltered}_shelter_and_other_subject_rain_reach_existing_single_call")
 
             # 保護中でも接触の実測は残る。危険発話を抑え、通常会話へ渡る二者の分離を確かめる。
@@ -199,7 +207,7 @@ def main():
                 obs = context["observations"]
                 assert obs["sensory_status"] == "unavailable", (label, obs)
                 if label == "senses_unavailable":
-                    assert obs["body_observation"]["current"]["position_relation"]["distance_blocks"] == 3.0, obs
+                    assert "ドギドとプレイヤーの足元間の直線距離は3ブロック。" in obs["body_observation"]["current"]["position_relation"]["facts"], obs
                 else:
                     assert obs["body_observation"]["status"] == "unavailable", obs
                     assert "current" not in obs["body_observation"], obs

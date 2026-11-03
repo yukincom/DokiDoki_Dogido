@@ -116,7 +116,7 @@ def main():
         passed.append("bert_end_asks_pending_adoption_and_saves_received_praise_once")
         request(base, "/api/v1/adapter-sessions/" + sid, method="DELETE")
 
-    # モデルの返事を待っていても戦闘音声を先に通し、安全後に受信済みの返答を続ける。
+    # 本人の交戦中は戦闘音声を先に通し、安全後に受信済みの返答を続ける。モブの視認だけでは中断しない。
     with fixture(combat_settings=SETTINGS) as context:
         base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder = context
         sid = ready(base, send, rows)
@@ -136,7 +136,7 @@ def main():
             turn = submit(base, sid, INPUT)
             assert submit(base, sid, INPUT) == turn  # 同じ受付の再送
             wait_for(entered.is_set)
-            send(sid, visual_threats=[MOB], combat={"combat_active_hint": True})
+            send(sid, visual_threats=[MOB], combat={"combat_active_hint": True, "player_engaged": True})
             wait_for(lambda: row(base, turn, {"waiting_for_warning"}))
             warning = wait_for(lambda: next((r for r in rows(sid) if r.get("combat_actions") and r["playback_status"] == "completed"), None), timeout=5)
             assert not release.is_set() and warning["turn_id"] != turn
@@ -172,7 +172,7 @@ def main():
         wait_for(lambda: row(base, turn, {"started"}))
         assert len(records(folder, "critiques")) == 1
         (folder / "player_mode").write_text("ok")
-        send(sid, visual_threats=[MOB], combat={"combat_active_hint": True})
+        send(sid, visual_threats=[MOB], combat={"combat_active_hint": True, "player_engaged": True})
         wait_for(lambda: row(base, turn, {"waiting_for_warning"}))
         assert not session(base, sid)["workshop_history"]
         end(send, rows, sid)
@@ -196,7 +196,7 @@ def main():
             try:
                 turn = submit(base, sid, PRAISE)
                 wait_for(lambda: "haiku_feedback_save_started" in log.read_text())
-                send(sid, visual_threats=[MOB], combat={"combat_active_hint": True})
+                send(sid, visual_threats=[MOB], combat={"combat_active_hint": True, "player_engaged": True})
                 wait_for(lambda: next((r for r in rows(sid) if r.get("combat_actions") and r["playback_status"] == "completed"), None), timeout=5)
                 assert not records(folder, "critiques")
             finally:
@@ -230,7 +230,7 @@ def main():
         try:
             turn = submit(base, sid, INPUT)
             wait_for(entered.is_set)
-            send(sid, visual_threats=[MOB], combat={"combat_active_hint": True})
+            send(sid, visual_threats=[MOB], combat={"combat_active_hint": True, "player_engaged": True})
             wait_for(lambda: row(base, turn, {"waiting_for_warning"}))
             release.set()
             end(send, rows, sid)
@@ -258,7 +258,7 @@ def main():
         try:
             turn = submit(base, sid, INPUT)
             wait_for(entered.is_set)
-            send(sid, visual_threats=[MOB], combat={"combat_active_hint": True})
+            send(sid, visual_threats=[MOB], combat={"combat_active_hint": True, "player_engaged": True})
             request(base, "/api/v1/adapter-sessions/" + sid, method="DELETE")
             new_sid = ready(base, send, rows)
             release.set()

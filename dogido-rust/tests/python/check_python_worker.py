@@ -18,11 +18,6 @@ from test_support import base, LINES, ALTERNATIVES
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def report(indices=(0, 1, 2), numbers=None):
-    return {"verdicts": {str(i): "pass" for i in indices}, "assessments": [
-        {"line_index": i, "atom_ids": [(numbers or {}).get(i, i + 1)]} for i in indices], "failure_reasons": {}}
-
-
 @contextmanager
 def mock(script, delay=0):
     seen, errors = [], []
@@ -59,8 +54,9 @@ def mock(script, delay=0):
         assert not errors, errors
 
 
-def run(folder, url, *options, stop_signal=None):
-    config = {"input": base(), "chat": {"base_url": url + "/chat/v1", "model": "chat-checker", "max_tokens": 72, "timeout_ms": 5000},
+def run(folder, url, *options, stop_signal=None, max_rounds=6):
+    poem_input = {**base(), "max_regeneration_rounds": max_rounds}
+    config = {"input": poem_input, "chat": {"base_url": url + "/chat/v1", "model": "chat-checker", "max_tokens": 72, "timeout_ms": 5000},
               "haiku": {"base_url": url + "/haiku/v1", "model": "verse-generator", "max_tokens": 192, "timeout_ms": 5000}}
     path = folder / "request.json"; path.write_text(json.dumps(config, ensure_ascii=False))
     env = dict(os.environ)
@@ -93,44 +89,35 @@ def main():
     checks = []
     with tempfile.TemporaryDirectory(prefix="dogido-haiku-") as temp:
         folder = Path(temp)
-        prefix = json.dumps(report(), ensure_ascii=False).rsplit('"failure_reasons"', 1)[0] + '"failure_reasons":{"1":"途中'
-        with mock([{"lines": LINES}, (prefix, "length")]) as (url, seen):
+        # 合格行は一回の初稿で採用する。模擬HTTPと実workerで、会話側への採点要求がなく句用の予算・終了理由が記録されることを確かめる。
+        with mock([(json.dumps({"lines": LINES}, ensure_ascii=False), "length")]) as (url, seen):
             process = run(folder, url); assert process.returncode == 0, process.stderr
             value = json.loads(process.stdout)
-            assert value["result"]["accepted"] and value["result"]["text"].splitlines() == LINES, value
-            assert len(seen) == 2
-            assert [v["path"] for v in seen] == ["/haiku/v1/chat/completions", "/chat/v1/chat/completions"]
-            assert [v["body"]["max_tokens"] for v in seen] == [192, 512]
-            assert [v["body"]["temperature"] for v in seen] == [.6, 0.0]
-            assert all(v["body"]["chat_template_kwargs"] == {"enable_thinking": False} for v in seen)
-            assert value["reports"][1]["generated"]["finish_reason"] == "length"
-            assert value["reports"][1]["generated"]["completion_tokens"] == 512
-            checks.append("routes_budget_complete_prefix_and_usage")
-        with mock([{"lines": LINES}, report((0, 2)), report((1,))]) as (url, seen):
-            process = run(folder, url); assert process.returncode == 0, process.stderr
-            value = json.loads(process.stdout)
-            assert value["result"]["accepted"] and value["result"]["regeneration_rounds"] == 0
-            assert value["requests"][2]["details"]["grounding_lines"] == [{"line_index": 1, "text": LINES[1]}]
-            assert len(seen) == 3
-            checks.append("missing_middle_recheck_original")
-        with mock([{"lines": LINES}, report((0, 2)), ('{"verdicts":', "length")]) as (url, seen):
-            process = run(folder, url); assert process.returncode == 0, process.stderr
-            value = json.loads(process.stdout)
-            assert value["result"]["failure_reason"] == "grounding_unavailable"
-            assert value["result"]["regeneration_rounds"] == 0 and len(seen) == 3
-            checks.append("repeated_check_failure_never_rewrites")
-        negative = report(); negative["verdicts"]["2"] = "japanese_fail"; negative["failure_reasons"] = {"2": "造語になっている。"}
-        with mock([{"lines": LINES}, negative, {"lines": [{"line_index": 2, "text": ALTERNATIVES[2]}]}, report((2,), {2: 1})]) as (url, seen):
+            assert value["result"]["accepted"] and value["result"]["text"].splitlines() == LINES
+            assert value["result"]["regeneration_rounds"] == 0 and len(seen) == 1
+            assert seen[0]["path"] == "/haiku/v1/chat/completions"
+            assert seen[0]["body"]["max_tokens"] == 192 and seen[0]["body"]["temperature"] == .6
+            assert seen[0]["body"]["chat_template_kwargs"] == {"enable_thinking": False}
+            assert value["reports"][0]["generated"]["finish_reason"] == "length"
+            assert value["reports"][0]["generated"]["completion_tokens"] == 512
+            checks.append("draft_only_routes_budget_and_usage")
+        # 中七だけが短ければ、上五・下五を固定する。二回目の模擬要求の対象が中七だけで、採用本文の他の二行が不変なら合格。
+        retry = {"lines": [{"line_index": 1, "text": ALTERNATIVES[1]}]}
+        with mock([{"lines": [LINES[0], "ひ", LINES[2]]}, retry]) as (url, seen):
             process = run(folder, url); assert process.returncode == 0, process.stderr
             value = json.loads(process.stdout)
             assert value["result"]["accepted"] and value["result"]["regeneration_rounds"] == 1
-            assert value["result"]["text"].splitlines() == LINES[:2] + [ALTERNATIVES[2]]
-            assert len(seen) == 4
-            checks.append("only_failed_line_regenerated")
+            assert value["result"]["text"].splitlines() == [LINES[0], ALTERNATIVES[1], LINES[2]]
+            assert value["requests"][1]["details"]["failed_line_indices"] == [1]
+            assert [r["body"]["temperature"] for r in seen] == [.6, .3]
+            assert all(r["path"] == "/haiku/v1/chat/completions" for r in seen)
+            checks.append("only_short_middle_line_regenerated")
+        # 再生成枠0の通信失敗は初稿1件で終わる。実HTTPの失敗とプロセス回収を調べる。
         with mock(["http_error"]) as (url, seen):
-            process = run(folder, url); assert process.returncode == 0, process.stderr
+            process = run(folder, url, max_rounds=0); assert process.returncode == 0, process.stderr
             value = json.loads(process.stdout)
-            assert not value["result"]["accepted"] and len(seen) == 1
+            assert not value["result"]["accepted"] and value["result"]["failure_reason"] == "max_regeneration_rounds"
+            assert len(seen) == 1
             checks.append("http_error_no_automatic_transport_retry")
         for option in ("--cancel-after-ms", "--timeout-ms"):
             with mock([{"lines": LINES}], delay=3) as (url, seen):

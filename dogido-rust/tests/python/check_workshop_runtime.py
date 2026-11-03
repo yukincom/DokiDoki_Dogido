@@ -316,6 +316,8 @@ def main():
         before = stored(sid)
         send(sid, event={"name": "hostile_audio_detected", "source_kind": "auditory", "priority_hint": "background", "certainty": "high"},
              auditory_threats=[{"label": "zombie", "source_id": "sound-z", "spoken_name_allowed": True}])
+        assert hud(sid)["state"] == "open", "実音だけでは読み上げ中の相談を中断しない"
+        send(sid, combat={"combat_active_hint": True, "player_engaged": True})
         wait_for(lambda: row(base, turn, {"waiting_for_warning"}))
         assert not session(base, sid)["workshop_history"]
         assert hud(sid)["state"] == "danger" and stored(sid) == before

@@ -154,11 +154,11 @@ def fixture(helper, binary, plan, *, capability=True, fail_selection=False):
                         event["visual_threats"] = [
                             {"type": "zombie", "entity_id": f"z{i}", "distance": 3,
                              "direction": {"horizontal": "front"}} for i in range(2)]
-                        event["combat"].update(combat_active_hint=True, hostiles_within_10=2)
+                        event["combat"].update(combat_active_hint=True, player_engaged=True, hostiles_within_10=2)
                     if state.get("alert"):
                         event["visual_threats"] = [{"type": "creeper", "entity_id": "alert-creeper", "distance": 9,
                                                     "direction": {"horizontal": "back"}}]
-                        event["combat"].update(combat_active_hint=True, hostiles_within_10=1)
+                        event["combat"].update(combat_active_hint=True, player_engaged=True, hostiles_within_10=1)
                     if damage:
                         event["combat"]["recent_damage_ms"] = 0
                     response = helper.request(base, "/api/v1/game-events", event, sid=session)

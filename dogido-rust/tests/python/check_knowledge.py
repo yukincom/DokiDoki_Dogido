@@ -47,9 +47,10 @@ def integration(binary, directory):
         assert synthesized and all("https://" not in text and "文部科学省" not in text for text in synthesized)
         passed.append("canonical_knowledge_without_model_and_separate_references")
 
+        # 2接続の参照を分離する。宛先を指定した文字入力で元の接続に質問し、各接続の表示内容を照合する。
         other = register(base)
         assert request(base, f"/api/v1/display/snapshot?session_id={other}")["references"] == []
-        turn = submit(base, sid, question)
+        turn = submit(base, sid, question, source="text")
         repeat = wait_for(lambda: row(base, turn, {"completed"}))
         view = request(base, f"/api/v1/display/snapshot?session_id={sid}")
         assert len(view["references"]) == 1
@@ -58,7 +59,7 @@ def integration(binary, directory):
 
         # Minecraftの未対応版はコードで未収録を返す。
         for question, expected_text in contracts()["integration"]["not_found_questions"].items():
-            turn = submit(base, sid, question)
+            turn = submit(base, sid, question, source="text")
             reply = wait_for(lambda: row(base, turn, {"completed"}))
             assert reply["text"] == expected_text, reply
             assert reply["reference_ids"] == [] and reply["knowledge_status"] == "not_found", reply
@@ -66,7 +67,7 @@ def integration(binary, directory):
         passed.append("minecraft_wrong_version_never_generates_an_answer")
 
         question = "ダイヤモンドの剣のIDは？"
-        turn = submit(base, sid, question)
+        turn = submit(base, sid, question, source="text")
         reply = wait_for(lambda: row(base, turn, {"completed"}))
         status = reply["knowledge_status"]
         assert status in {"found", "not_found", "unavailable"}, reply
@@ -81,7 +82,7 @@ def integration(binary, directory):
         passed.append("minecraft_reader_or_missing_database_reply_without_model")
 
         control["fail_tts"] = True
-        turn = submit(base, sid, "川柳の決まりを教えて")
+        turn = submit(base, sid, "川柳の決まりを教えて", source="text")
         wait_for(lambda: row(base, turn, {"failed"}))
         history = next(s["history"] for s in snapshot(base)["sessions"] if s["session_id"] == sid)
         assert not any(r["turn_id"] == turn + ":reply" and r["role"] == "assistant" for r in history)
@@ -90,7 +91,7 @@ def integration(binary, directory):
 
         # 文ごとの既存cacheを避け、未再生の知識回答を途中で止める。
         (directory / "player_mode").write_text("slow")
-        turn = submit(base, sid, "ソネットの形式は？")
+        turn = submit(base, sid, "ソネットの形式は？", source="text")
         wait_for(lambda: row(base, turn, {"started"}))
         request(base, "/api/v1/rust-dialogue/interrupt", {"session_id": sid})
         wait_for(lambda: row(base, turn, {"cancelled"}))
@@ -100,7 +101,7 @@ def integration(binary, directory):
         passed.append("cancelled_knowledge_stops_owned_audio_without_history")
 
         # 別sessionの雑談も、国語分類を挟まず一回で返す。
-        turn = submit(base, other, "こんにちは")
+        turn = submit(base, other, "こんにちは", source="text")
         wait_for(lambda: row(base, turn, {"completed"}))
         assert len([r for r in seen if r["path"] == "/v1/chat/completions"]) == 1, seen
         passed.append("ordinary_chat_uses_one_generation")

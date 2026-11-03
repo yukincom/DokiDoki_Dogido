@@ -123,7 +123,8 @@ def main():
         base, _, log, control, seen, _, _, _, send, hud, rows, stored, folder = f
         def warning_started(sid):
             (folder / "player_mode").write_text("slow")
-            send(sid, visual_threats=[MOB], combat={"combat_active_hint": True})
+            # 本人が交戦している観測で警告を起こし、再生中の知識入力の配送を検査する。
+            send(sid, visual_threats=[MOB], combat={"combat_active_hint": True, "player_engaged": True})
             return wait_for(lambda: next((r for r in rows(sid)
                 if r["playback_status"] == "started" and r.get("combat_actions")), None))
 
@@ -183,7 +184,10 @@ def main():
         if terminal_warning["playback_status"] == "completed":
             expected_spoken.append({"turn_id":warning["turn_id"] + ":reply",
                 "role":"assistant", "text":terminal_warning["text"]})
-        assert [r for r in history if r["role"] == "assistant"] == expected_spoken
+        # 表示時刻などのメタデータが加わっても、実際に完了した警告のID・本文・順序を照合する。
+        def delivered(rows):
+            return [(r["turn_id"], r["text"]) for r in rows if r["role"] == "assistant"]
+        assert delivered(history) == delivered(expected_spoken), history
         assert session(base, sid)["foreground"]["combat_active"]
         assert not any(r["turn_id"] in {first + ":reply", second + ":reply"} for r in history)
         (folder / "player_mode").write_text("ok")

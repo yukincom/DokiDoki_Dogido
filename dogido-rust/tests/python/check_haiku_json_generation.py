@@ -17,26 +17,25 @@ def run_case(mode):
                 assert all(m["role"] in ["system", "user"] for m in incoming["messages"])
                 prompt = "\n".join(m["content"] for m in incoming["messages"])
                 assert "JSON" in prompt and "submit_haiku_candidate" not in prompt
-            if temperature == .6:
-                original(incoming)
                 calls.append(incoming)
                 if mode == "native_only":
+                    # 本文のないtool呼出しを全回で返す。初稿＋既定6回で終了し、一句も保存しないことを検査する。
                     return {"role": "assistant", "content": None, "tool_calls": [{
                         "id": "unexpected-native", "type": "function", "function": {
                             "name": "submit_haiku_candidate", "arguments": json.dumps({
                                 "lines": [{"line_index": i, "text": t} for i, t in enumerate(LINES)]})}}]}
+            if temperature == .6:
+                original(incoming)
                 return {"lines": ["ひ", *LINES[1:]]}
             if temperature == .3:
-                calls.append(incoming)
+                # 修復時は残り二行を固定する。同じ短い上五を返し続けても、音数の不合格で上限に達する。
                 assert LINES[1] in prompt and LINES[2] in prompt
                 assert "音数が短い" in prompt
-                if len(calls) > 2:
-                    assert "以前と実質同じ候補" in prompt
                 return {"lines": [{"line_index": 0, "text": LINES[0] if mode == "repair" else "ひ"}]}
             return original(incoming)
 
         control["structured_handler"] = model
-        sid = register(base, preview=False)
+        sid = register(base, preview=False, body=True)
         send(sid)
         ending = ":poem" if mode == "repair" else ":failure"
         wait_for(lambda: any(r["turn_id"].endswith(ending) and r["playback_status"] == "completed" for r in rows(sid)))
@@ -46,7 +45,7 @@ def run_case(mode):
             assert stored(sid)[0]["materials_snapshot"]["regeneration_rounds"] == 1
         else:
             assert not stored(sid) and hud(sid)["state"] == "closed"
-            assert len(calls) == (1 if mode == "native_only" else 7)
+            assert len(calls) == 7
         return {"case": mode, "passed": True, "candidate_calls": len(calls), "saved_entries": len(stored(sid))}
 
 

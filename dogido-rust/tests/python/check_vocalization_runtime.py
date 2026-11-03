@@ -6,11 +6,11 @@ import json
 from check_dialogue import register, request, row, snapshot, submit, wait_for
 from check_haiku_runtime import LINES
 from check_workshop_fixture import fixture
-from check_workshop_combat import SETTINGS, MOB, end, enter, returned
+from check_workshop_combat import SETTINGS, MOB, end, enter, returned, rejected_normal_input
 from check_workshop_runtime import ready, session, install, step
 from check_workshop_edits import finish, edit, adoption, revisions
 from check_workshop_revision import wire
-from check_workshop_provisional import done, threatening
+from check_workshop_provisional import done
 from check_workshop_combat import actions, drive
 from request_classifier_fixture import resolve_input_response
 
@@ -96,7 +96,12 @@ def main():
         passed.append("unrelated_old_observation_does_not_invent_scream_cause")
 
         other = register(base, preview=False)
-        assert context(base) == {"prompt_mode":"normal", "session_id":None}
+        # 登録だけでは録音先を増やさない。両接続に現在観測が届いた後だけ宛先未確定になる。
+        assert context(base)["session_id"] == sid
+        send(sid)
+        send(other)
+        unbound = context(base)
+        assert unbound["prompt_mode"] == "normal" and unbound["session_id"] is None, unbound
         assert scream(base)["reason"] == "select_one_session"
         assert session(base, other)["history"] == []
         request(base, "/api/v1/adapter-sessions/"+other, method="DELETE")
@@ -190,17 +195,19 @@ def main():
         sid = ready(base, send, rows)
         enter(send, rows, sid)
         assert context(base)["prompt_mode"] == "normal"
-        turn = submit(base, sid, "句の続きを話そう")
-        wait_for(lambda: row(base, turn, {"queued"}))
-        threatening(send, sid)
+        # 戦闘中に届いた声は通常受付に結び付く。解除で相談文脈が戻り、その後の新しい声だけが句に届く。
+        rejected_normal_input(base, sid, "句の続きを話そう")
         assert context(base)["prompt_mode"] == "normal" and not workshop_calls
         end(send, rows, sid)
+        returned(send, rows, sid)
+        assert context(base)["prompt_mode"] == "haiku_workshop" and not workshop_calls
+        turn = submit(base, sid, "句の続きを話そう")
         result = done(base, send, sid, turn, hostile=False)
         assert result["workshop_action"] == "explain" and len(workshop_calls) == 1, result
-        assert context(base)["prompt_mode"] == "haiku_workshop"
-        send(sid, visual_threats=[{**MOB, "approaching":True}], combat={"combat_active_hint":True})
+        send(sid, visual_threats=[{**MOB, "approaching":True}],
+             combat={"combat_active_hint":True, "player_engaged":True})
         assert hud(sid)["state"] == "danger" and context(base)["prompt_mode"] == "normal"
-        passed.append("held_input_keeps_normal_stt_until_enemy_clear_then_restores_workshop_context")
+        passed.append("combat_input_uses_normal_stt_and_new_input_after_clear_uses_workshop")
 
     print(f"PASS {len(passed)} vocalization checks; all owned processes stopped")
     for case in passed:

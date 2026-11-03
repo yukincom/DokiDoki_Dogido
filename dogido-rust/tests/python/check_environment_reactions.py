@@ -224,13 +224,15 @@ def main():
             send(sid, passive_mobs=[cow], nearby_composition=blocks)
             time.sleep(.12)
             assert len(calls()) == before_calls+1
-            assert offered["observations"]["nearby_block_types"] == []
-            # 次の新しい変化は、消費済みの前周期とのブロック差分だけを渡す。
-            newer = {**blocks, "blocks":["minecraft:birch_log"]}
+            assert "nearby_block_types" not in offered["observations"] and "今いる場所にある少し特別なもの" not in offered["observations"]
+            # 内部の種類差分が次回の判断を起こす。外へ渡すのは今回の身体視界で選んだ表示名だけ。
+            newer = {**blocks, "blocks":["minecraft:birch_log"], "least_common_blocks":["minecraft:birch_log"]}
             send(sid, passive_mobs=[cow], nearby_composition=newer)
             wait_for(lambda: len(calls()) == before_calls+2)
             context = reaction_context(calls()[-1]["body"])
-            assert [c["kind"] for c in context["world_context"]["changes"]] == ["nearby_block_types"], context
+            observed = context["world_context"]
+            assert observed["observations"]["今いる場所にある少し特別なもの"] == ["シラカバの原木"], context
+            assert all(change["kind"] != "nearby_block_types" for change in observed["changes"]), context
             wait_for(lambda: len([r for r in reactions(sid) if r["playback_status"] == "not_selected"]) == 2)
             close(sid)
             passed.append("busy_period_is_consumed_without_replaying_its_change")

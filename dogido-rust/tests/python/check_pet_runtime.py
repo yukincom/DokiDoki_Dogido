@@ -7,6 +7,8 @@ from pathlib import Path
 import tempfile
 import time
 
+from check_body_senses import world_context
+from body_senses_fixture import attach_body
 from check_dialogue import dependencies, running, register, request, submit, wait_for, row, snapshot
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -20,7 +22,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="dogido-pets-") as tmp, dependencies() as (dep, control, seen):
         with running(args.binary.resolve(), Path(tmp), dep,
                      haiku_settings={"enabled": False, "memory_enabled": False}) as (base, process, log):
-            sid = register(base, preview=False)
+            sid = register(base, preview=False, body=True)
             sequence = 0
             identity = {"entity_id": "cat-1", "custom_name": "クロちゃん", "tamed": True}
             cat = {"type": "cat", "distance": 3, "direction": {"horizontal": "right"}, "identity": identity}
@@ -32,12 +34,12 @@ def main():
             def send(**fields):
                 nonlocal sequence
                 sequence += 1
-                return request(base, "/api/v1/game-events", {
+                return request(base, "/api/v1/game-events", attach_body({
                     "schema_version": "2026-05-24", "adapter": "fixture", "sequence": sequence,
                     "observed_at": datetime.now(timezone.utc).isoformat(),
                     "event": {"name": "status_snapshot", "source_kind": "system", "priority_hint": "background", "certainty": "high"},
                     "player": {"name": "試験", "dimension": "minecraft:overworld"},
-                    "world": {"sky_visible": True, "ceiling_height": 20, "local_light": 15, "time_phase": "day"}, **fields}, sid=sid)
+                    "world": {"sky_visible": True, "ceiling_height": 20, "local_light": 15, "time_phase": "day"}, **fields}), sid=sid)
 
             def calls():
                 return [r["body"] for r in seen if r["path"] == "/v1/chat/completions"]
@@ -63,12 +65,15 @@ def main():
             send(passive_mobs=[cat], ambient_sounds=[sound, fire])
             result, prompt, leaf = say("何の音？", "焚き火の音やな。")
             assert result["text"] == "焚き火の音やな。", result
-            assert "焚き火の音" in prompt and "クロちゃんの声" not in prompt, prompt
-            passed.append("generic_sound_prioritizes_nonpet")
+            # 通常会話は共通聴覚に両方の実音を残し、どちらを話題にするかだけ模擬モデルが選ぶ。
+            sounds = world_context(leaf[0])["observations"]["hearing"]["sounds"]
+            assert {s["sound_event"] for s in sounds} == {"entity.cat.ambient", "block.campfire.crackle"}, sounds
+            passed.append("generic_question_preserves_both_sounds_in_one_reply")
 
             result, prompt, leaf = say("クロちゃんの声？", "クロちゃんの声やな。")
             assert result["text"] == "クロちゃんの声やな。", result
-            assert "クロちゃんの声 右" in prompt, prompt
+            sounds = world_context(leaf[0])["observations"]["hearing"]["sounds"]
+            assert any(s["name"] == "クロちゃん" and s["direction"]["horizontal"] == "right" for s in sounds), sounds
             passed.append("explicit_name_selects_same_individual_sound")
 
             result, prompt, leaf = say("クロちゃんがクリーパーを追い払ってくれたー", "さすが猫やな、頼もしいわ。")
@@ -84,11 +89,12 @@ def main():
 
             # A new session has no earlier audio, so another cat cannot borrow this name.
             request(base, "/api/v1/adapter-sessions/" + sid, method="DELETE")
-            sid = register(base, preview=False)
+            sid = register(base, preview=False, body=True)
             other = {**sound, "source_id": "cat-2", "identity": {"entity_id": "cat-2", "custom_name": "シロ", "tamed": True}}
             send(passive_mobs=[cat], ambient_sounds=[other])
             result, prompt, leaf = say("クロちゃんの声？", "今の音はシロの声やな。")
-            assert "クロちゃんの声 右" not in prompt, prompt
+            sounds = world_context(leaf[0])["observations"]["hearing"]["sounds"]
+            assert [s["name"] for s in sounds] == ["シロ"], sounds
             passed.append("same_species_different_id_is_not_the_named_sound")
 
             send()

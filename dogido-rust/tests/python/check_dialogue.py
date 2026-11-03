@@ -296,14 +296,14 @@ def check_text_delivery(binary, passed):
             old = submit_text(base, sid, "少し話そう")
             old_reply = wait_for(lambda: display_row(base, old))
             new = submit_text(base, sid, "次の話にしよう")
-            result = request(base, "/api/v1/rust-dialogue/displayed",
-                             {"session_id": sid, "display_ids": [old_reply["display_id"]]})
-            assert result["rejected"] == [old_reply["display_id"]], result
-            wait_for(lambda: row(base, old, {"cancelled"}))
+            # 新入力後も、表示待ちの前の返答は自分のIDで配送を完了する。両方を一度だけ履歴に残す。
+            acknowledge(base, sid, old_reply)
+            wait_for(lambda: row(base, old, {"audio_disabled"}))
             acknowledge(base, sid, wait_for(lambda: display_row(base, new)))
             wait_for(lambda: row(base, new, {"audio_disabled"}))
-            assert not any(r["turn_id"] == old + ":reply" for r in history()), history()
-            passed.append("superseded_text_ack_cannot_enter_history")
+            for delivered_turn in (old, new):
+                assert sum(r["turn_id"] == delivered_turn + ":reply" for r in history()) == 1, history()
+            passed.append("new_input_preserves_pending_text_delivery_once_per_turn")
 
             generation = mode(True)
             for supplied in (None, "old-generation"):
@@ -504,7 +504,8 @@ def main():
             (directory / "player_mode").write_text("slow")
             stopping_turn = submit(base, sid, "停止を確認するよ")
             wait_for(lambda: row(base, stopping_turn, {"started"}))
-        assert re.search(r'turn_id="'+stopping_turn+r'" playback_status="cancelled"', log.read_text()), log.read_text()
+        # 停止時は再生中の元turnを中断し、running()の終了確認でplayerとwavを回収する。
+        assert f'event="audio_interrupt" session_id="{sid}" turn_id="{stopping_turn}" reason="server_shutdown"' in log.read_text(), log.read_text()
         passed.append("shutdown_joins_helpers_players_and_removes_wav")
     output = ROOT / "reports/dialogue-check.json"
     output.parent.mkdir(exist_ok=True)

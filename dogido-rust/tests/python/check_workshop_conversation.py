@@ -128,8 +128,10 @@ def main():
                 return step(text, "respond", "その響きもええな。")
             attempts += 1
             assert attempts == 1, "invalid extraction must not trigger another model call"
-            # BERT具体変更は今回の原文だけを限定抽出し、古い案の採用は提示しない。
-            assert '"conversation_candidate": {' not in prompt
+            # 同じ行の相談案は資料に残すが、今回の抽出に失敗しても旧案を勝手に使わない。
+            edit_input = json.loads(prompt.splitlines()[-1])
+            assert edit_input["conversation_candidate"]["proposal"]["replacement_text"] == "さくらいろ", edit_input
+            assert edit_input["player_text"] == new_text, edit_input
             p = edit(text, replacement="あさひかる", reference="上五")
             del p["confidence"]
             del p["evidence"]
@@ -144,7 +146,8 @@ def main():
         assert r["workshop_action"] == "respond", r
         assert hud(sid)["canonical_lines"] == LINES and not hud(sid)["pending_lines"]
         assert not revisions(folder, sid)
-        assert "workshop_tool_rejected" in log.read_text()
+        # 語の抽出結果は対象行へ適用できず、実行結果に失敗を残す。HTTPログの文言は契約に含めない。
+        assert r["workshop_reason"] == "native_tool_rejected:invalid_replacement_verse", r
         passed.append("malformed_native_arguments_keep_verse_and_do_not_select_old_candidate")
 
     from check_workshop_revision import wire

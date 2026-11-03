@@ -86,18 +86,15 @@ def main():
         speaking = submit(base, sid, "この句の説明を聞かせて")
         wait_for(lambda: row(base, speaking, {"started"}))
         calls.clear()
-        accepted = request(base, "/api/v1/player-input", {"session_id": sid, "source": "voice", "text": raw})
-        assert accepted["accepted"], accepted
-        turn = accepted["turn_id"]
-        held = wait_for(lambda: row(base, turn, {"waiting_for_warning"}))
-        assert held["player_input_text"] == raw and held["classifier_mode"] == "senryu", held
-        classification = held["request_classification"]
-        assert held["resolution"] == "reply_queued" and not calls and not held.get("asr_corrections"), held
+        # 前の説明が再生中でも次の音声を分類・補正し、配送中の返答は戦闘後に一度だけ完了する。
+        turn = submit(base, sid, raw)
+        ready_reply = wait_for(lambda: next((r for r in rows(sid) if r["turn_id"] == turn and r.get("workshop_action") == "explain"), None))
+        classification = ready_reply["request_classification"]
+        assert classification["mode"] == "senryu" and ready_reply["player_input_text"] == raw, ready_reply
+        assert ready_reply["interpreted_player_input_text"] == interpreted and len(calls) == 1, ready_reply
         (folder / "player_mode").write_text("ok")
         enter(send, rows, sid)
-        held = row(base, turn, {"waiting_for_warning"})
-        assert held and held["request_classification"] == classification, held
-        assert not calls and not held.get("asr_corrections") and hud(sid)["state"] == "danger", held
+        assert hud(sid)["state"] == "danger" and len(calls) == 1
         assert revisions(folder, sid) == before_revisions
         end(send, rows, sid)
         returned(send, rows, sid)
@@ -110,7 +107,7 @@ def main():
         assert result["asr_corrections"] and result["workshop_action"] == "explain", result
         assert len(calls) == 1 and calls[0][0] == interpreted and hud(sid)["state"] == "open", calls
         assert "asr_fix_conversation" in log.read_text()
-        passed.append("combat_pause_holds_raw_then_code_resume_corrects_current_verse_once")
+        passed.append("combat_pause_preserves_concurrent_voice_correction_and_delivers_once")
 
     # 閉鎖後には句候補を保持しない。
     with fixture() as f:

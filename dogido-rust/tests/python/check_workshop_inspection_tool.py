@@ -21,7 +21,7 @@ def main():
                 return None
             # モデルが旧JSONのinspectを返しても本体は実行しない。APIの実結果を必須にする。
             if incoming.get("tools"):
-                assert {t["function"]["name"] for t in incoming["tools"]} == {"inspect_verse", "stage_player_edit"}
+                assert {t["function"]["name"] for t in incoming["tools"]} == {"inspect_verse"}, "読み・出典の質問には参照toolだけを提示する"
             else:
                 assert args.base_url, incoming
             calls.append(incoming)

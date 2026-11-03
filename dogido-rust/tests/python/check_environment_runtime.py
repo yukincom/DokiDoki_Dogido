@@ -166,16 +166,17 @@ def main():
             close(sid); (folder / "delay").write_text(".04")
             passed.append("started_darkness_comment_finishes_after_light_recovery")
 
+            # 暗所警告との競合は、本人が交戦した敵で検証する。視認だけでは戦闘警告にならない。
             zombie = {"type": "zombie", "entity_id": "z", "distance": 3,
                 "direction": {"horizontal": "right", "cardinal": "east"}, "environment": {"on_ground": True}}
             sid = register(); send(sid, world=dark)
             wait_for(lambda: match(sid, "dark_push_no_light", "completed"))
             (folder / "delay").write_text(".4")
-            send(sid, world=dark, visual_threats=[zombie])
+            send(sid, world=dark, visual_threats=[zombie], combat={"combat_active_hint":True,"player_engaged":True})
             warning = wait_for(lambda: next((r for r in rows(sid)
                 if r["category"] == "callout" and r["playback_status"] == "started"), None))
             for _ in range(4):
-                send(sid, world=dark, visual_threats=[zombie]); time.sleep(.1)
+                send(sid, world=dark, visual_threats=[zombie], combat={"combat_active_hint":True,"player_engaged":True}); time.sleep(.1)
             wait_for(lambda: row(base, warning["turn_id"], {"completed"}))
             close(sid); (folder / "delay").write_text(".04")
             passed.append("darkness_does_not_repeatedly_cancel_same_combat_warning")
@@ -183,7 +184,7 @@ def main():
             sid = register(); send(sid, world=dark)
             wait_for(lambda: match(sid, "dark_push_no_light", "completed"))
             recovery = {**dark, "local_light": 4}
-            send(sid, world=recovery, visual_threats=[zombie])
+            send(sid, world=recovery, visual_threats=[zombie], combat={"combat_active_hint":True,"player_engaged":True})
             wait_for(lambda: next((r for r in rows(sid) if r["category"] == "callout"
                 and r["playback_status"] == "completed"), None))
             send(sid, world=recovery)
@@ -195,7 +196,8 @@ def main():
 
             sid = register(); far = {**zombie, "distance": 12}
             send(sid, visual_threats=[far])
-            wait_for(lambda: next((r for r in rows(sid) if r["playback_status"] == "completed"), None))
+            # 非交戦の遠い通常敵だけではcalloutを出さず、暗さと雷の警告は届く。
+            assert not any(r["category"] == "callout" for r in rows(sid)), rows(sid)
             send(sid, world=dark, visual_threats=[far])
             wait_for(lambda: match(sid, "dark_push_no_light", "completed"))
             send(sid, world={**dark, "thunder_sound_recent_ms": 0, "weather": "thunder"}, visual_threats=[far])
@@ -205,13 +207,13 @@ def main():
             sid = register(); send(sid)
             charged = {**zombie, "type": "charged_creeper", "distance": 8}
             (folder / "delay").write_text(".4")
-            send(sid, visual_threats=[charged])
+            send(sid, visual_threats=[charged], combat={"combat_active_hint":True,"player_engaged":True})
             wait_for(lambda: next((r for r in rows(sid) if r["playback_status"] == "started"), None))
             question = say(sid, "敵は何体？")
             assert question.get("queued"), question
-            send(sid, visual_threats=[charged], world={"thunder_sound_recent_ms": 0, "weather": "thunder"})
+            send(sid, visual_threats=[charged], combat={"combat_active_hint":True,"player_engaged":True}, world={"thunder_sound_recent_ms": 0, "weather": "thunder"})
             for _ in range(14):
-                time.sleep(.2); send(sid, visual_threats=[charged])
+                time.sleep(.2); send(sid, visual_threats=[charged], combat={"combat_active_hint":True,"player_engaged":True})
                 if any(r.get("player_input_text") == "敵は何体？" and r["playback_status"] == "completed" for r in rows(sid)):
                     break
             wait_for(lambda: next((r for r in rows(sid) if r.get("player_input_text") == "敵は何体？"
@@ -241,7 +243,7 @@ def main():
             sid = register(); send(sid); (folder / "delay").write_text(".5")
             time.sleep(.12); send(sid, passive_mobs=[cat])
             comment = wait_for(lambda: match(sid, "surroundings_notice", "started"))
-            send(sid, visual_threats=[zombie])
+            send(sid, visual_threats=[zombie], combat={"combat_active_hint":True,"player_engaged":True})
             wait_for(lambda: row(base, comment["turn_id"], {"cancelled"}))
             close(sid); (folder / "delay").write_text(".04")
             passed.append("hostile_still_interrupts_started_periodic_comment")

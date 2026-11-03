@@ -50,6 +50,8 @@ def main():
         finish(base, send, sid, "句を説明して")
         send(sid, event={"name":"hostile_audio_detected", "source_kind":"auditory", "priority_hint":"background", "certainty":"high"},
              auditory_threats=[{"label":"zombie", "source_id":"sound-z", "spoken_name_allowed":True}])
+        assert hud(sid)["state"] == "open", "音だけで相談を中断しない"
+        send(sid, combat={"combat_active_hint": True, "player_engaged": True})
         assert hud(sid)["state"] == "danger"
         assert session(base, sid)["workshop_followup"] == "discussion"
         assert hud(sid)["canonical_lines"] == LINES

@@ -10,7 +10,7 @@ from check_workshop_runtime import install, step
 
 def main():
     with fixture(workshop_idle_ms=1800) as (base, _, _, control, _, _, _, _, send, hud, rows, stored, folder):
-        sid=register(base, preview=False, voice_enabled=True);send(sid)
+        sid=register(base, preview=False, voice_enabled=True, body=True);send(sid)
         wait_for(lambda:any(r["turn_id"].endswith(":poem") and r["playback_status"]=="completed" for r in rows(sid)))
         entered=threading.Event();release=threading.Event()
         def slow_reply(text,prompt,n):
