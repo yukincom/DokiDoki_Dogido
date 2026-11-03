@@ -69,12 +69,12 @@ def build(project, destination, identity=LOCAL_SIGNING_IDENTITY, ad_hoc=False):
                     "sips", "-z", str(pixels), str(pixels),
                     str(SOURCE / "Resources/dogido-server-icon.png"), "--out", str(iconset / name),
                 ], check=True, stdout=subprocess.DEVNULL)
-        subprocess.run(["iconutil", "-c", "icns", str(iconset), "-o", str(resources / "DogidoServer-v2.icns")], check=True)
+        subprocess.run(["iconutil", "-c", "icns", str(iconset), "-o", str(resources / "DogidoServer-v3.icns")], check=True)
         info = {
             "CFBundleName": "ドギド サーバー", "CFBundleDisplayName": "ドギド サーバー",
             "CFBundleIdentifier": "local.dogido.server-manager", "CFBundleExecutable": "DogidoServerManager",
-            "CFBundlePackageType": "APPL", "CFBundleShortVersionString": "0.1.4", "CFBundleVersion": "5",
-            "CFBundleIconFile": "DogidoServer-v2.icns",
+            "CFBundlePackageType": "APPL", "CFBundleShortVersionString": "0.1.4", "CFBundleVersion": "6",
+            "CFBundleIconFile": "DogidoServer-v3.icns",
             "LSMinimumSystemVersion": "13.0", "NSHighResolutionCapable": True,
             "NSAppTransportSecurity": {"NSAllowsLocalNetworking": True},
             "NSMicrophoneUsageDescription": "ドギドの音声入力で、プレイヤーの声を認識するためにマイクを使います。",
