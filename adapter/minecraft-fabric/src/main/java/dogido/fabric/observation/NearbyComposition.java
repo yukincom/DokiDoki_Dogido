@@ -39,6 +39,18 @@ public final class NearbyComposition {
         public JsonObject finish(Collection<String> actuallyVisible) {
             return finish(actuallyVisible, true);
         }
+        /** 完備した身体の視認点だけを個数順に選ぶ。同数は種類ID順で、走査順の違いに影響されない。 */
+        public JsonObject finishBlocks(Map<String, Integer> seen, boolean complete, boolean fromBody) {
+            JsonObject result = finish(seen.keySet(), complete);
+            if (fromBody && !result.get("truncated").getAsBoolean() && !seen.isEmpty()) {
+                JsonArray leastCommon = new JsonArray();
+                seen.entrySet().stream()
+                    .sorted(Map.Entry.<String, Integer>comparingByValue().thenComparing(Map.Entry.comparingByKey()))
+                    .limit(2).forEach(row -> leastCommon.add(row.getKey()));
+                result.add("least_common_blocks", leastCommon);
+            }
+            return result;
+        }
         public void reset() { previous = Set.of(); }
     }
     /** 既存の水平±8・下3・上4ブロックの箱から、何ブロック外側か。 */

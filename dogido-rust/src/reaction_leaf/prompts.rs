@@ -180,7 +180,8 @@ pub(super) fn context(kind: &str, d: &Value) -> Result<Value> {
     crate::villager_routines::separate(context.as_object_mut().unwrap());
     if let Some(world) = context.get_mut("world_context") {
         crate::conversation_observation::strip_model_bookkeeping(world);
-        crate::conversation_observation::dialogue_capacity::compact(world);
+        let crowded = crate::conversation_observation::dialogue_capacity::crowded(world);
+        crate::conversation_observation::dialogue_capacity::compact(world, crowded);
     }
     Ok(context)
 }

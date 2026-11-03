@@ -288,6 +288,10 @@ pub fn project(
         ..Context::default()
     };
     if let Some(c) = &event.nearby_composition {
+        if event.body_origin().is_some_and(|origin| origin.available) && !c.least_common_blocks.is_empty() {
+            let labels: Vec<_> = c.least_common_blocks.iter().map(|id| catalog.block_label(Some(id))).collect();
+            context.observations[dialogue_capacity::LOCAL_HIGHLIGHTS] = json!(labels);
+        }
         if c.mobs_truncated { context.observations["nearby_mob_types_partial"] = json!(true); }
         if c.blocks_truncated { context.observations["nearby_block_types_partial"] = json!(true); }
     }

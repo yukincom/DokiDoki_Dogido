@@ -335,7 +335,11 @@ public final class BodySensesCollector {
     private static JsonObject composition(JsonObject blocks, JsonObject mobs) {
         JsonObject composition = new JsonObject();
         composition.add("mobs",mobs.get("entries"));
-        composition.add("blocks",blocks.getAsJsonObject("types").get("ids"));
+        JsonObject types = blocks.getAsJsonObject("types");
+        composition.add("blocks", types.get("ids"));
+        if (types.has("least_common_blocks")) {
+            composition.add("least_common_blocks", types.get("least_common_blocks"));
+        }
         composition.add("mobs_truncated",mobs.get("truncated"));
         composition.add("blocks_truncated",blocks.getAsJsonObject("types").get("truncated"));
         return composition;

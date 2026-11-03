@@ -16,7 +16,7 @@ class BodySenseCapacityTest {
               "visual_threats":[{"type":"zombie"}],"passive_mobs":[{"type":"cow"}],
               "smell_observation":{"status":"none"},"hearing_truncated":false,
               "auditory_threats":[],"ambient_sounds":[{"type":"rain","heard_ago_ms":150}],
-              "nearby_composition":{"mobs":[],"blocks":["minecraft:stone"],"mobs_truncated":false,"blocks_truncated":false}
+              "nearby_composition":{"mobs":[],"blocks":["minecraft:stone"],"least_common_blocks":["minecraft:stone"],"mobs_truncated":false,"blocks_truncated":false}
             }
             """).getAsJsonObject();
     }
@@ -43,6 +43,7 @@ class BodySenseCapacityTest {
             assertEquals(expected.get(field),sample.get(field));
         assertEquals(JsonParser.parseString("[\"minecraft:stone\",\"minecraft:snow\"]"),kinds.get("blocks"));
         assertTrue(kinds.get("blocks_truncated").getAsBoolean());
+        assertFalse(kinds.has("least_common_blocks"));
         assertFalse(kinds.get("mobs_truncated").getAsBoolean());
         assertEquals(JsonParser.parseString("[\"nearby_composition\"]"),sample.get("incomplete"));
     }

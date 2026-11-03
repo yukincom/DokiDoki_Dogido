@@ -915,3 +915,44 @@ fn partial_body_sample_keeps_local_weather_and_observed_blocks() {
     assert!(facts["hearing"]["rain_heard"].is_null());
     assert_eq!(facts["smell"]["status"], "unknown");
 }
+
+// 見込み: 同じ視野の石・花で、普段は下位2種、混雑時と順位未取得時は欄ごと省く。
+// 合格: 身体イベントから通常会話と環境反応のモデル入力まで通し、種類表・過去差分・辞書が一覧を出し直さない。実ゲームの視認・生成は対象外。
+#[test]
+fn local_block_highlights_reach_both_dialogues_only_in_quiet_scenes() {
+    const FIELD: &str = "今いる場所にある少し特別なもの";
+    // モブだけで混雑する場合、羊の話題で他種が絞られた後もブロック欄を出し直さない。
+    for (extra_blocks, extra_mobs, ranked) in [(0, 0, true), (23, 0, true), (0, 23, true), (0, 0, false)] {
+        let d = server();
+        let raw = edit(event(1, 100, 23.0), |v| {
+            let c = &mut v["body_observation"]["sample"]["senses"]["nearby_composition"];
+            let mut kinds = vec!["stone".to_owned(), "poppy".into(), "dandelion".into()];
+            kinds.extend((0..extra_blocks).map(|n| format!("fixture:block_{n}")));
+            c["blocks"] = json!(kinds);
+            c["mobs"] = json!((0..extra_mobs).map(|n| json!({"id":format!("fixture:mob_{n}"),"quantity":1})).collect::<Vec<_>>());
+            if ranked { c["least_common_blocks"] = json!(["poppy", "dandelion"]); }
+        });
+        d.observe("s", raw.clone(), None);
+        let native = capture(&d, &raw);
+        let mut world = json!(native.context.world_context.unwrap());
+        world["changes"] = json!([{"kind":"nearby_block_types","before":["old_landscape"],"now":["stone"],"observed_at":"2026-11-03T00:00:00Z","revision":1}]);
+        let ordinary = crate::chat_prompt::messages(&json!({"world_context":world,"user_text":"羊がおる？"})).unwrap();
+        let reaction = crate::environment::reaction::Prepared::new(&json!({
+            "kind":crate::environment::reaction::KIND,"model":"fixture","max_tokens":200,"fallback_text":"",
+            "details":{"reaction_context":{"topic":"surroundings","world_context":world}},
+        }), "fixture").unwrap();
+        let context: Value = serde_json::from_str(&reaction.request.messages[1].content).unwrap();
+        if extra_blocks == 0 && extra_mobs == 0 && ranked {
+            assert_eq!(context["world_context"]["observations"][FIELD], json!(["ポピー","タンポポ"]));
+        }
+        for msg in [&ordinary[1].content, &reaction.request.messages[1].content] {
+            let show = extra_blocks == 0 && extra_mobs == 0 && ranked;
+            for text in [FIELD, "ポピー", "タンポポ"] {
+                assert_eq!(msg.contains(text), show, "{text}: {msg}");
+            }
+            for raw in ["nearby_block_types", "old_landscape", "fixture:block_", "\"stone\""] {
+                assert!(!msg.contains(raw), "{raw}: {msg}");
+            }
+        }
+    }
+}

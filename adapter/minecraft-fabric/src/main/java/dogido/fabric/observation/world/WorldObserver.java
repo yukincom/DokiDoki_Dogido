@@ -256,7 +256,7 @@ public final class WorldObserver {
         bodyVisibleBlocks = java.util.List.of();
         if (!captureNearbyKinds) return new JsonObject();
         BlockPos origin = receiver.blockPosition();
-        java.util.Set<String> observedTypes = new java.util.TreeSet<>();
+        java.util.Map<String, Integer> visibleCounts = new java.util.HashMap<>();
         java.util.List<VisibleBlock> visibleBlocks = new java.util.ArrayList<>();
         int margin = NearbyComposition.BLOCK_MARGIN;
         java.util.List<BlockPos> samples = new java.util.ArrayList<>();
@@ -275,7 +275,7 @@ public final class WorldObserver {
             if (state.isAir()) continue;
             double padding = NearbyComposition.blockPadding(dx, dy, dz);
             String blockId = Registries.BLOCK.getId(state.getBlock()).toString();
-            if (observedTypes.contains(blockId) || !this.nearbyBlockKinds.allows(blockId, padding)
+            if ((!receiver.body() && visibleCounts.containsKey(blockId)) || !this.nearbyBlockKinds.allows(blockId, padding)
                     || !isAirExposed(world, sample)) continue;
             boolean visible;
             if (receiver.body()) {
@@ -288,13 +288,15 @@ public final class WorldObserver {
                 visible = hit.getType() == HitResult.Type.MISS || hit.getBlockPos().equals(sample);
             }
             if (visible) {
-                observedTypes.add(blockId);
-                if (receiver.body()) visibleBlocks.add(new VisibleBlock(sample.toImmutable(),blockId,state.getBlock().getName().getString()));
+                int count = visibleCounts.merge(blockId, 1, Integer::sum);
+                if (receiver.body() && count == 1) {
+                    visibleBlocks.add(new VisibleBlock(sample.toImmutable(), blockId, state.getBlock().getName().getString()));
+                }
             }
         }
         bodyVisibleBlocks = java.util.List.copyOf(visibleBlocks);
         JsonObject result = new JsonObject();
-        result.add("types", this.nearbyBlockKinds.finish(observedTypes, completeScan.getAsBoolean()));
+        result.add("types", this.nearbyBlockKinds.finishBlocks(visibleCounts, completeScan.getAsBoolean(), receiver.body()));
         return result;
     }
 

@@ -21,6 +21,21 @@ class NearbyCompositionTest {
         assertFalse(tracker.allows("cow",20));
     }
 
+    // 見込み: 石18点の中の花1点とキノコ2点を場所の特徴に選ぶ。同数は種類ID順。
+    // 合格: 全種類は保持し、選ぶIDは最大2件。1種類・空・欠測・player視点もこの集計で検査する。
+    @Test void localHighlightsUseVisibleFrequencyOnlyForACompleteBodyScan() {
+        var tracker = new NearbyComposition.RangeTracker(0, NearbyComposition.BLOCK_MARGIN);
+        var counts = java.util.Map.of("stone",18, "poppy",1, "red_mushroom",2, "torch",2);
+        var full = tracker.finishBlocks(counts, true, true);
+        assertEquals(4, full.getAsJsonArray("ids").size());
+        assertEquals("[\"poppy\",\"red_mushroom\"]", full.getAsJsonArray("least_common_blocks").toString());
+        assertEquals("[\"stone\"]", tracker.finishBlocks(java.util.Map.of("stone",18), true, true)
+            .getAsJsonArray("least_common_blocks").toString());
+        assertFalse(tracker.finishBlocks(java.util.Map.of(), true, true).has("least_common_blocks"));
+        assertFalse(tracker.finishBlocks(counts, false, true).has("least_common_blocks"));
+        assertFalse(tracker.finishBlocks(counts, true, false).has("least_common_blocks"));
+    }
+
     @Test void orderAndDuplicatesDoNotChangeTheKinds() {
         assertEquals(NearbyComposition.types(List.of("cow","pig","cow")), NearbyComposition.types(List.of("pig","cow")));
         assertFalse(NearbyComposition.types(List.of()).get("truncated").getAsBoolean());

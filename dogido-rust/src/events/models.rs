@@ -1205,6 +1205,9 @@ pub struct NearbyMob {
 pub struct NearbyComposition {
     pub mobs: Vec<NearbyMob>,
     pub blocks: Vec<String>,
+    /// 完備した身体の視認点を数えて選んだ最大二種類。旧フレームにない順位は推測しない。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub least_common_blocks: Vec<String>,
     pub mobs_truncated: bool,
     pub blocks_truncated: bool,
 }
@@ -1233,6 +1236,11 @@ impl Validate for NearbyComposition {
             )
         }
         ids(self.blocks.iter().map(String::as_str))?;
+        ensure(self.least_common_blocks.len() <= 2, "NearbyComposition: at most two local highlights")?;
+        ids(self.least_common_blocks.iter().map(String::as_str))?;
+        ensure(self.least_common_blocks.iter().all(|id| self.blocks.contains(id)) &&
+            (!self.blocks_truncated || self.least_common_blocks.is_empty()),
+            "NearbyComposition: highlights require confirmed block types")?;
         ids(self.mobs.iter().map(|m| m.id.as_str()))?;
         for mob in &self.mobs {
             mob.quantity.validate()?;

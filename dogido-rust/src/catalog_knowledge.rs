@@ -271,11 +271,6 @@ pub fn for_event(event: &GameEvent, structure: Option<&str>) -> Knowledge {
                 }
             }
         }
-        if !composition.blocks_truncated {
-            for key in &composition.blocks {
-                out.add(thing("block", key, "nearby_composition"));
-            }
-        }
     }
     for target in &event.visual_threats {
         out.add(mob(&target.r#type, None, false, "visual"));

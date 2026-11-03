@@ -41,6 +41,7 @@ final class BodySenseCapacity {
         JsonArray hostile = emptyList(senses,"visual_threats"), passive = emptyList(senses,"passive_mobs");
         JsonArray heardThreats = emptyList(senses,"auditory_threats"), ambient = emptyList(senses,"ambient_sounds");
         JsonObject composition = senses.getAsJsonObject("nearby_composition");
+        composition.remove("least_common_blocks"); // 送信枠が混雑した時点で、対話用の地形材料は省く。
         JsonArray kinds = emptyList(composition,"mobs"), blocks = emptyList(composition,"blocks");
         // 完備のfalseからtrueに変更してもサイズは増えない。
         Space space = new Space(MAX_BYTES - bytes(senses));
