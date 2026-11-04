@@ -34,6 +34,11 @@ def prepare_assets(project, target):
                         target / "evidence" / (day + ".jsonl"))
     shutil.copyfile(SOURCE / "train_colab.py", target / "train_colab.py")
     shutil.copyfile(SOURCE / "notebook_controls.py", target / "notebook_controls.py")
+    (target / "span/shared").mkdir(parents=True)
+    for name in ("train.py", "span_model.py", "early_stopping.py", "download_base.py"):
+        shutil.copyfile(project / "dev_tools/edit_span_extractor" / name, target / "span/shared" / name)
+    for name in ("span_train_colab.py", "span_notebook_controls.py"):
+        shutil.copyfile(SOURCE / name, target / "span" / name)
     hashes = {str(p.relative_to(target)): hashlib.sha256(p.read_bytes()).hexdigest()
               for p in sorted(target.rglob("*")) if p.is_file()}
     (target / "baseline-sha256.json").write_text(json.dumps(hashes, indent=2) + "\n", encoding="utf-8")
@@ -52,7 +57,8 @@ def build(project, destination):
         resources = app / "Contents/Resources"
         resources.mkdir()
         prepare_assets(project, resources / "assets")
-        shutil.copyfile(SOURCE / "builder.py", resources / "builder.py")
+        for name in ("builder.py", "span_builder.py", "語句抽出の使い方.md"):
+            shutil.copyfile(SOURCE / name, resources / name)
         shutil.copyfile(SOURCE / "使い方.md", resources / "使い方.md")
         subprocess.run(["xcrun", "swiftc", "-O", "-module-cache-path", str(work / "swift-cache"),
                         "-target", f"{platform.machine()}-apple-macos13.0", "-framework", "AppKit",
@@ -83,7 +89,7 @@ try bitmap.representation(using: .png, properties: [:])!.write(to: URL(fileURLWi
         subprocess.run(["iconutil", "-c", "icns", str(iconset), "-o", str(resources / "Training.icns")], check=True)
         info = {"CFBundleName": "ModernBERT 学習教材", "CFBundleDisplayName": "ModernBERT 学習教材",
                 "CFBundleIdentifier": "local.dogido.training-builder", "CFBundleExecutable": executable.name,
-                "CFBundlePackageType": "APPL", "CFBundleShortVersionString": "0.3.0", "CFBundleVersion": "3",
+                "CFBundlePackageType": "APPL", "CFBundleShortVersionString": "0.4.0", "CFBundleVersion": "4",
                 "CFBundleIconFile": "Training.icns", "LSMinimumSystemVersion": "13.0", "NSHighResolutionCapable": True,
                 "NSDocumentsFolderUsageDescription": "選択した学習プロジェクトの分類一覧と教材を読み、NotebookとZIPを保存します。",
                 "DogidoTrainingWorkspace": str(project / "dev_tools/request_classifier/教材作成"),

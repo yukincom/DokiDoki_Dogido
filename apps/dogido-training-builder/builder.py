@@ -28,6 +28,9 @@ def load_project(assets, folder=None):
     folder = Path(folder).expanduser().resolve() if folder else None
     path = folder / PROJECT_FILE if folder else assets / "dogido_project.json"
     config = json_read(path)
+    if config.get("schema") == "edit_span_project.v1":
+        import span_builder
+        return span_builder.load_project(folder)
     if config.get("schema") != "classifier_project.v1" or not config.get("id") or not config.get("name"):
         raise ValueError("プロジェクトのID・名前・形式を確認してください。")
     if config.get("input_format") not in ("plain_text", "dogido_current_v1"):
@@ -348,6 +351,9 @@ controls = show_controls(ROOT, OUTPUT)
 def build(paths, assets=None, output_parent=None, project=None):
     assets = Path(assets or HERE / "assets").resolve()
     project = resolve_project(paths, assets, project)
+    if project["config"]["schema"] == "edit_span_project.v1":
+        import span_builder
+        return span_builder.build(paths, assets, output_parent, project)
     rows, skipped, sources = read_csv(paths, project)
     snapshot = json.loads((assets / "baseline-sha256.json").read_text())
     for name, expected in snapshot.items():

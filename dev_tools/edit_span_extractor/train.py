@@ -29,6 +29,8 @@ from early_stopping import EarlyStopping
 def synchronize(device):
     if device == "mps":
         torch.mps.synchronize()
+    elif device == "cuda":
+        torch.cuda.synchronize()
 
 
 def main():
@@ -36,7 +38,7 @@ def main():
     parser.add_argument("--base", type=Path, required=True)
     parser.add_argument("--data", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--device", choices=["cpu", "mps"], default="mps")
+    parser.add_argument("--device", choices=["cpu", "mps", "cuda"], default="mps")
     parser.add_argument("--epochs", type=int, default=4)
     parser.add_argument("--batch-size", type=int, default=24)
     parser.add_argument("--learning-rate", type=float, default=3e-5)
@@ -53,6 +55,8 @@ def main():
         raise ValueError("Output already exists; never overwrite a previous trial")
     if args.device == "mps" and not torch.backends.mps.is_available():
         raise RuntimeError("MPS is unavailable; do not silently change the experiment device")
+    if args.device == "cuda" and not torch.cuda.is_available():
+        raise RuntimeError("CUDA is unavailable; do not silently change the experiment device")
     torch.set_num_threads(4)
     torch.manual_seed(args.seed)
     random.seed(args.seed)
@@ -131,6 +135,8 @@ def main():
     del model, optimizer
     if args.device == "mps":
         torch.mps.empty_cache()
+    elif args.device == "cuda":
+        torch.cuda.empty_cache()
     model = BertForTokenClassification.from_pretrained(args.output / "model", local_files_only=True,
         attn_implementation="sdpa").to(args.device)
     reports = {}

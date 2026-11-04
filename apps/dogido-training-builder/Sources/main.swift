@@ -31,6 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var status: NSTextView!
     var pending: [(files: [URL], project: URL)] = []
     var projectMenu: NSPopUpButton!
+    var labelsButton: NSButton!
     var projectFolders: [URL] = []
     var projectAccess: URL?
     var working = false
@@ -78,17 +79,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         create.bezelStyle = .rounded
         create.frame = NSRect(x: 310, y: 420, width: 170, height: 30)
         root.addSubview(create)
-        let labels = NSButton(title: "分類一覧を開く", target: self, action: #selector(openLabels))
-        labels.bezelStyle = .rounded
-        labels.frame = NSRect(x: 490, y: 420, width: 170, height: 30)
-        root.addSubview(labels)
+        labelsButton = NSButton(title: "分類一覧を開く", target: self, action: #selector(openLabels))
+        labelsButton.bezelStyle = .rounded
+        labelsButton.frame = NSRect(x: 490, y: 420, width: 170, height: 30)
+        root.addSubview(labelsButton)
         reloadProjects(select: pending.first?.project ?? workspace)
         let drop = DropArea(frame: NSRect(x: 28, y: 280, width: 634, height: 123))
         let hint = NSTextField(labelWithString: "↓  CSVをここへドロップ")
         hint.font = .systemFont(ofSize: 24, weight: .medium)
         hint.alignment = .center
-        hint.frame = NSRect(x: 30, y: 44, width: 574, height: 35)
+        hint.frame = NSRect(x: 30, y: 70, width: 574, height: 35)
         drop.addSubview(hint)
+        let generate = NSButton(title: "教材ZIPを作る", target: self, action: #selector(buildSelectedDataset))
+        generate.bezelStyle = .rounded
+        generate.frame = NSRect(x: 215, y: 20, width: 205, height: 34)
+        drop.addSubview(generate)
         drop.receive = { [weak self] urls in self?.enqueue(urls) }
         root.addSubview(drop)
         func button(_ title: String, _ x: CGFloat, _ width: CGFloat, _ selector: Selector) {
@@ -164,7 +169,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if succeeded {
                     let path = resultMessage.trimmingCharacters(in: .whitespacesAndNewlines)
                     lastOutput = URL(fileURLWithPath: path)
-                    status.string = "作成しました。\n\(path)\n\nModernBERT_T4学習.ipynbをColabで開き、同じフォルダの教材.zipをアップロードしてください。"
+                    status.string = "作成しました。\n\(path)\n\n同じフォルダのNotebook（.ipynb）をColabで開き、教材.zipをアップロードしてください。"
                     NSWorkspace.shared.activateFileViewerSelecting([lastOutput!])
                 } else {
                     status.string = "CSVを確認してください。\n\n" + resultMessage
@@ -191,8 +196,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             projectMenu.addItem(withTitle: config?["name"] as? String ?? (folder == workspace ? "ドギド" : folder.lastPathComponent))
         }
         projectMenu.selectItem(at: projectFolders.firstIndex(where: { sameFolder($0, target) }) ?? 0)
+        updateProjectControls()
     }
-    @objc func projectChanged() { lastOutput = nil }
+    var selectedConfig: [String: Any] {
+        guard let data = try? Data(contentsOf: selectedProject.appendingPathComponent("project.json")),
+              let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [:] }
+        return value
+    }
+    var isSpanProject: Bool { selectedConfig["schema"] as? String == "edit_span_project.v1" }
+    var selectedDataset: URL {
+        let name = selectedConfig["dataset_file"] as? String ?? (selectedConfig["id"] as? String == "dogido" ? "追加データ.csv" : "教材.csv")
+        return selectedProject.appendingPathComponent(name)
+    }
+    func updateProjectControls() {
+        labelsButton?.title = isSpanProject ? "教材CSVを開く" : "分類一覧を開く"
+        window?.title = isSpanProject ? "学習教材 — ドギド・語句抽出" : "ModernBERT 学習教材"
+    }
+    @objc func projectChanged() {
+        lastOutput = nil
+        updateProjectControls()
+    }
+    @objc func buildSelectedDataset() {
+        let dataset = selectedDataset
+        guard FileManager.default.fileExists(atPath: dataset.path) else {
+            status.string = "教材CSVが見つかりません。CSVを選ぶか、この画面へドロップしてください。\n" + dataset.path
+            return
+        }
+        enqueue([dataset])
+    }
     @objc func openProject() {
         let panel = NSOpenPanel()
         panel.title = "プロジェクトフォルダを選択"
@@ -211,7 +242,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         lastOutput = nil
         next()
     }
-    @objc func openLabels() { NSWorkspace.shared.open(selectedProject.appendingPathComponent("分類一覧.csv")) }
+    @objc func openLabels() {
+        NSWorkspace.shared.open(isSpanProject ? selectedDataset : selectedProject.appendingPathComponent("分類一覧.csv"))
+    }
     @objc func newProject() {
         let alert = NSAlert()
         alert.messageText = "新規プロジェクト"
@@ -255,7 +288,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if panel.runModal() == .OK { enqueue(panel.urls) }
     }
     @objc func openWorkspace() { NSWorkspace.shared.open(selectedProject) }
-    @objc func openGuide() { NSWorkspace.shared.open(Bundle.main.resourceURL!.appendingPathComponent("使い方.md")) }
+    @objc func openGuide() { NSWorkspace.shared.open(Bundle.main.resourceURL!.appendingPathComponent(isSpanProject ? "語句抽出の使い方.md" : "使い方.md")) }
     @objc func openOutput() {
         let folder = lastOutput ?? selectedProject.appendingPathComponent("出力")
         if FileManager.default.fileExists(atPath: folder.path) { NSWorkspace.shared.open(folder) }
