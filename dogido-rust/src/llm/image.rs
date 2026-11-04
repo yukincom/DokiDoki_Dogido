@@ -81,7 +81,7 @@ fn turn(parts: &mut Vec<Value>, heading: Option<Heading>) {
         Heading::West => "西",
         Heading::Northwest => "北西",
     };
-    text(parts, &format!("体が{heading}向きに変わったで"));
+    text(parts, &format!("体が{heading}向きに変わったで。さっき気になった方向を確認するために、そちらを向いたところやで。今見えたものと、さっき気になったことを見比べてな。"));
 }
 
 #[cfg(test)]
@@ -181,7 +181,7 @@ mod tests {
                 vec![
                     json!({"type":"text","text":"景色は？"}),
                     json!({"type":"text","text":"変わらない"}),
-                    json!({"type":"text","text":format!("体が{name}向きに変わったで")}),
+                    json!({"type":"text","text":format!("体が{name}向きに変わったで。さっき気になった方向を確認するために、そちらを向いたところやで。今見えたものと、さっき気になったことを見比べてな。")}),
                     json!({"type":"image_url","image_url":{"url":image.data_url()}})
                 ]
             );
