@@ -321,6 +321,7 @@ pub struct State {
     notice_previous: Option<Snapshot>,
     notice_pending: Option<Context>,
     notice_last_sample: Option<u64>,
+    spontaneous_hearing: hearing::Spontaneous,
 }
 impl State {
     /// 身体の世代変更・失効では感覚の比較だけを消し、Sessionの会話履歴に触れない。
@@ -343,6 +344,7 @@ impl State {
                 ..Self::default()
             };
         }
+        if origin.available { self.spontaneous_hearing.observe(event); }
     }
     /// 周期に来た新しい全snapshotだけを比較する。初回は基準の作成だけ。
     /// 今回の機会を使えなくても差分は次回へ持ち越さず、発話結果にも依存しない。
@@ -561,6 +563,11 @@ impl State {
             c.changes.sort_by_key(|change| change.revision);
             c
         })
+    }
+    /// 生成直前に一度だけ呼ぶ。予約時の読取や通常の質問は継続提示の基準を進めない。
+    pub(crate) fn present_spontaneous_hearing(&mut self, hearing: &mut Value,
+        sounds: Vec<crate::chat_observation::SoundCandidate>, retention_ms: u64) {
+        self.spontaneous_hearing.present(hearing, sounds, retention_ms);
     }
     pub fn considered(&mut self, revision: u64) {
         // Only a version actually offered to this decision can be acknowledged.

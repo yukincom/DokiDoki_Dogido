@@ -5,6 +5,9 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::HashSet;
 
+mod spontaneous;
+pub(crate) use spontaneous::Spontaneous;
+
 fn owner(event: &GameEvent) -> Option<&str> {
     event.body_origin().and_then(|o| o.context.as_ref()).map(|c| c.owner_id.as_str())
 }
@@ -128,12 +131,17 @@ pub(crate) fn append_recent(hearing: &mut Value, event: &GameEvent, snapshot: &c
     for memo in chat_observation::retained_hearing(event, snapshot, labels) {
         // 雨・雷は同じ観測内のweather欄から既に渡している。
         if memo.sound_event.is_none() && memo.dedupe_key.starts_with("environment:weather:") { continue; }
-        let mut fact = memo.observation.clone().unwrap_or_else(|| json!({
-            "description":"音（種別未確定）","sound_event":memo.sound_event,
-            "direction":memo.direction,"distance_band":memo.distance_band,
-            "certainty":null,"emitter":null,"emitter_attribution":"unknown"}));
-        fact["heard_ago_ms"] = json!((now.timestamp_micros().saturating_sub(memo.heard_at_us)/1000).max(0));
+        let mut fact = memo_fact(memo, now.timestamp_micros());
         fact["basis"] = json!("retained_sound");
         rows.push(fact);
     }
+}
+
+fn memo_fact(memo: &chat_observation::HearingMemo, now_us: i64) -> Value {
+    let mut fact = memo.observation.clone().unwrap_or_else(|| json!({
+        "description":"音（種別未確定）","sound_event":memo.sound_event,
+        "direction":memo.direction,"distance_band":memo.distance_band,
+        "certainty":null,"emitter":null,"emitter_attribution":"unknown"}));
+    fact["heard_ago_ms"] = json!((now_us.saturating_sub(memo.heard_at_us)/1000).max(0));
+    fact
 }

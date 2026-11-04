@@ -861,6 +861,14 @@ impl Dialogue {
                     Self::cancel_warning(&mut data, &sid, "body_decision_unavailable");
                     anyhow::bail!("body decision unavailable");
                 }
+                // 予約時の再描画では進めず、今回の自発生成へ提示する時点で音の継続を記録する。
+                if refreshed.delivery == Delivery::Ambient && crate::reaction_leaf::is_model_reaction(&refreshed) {
+                    let mut data = self.data.lock().unwrap();
+                    if let Some(s) = data.sessions.get_mut(&sid) {
+                        anyhow::ensure!(s.warning.as_ref().is_some_and(|w| w.turn == turn), "cancelled");
+                        super::environment_runtime::prepare_spontaneous_hearing(s, &mut refreshed, &config.combat);
+                    }
+                }
                 let action = &refreshed;
                 // 数の報告は録音断片と欠損時のTTSを同じ倍率で少し速める。
                 let callout_rate = if action.visual_plan.as_ref().is_some_and(|p| p.kind == "hostile_count") {

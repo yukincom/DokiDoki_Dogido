@@ -107,6 +107,9 @@ pub struct HearingMemo {
     pub distance_band: String,
     pub heard_at_us: i64,
     pub dedupe_key: String,
+    /// 音源単位の表示集約用。モデルへは渡さず、位置由来のキーを個体UUIDと解釈しない。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub identity: Option<crate::events::MobIdentity>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -330,19 +333,7 @@ impl ChatObservationMemory {
             age(now, memo.heard_at_us) <= self.settings.player_chat_hearing_retention_ms
         });
         for sound in sounds(event, labels) {
-            let memo = HearingMemo {
-                kind: sound.kind,
-                mob_type: sound.mob_type,
-                label_ja: sound.label,
-                direction: sound.direction,
-                distance_band: sound.band,
-                heard_at_us: now.saturating_sub(sound.heard_ago_ms.saturating_mul(1000)),
-                dedupe_key: sound.key,
-                identity: sound.identity,
-                sound_event: sound.sound_event,
-                emitter: sound.emitter,
-                observation: Some(sound.observation),
-            };
+            let memo = sound.memo(now);
             put_hearing(&mut self.hearing, memo);
         }
         for (name, label, heard) in [
@@ -370,6 +361,7 @@ impl ChatObservationMemory {
                             now
                         },
                         dedupe_key: format!("environment:{raw}:周囲:"),
+                        source_id: None,
                         identity: None,
                         sound_event: None,
                         emitter: None,
@@ -662,19 +654,7 @@ impl ChatObservationMemory {
                 .iter()
                 .map(|sound| SoundCandidate {
                     current: true,
-                    memo: HearingMemo {
-                        kind: sound.kind.clone(),
-                        mob_type: sound.mob_type.clone(),
-                        label_ja: sound.label.clone(),
-                        direction: sound.direction.clone(),
-                        distance_band: sound.band.clone(),
-                        heard_at_us: now.saturating_sub(sound.heard_ago_ms.saturating_mul(1000)),
-                        dedupe_key: sound.key.clone(),
-                        identity: sound.identity.clone(),
-                        sound_event: sound.sound_event.clone(),
-                        emitter: sound.emitter.clone(),
-                        observation: Some(sound.observation.clone()),
-                    },
+                    memo: sound.memo(now),
                 })
                 .collect::<Vec<_>>();
             for memo in &hearing {
@@ -913,11 +893,23 @@ struct Sound {
     direction: String,
     band: String,
     key: String,
+    source_id: Option<String>,
     heard_ago_ms: i64,
     identity: Option<crate::events::MobIdentity>,
     sound_event: Option<String>,
     emitter: Option<String>,
     observation: serde_json::Value,
+}
+impl Sound {
+    fn memo(&self, now: i64) -> HearingMemo {
+        HearingMemo {
+            kind: self.kind.clone(), mob_type: self.mob_type.clone(), label_ja: self.label.clone(),
+            direction: self.direction.clone(), distance_band: self.band.clone(),
+            heard_at_us: now.saturating_sub(self.heard_ago_ms.saturating_mul(1000)),
+            dedupe_key: self.key.clone(), source_id: self.source_id.clone(), identity: self.identity.clone(),
+            sound_event: self.sound_event.clone(), emitter: self.emitter.clone(), observation: Some(self.observation.clone()),
+        }
+    }
 }
 fn sounds(event: &GameEvent, labels: &impl Labels) -> Vec<Sound> {
     let mut result = vec![];
@@ -945,6 +937,7 @@ fn sounds(event: &GameEvent, labels: &impl Labels) -> Vec<Sound> {
             band,
             // 敵対音は従来の音源単位で保持し、警戒側と同じ最新音を使う。
             key,
+            source_id: audio.source_id.clone(),
             heard_ago_ms: audio.heard_ago_ms.unwrap_or(0),
             identity: None,
             sound_event: audio.sound_event.clone(),
@@ -982,6 +975,7 @@ fn sounds(event: &GameEvent, labels: &impl Labels) -> Vec<Sound> {
             direction,
             band,
             key: sound::event_key(key, sound.sound_event.as_deref()),
+            source_id: sound.source_id.clone(),
             heard_ago_ms: sound.heard_ago_ms.unwrap_or(0),
             identity: sound
                 .identity
@@ -1000,6 +994,20 @@ fn sounds(event: &GameEvent, labels: &impl Labels) -> Vec<Sound> {
 pub(crate) fn retained_hearing<'a>(event: &GameEvent, snapshot: &'a Snapshot, labels: &impl Labels) -> Vec<&'a HearingMemo> {
     let current: std::collections::HashSet<_> = sounds(event, labels).into_iter().map(|s| s.key).collect();
     snapshot.recent.hearing_memos.iter().filter(|memo| !current.contains(&memo.dedupe_key)).collect()
+}
+
+/// 共通聴覚と同じ現在音・保持音を、音源を内部照合できる形で読む。記録は更新しない。
+pub(crate) fn hearing_candidates(event: &GameEvent, snapshot: &Snapshot, labels: &impl Labels) -> Vec<SoundCandidate> {
+    current_hearing_candidates(event, labels).into_iter()
+        .chain(retained_hearing(event, snapshot, labels).into_iter()
+            .filter(|memo| !(memo.sound_event.is_none() && memo.dedupe_key.starts_with("environment:weather:")))
+            .map(|memo| SoundCandidate { current: false, memo: memo.clone() }))
+        .collect()
+}
+pub(crate) fn current_hearing_candidates(event: &GameEvent, labels: &impl Labels) -> Vec<SoundCandidate> {
+    sounds(event, labels).iter().map(|sound| SoundCandidate {
+        current: true, memo: sound.memo(event.observed_at.timestamp_micros()),
+    }).collect()
 }
 
 pub(crate) fn line(

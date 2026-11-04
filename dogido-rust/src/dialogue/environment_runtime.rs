@@ -2,7 +2,7 @@
 //! 環境判断と既存の戦闘・会話音声の優先順位を結ぶ。
 use super::{Data, Dialogue, Session, bridge, observation_fresh};
 use crate::{
-    combat::model::{Delivery, Speech},
+    combat::model::{Delivery, Settings, Speech},
     environment::{
         ambient::{AmbientFocus, LightContext, LightPlanRequest},
         danger,
@@ -344,6 +344,27 @@ pub(super) fn refresh_dialogue_context(s: &Session, actions: &mut [Speech]) -> b
     }
     true
 }
+
+/// 自発生成に渡すコピーだけを集約する。質問・緊急警告・川柳再開は既存の材料を保つ。
+pub(super) fn prepare_spontaneous_hearing(s: &mut Session, action: &mut Speech, settings: &Settings) {
+    if action.delivery != Delivery::Ambient || action.kind == "workshop_resume"
+        || !crate::reaction_leaf::is_model_reaction(action)
+        || s.warning.as_ref().is_some_and(|warning| warning.input.is_some()) {
+        return;
+    }
+    let Some(raw) = s.environment_latest.as_ref().or(s.latest.as_ref()) else { return; };
+    let event = super::body_runtime::event(s, raw);
+    let snapshot = s.chat_observation.snapshot_body(&event, &super::chat_context::CatalogLabels);
+    let sounds = crate::chat_observation::hearing_candidates(&event, &snapshot, &super::chat_context::CatalogLabels);
+    let leaf = action.leaf.as_mut().unwrap();
+    let key = if leaf.kind == crate::environment::reaction::KIND { "reaction_context" } else { "conversation_context" };
+    let Some(hearing) = leaf.details[key].pointer_mut("/world_context/observations/hearing") else { return; };
+    s.conversation_observation.present_spontaneous_hearing(hearing, sounds, settings.ms("player_chat_hearing_retention_ms"));
+}
+
+#[cfg(test)]
+#[path = "environment_runtime/spontaneous_hearing_tests.rs"]
+mod spontaneous_hearing_tests;
 
 
 impl Dialogue {
