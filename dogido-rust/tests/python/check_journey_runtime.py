@@ -103,12 +103,16 @@ def main():
         assert records[0]["poems"][0]["id"] == f"session:{sid}:{poem['id']}", records
         passed.append("delivered_poem_links_to_existing_bookshelf_identity")
     from check_workshop_fixture import fixture as workshop_fixture
-    from check_workshop_runtime import install, ready, step
-    with workshop_fixture() as f:
+    from check_workshop_runtime import install, step
+    # 見込み: 相談中は要約せず、終了後の通常入力で古い22ターンだけをまとめる。
+    # 合格: 最新10ターンを保持。0秒の再発句と競合させず、生成・TTSは既存の模擬依存を使う。
+    from check_workshop_combat import drive
+    with workshop_fixture(interval_ms=5000) as f:
         base, process, log, control, seen, _, _, _, send, hud, rows, _, folder = f
         summaries = synopsis_model(control)
         prompts = install(control, lambda text, prompt, n: step(text, "respond", f"相談の返答{n:04d}やで。"))
-        sid = ready(base, send, rows)
+        sid = register(base, preview=False, body=True)
+        drive(send, sid, lambda: any(r["turn_id"].endswith(":poem") and r["playback_status"] == "completed" for r in rows(sid)), timeout=10)
         for i in range(31):
             send(sid)
             turn = submit(base, sid, f"川柳相談の目印{i:04d}だよ")

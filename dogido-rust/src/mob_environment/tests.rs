@@ -261,7 +261,7 @@ fn crosshair_keeps_taming_separate_for_two_wolves_and_refreshes_name() {
     assert!(rows[1].get("custom_name").is_none());
 }
 
-// オオカミが話題のとき、通常と環境の要求に飼育状態・名札を載せる。個体IDは内部に保ち、模擬観測から消えた個体は現在表に残さない。
+// 見込み: 視認見出しを加えても話題の飼育状態・名札は資料JSONへ届く。合格: 両要求が名前と飼育状態を保持し、個体IDや消えた個体を残さない。固定観測の投影のみ。
 #[test]
 fn companion_metadata_reaches_chat_and_surroundings_model_inputs_and_expires() {
     let event = frame(json!({"companion_candidates":[{"type":"wolf",
@@ -282,7 +282,7 @@ fn companion_metadata_reaches_chat_and_surroundings_model_inputs_and_expires() {
         "fixture",
     )
     .unwrap();
-    let prompt: Value = serde_json::from_str(&prepared.request.messages[1].content).unwrap();
+    let prompt: Value = serde_json::from_str(prepared.request.messages[1].content.lines().last().unwrap()).unwrap();
     let pet = &prompt["world_context"]["observations"]["mob_states"][0];
     assert_eq!(pet["tamed"], true);
     assert_eq!(pet["custom_name"], "クロちゃん");

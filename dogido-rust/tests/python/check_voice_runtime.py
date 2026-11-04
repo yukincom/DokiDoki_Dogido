@@ -4,7 +4,6 @@ import argparse
 import contextlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
-import os
 from pathlib import Path
 import signal
 import subprocess
@@ -16,6 +15,7 @@ import time
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
 from test_support import assert_voice_diagnostic
+from storage_fixture import isolated_storage
 
 
 def wait(predicate, description, timeout=8):
@@ -113,11 +113,13 @@ class Harness:
                 minimum_ms=350, maximum_ms=30000, max_pending=1, max_age_sec=options.get("max_age", 8),
                 no_speech_threshold=.6, retry_threshold=options.get("retry_threshold", 1.0),
                 wake_word=options.get("wake_word", ""), normal_prompt="通常会話", workshop_prompt="川柳推敲", use_gpu=True)
-            env = {**os.environ, "DOGIDO_VOICE_TEST_CONFIG": str(config), "DOGIDO_AUTH_TOKEN": "test-token", "TMPDIR": str(folder)}
+            # 録音・認識は模擬する。親の保存設定を除き、HOME・出来事・WAVも同じ一時領域へ閉じる。
+            _, env = isolated_storage(folder, None, ())
+            env.update(DOGIDO_VOICE_TEST_CONFIG=str(config), DOGIDO_AUTH_TOKEN="test-token", TMPDIR=str(folder))
             command = [str(self.binary), "voice-input", "--settings", json.dumps(settings)]
             if options.get("check"): command.append("--check")
             with (folder / "runtime.log").open("w+") as output:
-                process = subprocess.Popen(command, env=env, cwd=ROOT, stdin=subprocess.DEVNULL, stdout=output, stderr=subprocess.STDOUT)
+                process = subprocess.Popen(command, env=env, cwd=folder, stdin=subprocess.DEVNULL, stdout=output, stderr=subprocess.STDOUT)
                 def child_log():
                     path = folder / "children.jsonl"
                     return [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []

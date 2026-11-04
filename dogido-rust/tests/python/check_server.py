@@ -7,7 +7,6 @@ from contextlib import closing, contextmanager
 from datetime import datetime, timezone
 from http.client import HTTPConnection
 import json
-import os
 from pathlib import Path
 import selectors
 import signal
@@ -17,6 +16,8 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT.parent))
+
+from storage_fixture import isolated_storage
 
 from test_support import (
     assert_closed_hud, assert_health, assert_session_ack, assert_session_created,
@@ -33,11 +34,13 @@ def event(sequence=18):
 
 @contextmanager
 def server(binary: Path, log_path: Path, stop_signal=signal.SIGTERM):
-    env = dict(os.environ, DOGIDO_AUTH_TOKEN=TOKEN)
+    # 見込み: 個人設定を継承せず接続だけを検査する。HOME・出来事・作業先は試験用一時領域。
+    _, env = isolated_storage(log_path.parent, None, ())
+    env["DOGIDO_AUTH_TOKEN"] = TOKEN
     with log_path.open("w", encoding="utf-8") as log:
         process = subprocess.Popen(
             [str(binary), "serve", "--listen", "127.0.0.1:0"],
-            stdout=subprocess.PIPE, stderr=log, text=True, env=env,
+            stdout=subprocess.PIPE, stderr=log, text=True, env=env, cwd=log_path.parent,
         )
         try:
             with selectors.DefaultSelector() as selector:

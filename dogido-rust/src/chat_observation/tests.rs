@@ -47,7 +47,7 @@ struct Step {
     outcome_updates: NameOutcomeUpdate,
     expected: Value,
 }
-// 見込み: 観測情報の追加で既存保持の振る舞いを変えない。合格: 全旧fixture項目を厳密比較し、observationを含むsnapshotはJSON往復で一致。確認範囲: 固定した旧形式と保持。新観測の内容の正解は受入試験で別検査。
+// 見込み: 観測・音源IDを追加しても既存の保持時刻・件数は不変。合格: 旧fixtureの全項目を厳密比較し、新項目を含むsnapshotはJSON往復で一致。音源IDは下の保持試験、観測の内容は受入試験で別検査。
 #[test]
 fn persistent_observation_traces_match_fixture() {
     let labels = labels();
@@ -66,9 +66,10 @@ fn persistent_observation_traces_match_fixture() {
             let restored: Snapshot = serde_json::from_value(actual.clone()).unwrap();
             assert_eq!(restored, snapshot, "{} step {i}: 新観測情報もJSON往復で保持", trace.name);
             // 移植時の正本fixtureは再生成しない。従来の全項目を厳密比較し、
-            // 追加observationの内容はacceptance/hearing.rsで入力から独立に照合する。
+            // 追加observationはacceptance/hearing.rs、source_idは下の保持試験で照合する。
             for memo in actual["recent"]["hearing_memos"].as_array_mut().unwrap() {
                 memo.as_object_mut().unwrap().remove("observation");
+                memo.as_object_mut().unwrap().remove("source_id");
             }
             assert_eq!(actual, row.expected, "{} step {i}", trace.name);
             assert!(memory.visual.len() <= 12);
@@ -172,6 +173,8 @@ fn explicit_empty_outcome_update_does_not_manufacture_a_death() {
     );
 }
 
+// 見込み: 同じ音の再送で聴取時刻を更新せず、音源IDを失わない。
+// 合格: 再送後も同じ時刻とID、20秒後に消え、新しい敵対音は別IDと実聴取時刻を保持。固定観測の台帳だけを検査。
 #[test]
 fn repeated_sound_snapshots_preserve_actual_hearing_time_and_current_source_identity() {
     let labels = labels();
@@ -186,6 +189,7 @@ fn repeated_sound_snapshots_preserve_actual_hearing_time_and_current_source_iden
     memory
         .observe(&first, &NameOutcomeUpdate::default(), &labels);
     let heard = memory.hearing[0].heard_at_us;
+    assert_eq!(memory.hearing[0].source_id.as_deref(), Some("heard-entity"));
     let repeated = frame(
         "2026-09-30T01:00:15Z",
         json!({"ambient_sounds":[{
@@ -197,6 +201,7 @@ fn repeated_sound_snapshots_preserve_actual_hearing_time_and_current_source_iden
         .observe(&repeated, &NameOutcomeUpdate::default(), &labels);
     assert_eq!(memory.hearing.len(), 1);
     assert_eq!(memory.hearing[0].heard_at_us, heard);
+    assert_eq!(memory.hearing[0].source_id.as_deref(), Some("heard-entity"));
     assert_eq!(memory.hearing[0].direction, "後ろ");
     let gone = frame("2026-09-30T01:00:21Z", json!({}));
     memory
@@ -214,6 +219,7 @@ fn repeated_sound_snapshots_preserve_actual_hearing_time_and_current_source_iden
     memory
         .observe(&newer, &NameOutcomeUpdate::default(), &labels);
     assert_eq!(memory.hearing[0].heard_at_us, heard + 20_000_000);
+    assert_eq!(memory.hearing[0].source_id.as_deref(), Some("new-sound"));
     let mut invalid = json!(newer);
     invalid["auditory_threats"][0]["heard_ago_ms"] = json!(-1);
     assert!(GameEvent::parse(invalid).is_err());

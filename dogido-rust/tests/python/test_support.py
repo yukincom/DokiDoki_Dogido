@@ -134,3 +134,21 @@ def completion_response(content, *, finish="stop"):
                      "finish_reason": finish}],
         "usage": {"prompt_tokens": 1234, "completion_tokens": 19, "total_tokens": 1253},
     }
+
+
+# 見込み: 通常会話・環境反応の視認を現在／直前で分け、旧JSON一覧へ依存しない。
+# 合格: 両見出しの順序と、それぞれの表示行を検査側へ返す。模擬要求の送信本文だけを扱う。
+def sight_sections(incoming):
+    for message in incoming["messages"]:
+        content = message.get("content", "")
+        if not isinstance(content, str) or "## いま見えとるもん\n" not in content:
+            continue
+        current, separator, previous = content.split("## いま見えとるもん\n", 1)[1].partition("\n## さっきまで見えとったもん\n")
+        assert separator, content
+        previous_rows = []
+        for line in previous.splitlines():
+            if not line.startswith("- "):
+                break
+            previous_rows.append(line)
+        return ([line for line in current.splitlines() if line.startswith("- ")], previous_rows)
+    raise AssertionError("current/previous sight sections missing from model request")

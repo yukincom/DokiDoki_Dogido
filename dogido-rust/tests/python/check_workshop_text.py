@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 from workshop_text_client import call, speak
 from check_workshop_runtime import step, native_mock_message
 from check_workshop_edits import edit
+from storage_fixture import isolated_storage
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -65,6 +66,9 @@ def main():
 
     with tempfile.TemporaryDirectory(prefix='dogido-text-check-') as folder:
         folder = Path(folder)
+        # 再起動も含めて模擬モデル・一時保存を固定し、親のSSD・採取設定を継承しない。
+        settings, env = isolated_storage(folder, None, ())
+        env['TMPDIR'] = str(folder)
         source = folder / 'memory/sessions/test/long_term/haiku_entries.jsonl'
         source.parent.mkdir(parents=True)
         view = json.loads((ROOT / 'dogido-rust/tests/python/fixtures/workshop_meaning_cases.json').read_text())['contexts']['grass']
@@ -81,9 +85,9 @@ def main():
         command = [os.environ.get('DOGIDO_WORKSHOP_TEXT_BINARY', str(ROOT / 'dogido-rust/target/release/examples/workshop_text')),
                    '--listen', '127.0.0.1:0', '--memory-dir', str(folder / 'memory'),
                    '--python', sys.executable, '--model', 'mock', '--base-url', f'http://127.0.0.1:{model.server_port}/v1',
-                   '--prompt-file', str(folder / 'prompts.json')]
+                   '--prompt-file', str(folder / 'prompts.json'), '--haiku-settings', json.dumps(settings)]
         with (folder / 'stderr.log').open('w') as error:
-            process = subprocess.Popen(command, cwd=ROOT, stdout=subprocess.PIPE, stderr=error, text=True)
+            process = subprocess.Popen(command, cwd=folder, env=env, stdout=subprocess.PIPE, stderr=error, text=True)
             try:
                 ready = process.stdout.readline()
                 found = re.search(r'http://127.0.0.1:\d+', ready)
@@ -135,7 +139,7 @@ def main():
                     'snapshot': call('snapshot', {'session_id': sid}, base)}], ensure_ascii=False))
                 call('shutdown', {}, base)
                 process.wait(timeout=10)
-                process = subprocess.Popen(command + ['--resume', str(handoff)], cwd=ROOT,
+                process = subprocess.Popen(command + ['--resume', str(handoff)], cwd=folder, env=env,
                     stdout=subprocess.PIPE, stderr=error, text=True)
                 ready = process.stdout.readline()
                 found = re.search(r'http://127.0.0.1:\d+', ready)
@@ -181,7 +185,7 @@ def main():
                 handoff.write_text(json.dumps([{'key': poems[0]['key'], 'session_id': sid, 'snapshot': closed}, {'key': poems[0]['key'], 'session_id': stale_sid, 'snapshot': call('snapshot', {'session_id': stale_sid}, base)}], ensure_ascii=False))
                 call('shutdown', {}, base)
                 process.wait(timeout=10)
-                process = subprocess.Popen(command + ['--resume', str(handoff)], cwd=ROOT,
+                process = subprocess.Popen(command + ['--resume', str(handoff)], cwd=folder, env=env,
                     stdout=subprocess.PIPE, stderr=error, text=True)
                 ready = process.stdout.readline()
                 found = re.search(r'http://127.0.0.1:\d+', ready)

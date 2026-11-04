@@ -12,6 +12,7 @@ import threading
 import time
 
 from check_dialogue import dependencies, register, request, row, running, snapshot, wait_for
+from check_environment_reactions import reaction_context
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -28,13 +29,9 @@ def main():
         control["hazard_gate"] = False
 
         def respond(incoming):
-            for message in incoming["messages"]:
-                try:
-                    context = json.loads(message["content"])
-                except (ValueError, TypeError):
-                    continue
-                if not isinstance(context, dict) or context.get("topic") != "danger":
-                    continue
+            # 視認見出し付きの現行要求を共通パーサーで読み、危険の実測だけへ固定応答する。
+            context = reaction_context(incoming)
+            if context is not None and context.get("topic") == "danger":
                 requests.append(context)
                 if control["hazard_gate"]:
                     entered.set()

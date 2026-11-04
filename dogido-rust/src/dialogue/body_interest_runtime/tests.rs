@@ -521,7 +521,8 @@ async fn owner_concern_only_reaches_the_model_once_per_observed_episode() {
     }
     for req in mock.seen.lock().unwrap().iter() {
         let user = req["messages"][1]["content"].as_str().unwrap();
-        let input: Value = serde_json::from_str(user).unwrap();
+        // 視認見出しは前段にあり、気づきと身体の資料は末尾の完全なJSONで検査する。
+        let input: Value = serde_json::from_str(user.lines().last().unwrap()).unwrap();
         assert_eq!(input["self_notice"], "プレイヤーの様子が気になってきたで。");
         assert_eq!(user.matches(OWNER_CONCERN).count(), 1);
         assert!(!user.contains("29.875") && !user.contains("0.29875"));
@@ -771,7 +772,7 @@ async fn model_can_silently_look_at_owner_with_unchanged_image_and_covered_rain(
         let requests=mock.seen.lock().unwrap();assert_eq!(requests.len(),1);
         let content=&requests[0]["messages"].as_array().unwrap().last().unwrap()["content"];
         let parts=content.as_array().unwrap();
-        let context:Value=serde_json::from_str(parts[0]["text"].as_str().unwrap()).unwrap();
+        let context:Value=serde_json::from_str(parts[0]["text"].as_str().unwrap().lines().last().unwrap()).unwrap();
         assert_eq!(parts.iter().filter(|part| part["text"] == "変わらない").count(), 1);
         assert_eq!(context["body_options"]["available_actions"]["look_owner"],"その場でプレイヤーを見る");
         assert_eq!(context["world_context"]["observations"]["weather"]["label"],"雨");

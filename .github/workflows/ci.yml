@@ -38,7 +38,7 @@ jobs:
   helpers:
     name: Python and library tests
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -52,6 +52,9 @@ jobs:
           python -m venv .venv
           .venv/bin/python -m dogido_server.tls_security --bootstrap
           .venv/bin/python -m pip --disable-pip-version-check install -e '.[dev]' numpy==2.2.6
+      # 保存先の隔離試験は模擬HTTPへ本体を接続する。別ジョブのビルド結果は共有されない。
+      - name: Build runtime for isolated HTTP tests
+        run: ./dogido-rust/cargo.sh build --bin dogido-rust --locked
       - name: Test Python helpers
         run: .venv/bin/python -m pytest -q tests dogido-rust/tests/python/test_*.py
       - name: Test library models

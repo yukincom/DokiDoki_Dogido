@@ -14,6 +14,7 @@ import threading
 import time
 
 from test_support import base, LINES, ALTERNATIVES
+from storage_fixture import isolated_storage
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -59,13 +60,13 @@ def run(folder, url, *options, stop_signal=None, max_rounds=6):
     config = {"input": poem_input, "chat": {"base_url": url + "/chat/v1", "model": "chat-checker", "max_tokens": 72, "timeout_ms": 5000},
               "haiku": {"base_url": url + "/haiku/v1", "model": "verse-generator", "max_tokens": 192, "timeout_ms": 5000}}
     path = folder / "request.json"; path.write_text(json.dumps(config, ensure_ascii=False))
-    env = dict(os.environ)
-    for key in ("DOGIDO_LLM_API_KEY", "DOGIDO_HAIKU_API_KEY"): env.pop(key, None)
+    # 実workerは使うが生成は模擬HTTP。親の認証・採取・保存設定を継承しない。
+    _, env = isolated_storage(folder, None, ())
     command = [str(ROOT / "target/debug/examples/generate_haiku"), str(path), "--python", sys.executable, *options]
     if stop_signal is None:
-        result = subprocess.run(command, text=True, capture_output=True, env=env, timeout=15)
+        result = subprocess.run(command, text=True, capture_output=True, env=env, cwd=folder, timeout=15)
     else:
-        with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env) as process:
+        with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env, cwd=folder) as process:
             try:
                 time.sleep(1.5)
                 assert process.poll() is None, "generation ended before stop signal"

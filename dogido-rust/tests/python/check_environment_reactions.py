@@ -12,6 +12,7 @@ from urllib.parse import parse_qs, urlsplit
 from check_dialogue import dependencies, register, request, row, running, snapshot, submit, wait_for
 
 from body_senses_fixture import attach_body
+from test_support import sight_sections
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -19,7 +20,14 @@ ROOT = Path(__file__).resolve().parents[2]
 def reaction_context(incoming):
     for message in incoming.get("messages", []):
         try:
-            value = json.loads(message.get("content", ""))
+            content = message.get("content", "")
+            if not isinstance(content, str):
+                continue
+            # 視認見出しと資料を分離し、末尾のJSON全体を読む。任意の断片は拾わない。
+            if content.startswith("## いま見えとるもん\n"):
+                assert "\n## さっきまで見えとったもん\n" in content
+                content = content.rsplit("\n", 1)[-1]
+            value = json.loads(content)
         except (ValueError, TypeError):
             continue
         if isinstance(value, dict) and {"topic", "observations", "properties", "recent"} <= value.keys():
@@ -171,14 +179,16 @@ def main():
             assert len(calls()) == before_calls and not rows(sid), rows(sid)
             nearby = {"mobs":[{"id":"zombie","quantity":1}], "blocks":[],
                       "mobs_truncated":False,"blocks_truncated":False}
-            send(sid, visual_threats=[zombie], auditory_threats=heard, nearby_composition=nearby, combat=passive)
+            send(sid, passive_mobs=[zombie], auditory_threats=heard, nearby_composition=nearby, combat=passive)
             wait_for(lambda: any(r["playback_status"] == "not_selected" for r in reactions(sid)))
             context = reaction_context(calls()[-1]["body"])["world_context"]
-            assert any(m["id"] == "zombie" and m["quantity"] == 1
-                       for m in context["observations"]["nearby_mob_types"]), context
+            # 実視認の種類・数量は現在欄へ一度だけ届く。旧JSON一覧と過去欄へ重ねない。
+            current, previous = sight_sections(calls()[-1]["body"])
+            assert current == ["- ゾンビ（1体）"] and not previous, (current, previous)
+            assert "nearby_mob_types" not in context["observations"], context
             assert len(calls()) == before_calls+1 and len(rows(sid)) == 1, rows(sid)
             time.sleep(.12)
-            send(sid, visual_threats=[zombie], auditory_threats=heard, nearby_composition=nearby, combat=passive)
+            send(sid, passive_mobs=[zombie], auditory_threats=heard, nearby_composition=nearby, combat=passive)
             time.sleep(.12)
             assert len(calls()) == before_calls+1 and len(rows(sid)) == 1
             close(sid)
@@ -195,10 +205,10 @@ def main():
             send(sid, nearby_composition=village)
             wait_for(lambda: any(r["playback_status"] == "not_selected" for r in reactions(sid)))
             context = reaction_context(calls()[-1]["body"])["world_context"]
-            mob = context["observations"]["nearby_mob_types"][0]
-            assert mob["quantity"] == "いっぱい", mob
-            assert mob["profession_breakdown"]["groups"] == [
-                {"id":"farmer","label":"農民","quantity":3}, {"id":"librarian","label":"司書","quantity":"いっぱい"}], mob
+            # 4個体上限と独立した集計・職業内訳を、モデルが読む現在欄へ保持する。
+            current, previous = sight_sections(calls()[-1]["body"])
+            assert current == ["- 村人（いっぱい）：農民（3体）、司書（いっぱい）"] and not previous, (current, previous)
+            assert "nearby_mob_types" not in context["observations"], context
             reduced = {**village, "mobs":[{"id":"villager","quantity":4,
                 "professions":[{"id":"farmer","quantity":4}]}]}
             time.sleep(.12)

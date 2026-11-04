@@ -42,7 +42,7 @@ fn environment(rows: &[Value]) -> Vec<ChatMessage> {
     }), "acceptance-fixture").unwrap().request.messages
 }
 
-// JSONを使うbuilderでは表示文字列の改行をデコードするだけ。時刻・分類・返答先は作らない。
+// 見込み: 視認見出しと資料JSONを分けても履歴の本文・順序は同じ。合格: JSONの改行だけを復元し、見出しも保持。固定要求の表示検査のみ。
 fn text_values(value: &Value, output: &mut Vec<String>) {
     match value {
         Value::String(text) => output.push(text.clone()),
@@ -55,9 +55,19 @@ fn text_values(value: &Value, output: &mut Vec<String>) {
 fn prompt_text(messages: &[ChatMessage]) -> String {
     let mut values = Vec::new();
     for message in messages {
-        if let Ok(value) = serde_json::from_str::<Value>(&message.content) {
+        let (headings, material) = if message.content.starts_with("## いま見えとるもん\n") {
+            message.content.rsplit_once('\n').unwrap()
+        } else {
+            ("", message.content.as_str())
+        };
+        if !headings.is_empty() {
+            assert!(headings.contains("\n## さっきまで見えとったもん\n"));
+            values.push(headings.to_owned());
+        }
+        if let Ok(value) = serde_json::from_str::<Value>(material) {
             text_values(&value, &mut values);
         } else {
+            assert!(headings.is_empty(), "環境反応の末尾は完全な資料JSONである");
             values.push(message.content.clone());
         }
     }

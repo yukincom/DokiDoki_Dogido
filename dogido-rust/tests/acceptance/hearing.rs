@@ -186,7 +186,11 @@ fn json_section(prompt: &str, heading: &str) -> Value {
 }
 
 fn environment_material(result: &Requests) -> Value {
-    serde_json::from_str(&user_material(&result.environment)).unwrap()
+    // 見込み: 視認の見出しと末尾の資料JSONを分けて読む。合格: 2見出しの順序を保ち、聴覚はJSON全体から厳密に検査。模擬要求のみ。
+    let prompt = user_material(&result.environment);
+    assert!(prompt.starts_with("## いま見えとるもん\n"));
+    assert!(prompt.contains("\n## さっきまで見えとったもん\n"));
+    serde_json::from_str(prompt.lines().last().unwrap()).unwrap()
 }
 
 // 見込み: 受信と身体側の経過時間を残せば、古い音を今鳴った音にしない。合格: 石の足音・highを保持し、観測時刻−身体150ms−音1200msから復元した聴取時刻が10ms以内で一致。確認範囲: 模擬観測から共通入力まで。

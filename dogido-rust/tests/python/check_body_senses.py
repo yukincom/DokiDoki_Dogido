@@ -11,6 +11,7 @@ from pathlib import Path
 import tempfile
 
 from body_senses_fixture import attach_body
+from test_support import sight_sections
 from check_dialogue import (acknowledge, dependencies, display_row, register, request,
                             row, running, submit_text, wait_for)
 
@@ -72,12 +73,15 @@ def main():
             def send(value):
                 return request(base, "/api/v1/game-events", value, sid=sid)
 
+            model_requests = []
+
             def ask(text):
                 count = len([r for r in seen if r["path"] == "/v1/chat/completions"])
                 turn = submit_text(base, sid, text)
                 reply = wait_for(lambda: display_row(base, turn))
                 requests = [r["body"] for r in seen if r["path"] == "/v1/chat/completions"][count:]
                 assert len(requests) == 1, requests
+                model_requests.append(requests[0])
                 context = world_context(requests[0])
                 acknowledge(base, sid, reply)
                 wait_for(lambda: row(base, turn, {"audio_disabled"}))
@@ -92,7 +96,10 @@ def main():
             assert current["vision"]["player_visibility"] == "visible", current
             assert "self" not in current and "player" not in current, current
             assert obs["location_biome"]["id"] == "plains", obs
-            assert "cow" in json.dumps(obs) and "pig" not in json.dumps(obs), obs
+            # 本人側のブタを代用せず、身体が見たウシ一体を現在欄だけへ渡す。
+            current_sight, previous_sight = sight_sections(model_requests[-1])
+            assert current_sight == ["- ウシ（1体）"] and not previous_sight, (current_sight, previous_sight)
+            assert "nearby_mob_types" not in obs and "pig" not in json.dumps(obs), obs
             # ドギド視界の実測候補だけを表示名で渡す。プレイヤー側のサボテンと種類台帳は出さない。
             assert obs["今いる場所にある少し特別なもの"] == ["オークの原木"], obs
             assert "nearby_block_types" not in obs and "サボテン" not in json.dumps(obs, ensure_ascii=False), obs
@@ -213,6 +220,9 @@ def main():
                     assert "current" not in obs["body_observation"], obs
                 assert context.get("changes", []) == [], (label, context)
                 assert "location_biome" not in obs and "smell" not in obs and "nearby_mob_types" not in obs, (label, obs)
+                # 未取得は消失でも本人側の視認でもない。両欄に個体を補わない。
+                assert sight_sections(model_requests[-1]) == ([], []), (label, model_requests[-1])
+                assert "（視認情報は一部または未取得）" in str(model_requests[-1]), label
                 assert "subject_states" not in obs, (label, obs)
                 assert "cactus" not in json.dumps(obs) and "pig" not in json.dumps(obs), (label, obs)
                 passed.append(label + "_never_falls_back_to_player_senses")
