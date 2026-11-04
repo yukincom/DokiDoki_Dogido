@@ -95,7 +95,7 @@ public final class BodySensesCollector {
                 clearCollectors();
                 return unavailable(observation,serverTick,invalid,key);
             }
-            BodyOriginVision vision = inspectionVision(sample,frame.autonomy());
+            BodyOriginVision vision = vision(sample,null);
             BodyOriginVision safetyVision = vision.forThreats();
             ObservationOrigin origin = origin(sample,body,vision);
             if (origin == null) {
@@ -108,7 +108,7 @@ public final class BodySensesCollector {
             senses.addProperty("basis","body_pose_client_world");
             senses.addProperty("source_server_tick",serverTick);
 
-            // 現在姿勢のモブを先に照合する。敵には広い視野、非敵対と注視対象には身体の注意範囲を使う。
+            // 周辺の視認には通常FOVと既存の外周を使う。注意範囲は取得後の注目候補だけへ適用する。
             int beforeThreats = vision.missedRays();
             var hostileOrigin = origin(sample,body,safetyVision);
             List<ThreatObservation> hostile = measure(senses,"visual_threats",() -> threats.scanThreats(hostileOrigin,client.world),List.of());
@@ -211,7 +211,10 @@ public final class BodySensesCollector {
             senses.add("auditory_threats",heardThreats);
             senses.add("ambient_sounds",ambient);
             BodySenseCapacity.fit(senses);
-            retainedCandidates = candidates(client,frame.autonomy());
+            var pose = sample.getAsJsonObject("self_pose");
+            var focusedVision = vision.forAttention(attention.view(point(pose.getAsJsonObject("eye_position")),
+                pose.get("view_yaw").getAsDouble(),frame.autonomy()));
+            retainedCandidates = candidates(client,frame.autonomy(),focusedVision);
             var gaze = new java.util.ArrayList<BodySpeechGaze.Target>();
             for (var mob : mobs.bodyVisibleMobs()) gaze.add(new BodySpeechGaze.Target("body","entity",mob.entityId().toString(),mob.position()));
             for (var mob : hostile) if (mob.lineOfSight()) gaze.add(new BodySpeechGaze.Target("body","entity",mob.uuid().toString(),new Vec3d(mob.x(),mob.y(),mob.z())));
@@ -253,20 +256,33 @@ public final class BodySensesCollector {
                 && "observed".equals(string(retainedSenses,"status"))) value.add("candidates",retainedCandidates.deepCopy());
         return value;
     }
-    private JsonArray candidates(MinecraftClient client,JsonObject autonomy) {
+    private JsonArray candidates(MinecraftClient client,JsonObject autonomy,BodyOriginVision focusedVision) {
         if (!"observed".equals(string(autonomy,"status"))) return new JsonArray();
         double followDistance=autonomy.get("follow_distance").getAsDouble();
         if (!Double.isFinite(followDistance) || followDistance <= 0) return new JsonArray();
+        return candidates(mobs.bodyVisibleMobs(),worldObserver.bodyVisibleBlocks(),client.player.getEntityPos(),followDistance,
+            mob -> focusedVision.entity(client.world,mob.entityId(),mob.bounds(),NearbyComposition.MOB_ENTER),
+            block -> focusedVision.point(client.world,Vec3d.ofCenter(block.position()),block.position(),NearbyComposition.BLOCK_RAY_RANGE));
+    }
+    /** 実視認済みのframeからだけ選ぶ。注意内の同種ブロックを選んでから一種類一件へまとめる。 */
+    static JsonArray candidates(List<AmbientMobObserver.VisibleMob> visibleMobs,List<WorldObserver.VisibleBlock> visibleBlocks,
+            Vec3d owner,double followDistance,java.util.function.Predicate<AmbientMobObserver.VisibleMob> focusedMob,
+            java.util.function.Predicate<WorldObserver.VisibleBlock> focusedBlock) {
         var rows = new java.util.ArrayList<BodyInspectProtocol.Target>();
-        Vec3d owner = client.player.getEntityPos();
-        for (var mob : mobs.bodyVisibleMobs()) {
+        for (var mob : visibleMobs) {
             if (mob.position().distanceTo(owner) > followDistance || !wireType(mob.typeId()) || boundedLabel(mob.label()).isBlank()) continue;
+            if (!focusedMob.test(mob)) continue;
             rows.add(new BodyInspectProtocol.Target("e:"+mob.entityId(),"entity",mob.typeId(),boundedLabel(mob.label()),
                 new BodyInspectProtocol.Point(mob.position().x,mob.position().y,mob.position().z),mob.entityId()));
         }
-        for (var block : worldObserver.bodyVisibleBlocks()) {
+        // 広い視野で最も近い同種ブロックが注意外でも、注意内の実視認点を候補にできる。
+        var candidateBlockTypes = new java.util.HashSet<String>();
+        for (var block : visibleBlocks) {
             Vec3d position = Vec3d.ofCenter(block.position());
-            if (position.distanceTo(owner) > followDistance || !wireType(block.typeId()) || boundedLabel(block.label()).isBlank()) continue;
+            if (candidateBlockTypes.contains(block.typeId()) || position.distanceTo(owner) > followDistance
+                    || !wireType(block.typeId()) || boundedLabel(block.label()).isBlank()) continue;
+            if (!focusedBlock.test(block)) continue;
+            candidateBlockTypes.add(block.typeId());
             var point = new BodyInspectProtocol.Point(position.x,position.y,position.z);
             rows.add(new BodyInspectProtocol.Target(BodyInspectProtocol.blockId(point,block.typeId()),"block",block.typeId(),boundedLabel(block.label()),point,null));
         }
@@ -375,7 +391,7 @@ public final class BodySensesCollector {
         return new BodyOriginVision(sample.get("server_tick").getAsLong(),point(pose.getAsJsonObject("eye_position")),
             pose.get("view_yaw").getAsDouble(),pose.get("view_pitch").getAsDouble(),attention);
     }
-    /** 候補採取と実行前再照合が同じ範囲を使う。対象の到着や取消をここで推測しない。 */
+    /** 注目候補の実行前再照合。通常視認の内側へ同じ注意範囲を重ねる。周囲の観測には使わない。 */
     BodyOriginVision inspectionVision(JsonObject sample, JsonObject autonomy) {
         JsonObject pose=sample.getAsJsonObject("self_pose");
         return vision(sample,attention.view(point(pose.getAsJsonObject("eye_position")),pose.get("view_yaw").getAsDouble(),autonomy));

@@ -11,7 +11,8 @@ import net.minecraft.util.math.Vec3d;
 import static dogido.fabric.body.BodyInspectProtocol.*;
 
 /**
- * FOLLOWの注意範囲と、受理した観察対象への集中を同じ身体frameから決める。
+ * FOLLOWで見に行く候補の注意範囲と、受理した観察対象への集中を同じ身体frameから決める。
+ * 周囲の視認一覧は狭めず、BodyOriginVisionの通常視野内にある候補だけを絞る。
  * 世界の視認・遮蔽はBodyOriginVision、移動と実到着後5秒の時計は身体Modが所有する。
  * この接続内の対象だけを保持し、到着通知の受信時刻から待機時間を積み増さない。
  */

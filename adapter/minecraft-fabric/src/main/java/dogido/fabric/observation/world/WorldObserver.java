@@ -267,7 +267,7 @@ public final class WorldObserver {
                 }
             }
         }
-        // 既存範囲を近い順にたどり、一種類につき最初の実視認点だけを操作候補へ残す。
+        // 実視認点を近い順に残す。一種類一候補への絞り込みは、身体の注意範囲を照合した後に行う。
         if (receiver.body()) samples.sort(java.util.Comparator.comparingDouble(pos -> Vec3d.ofCenter(pos).squaredDistanceTo(receiver.position())));
         for (BlockPos sample : samples) {
             int dx = sample.getX()-origin.getX(), dy = sample.getY()-origin.getY(), dz = sample.getZ()-origin.getZ();
@@ -279,7 +279,7 @@ public final class WorldObserver {
                     || !isAirExposed(world, sample)) continue;
             boolean visible;
             if (receiver.body()) {
-                visible = receiver.visible(world,Vec3d.ofCenter(sample),sample,21.0);
+                visible = receiver.visible(world,Vec3d.ofCenter(sample),sample,NearbyComposition.BLOCK_RAY_RANGE);
             } else {
                 // player経路のOUTLINE/流体条件は従来通り。身体は共有Body APIの視認判定を使う。
                 BlockHitResult hit = world.raycast(new RaycastContext(receiver.eyePosition(),
@@ -288,8 +288,8 @@ public final class WorldObserver {
                 visible = hit.getType() == HitResult.Type.MISS || hit.getBlockPos().equals(sample);
             }
             if (visible) {
-                int count = visibleCounts.merge(blockId, 1, Integer::sum);
-                if (receiver.body() && count == 1) {
+                visibleCounts.merge(blockId, 1, Integer::sum);
+                if (receiver.body()) {
                     visibleBlocks.add(new VisibleBlock(sample.toImmutable(), blockId, state.getBlock().getName().getString()));
                 }
             }

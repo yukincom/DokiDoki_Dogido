@@ -12,8 +12,9 @@ import java.util.TreeSet;
 public final class NearbyComposition {
     static final int LIMIT = 128;
     public static final double MOB_ENTER = 16.0;
-    public static final double MOB_EXIT = 21.0;
+    public static final double MOB_EXIT = MOB_ENTER + 5.0;
     public static final int BLOCK_MARGIN = 5;
+    public static final double BLOCK_RAY_RANGE = 21.0;
 
     /** 新規の種類だけ内側で発見し、既知の種類は外側の実視認まで保つ。未視認を補完しない。 */
     public static final class RangeTracker {

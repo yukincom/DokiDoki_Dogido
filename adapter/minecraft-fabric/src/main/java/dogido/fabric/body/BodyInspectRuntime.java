@@ -2,6 +2,7 @@ package dogido.fabric.body;
 
 import com.google.gson.JsonObject;
 import dogido.fabric.protocol.DogidoEventClient.SessionRef;
+import dogido.fabric.observation.NearbyComposition;
 import java.time.Instant;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
@@ -95,7 +96,7 @@ public final class BodyInspectRuntime {
                 if (!(entity instanceof LivingEntity living) || !living.isAlive()
                         || !target.typeId().equals(Registries.ENTITY_TYPE.getId(entity.getType()).toString())
                         || !senses.classifier().classifyMobDisposition(client.player.getUuid(),living).ambientEligible()
-                        || !vision.entity(client.world,entity,16)) return null;
+                        || !vision.entity(client.world,entity,NearbyComposition.MOB_ENTER)) return null;
                 return resolved(new Point(entity.getX(),entity.getY(),entity.getZ()),bounds(entity.getBoundingBox()),shape);
             }
             return null;
@@ -104,7 +105,7 @@ public final class BodyInspectRuntime {
         if (!client.world.getChunkManager().isChunkLoaded(pos.getX()>>4,pos.getZ()>>4)) return null;
         var state=client.world.getBlockState(pos);
         if (state.isAir() || !target.typeId().equals(Registries.BLOCK.getId(state.getBlock()).toString())
-                || !vision.point(client.world,Vec3d.ofCenter(pos),pos,21)) return null;
+                || !vision.point(client.world,Vec3d.ofCenter(pos),pos,NearbyComposition.BLOCK_RAY_RANGE)) return null;
         return resolved(new Point(pos.getX()+.5,pos.getY()+.5,pos.getZ()+.5),
             new BodyApproachGeometry.Bounds(pos.getX(),pos.getY(),pos.getZ(),pos.getX()+1,pos.getY()+1,pos.getZ()+1),shape);
     }

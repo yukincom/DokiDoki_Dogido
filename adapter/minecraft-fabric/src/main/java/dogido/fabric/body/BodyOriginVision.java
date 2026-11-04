@@ -5,6 +5,10 @@ import dogido.lab.api.BodyProtocol.Visibility;
 import dogido.lab.api.perception.BodyVisibility;
 import dogido.lab.api.perception.BodyVisionGeometry;
 import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+import java.util.function.Function;
 import net.minecraft.block.ShapeContext;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.entity.Entity;
@@ -24,7 +28,11 @@ final class BodyOriginVision implements ObservationOrigin.Sight {
     private final Vec3d eye;
     private final double yaw, pitch;
     private final BodyAttention.View attention;
-    private static final class Budget { int rays, missed; }
+    private record Ray(Vec3d target, BlockPos allowedBlock) {}
+    private static final class Budget {
+        int rays, missed;
+        final Map<Ray,BodyVisibility.Trace> traces = new HashMap<>();
+    }
     private final int rayLimit;
     private final Budget budget;
     BodyOriginVision(long tick, Vec3d eye, double yaw, double pitch) {
@@ -41,6 +49,10 @@ final class BodyOriginVision implements ObservationOrigin.Sight {
     BodyOriginVision forThreats() {
         return new BodyOriginVision(tick,eye,yaw,pitch,null,budget,MAX_RAYS - 64 * 3);
     }
+    /** 同じ視認frameから注目候補を絞る。実rayと予算は周辺観測と共有し、同じ点を再走査しない。 */
+    BodyOriginVision forAttention(BodyAttention.View view) {
+        return new BodyOriginVision(tick,eye,yaw,pitch,view,budget,rayLimit);
+    }
     /** 全frameの共通予算。section前後の差だけが、その走査で測れなかったrayを表す。 */
     int missedRays() { return budget.missed; }
 
@@ -53,8 +65,11 @@ final class BodyOriginVision implements ObservationOrigin.Sight {
         return true;
     }
     @Override public boolean entity(ClientWorld world, Entity target, double range) {
-        if (attention != null && !attention.entity(target.getUuid())) return false;
-        var box = target.getBoundingBox();
+        return entity(world,target.getUuid(),target.getBoundingBox(),range);
+    }
+    /** 広い視野で取得済みの同一frameの個体にも、同じ実測点と集中条件を使う。 */
+    boolean entity(ClientWorld world, UUID id, Box box, double range) {
+        if (attention != null && !attention.entity(id)) return false;
         double x = (box.minX+box.maxX)/2, z = (box.minZ+box.maxZ)/2, h = box.getLengthY();
         return visible(world,List.of(new Vec3d(x,box.minY+h*.25,z),
             new Vec3d(x,box.minY+h*.55,z),new Vec3d(x,box.minY+h*.85,z)),null,range);
@@ -65,13 +80,14 @@ final class BodyOriginVision implements ObservationOrigin.Sight {
         return visible(world,List.of(target),allowedBlock,range);
     }
     private boolean visible(ClientWorld world, List<Vec3d> targets, BlockPos allowedBlock, double range) {
-        // FOLLOWの近傍注意は向き付きの箱。狭い後方も含むので、従来の前方FOVを重ねて図の範囲を削らない。
-        // 敵とownerの視認はattentionなしの既存FOVを呼出元が使う。
-        if (attention != null) {
-            return attention.visible(targets,range,target -> trace(world,target,allowedBlock));
-        }
+        return visible(targets,range,target -> trace(world,target,allowedBlock));
+    }
+    /** 周囲は通常FOV、注目候補はその中の注意範囲。集中しても視認そのものを置き換えない。 */
+    boolean visible(List<Vec3d> targets, double range, Function<Vec3d,BodyVisibility.Trace> trace) {
+        if (attention != null) targets = targets.stream().filter(attention::contains).toList();
+        if (targets.isEmpty()) return false;
         var observation = BodyVisionGeometry.observe(tick,eye,yaw,pitch,range,
-            BodyVisionGeometry.HORIZONTAL_FOV,BodyVisionGeometry.VERTICAL_FOV,targets,target -> trace(world,target,allowedBlock));
+            BodyVisionGeometry.HORIZONTAL_FOV,BodyVisionGeometry.VERTICAL_FOV,targets,trace);
         return observation.playerVisibility() == Visibility.VISIBLE;
     }
     boolean takeRay() {
@@ -80,9 +96,19 @@ final class BodyOriginVision implements ObservationOrigin.Sight {
         return true;
     }
     private BodyVisibility.Trace trace(ClientWorld world, Vec3d target, BlockPos allowedBlock) {
+        return trace(target,allowedBlock,() -> BodyVisibility.trace(world,area -> loaded(world,area),eye,target,
+            ShapeContext.absent(),BodyVisibility.Purpose.VISION,allowedBlock));
+    }
+    BodyVisibility.Trace trace(Vec3d target, BlockPos allowedBlock, java.util.function.Supplier<BodyVisibility.Trace> measure) {
+        var key = new Ray(target,allowedBlock);
+        var retained = budget.traces.get(key);
+        if (retained != null) {
+            if (retained == BodyVisibility.Trace.UNAVAILABLE) budget.missed++;
+            return retained;
+        }
         if (!takeRay()) return BodyVisibility.Trace.UNAVAILABLE;
-        var result=BodyVisibility.trace(world,area -> loaded(world,area),eye,target,
-            ShapeContext.absent(),BodyVisibility.Purpose.VISION,allowedBlock);
+        var result=measure.get();
+        budget.traces.put(key,result);
         if (result == BodyVisibility.Trace.UNAVAILABLE) budget.missed++;
         return result;
     }

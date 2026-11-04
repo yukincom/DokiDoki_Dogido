@@ -19,6 +19,7 @@ import net.minecraft.registry.Registries;
 import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.math.Box;
 import net.minecraft.village.VillagerProfession;
 import net.minecraft.village.VillagerType;
 import org.slf4j.Logger;
@@ -29,7 +30,7 @@ import static dogido.fabric.observation.ObservationGeometry.classifyVertical;
 import static dogido.fabric.observation.ObservationVisibility.hasLineOfSight;
 
 public final class AmbientMobObserver {
-    private static final double AMBIENT_MOB_DISTANCE = 16.0;
+    private static final double AMBIENT_MOB_DISTANCE = NearbyComposition.MOB_ENTER;
     private final NearbyComposition.RangeTracker nearbyMobKinds =
         new NearbyComposition.RangeTracker(NearbyComposition.MOB_ENTER, NearbyComposition.MOB_EXIT);
     private JsonObject nearbyMobComposition = NearbyComposition.mobs(List.of());
@@ -42,7 +43,7 @@ public final class AmbientMobObserver {
         this.logger = logger;
     }
 
-    public record VisibleMob(java.util.UUID entityId,String typeId,String label,Vec3d position) {}
+    public record VisibleMob(java.util.UUID entityId,String typeId,String label,Vec3d position,Box bounds) {}
     private List<VisibleMob> bodyVisibleMobs = List.of();
     public List<VisibleMob> bodyVisibleMobs() { return bodyVisibleMobs; }
 
@@ -85,7 +86,7 @@ public final class AmbientMobObserver {
 
             Vec3d entityPosition = new Vec3d(entity.getX(), entity.getY(), entity.getZ());
             if (origin.body() && distance <= AMBIENT_MOB_DISTANCE)
-                visibleMobs.add(new VisibleMob(entity.getUuid(),Registries.ENTITY_TYPE.getId(entity.getType()).toString(),entity.getName().getString(),entityPosition));
+                visibleMobs.add(new VisibleMob(entity.getUuid(),Registries.ENTITY_TYPE.getId(entity.getType()).toString(),entity.getName().getString(),entityPosition,entity.getBoundingBox()));
             Boolean isBaby = null;
             String profession = null;
             String villagerType = null;
