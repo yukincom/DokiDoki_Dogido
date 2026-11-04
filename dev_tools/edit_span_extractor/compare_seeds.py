@@ -1,4 +1,4 @@
-"""devのみでseedを固定してから、全seedを同じ未使用評価セットで比較する。
+"""devのみでseedを固定してから、全seedを同じ評価セットと既知回帰で比較する。
 
 見込み: 句・依頼文を分離した評価で丸暗記とseed依存を見分ける。
 合格目安: 合成test完全一致95%以上。実対話は件数と全失敗を別集計する。
@@ -60,12 +60,15 @@ def main():
     if args.device == 'mps' and not torch.backends.mps.is_available():
         raise RuntimeError('MPS unavailable')
     summary = []
+    set_names = ['test', 'new_real_test', 'real_test', 'regression']
+    if (args.data / 'previous_test.jsonl').exists():
+        set_names.append('previous_test')
     for run in runs:
         codec = CharacterCodec(run / 'model' / 'vocab.txt')
         model = BertForTokenClassification.from_pretrained(run / 'model', local_files_only=True,
             attn_implementation='sdpa').to(args.device)
         report = {'seed': int(run.name.removeprefix('seed-')), 'sets': {}}
-        for name in ['test', 'new_real_test', 'real_test', 'regression']:
+        for name in set_names:
             results = predict_rows(model, codec, read_jsonl(args.data / f'{name}.jsonl'), args.device, 48)
             report['sets'][name] = metrics(results)
             report['sets'][name]['by_variant'] = {variant: metrics([r for r in results if r.get('variant', 'real') == variant])
@@ -95,10 +98,14 @@ def main():
         if args.device == 'mps':
             torch.mps.empty_cache()
     aggregate = {}
-    for name in ['test', 'new_real_test', 'real_test', 'regression']:
+    for name in set_names:
         rates = [r['sets'][name]['all']['exact_rate'] for r in summary]
         aggregate[name] = {'mean': statistics.mean(rates), 'min': min(rates), 'max': max(rates), 'std_population': statistics.pstdev(rates)}
-    write_json(args.output / 'comparison.json', {'selection': selection, 'seeds': summary, 'aggregate': aggregate})
+    write_json(args.output / 'comparison.json', {'selection': selection, 'seeds': summary, 'aggregate': aggregate,
+        'evaluation_scope': {'test': 'synthetic held-out phrases/templates',
+            'new_real_test': 'known regression since v2', 'real_test': 'known regression since v1',
+            'regression': 'known three utterances and their ASR variants',
+            'previous_test': 'unchanged v2 synthetic test, now regression'}})
 
 
 if __name__ == '__main__':

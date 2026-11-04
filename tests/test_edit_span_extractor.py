@@ -16,6 +16,7 @@ from span_model import CharacterCodec, decode_spans, span_key, validate_spans
 from build_dataset import group_poems, render, TEMPLATES
 from augmentation import kana_template, prepare
 from compare_seeds import select_seed
+from rebalance_dataset import checked_variants, profile_plan, summarize
 
 
 class SpanContractTests(unittest.TestCase):
@@ -110,6 +111,29 @@ class SpanContractTests(unittest.TestCase):
             test.write_text('{}\n')
             with self.assertRaises(ValueError):
                 select_seed(runs, data)
+
+
+    def test_balance_counts_slot_spelling_not_request_verbs(self):
+        # 見込み: 依頼の「変更」だけが漢字でも漢字語句の教材として数えない。
+        # 合格: 漢字を含む依頼2件のうち、抽出語が漢字のものだけ1件を計上。統計処理のみ。
+        samples = []
+        for text in ["あめ", "雨"]:
+            utterance, spans = render("{new}に変更して", {"new": text})
+            samples.append({"text": utterance, "spans": spans})
+        result = summarize(samples)
+        self.assertEqual(result["utterance_has_kanji"], 2)
+        self.assertEqual(result["positive_with_kanji_slot"], 1)
+        self.assertEqual(result["positive_all_kana_slots"], 1)
+
+    def test_balance_preserves_counts_and_split_annotations(self):
+        # 見込み: 配分を固定し、他分割の表記案を誤って学習へ渡さない。
+        # 合格: 100件中漢字50/仮名30/崩れ20、知らない素材への注釈は例外。モデル未使用。
+        plan = profile_plan(100, random.Random(42))
+        self.assertEqual({key: plan.count(key) for key in set(plan)}, {"kanji": 50, "kana": 30, "asr_noise": 20})
+        with self.assertRaises(ValueError):
+            checked_variants([{"text": "あめ"}], {"ゆき": ["雪"]})
+        with self.assertRaises(ValueError):
+            checked_variants([{"text": "あめ"}], {"あめ": ["あめ"]})
 
 
 if __name__ == "__main__":
