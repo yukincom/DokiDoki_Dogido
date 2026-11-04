@@ -115,6 +115,9 @@ public final class SoundObserver {
     private UUID lastOminousSource, lastOminousReceiver;
     private boolean bodyHearingTruncated;
     private final BodySoundDeduplicator bodySoundDeduplicator = new BodySoundDeduplicator();
+    record BodySource(UUID id, String type, Vec3d position, MobIdentityObservation identity,
+                      boolean observed, double retentionRange) {}
+    private List<BodySource> bodySources = List.of();
 
     private final double audioThreatDistance;
     private final MobClassifier mobClassifier;
@@ -152,8 +155,53 @@ public final class SoundObserver {
     public void resetRetainedSounds() {
         this.bodyHearingTruncated = false;
         this.bodySoundDeduplicator.reset();
+        this.bodySources = List.of();
         this.recentSoundObservations.clear();
         this.recentAmbientSoundObservations.clear();
+    }
+
+    /** 今回の視認対象と、実音が継続中の既知個体だけ。視覚の観測表や発音時刻は変更しない。 */
+    public void updateBodySoundSources(ObservationOrigin origin, ClientWorld world, Map<UUID, Double> observed) {
+        var known = new HashMap<UUID, Double>();
+        long now = System.nanoTime();
+        for (var sound : bodySoundRecords()) {
+            var association = sourceAssociation(sound);
+            if (association != null && SoundObservationPolicy.ageMillis(now,sound.heardAtNanos()) <= SOUND_OBSERVATION_TTL_TICKS*50L)
+                known.put(sound.entityUuid(),association.get("retention_range").getAsDouble());
+        }
+        var sources = new ArrayList<BodySource>();
+        for (Entity candidate : world.getEntities()) {
+            UUID id = candidate.getUuid();
+            Double range = observed.getOrDefault(id,known.get(id));
+            if (range == null || origin.isSelf(candidate) || !(candidate instanceof LivingEntity living)
+                    || !living.isAlive() || origin.distanceTo(candidate) > range) continue;
+            sources.add(new BodySource(id,entityTypeName(candidate),candidate.getEntityPos(),mobIdentity(candidate),
+                observed.containsKey(id),range));
+        }
+        updateBodySoundSources(origin,sources);
+    }
+    void updateBodySoundSources(ObservationOrigin origin, List<BodySource> sources) {
+        var previous = bodySources.stream().map(BodySource::id).collect(java.util.stream.Collectors.toSet());
+        bodySources = sources.stream().filter(source -> Double.isFinite(source.retentionRange())
+            && origin.distanceTo(source.position()) <= source.retentionRange()
+            && (source.observed() || previous.contains(source.id()))).toList();
+    }
+    private List<SoundObservation> bodySoundRecords() {
+        return java.util.stream.Stream.concat(recentSoundObservations.stream(),recentAmbientSoundObservations.stream()).toList();
+    }
+    private static com.google.gson.JsonObject sourceAssociation(SoundObservation sound) {
+        return sound.entityUuid() != null && sound.sourceContext() != null
+            && sound.sourceContext().has("observed_source") ? sound.sourceContext().getAsJsonObject("observed_source") : null;
+    }
+    private BodySource bodySoundSource(String event, Vec3d position, UUID direct, long heardAt) {
+        var candidates = bodySources.stream().filter(source -> source.observed() || bodySoundRecords().stream().anyMatch(old ->
+            source.id().equals(old.entityUuid()) && event.equals(old.soundEvent()) && sourceAssociation(old) != null
+                && Math.abs(heardAt-old.heardAtNanos()) <= SOUND_OBSERVATION_TTL_TICKS*50_000_000L)).toList();
+        UUID matched = direct != null ? direct : SoundObservationPolicy.observedSoundSource(event,
+            new SoundObservationPolicy.Point(position.x,position.y,position.z),candidates.stream().map(source ->
+                new SoundObservationPolicy.MobSource(source.id(),source.type(),new SoundObservationPolicy.Point(
+                    source.position().x,source.position().y,source.position().z))).toList());
+        return candidates.stream().filter(source -> source.id().equals(matched)).findFirst().orElse(null);
     }
 
     public void clearAmbientSounds() {
@@ -442,18 +490,31 @@ public final class SoundObserver {
         // UUID付きの実音は既に発音者が確定している。分類表に無いplayer音も捨てず、音IDと由来をそのまま運ぶ。
         if (label == null && entityId != null && entityId.equals(origin.threatTargetId())) label = "environment:player_action";
         if (label == null) return;
-        String incomingId = entityId == null ? unresolvedSoundSourceId(source,soundId) : entityId.toString();
         long now = System.nanoTime();
         long incomingHeardAt = now-ageMs*1_000_000L;
+        BodySource associated = bodySoundSource(soundId,source,entityId,incomingHeardAt);
+        UUID incomingEntityId = entityId != null ? entityId : associated == null ? null : associated.id();
+        String incomingId = incomingEntityId == null ? unresolvedSoundSourceId(source,soundId) : incomingEntityId.toString();
         var stamp = this.bodySoundDeduplicator.reconcile(soundId,source,incomingHeardAt,incomingId,server,now);
         // 一対一で照合できた同じ発音だけからUUIDと採取時の根拠を引き継ぐ。
         var paired = java.util.stream.Stream.concat(this.recentSoundObservations.stream(),this.recentAmbientSoundObservations.stream())
             .filter(old -> old.sourceId().equals(stamp.previousSourceId()) && soundId.equals(old.soundEvent())
                 && old.heardAtNanos() == stamp.previousHeardAt()).findFirst().orElse(null);
-        UUID effectiveEntityId = entityId != null ? entityId : paired == null ? null : paired.entityUuid();
-        String id = effectiveEntityId == null ? incomingId : effectiveEntityId.toString();
+        UUID effectiveEntityId = incomingEntityId != null ? incomingEntityId : paired == null ? null : paired.entityUuid();
         var evidence = sourceContext != null ? sourceContext.deepCopy()
             : paired == null || paired.sourceContext() == null ? null : paired.sourceContext().deepCopy();
+        if (associated != null) {
+            if (evidence == null) evidence = new com.google.gson.JsonObject();
+            var link = new com.google.gson.JsonObject();
+            link.addProperty("entity_id",associated.id().toString());
+            link.addProperty("type",associated.type());
+            link.addProperty("basis",associated.observed() ? "observed" : "continued");
+            link.addProperty("inferred",entityId == null && (paired == null || paired.entityUuid() == null
+                || sourceAssociation(paired) != null && sourceAssociation(paired).get("inferred").getAsBoolean()));
+            link.addProperty("retention_range",associated.retentionRange());
+            evidence.add("observed_source",link);
+        }
+        String id = effectiveEntityId == null ? incomingId : effectiveEntityId.toString();
         long latestPairTime = Math.max(incomingHeardAt,stamp.previousHeardAt());
         // 同じ発音の遅い配送は、交戦前の通常音を新しい警告にしない。
         boolean threat = mobSound && mobClassifier.hasOpponent(origin.threatTargetId(), effectiveEntityId)
@@ -475,7 +536,8 @@ public final class SoundObserver {
             this.recentAmbientSoundObservations.removeIf(old -> old.sourceId().equals(stamp.previousSourceId()) && soundId.equals(old.soundEvent()));
         }
         var observation = new SoundObservation(heardTick,heardAt,effectiveEntityId,id,label,soundId,
-            source.x,source.y,source.z,true,entity != null ? mobIdentity(entity) : paired == null ? null : paired.identity(),evidence);
+            source.x,source.y,source.z,true,associated != null ? associated.identity()
+                : entity != null ? mobIdentity(entity) : paired == null ? null : paired.identity(),evidence);
         Deque<SoundObservation> target = threat ? this.recentSoundObservations : this.recentAmbientSoundObservations;
         // 遅れて届いた同じ音で、既に新しい実音の記録を巻き戻さない。
         if (target.stream().anyMatch(old -> old.sourceId().equals(id) && (threat || soundId.equals(old.soundEvent())) && old.heardAtNanos() > heardAt+100_000_000L)) return;

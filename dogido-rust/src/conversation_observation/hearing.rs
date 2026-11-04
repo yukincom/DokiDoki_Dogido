@@ -27,21 +27,46 @@ pub(crate) fn ambient(event: &GameEvent, sound: &AmbientSound) -> Value {
     });
     let attribution = attribution(event.observed_at, sound.heard_ago_ms, owner(event),
         sound.source_id.as_deref(), sound.sound_event.as_deref(), sound.extra.get("source_context"));
-    json!({"description":description(name.or(label.as_deref()), "ambient", sound.sound_event.as_deref(), name.is_some()),
+    let mut fact = json!({"description":description(name.or(label.as_deref()), "ambient", sound.sound_event.as_deref(), name.is_some()),
         "sound_event":sound.sound_event,"direction":sound.direction,"distance_band":sound.distance_band,
         "certainty":sound.certainty,"heard_ago_ms":sound.heard_ago_ms,
         "emitter":attribution.0,"emitter_attribution":attribution.1,
-        "source_survey_status":sound.extra.get("source_context").map(|v| &v["survey"]["status"]),"name":name})
+        "source_survey_status":sound.extra.get("source_context").map(|v| &v["survey"]["status"]),"name":name});
+    observed_source(&mut fact, owner(event), sound.source_id.as_deref(), name, sound.extra.get("source_context"));
+    fact
 }
 pub(crate) fn threat(event: &GameEvent, sound: &AuditoryThreat) -> Value {
     let label = sound.spoken_name_allowed.then(|| crate::environment::ambient::mob_label(&sound.label));
     let attribution = attribution(event.observed_at, sound.heard_ago_ms, owner(event),
         sound.source_id.as_deref(), sound.sound_event.as_deref(), sound.extra.get("source_context"));
-    json!({"category":"hostile","description":description(label.as_deref(), "hostile", sound.sound_event.as_deref(), false),
+    let mut fact = json!({"category":"hostile","description":description(label.as_deref(), "hostile", sound.sound_event.as_deref(), false),
         "sound_event":sound.sound_event,"direction":sound.direction,"distance_band":sound.distance_band,
         "certainty":sound.certainty,"spoken_name_allowed":sound.spoken_name_allowed,
         "heard_ago_ms":sound.heard_ago_ms,"emitter":attribution.0,"emitter_attribution":attribution.1,
-        "source_survey_status":sound.extra.get("source_context").map(|v| &v["survey"]["status"])})
+        "source_survey_status":sound.extra.get("source_context").map(|v| &v["survey"]["status"])});
+    observed_source(&mut fact, owner(event), sound.source_id.as_deref(), None, sound.extra.get("source_context"));
+    fact
+}
+
+/// adapterが観測対象と照合した実音。個体IDは内部照合だけに使い、継続音を現在の視認へ昇格させない。
+fn observed_source(fact: &mut Value, owner: Option<&str>, source: Option<&str>, name: Option<&str>, context: Option<&Value>) {
+    let Some(link) = context.and_then(|v| v.get("observed_source")) else { return; };
+    let Some(id) = source.filter(|id| uuid::Uuid::parse_str(id).is_ok()) else { return; };
+    if link["entity_id"].as_str() != Some(id) { return; }
+    let observation = match link["basis"].as_str() {
+        Some("observed") => "観測した対象に紐付く音",
+        Some("continued") => "以前に観測した対象の同種の継続音",
+        _ => return,
+    };
+    let label = if owner == Some(id) { Some("プレイヤー".to_owned()) } else {
+        name.map(str::to_owned).or_else(|| chat_observation::mob_label(
+            link["type"].as_str().map(|s| s.strip_prefix("minecraft:").unwrap_or(s)), &chat_observation::CatalogLabels))
+    };
+    let Some(label) = label else { return; };
+    let Some(inferred) = link["inferred"].as_bool() else { return; };
+    fact["emitter"] = json!(label);
+    fact["emitter_attribution"] = json!(if inferred { "inferred" } else { "confirmed" });
+    fact["emitter_observation"] = json!(observation);
 }
 pub(crate) fn project(event: &GameEvent, weather_age_ms: u64) -> Value {
     let origin = event.body_origin();

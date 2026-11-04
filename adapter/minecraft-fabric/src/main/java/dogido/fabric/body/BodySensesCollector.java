@@ -129,6 +129,15 @@ public final class BodySensesCollector {
             if (!allPassiveSeen || passive.size() > 64) BodySenseCapacity.incomplete(senses,"passive_mobs");
             senses.add("passive_mobs",EventJsonBuilder.buildPassiveMobs(passive.stream().limit(64).toList()));
 
+            // 音の紐付けは今回の実観測から始める。継続する既知個体には既存の外周マージンを使う。
+            var soundSources = new java.util.HashMap<UUID, Double>();
+            passive.forEach(mob -> soundSources.put(mob.uuid(),NearbyComposition.MOB_EXIT));
+            hostile.stream().filter(ThreatObservation::lineOfSight)
+                .forEach(mob -> soundSources.put(mob.uuid(),threats.scanDistance()));
+            if ("visible".equals(string(sample.getAsJsonObject("vision"),"player_visibility")))
+                soundSources.put(client.player.getUuid(),NearbyComposition.MOB_EXIT);
+            sounds.updateBodySoundSources(origin,client.world,soundSources);
+
             boolean positionLoaded = BodyOriginVision.loaded(client.world,origin.bounds());
             JsonObject climate = measure(senses,"world",() -> worldObserver.buildClimate(client.world,origin.blockPosition(),positionLoaded),new JsonObject());
             JsonObject localWorld = climate;

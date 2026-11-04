@@ -77,6 +77,28 @@ public final class SoundObservationPolicy {
         return result;
     }
 
+    /** 観測済み候補の発音点を照合する。足音は床材名なので生き物の種類とは比較しない。 */
+    static UUID observedSoundSource(String soundEvent, Point sound, List<MobSource> candidates) {
+        String event = soundEvent.replace("minecraft:", "");
+        boolean step = event.startsWith("block.") && event.endsWith(".step");
+        String emitter = mobSoundEmitter(event);
+        if (!step && emitter == null) return null;
+        UUID result = null;
+        // 既存のプレイヤー足音照合と同じ2ブロック。発音と観測配送の間の移動を含む。
+        double closest = 2.0 * 2.0;
+        boolean tied = false;
+        for (MobSource candidate : candidates) {
+            if (!step && !matchesMobSound(emitter, candidate.type().replace("minecraft:", ""))) continue;
+            Point p = candidate.position();
+            double dx = sound.x()-p.x(), dy = sound.y()-p.y(), dz = sound.z()-p.z();
+            double distance = dx*dx+dy*dy+dz*dz;
+            if (!Double.isFinite(distance) || distance > closest) continue;
+            if (result != null && Math.abs(distance-closest) < 0.000001) { tied = true; continue; }
+            result = candidate.id(); closest = distance; tied = false;
+        }
+        return tied ? null : result;
+    }
+
     static UUID entityUuid(String sourceId) {
         if (sourceId == null) return null;
         try {

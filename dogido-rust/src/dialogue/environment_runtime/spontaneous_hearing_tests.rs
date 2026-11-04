@@ -54,6 +54,83 @@ fn submitted_hearing(action: &Speech) -> Value {
     input["world_context"]["observations"]["hearing"].clone()
 }
 
+fn normal_hearing(s: &Session, event: &GameEvent) -> Value {
+    let messages = crate::chat_prompt::messages(&json!({"user_text":"今の音は何？",
+        "world_context":super::super::body_runtime::context_for(s, event),"dialogue_choice":true})).unwrap();
+    let (_, text) = messages[1].content.split_once("【現在の環境観測と変化（会話履歴とは別）】\n").unwrap();
+    let world: Value = serde_json::Deserializer::from_str(text).into_iter::<Value>().next().unwrap().unwrap();
+    world["observations"]["hearing"].clone()
+}
+
+fn linked_sound(id: &str, kind: &str, event: &str, basis: &str) -> Value {
+    let mut row = sound();
+    row["source_id"] = json!(id);
+    row["type"] = json!(kind);
+    row["sound_event"] = json!(event);
+    row["source_context"] = json!({"observed_source":{"entity_id":id,"type":kind,
+        "basis":basis,"inferred":true,"retention_range":21.0}});
+    row
+}
+
+// 見込み: adapterで対象へ紐付けた音は、個体IDを出さずに本人・モブの音として質問と自発入力へ届く。
+// 合格: 両入力の各音に対応するemitterと観測根拠が付き、音種は不変。紐付け結果は模擬でJava採取・実モデルは別確認。
+#[test]
+fn linked_hearing_reaches_both_model_inputs_as_player_and_observed_mob() {
+    let dialogue = server();
+    let mut data = dialogue.data.lock().unwrap();
+    let s = data.sessions.get_mut("hearing").unwrap();
+    let initial = observe(s, 1, json!([]));
+    let owner = initial.body_origin().unwrap().context.as_ref().unwrap().owner_id.clone();
+    let event = observe(s, 2, json!([
+        linked_sound(&owner, "player", "block.grass.step", "observed"),
+        linked_sound("44444444-4444-4444-8444-444444444444", "iron_golem", "entity.iron_golem.step", "observed")
+    ]));
+    let mut pending = action(s, &event, &dialogue.config.combat);
+    prepare_spontaneous_hearing(s, &mut pending, &dialogue.config.combat);
+    for hearing in [normal_hearing(s, &event), submitted_hearing(&pending)] {
+        let rows = hearing["sounds"].as_array().unwrap();
+        assert_eq!(rows.len(), 2);
+        for (event, emitter) in [("block.grass.step", "プレイヤー"), ("entity.iron_golem.step", "アイアンゴーレム")] {
+            let row = rows.iter().find(|row| row["sound_event"] == event).unwrap();
+            assert_eq!(row["emitter"], emitter);
+            assert_eq!(row["emitter_attribution"], "inferred");
+            assert_eq!(row["emitter_observation"], "観測した対象に紐付く音");
+        }
+        assert!(!hearing.to_string().contains(&owner));
+    }
+}
+
+// 見込み: 以前に観測した対象の同種音が外周で続いても未特定へ戻さず、現在見えたとは記録しない。
+// 合格: 自発は同UUIDの継続一件、質問・保持音にも対象名と以前の観測に基づく根拠・元時刻が残る。模擬入力のみ。
+#[test]
+fn linked_hearing_continuity_and_question_retention_keep_the_source_without_new_visual_evidence() {
+    let dialogue = server();
+    let mut data = dialogue.data.lock().unwrap();
+    let s = data.sessions.get_mut("hearing").unwrap();
+    let id = "44444444-4444-4444-8444-444444444444";
+    let event = observe(s, 1, json!([linked_sound(id,"iron_golem","entity.iron_golem.step","observed")]));
+    let mut first = action(s, &event, &dialogue.config.combat);
+    prepare_spontaneous_hearing(s, &mut first, &dialogue.config.combat);
+    let mut continued = linked_sound(id,"iron_golem","entity.iron_golem.step","continued");
+    continued["distance_band"] = json!("far");
+    let event = observe(s, 2, json!([continued]));
+    let mut next = action(s, &event, &dialogue.config.combat);
+    prepare_spontaneous_hearing(s, &mut next, &dialogue.config.combat);
+    let hearing = submitted_hearing(&next);
+    assert_eq!(hearing["sounds"].as_array().unwrap().len(), 1);
+    assert_eq!(hearing["sounds"][0]["presentation"], "継続提示");
+    assert_eq!(hearing["sounds"][0]["emitter"], "アイアンゴーレム");
+    assert_eq!(hearing["sounds"][0]["emitter_observation"], "以前に観測した対象の同種の継続音");
+    assert_eq!(hearing["sounds"][0]["distance_band"], "far");
+    let event = observe(s, 3, json!([]));
+    let retained = normal_hearing(s, &event);
+    let row = &retained["sounds"][0];
+    assert_eq!(row["emitter"], "アイアンゴーレム");
+    assert_eq!(row["emitter_observation"], "以前に観測した対象の同種の継続音");
+    assert_eq!(row["basis"], "retained_sound");
+    assert!(row["heard_ago_ms"].as_i64().unwrap() >= 1000);
+}
+
 // 見込み: 同じ音の再提示だけが継続になり、質問側は音の年齢・由来を含む元の材料を引き続き参照できる。
 // 合格: 初回→継続、更新予約のみでは初回、保持音はretained_sound。通常チャット入力と保存メモは前後で一致。模擬入力のみ。
 #[test]
