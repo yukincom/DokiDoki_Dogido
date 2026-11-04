@@ -23,6 +23,7 @@ from transformers import BertForTokenClassification
 import transformers
 
 from span_model import CharacterCodec, LABELS, LABEL_TO_ID, collate, metrics, predict_rows, read_jsonl, write_json
+from early_stopping import EarlyStopping
 
 
 def synchronize(device):
@@ -41,7 +42,10 @@ def main():
     parser.add_argument("--learning-rate", type=float, default=3e-5)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--defer-evaluation", action="store_true", help="Save dev-selected model; leave all final sets untouched")
+    parser.add_argument("--early-stopping-patience", type=int, default=0,
+                        help="Stop after this many epochs without dev improvement; 0 disables")
     args = parser.parse_args()
+    progress = EarlyStopping(args.early_stopping_patience)
     status_path = args.data / "dataset-status.json"
     if status_path.exists() and json.loads(status_path.read_text()).get("training_allowed") is False:
         raise ValueError("この教材は学習対象外です。dataset-status.jsonを確認してください")
@@ -75,7 +79,7 @@ def main():
         return (step + 1) / warmup if step < warmup else max(0.0, (total_steps - step) / (total_steps - warmup))
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, schedule)
     loss_fn = torch.nn.CrossEntropyLoss(ignore_index=-100)
-    best = (-1, -1.0)
+    stop_reason = "max_epochs"
     started = time.perf_counter()
     history = []
     for epoch in range(1, args.epochs + 1):
@@ -101,21 +105,28 @@ def main():
         dev_rows = predict_rows(model, codec, splits["dev"], args.device, args.batch_size)
         dev_metrics = metrics(dev_rows)
         key = (dev_metrics["all"]["exact"], dev_metrics["all"]["span_f1"] or 0.0)
-        selected = key > best
+        selected = progress.observe(key)
         if selected:
-            best = key
             model.save_pretrained(args.output / "model", safe_serialization=True)
             shutil.copy2(args.base / "vocab.txt", args.output / "model" / "vocab.txt")
             shutil.copy2(args.base / "provenance.json", args.output / "model" / "base-provenance.json")
             write_json(args.output / "selection.json", {"epoch": epoch, "dev_metrics": dev_metrics})
         record = {"epoch": epoch, "dev_metrics": dev_metrics, "selected": selected,
+            "stale_epochs": progress.stale_epochs,
             "train_loss": loss_sum / ((len(train_items) + args.batch_size - 1) // args.batch_size),
             "elapsed_s": round(time.perf_counter() - started, 3)}
         history.append(record)
         write_json(args.output / "training-history.json", history)
         print(json.dumps(record, ensure_ascii=False), flush=True)
+        if progress.should_stop:
+            stop_reason = "dev_no_improvement"
+            print(json.dumps({"event": "early_stop", "epoch": epoch,
+                "stale_epochs": progress.stale_epochs, "patience": progress.patience}), flush=True)
+            break
     if args.defer_evaluation:
-        write_json(args.output / "training-complete.json", {"elapsed_s": time.perf_counter() - started, "evaluation": "deferred"})
+        write_json(args.output / "training-complete.json", {"elapsed_s": time.perf_counter() - started,
+            "evaluation": "deferred", "epochs_completed": len(history), "stop_reason": stop_reason,
+            "early_stopping_patience": progress.patience})
         return
     del model, optimizer
     if args.device == "mps":
