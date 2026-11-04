@@ -1,5 +1,10 @@
 use super::*;
 
+// 視認のMarkdown一覧に続く、既存の環境・履歴JSONを読む。
+fn model_context(content: &str) -> Value {
+    serde_json::from_str(content.lines().last().unwrap()).unwrap()
+}
+
 fn attach(action: &mut Speech, event: &GameEvent, recent: &Value) {
     super::attach(action, event, &Settings::default());
     if let Some(leaf) = action.leaf.as_mut().filter(|leaf| leaf.kind == KIND) {
@@ -67,7 +72,7 @@ fn reaction_request_keeps_trigger_knowledge_without_capture_bookkeeping() {
                 "villager_routines":{"usage":"unrelated routine"}}}}});
     let original = input.clone();
     let p = Prepared::new(&input, "fixture").unwrap();
-    let body: Value = serde_json::from_str(&p.request.messages[1].content).unwrap();
+    let body: Value = model_context(&p.request.messages[1].content);
     assert_eq!(body["catalog_knowledge"]["entries"].as_array().unwrap().len(), 1);
     assert_eq!(body["catalog_knowledge"]["entries"][0]["id"], "panda");
     assert!(body.get("villager_routines").is_none() && body.get("visual_capture").is_none());
@@ -157,7 +162,7 @@ fn smell_context_preserves_components_and_strength_without_inventing_spatial_inf
     attach(&mut a, &e, &json!({}));
     assert!(a.cue_id.is_none());
     let p = prepared(&a);
-    let parsed: Value = serde_json::from_str(&p.request.messages[1].content).unwrap();
+    let parsed: Value = model_context(&p.request.messages[1].content);
     let context = parsed["observations"]["smell"].to_string();
     assert!(
         context.contains("effective_strength")
@@ -245,7 +250,7 @@ fn resolved_strength_reaches_the_model_and_change_invalidates_old_speech() {
     let mut a = action("smell", json!({}));
     attach(&mut a, &e, &json!({}));
     let p = prepared(&a);
-    let context: Value = serde_json::from_str(&p.request.messages[1].content).unwrap();
+    let context: Value = model_context(&p.request.messages[1].content);
     let observed_smell = &context["observations"]["smell"]["components"][0];
     assert_eq!(observed_smell["effective_strength"], 5);
     for hidden in [
@@ -319,15 +324,15 @@ fn underground_forest_is_a_location_not_a_visible_surface_scene() {
     attach(&mut a, &e, &json!({}));
     let p = prepared(&a);
     assert_eq!(
-        serde_json::from_str::<Value>(&p.request.messages[1].content).unwrap()["observations"]["location_biome"],
+        model_context(&p.request.messages[1].content)["observations"]["location_biome"],
         "森林"
     );
     assert_eq!(
-        serde_json::from_str::<Value>(&p.request.messages[1].content).unwrap()["observations"]["biome_scene_visible"],
+        model_context(&p.request.messages[1].content)["observations"]["biome_scene_visible"],
         false
     );
     assert_eq!(
-        serde_json::from_str::<Value>(&p.request.messages[1].content).unwrap()["observations"]["overhead_cover"],
+        model_context(&p.request.messages[1].content)["observations"]["overhead_cover"],
         "stone"
     );
 }
@@ -361,11 +366,11 @@ fn strike_without_sound_does_not_invent_heard_thunder() {
     attach(&mut a, &e, &json!({}));
     let p = prepared(&a);
     assert_eq!(
-        serde_json::from_str::<Value>(&p.request.messages[1].content).unwrap()["observations"]["thunder_heard"],
+        model_context(&p.request.messages[1].content)["observations"]["thunder_heard"],
         false
     );
     assert_eq!(
-        serde_json::from_str::<Value>(&p.request.messages[1].content).unwrap()["observations"]["nearby_lightning_observed"],
+        model_context(&p.request.messages[1].content)["observations"]["nearby_lightning_observed"],
         true
     );
     assert_eq!(outcome(&p, "近くに落ちたな、びっくりしたわ。").1, "speak");
@@ -384,7 +389,7 @@ fn final_environment_input_uses_shared_weather_situations_and_actual_scream_stat
         );
         attach(&mut thunder, &e, &json!({}));
         let request = prepared(&thunder).request;
-        let context: Value = serde_json::from_str(&request.messages[1].content).unwrap();
+        let context: Value = model_context(&request.messages[1].content);
         assert_eq!(context["event"], "thunder_reaction");
         assert_eq!(context["situation"], "雷鳴が聞こえた。");
         assert_eq!(context["observations"]["thunder_heard"], true);
@@ -436,7 +441,7 @@ fn mixed_components_reach_model_and_fixed_answer_without_order_dependent_guards(
     let mut a = action("smell", json!({}));
     attach(&mut a, &e, &json!({}));
     let p = prepared(&a);
-    let context: Value = serde_json::from_str(&p.request.messages[1].content).unwrap();
+    let context: Value = model_context(&p.request.messages[1].content);
     let components = &context["observations"]["smell"]["components"];
     assert_eq!(components[0]["smell_id"], "soup");
     assert_eq!(components[0]["effective_strength"], 3);
@@ -601,7 +606,7 @@ fn spontaneous_history_labels_speakers_without_changing_stored_roles_or_events()
     attach(&mut a, &event(json!({})), &json!({"conversation":conversation}));
     let details = a.leaf.as_ref().unwrap().details.clone();
     let p = prepared(&a);
-    let context: Value = serde_json::from_str(&p.request.messages[1].content).unwrap();
+    let context: Value = model_context(&p.request.messages[1].content);
     assert_eq!(context["recent"]["conversation"],
         crate::dialogue::history::History::lines_for(conversation.as_array().unwrap()));
     assert_eq!(a.leaf.as_ref().unwrap().details, details);

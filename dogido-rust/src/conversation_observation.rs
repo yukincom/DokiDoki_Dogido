@@ -11,6 +11,7 @@ mod body_facts;
 pub(crate) mod image_timing;
 pub(crate) mod hearing;
 pub(crate) mod subjects;
+pub(crate) mod sight;
 
 /// Reuse catalogue-name extraction on the current turn. The existing mob-query
 /// route may also use the latest named completed line; an empty result must not

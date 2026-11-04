@@ -305,6 +305,7 @@ impl Prepared {
             .context("reaction context")?
             .clone();
         let mut context = context;
+        let sight = context.get("world_context").map(crate::conversation_observation::sight::Sight::from_world);
         // モデルに渡すコピーには今回の反応・操作に必要な情報だけを載せる。撮影ID・絶対時刻・処理番号は内部照合用。
         // 保存行の複製だけを通常会話と同じ表示へ投影する。
         if let Some(conversation) = context.get_mut("recent")
@@ -373,6 +374,9 @@ impl Prepared {
             system.push('\n');
             system.push_str(&crate::companion_prompt::environment_body_examples(options));
         }
+        let sight = sight.zip(context.get_mut("world_context"))
+            .map(|(sight, world)| sight.present(world)).unwrap_or_default();
+        let context = serde_json::to_string(&context)?;
         let request = GenerationRequest {
             schema_version: 1,
             kind: KIND.into(),
@@ -384,7 +388,7 @@ impl Prepared {
                 },
                 ChatMessage {
                     role: Role::User,
-                    content: serde_json::to_string(&context)?,
+                    content: if sight.is_empty() { context } else { format!("{sight}\n{context}") },
                 },
             ],
             temperature: 0.65,

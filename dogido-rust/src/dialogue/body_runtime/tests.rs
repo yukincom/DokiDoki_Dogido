@@ -941,7 +941,7 @@ fn local_block_highlights_reach_both_dialogues_only_in_quiet_scenes() {
             "kind":crate::environment::reaction::KIND,"model":"fixture","max_tokens":200,"fallback_text":"",
             "details":{"reaction_context":{"topic":"surroundings","world_context":world}},
         }), "fixture").unwrap();
-        let context: Value = serde_json::from_str(&reaction.request.messages[1].content).unwrap();
+        let context: Value = serde_json::from_str(reaction.request.messages[1].content.lines().last().unwrap()).unwrap();
         if extra_blocks == 0 && extra_mobs == 0 && ranked {
             assert_eq!(context["world_context"]["observations"][FIELD], json!(["ポピー","タンポポ"]));
         }

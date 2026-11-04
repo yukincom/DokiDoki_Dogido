@@ -61,7 +61,7 @@ fn submitted_hearing(action: &Speech) -> Value {
     let prepared = crate::environment::reaction::Prepared::new(
         &json!({"kind":"environment_reaction","model":"fixture","max_tokens":128,
             "fallback_text":"","details":action.leaf.as_ref().unwrap().details}), "fixture").unwrap();
-    let input: Value = serde_json::from_str(&prepared.request.messages[1].content).unwrap();
+    let input: Value = serde_json::from_str(prepared.request.messages[1].content.lines().last().unwrap()).unwrap();
     assert!(!prepared.request.messages[1].content.contains("44444444-4444-4444-8444-444444444444"));
     input["world_context"]["observations"]["hearing"].clone()
 }

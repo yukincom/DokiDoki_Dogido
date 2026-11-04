@@ -376,6 +376,7 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
     // モデルには今回の問いに必要な観測だけを渡す。内部更新番号や無関係な村人の日課は観測台帳に留める。
     let world_block = if d["world_context"].is_object() {
         let mut world = d["world_context"].clone();
+        let sight = crate::conversation_observation::sight::Sight::from_world(&world);
         crate::conversation_observation::strip_model_bookkeeping(&mut world);
         let topics = crate::conversation_observation::chat_topic_mobs(
             text(d, "user_text", ""), text(d, "conversation_history", ""), flag(d, "asks_mob_information"));
@@ -418,8 +419,9 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
             .as_object_mut()
             .unwrap()
             .shift_remove("villager_routines");
+        let sight = sight.present(&mut world);
         let mut block = format!(
-            "【現在の環境観測と変化（会話履歴とは別）】\n{}\n",
+            "{sight}\n【現在の環境観測と変化（会話履歴とは別）】\n{}\n",
             crate::text_format::spaced_json(&world)
         );
         if let Some(knowledge) = knowledge.filter(|value| !value.is_null()) {
@@ -563,8 +565,8 @@ mod tests {
     use super::*;
     use serde_json::json;
     // 見込み: 共通聴覚へ移した後は旧音メモ入力を拒否し、新形式の固定要求を保てる。合格: 現行ケースは全文一致、廃止項目を持つケースはエラー。確認範囲: prompt構築だけ。実モデルの意味理解は未検査。
-    // 見込み: 話題を絞れない会話の材料は保ち、内部revisionを送信から除く。
-    // 合格: 固定入力からsystem/userが期待どおりになり、廃止された聴覚入力は拒否する。実モデルは対象外。
+    // 見込み: 視認の未取得も新しい見出しで明記し、他の会話材料は保てる。
+    // 合格: 固定入力の全文が一致し、内部revisionはなく、廃止聴覚入力は拒否。実モデルは対象外。
     #[test]
     fn initial_messages_match_fixture() {
         let fixture: Value =

@@ -158,7 +158,7 @@ fn environment_preserves_selected_contract_and_keeps_candidate_examples_last() {
                     }
                 }
                 assert_eq!(
-                    serde_json::from_str::<Value>(&prepared.request.messages[1].content).unwrap(),
+                    serde_json::from_str::<Value>(prepared.request.messages[1].content.lines().last().unwrap()).unwrap(),
                     context
                 );
             }

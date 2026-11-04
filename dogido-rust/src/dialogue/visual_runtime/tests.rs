@@ -377,7 +377,7 @@ async fn image_notice_refreshes_all_current_facts_and_history_in_the_common_cont
 }
 
 // 見込み: 環境判断一回に前後画像・変化一文・観測・履歴と件数を指定しない反復回避指示を渡せる。
-// 合格: 模擬HTTP一件でsilent、共有指示はsystemに一度。カメ・天候・匂い・履歴と撮影との時間差を保持し、撮影台帳・内部revisionを送らない。実モデルは対象外。
+// 合格: 模擬HTTP一件でsilent、共有指示はsystemに一度。現在の視認欄にカメ3体があり、天候・匂い・履歴と撮影との時間差を保持し、撮影台帳・内部revisionを送らない。実モデルは対象外。
 #[tokio::test]
 async fn existing_environment_model_gets_one_image_request_and_can_select_silence() {
     let sent=Arc::new(std::sync::Mutex::new(Vec::<Value>::new()));let recorded=sent.clone();
@@ -405,15 +405,16 @@ async fn existing_environment_model_gets_one_image_request_and_can_select_silenc
     assert_eq!(requests[0]["messages"].as_array().unwrap().last().unwrap()["content"].as_array().unwrap().last().unwrap()["image_url"]["url"],format!("data:image/png;base64,{PNG}"));
     assert!(requests[0]["messages"][0]["content"].as_str().unwrap().contains(crate::companion_prompt::chat_image()));
     let content = &requests[0]["messages"].as_array().unwrap().last().unwrap()["content"];
-    let context: Value = serde_json::from_str(content[0]["text"].as_str().unwrap()).unwrap();
+    let prompt = content[0]["text"].as_str().unwrap();
+    let context: Value = serde_json::from_str(prompt.lines().last().unwrap()).unwrap();
     let image_text = content.as_array().unwrap().iter().skip(1).filter_map(|p| p["text"].as_str()).collect::<Vec<_>>().join("\n");
     assert!(!image_text.contains("image_observation"));
     assert_eq!(image_text.matches("変わった").count(), 1);
     let observations = &context["world_context"]["observations"];
     assert!(observations["image_timing"][0].as_str().is_some_and(|fact| fact.starts_with("今の観測は撮影")));
     assert!(observations.get("observed_at").is_none());
-    assert_eq!(observations["nearby_mob_types"][0]["id"], "turtle");
-    assert_eq!(observations["nearby_mob_types"][0]["quantity"], 3);
+    assert!(prompt.contains("## いま見えとるもん\n") && prompt.contains("- カメ（3体）\n"));
+    assert!(observations.get("nearby_mob_types").is_none());
     assert_eq!(observations["weather"], "rain");
     assert_eq!(observations["smell"]["components"][0]["effective_strength"], 3);
     assert_eq!(observations["body_observation"]["status"], "observed");
@@ -437,7 +438,7 @@ async fn existing_environment_model_gets_one_image_request_and_can_select_silenc
     let mut without_image = input.clone();
     without_image["details"]["reaction_context"].as_object_mut().unwrap().remove("visual_capture");
     let plain = crate::environment::reaction::Prepared::new(&without_image, "fixture").unwrap();
-    let plain: Value = serde_json::from_str(&plain.request.messages[1].content).unwrap();
+    let plain: Value = serde_json::from_str(plain.request.messages[1].content.lines().last().unwrap()).unwrap();
     for key in ["situation", "recent"] { assert_eq!(context[key], plain[key]); }
     assert_eq!(context["world_context"]["observations"], plain["world_context"]["observations"]);
     assert!(plain["world_context"]["changes"].as_array().unwrap().iter().any(|c| c["kind"] == "body_view"));

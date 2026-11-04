@@ -105,7 +105,7 @@ fn acceptance_body_results_current_body_state_accompanies_next_model_options() {
         "acceptance-no-call",
     )
     .unwrap();
-    let model_context: Value = serde_json::from_str(&prepared.request.messages[1].content).unwrap();
+    let model_context: Value = serde_json::from_str(prepared.request.messages[1].content.lines().last().unwrap()).unwrap();
     let options = &model_context["body_options"];
     assert!(
         options["available_actions"]["stay"].is_string(),

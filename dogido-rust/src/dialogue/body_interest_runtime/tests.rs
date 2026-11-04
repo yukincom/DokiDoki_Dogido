@@ -238,7 +238,7 @@ async fn model_choice_reaches_existing_commands_and_terminal_ack_once() {
         let requests = mock.seen.lock().unwrap();
         assert_eq!(requests.len(),1);
         let messages = requests[0]["messages"].as_array().unwrap();
-        let input: Value = serde_json::from_str(messages[1]["content"].as_str().unwrap()).unwrap();
+        let input: Value = serde_json::from_str(messages[1]["content"].as_str().unwrap().lines().last().unwrap()).unwrap();
         assert_current_body_prompt(messages[0]["content"].as_str().unwrap(), &input);
         assert_eq!(input["body_options"]["candidates"][0]["id"],"c1");
         assert!(input["body_options"]["candidates"][0].get("position").is_none());
@@ -625,7 +625,7 @@ async fn unified_request_exposes_only_current_action_names_and_descriptions() {
                 assert_eq!(requests.len(),1);
                 let system=requests[0]["messages"][0]["content"].as_str().unwrap();
                 assert!(system.contains("周囲の変化と会話も見て、"));
-                let input:Value=serde_json::from_str(requests[0]["messages"][1]["content"].as_str().unwrap()).unwrap();
+                let input:Value=serde_json::from_str(requests[0]["messages"][1]["content"].as_str().unwrap().lines().last().unwrap()).unwrap();
                 assert_ne!(input["trigger"]["kind"],"owner_left_reassurance_range");
                 let actions=&input["body_options"]["available_actions"];
                 let mut expected=json!({"owner_near":"そばへ戻る","stay":"その場におる","look_owner":"その場でプレイヤーを見る"});
@@ -655,7 +655,7 @@ async fn an_exit_uses_the_observed_follow_setting_instead_of_the_recovery_distan
         {
             let requests=mock.seen.lock().unwrap();
             assert_eq!(requests.len(),1);
-            let input:Value=serde_json::from_str(requests[0]["messages"][1]["content"].as_str().unwrap()).unwrap();
+            let input:Value=serde_json::from_str(requests[0]["messages"][1]["content"].as_str().unwrap().lines().last().unwrap()).unwrap();
             assert_eq!(input["trigger"],json!({"kind":"owner_left_reassurance_range","range_blocks":follow_distance}));
             assert!(input["body_options"]["available_actions"].get("inspect").is_none());
         }
@@ -685,7 +685,7 @@ async fn return_arrival_uses_one_existing_request_with_only_current_body_choices
         observe(&d,follow_arrival_wire(2,true,working)); completed(&d,&mock).await;
         {
             let requests=mock.seen.lock().unwrap(); assert_eq!(requests.len(),1);
-            let input:Value=serde_json::from_str(requests[0]["messages"][1]["content"].as_str().unwrap()).unwrap();
+            let input:Value=serde_json::from_str(requests[0]["messages"][1]["content"].as_str().unwrap().lines().last().unwrap()).unwrap();
             assert_eq!(input["trigger"]["kind"],"owner_arrived_near");
             let options=&input["body_options"];
             assert_eq!(options["candidates"],json!([]));
@@ -733,7 +733,7 @@ async fn a_queued_return_checks_work_and_departure_again_before_generation() {
             if departs { assert!(requests.is_empty()); }
             else {
                 assert_eq!(requests.len(),1);
-                let input:Value=serde_json::from_str(requests[0]["messages"][1]["content"].as_str().unwrap()).unwrap();
+                let input:Value=serde_json::from_str(requests[0]["messages"][1]["content"].as_str().unwrap().lines().last().unwrap()).unwrap();
                 assert_eq!(input["body_options"]["available_actions"],json!({"stay":"その場におる","look_owner":"その場でプレイヤーを見る"}));
             }
         }

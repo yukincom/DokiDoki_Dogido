@@ -1160,7 +1160,7 @@ mod tests {
                         .request
                 };
                 let body: serde_json::Value =
-                    serde_json::from_str(&request.messages[1].content).unwrap();
+                    serde_json::from_str(request.messages[1].content.lines().last().unwrap()).unwrap();
                 if kind == "surroundings_notice" {
                     assert!(body.get("villager_routines").is_none());
                 } else {
@@ -1270,7 +1270,7 @@ mod tests {
                     .request
             };
             let model_context: serde_json::Value =
-                serde_json::from_str(&request.messages[1].content).unwrap();
+                serde_json::from_str(request.messages[1].content.lines().last().unwrap()).unwrap();
             assert!(
                 model_context["world_context"]
                     .get("catalog_knowledge")
