@@ -4,6 +4,32 @@
 
 モデルは [tohoku-nlp/bert-base-japanese-char-v3](https://huggingface.co/tohoku-nlp/bert-base-japanese-char-v3)（Apache-2.0、固定revision `ccddee593a9e03a589ae1feedcd4d1eb06d6ba02`）を追加学習した約9,085万パラメータのBERT。出力は `O / B-from / I-from / B-to / I-to`。
 
+## 2026-11-04の追加学習：ひらがな・認識崩れと5 seed
+
+今回の結論: 既知3件のひらがなASR入力は前回1/3から全5 seedで3/3へ改善。一方、旧実対話37件は前回32件正解から29〜31件へ低下。全体の精度向上は確認できない。devで選んだseed45の新実対話は18/25（具体語あり14/20、なし4/5）。漢字混じり語句の末尾・先頭欠落、説明中の語を余計に拾う失敗が残った。既存意図BERTの前段分類だけで、これらの語句欠落が解決するとは言えない。
+
+通常表記・全ひらがな・認識崩れの合成を各2,000件、実発話11件を4回ずつ使い、計6,044行で学習した。dev/testは各960件（各表記320件）。5 seedとも同じ公開baseから4 epoch、batch 48、学習率3e-5で学習し、モデル構造と出力復元は初回から変えていない。
+
+新たに9つの句から25発話（具体語あり20、なし5）をモデル予測前に注釈し、その句と全revisionを学習・devから除外した。旧評価と合わせて39群を予約し、残りはtrain 46群、dev 6群、test 6群。実際の素材行は85/9/18行で、合成件数ほど独立した話題があるわけではない。新実対話の注釈は本人の全件確認前。
+
+各seedのepochと最終seedはdevの完全一致→span F1→小さいseedの順で固定し、その記録を保存してから最終評価を実施した。
+
+| seed | dev / 960 | 合成test / 960 | 新実対話 / 25 | 旧実対話 / 37 | 既知3件のひらがなASR / 3 |
+|---:|---:|---:|---:|---:|---:|
+| 42 | 796 | 786 | 18 | 30 | 3 |
+| 43 | 781 | 774 | 17 | 29 | 3 |
+| 44 | 835 | 818 | 16 | 30 | 3 |
+| 45（選択） | 850 | 832 | 18 | 30 | 3 |
+| 46 | 847 | 825 | 15 | 31 | 3 |
+
+選択モデルは **seed 45**。表記別testは、通常 316/320（98.8%）、ひらがな 264/320（82.5%）、認識崩れ 252/320（78.8%）。新実対話は 18/25（72.0%）。合成testの目安95%には未達。
+
+旧実対話37件と既知3件は改善方針を決める際に見た回帰集であり、新しい未使用評価とは呼ばない。初回と今回では合成test・素材分割・batchが異なるため、ひらがな教材追加だけの因果効果は切り分けていない。5 seedの比較内では条件をそろえた。
+
+認識崩れは長音、行名の先頭脱落、助詞の誤変換、文字の脱落・重複を合成したもの。崩れた文字列をそのまま正解範囲とし、原文にない語へ補正しない。既存の意図BERTで具体変更と分類された依頼を抽出器へ渡す構成を想定するが、その接続・分類BERTとの連動試験は今回行っていない。
+
+5つの重み、教材、全予測、選択記録、失敗例はGit対象外の `.dogido_tools/edit_span_extractor/2026-11-04-v2/`。詳細は同フォルダの `REPORT.txt`、重みのパスとhashは `MODEL_FILES.json`。本体へは未接続。
+
 ## 2026-11-04の初回結果
 
 学習用3,656行＝合成3,600件＋目視注釈した実発話14件を4回配置。調整用480件だけで選び、3エポック目を採用した。4エポックの学習と評価はMPSで約156秒。
@@ -71,3 +97,17 @@ python3 -m unittest discover -s tests -p 'test_edit_span_extractor.py' -v
 `build_dataset.py` のaudit入力は `extraction / non_extraction / regression / ambiguous` の配列を持つJSON。各行は `source_id, entry_id, text, current_verse, spans` を持ち、spansは `role, start, end, text`。manual注釈は原文をキー、`[旧語またはnull, 新語またはnull]` を値とする。regression入力は同じ行形式の配列。句の出典と独立した注釈を先に確認する。
 
 再現用に、初回の入力hash・学習時のソース・選択履歴を保存した。初回後に私的注釈をコードから分離し、素材群の走査順を明示したが、5分割の教材JSONLがバイト単位で一致することを確認した。既存の出力先は上書きしない。次の学習で今回の失敗例を教師へ移す場合、この評価集を未使用testとは呼ばず、別の実対話を予約する。
+
+### 追加学習を再現する場合
+
+教材生成へ `--augmentation-v2 --new-audit /path/to/new-independent-audit.json` を加える。new-auditは `extraction / non_extraction` の配列を持ち、各行の形式は旧auditと同じ。既存の評価例を教師へ移さず、追加評価の句・revisionも先に予約する。
+
+同じデータとbaseを固定し、seed 42、43、44、45、46をそれぞれ `--seed N --epochs 4 --batch-size 48 --defer-evaluation` で学習する。出力先は新しい実験フォルダ配下の `runs/seed-42` 等に分ける。その後だけ、次を実行する。
+
+```bash
+.dogido_tools/request_classifier/.venv/bin/python dev_tools/edit_span_extractor/compare_seeds.py \
+  --runs /path/to/new-experiment/runs --data /path/to/new-experiment/data \
+  --output /path/to/new-experiment/comparison --device mps
+```
+
+`compare_seeds.py` は5 runのデータhashを照合し、devでの選択を `frozen-selection.json` に書き出してから最終評価に進む。既存の出力先は上書きしない。

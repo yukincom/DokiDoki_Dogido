@@ -15,6 +15,7 @@ import re
 from string import Formatter
 
 from span_model import validate_spans, write_json
+from augmentation import kana, kana_only, KANA_LINES, KANA_PREFIXES, KANA_SUFFIXES, prepare
 
 EXPECTATION = "原文の変更元・変更先だけを取り、行呼称・依頼の助詞・説明を含めない"
 CRITERIA = "roleと開始/終了offsetがすべて一致。原文にない読みや漢字へ変換しない"
@@ -172,6 +173,8 @@ def main():
     parser.add_argument("--regression", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--new-audit", type=Path)
+    parser.add_argument("--augmentation-v2", action="store_true")
     args = parser.parse_args()
     if args.output.exists():
         raise ValueError("Output exists; create a new dataset version")
@@ -180,8 +183,10 @@ def main():
     audit = json.loads(args.audit.read_text())
     # 評価ファイルは検証・モデル選択に用いず、学習対象から除くIDだけ先に読む。
     evaluation = audit["extraction"] + audit["non_extraction"]
+    new_audit = json.loads(args.new_audit.read_text()) if args.new_audit else {}
+    new_evaluation = new_audit.get("extraction", []) + new_audit.get("non_extraction", [])
     original_regression = audit["regression"]
-    reserved_ids = {r["entry_id"] for r in evaluation + original_regression + audit["ambiguous"]}
+    reserved_ids = {r["entry_id"] for r in evaluation + new_evaluation + original_regression + audit["ambiguous"]}
     regression = json.loads(args.regression.read_text())
     reserved_ids |= {r["entry_id"] for r in regression}
     rows, sources = load_sources(args.memory_root)
@@ -212,19 +217,22 @@ def main():
     for group in reserved_groups:
         for poem in groups[group]:
             protected |= {line.strip() for verse in poem["variants"] for line in verse.splitlines() if line.strip()}
-    protected |= {s["text"] for row in evaluation + regression for s in row["spans"]}
-    manual = [row for row in manual if not any(s["text"] in protected for s in row["spans"])
-              and not any(line.strip() in protected for line in row["current_verse"].splitlines())]
+    protected |= {s["text"] for row in evaluation + new_evaluation + regression for s in row["spans"]}
+    key = kana if args.augmentation_v2 else lambda x: x
+    protected = {key(text) for text in protected}
+    manual = [row for row in manual if not any(key(s["text"]) in protected for s in row["spans"])
+              and not any(key(line.strip()) in protected for line in row["current_verse"].splitlines())]
     for split in ["test", "dev", "train"]:
         unique = {}
         for item in materials[split]:
-            if item["text"] not in protected and not any(line.strip() in protected for line in item["verse"].splitlines()):
-                unique.setdefault(item["text"], item)
+            if key(item["text"]) not in protected and not any(key(line.strip()) in protected for line in item["verse"].splitlines()):
+                unique.setdefault(key(item["text"]), item)
         materials[split] = list(unique.values())
         protected |= set(unique)
     all_rows = {"train": [], "dev": [], "test": []}
     seen = set()
-    for split, count in [("train", 3600), ("dev", 480), ("test", 480)]:
+    counts = [("train", 6000), ("dev", 960), ("test", 960)] if args.augmentation_v2 else [("train", 3600), ("dev", 480), ("test", 480)]
+    for split, count in counts:
         pool = materials[split]
         if len(pool) < 8:
             raise ValueError(f"Not enough independent phrase materials in {split}: {len(pool)}")
@@ -233,7 +241,11 @@ def main():
             attempts += 1
             if attempts > count * 30:
                 raise ValueError("Insufficient unique synthetic combinations")
-            source, target = rng.sample(pool, 2)
+            variant = ["clean", "kana", "asr_noise"][len(all_rows[split]) % 3] if args.augmentation_v2 else "clean"
+            eligible = pool if variant == "clean" else [item for item in pool if kana_only(item["text"])]
+            if len(eligible) < 2:
+                raise ValueError(f"Not enough kana materials in {split}")
+            source, target = rng.sample(eligible, 2)
             old, new = source["text"], target["text"]
             if rng.random() < 0.08:
                 new = old  # 同じ文字列でも出現位置からfrom/toを区別する。
@@ -244,13 +256,15 @@ def main():
                 old = old[begin:rng.randrange(begin + 2, len(old) + 1)]
             mode = rng.choices(["pair", "whole", "from_only", "none"], [45, 30, 5, 20])[0]
             template = rng.choice(TEMPLATES[split][mode])
-            text, spans = render(template, {"line": rng.choice(LINE_NAMES[source["line_index"] % 3]), "old": old, "new": new},
-                                 rng.choice(PREFIXES), rng.choice(SUFFIXES))
+            names, prefixes, suffixes = (LINE_NAMES, PREFIXES, SUFFIXES) if variant == "clean" else (KANA_LINES, KANA_PREFIXES, KANA_SUFFIXES)
+            values = {"line": rng.choice(names[source["line_index"] % 3]), "old": old, "new": new}
+            template, values, prefix, suffix = prepare(template, values, rng.choice(prefixes), rng.choice(suffixes), variant, rng)
+            text, spans = render(template, values, prefix, suffix)
             if text in seen:
                 continue
             seen.add(text)
             row = {"id": f"{split}-{len(all_rows[split]):05d}", "text": text, "current_verse": source["verse"],
-                "spans": spans, "kind": "synthetic_" + mode, "partial_source": partial,
+                "spans": spans, "kind": "synthetic_" + mode, "variant": variant, "partial_source": partial,
                 "source_entry_ids": [source["entry_id"], target["entry_id"]],
                 "source_groups": [source["group_id"], target["group_id"]], "template": template,
                 "expectation": EXPECTATION, "pass_criteria": CRITERIA,
@@ -265,6 +279,8 @@ def main():
         "expectation": EXPECTATION, "pass_criteria": CRITERIA, "scope": "保存された実対話の原文。ASRの修復はしない"}
         for r in evaluation if r.get("category") != "regression"]
     all_rows["regression"] = regression
+    if new_evaluation:
+        all_rows["new_real_test"] = [{**r, "id": "new-real-test-" + r["source_id"]} for r in new_evaluation]
     for split, split_rows in all_rows.items():
         for row in split_rows:
             validate_spans(row)
@@ -274,7 +290,9 @@ def main():
         "reserved_groups": sorted(reserved_groups), "reserved_ids": sorted(reserved_ids)})
     write_json(args.output / "ambiguous-not-scored.json", audit["ambiguous"])
     write_json(args.output / "materials.json", dict(materials))
-    report = {"seed": args.seed, "source_counts": {k: len(v) for k, v in rows.items()},
+    report = {"seed": args.seed, "augmentation_v2": args.augmentation_v2,
+        "variants": {k: dict(Counter(r.get("variant", "real") for r in v)) for k, v in all_rows.items()},
+        "new_audit_sha256": hashlib.sha256(args.new_audit.read_bytes()).hexdigest() if args.new_audit else None, "source_counts": {k: len(v) for k, v in rows.items()},
         "poem_groups": len(groups), "reserved_groups": len(reserved_groups),
         "assigned_groups": dict(Counter(assignments.values())),
         "material_lines": {k: len(v) for k, v in materials.items()}, "manual_training_unique": len(manual),

@@ -5,12 +5,17 @@
 """
 from pathlib import Path
 import sys
+import json
+import hashlib
+import random
 import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "dev_tools" / "edit_span_extractor"))
 from span_model import CharacterCodec, decode_spans, span_key, validate_spans
-from build_dataset import group_poems, render
+from build_dataset import group_poems, render, TEMPLATES
+from augmentation import kana_template, prepare
+from compare_seeds import select_seed
 
 
 class SpanContractTests(unittest.TestCase):
@@ -58,6 +63,53 @@ class SpanContractTests(unittest.TestCase):
         self.assertIn({"a", "b"}, members)
         self.assertIn({"c"}, members)
         self.assertEqual(len(groups), 2)
+
+
+    def test_noisy_labels_keep_the_actual_damaged_string(self):
+        # 見込み: 変形を挿入前に行えば、脱落/重複しても原文にない補正語を教師にしない。
+        # 合格: 100条件でfrom/toが変形後の語に一致し、依頼動詞を含まない。合成器のみ。
+        changed = False
+        for seed in range(100):
+            template, values, prefix, suffix = prepare(
+                "{line}の{old}を{new}に変更してください", {"line": "かみのく", "old": "あめのあさ", "new": "ゆきのよる"},
+                "そうだな、", "", "asr_noise", random.Random(seed))
+            text, spans = render(template, values, prefix, suffix)
+            validate_spans({"text": text, "spans": spans})
+            self.assertEqual([span["text"] for span in spans], [values["old"], values["new"]])
+            self.assertNotIn("へんこ", spans[-1]["text"])
+            changed |= values["old"] != "あめのあさ" or values["new"] != "ゆきのよる"
+        self.assertTrue(changed)
+
+    def test_reading_conversion_does_not_merge_split_templates(self):
+        # 見込み: 漢字だけで違う同じ文型を別分割へ入れない。
+        # 合格: ひらがな化後もtrain/dev/testの基底文型が互いに非重複。モデルは使わない。
+        sets = {split: {kana_template(t) for values in modes.values() for t in values}
+                for split, modes in TEMPLATES.items()}
+        for a, b in [("train", "dev"), ("train", "test"), ("dev", "test")]:
+            self.assertFalse(sets[a] & sets[b])
+
+    def test_seed_selection_uses_dev_and_rejects_dataset_drift(self):
+        # 見込み: 評価を見る前にdev順で固定し、違う教材のrunを比較から除く。
+        # 合格: testに有利なseed42でもdevが良い43を選び、教材変更後は例外。模擬選択情報のみ。
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            data = root / "data"
+            data.mkdir()
+            test = data / "test.jsonl"
+            test.write_text('{"preferred_seed":42}\n')
+            hashes = {test.name: hashlib.sha256(test.read_bytes()).hexdigest()}
+            runs = []
+            for seed, exact in [(42, 80), (43, 90)]:
+                run = root / f"seed-{seed}"
+                run.mkdir()
+                (run / "manifest.json").write_text(json.dumps({"arguments": {"seed": seed}, "dataset_sha256": hashes}))
+                (run / "training-complete.json").write_text('{}')
+                (run / "selection.json").write_text(json.dumps({"epoch": 3, "dev_metrics": {"all": {"exact": exact, "span_f1": .9}}}))
+                runs.append(run)
+            self.assertEqual(select_seed(runs, data)["selected_seed"], 43)
+            test.write_text('{}\n')
+            with self.assertRaises(ValueError):
+                select_seed(runs, data)
 
 
 if __name__ == "__main__":

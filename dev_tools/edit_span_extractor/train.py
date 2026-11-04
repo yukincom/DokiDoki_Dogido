@@ -40,6 +40,7 @@ def main():
     parser.add_argument("--batch-size", type=int, default=24)
     parser.add_argument("--learning-rate", type=float, default=3e-5)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--defer-evaluation", action="store_true", help="Save dev-selected model; leave all final sets untouched")
     args = parser.parse_args()
     if args.output.exists():
         raise ValueError("Output already exists; never overwrite a previous trial")
@@ -110,6 +111,9 @@ def main():
         history.append(record)
         write_json(args.output / "training-history.json", history)
         print(json.dumps(record, ensure_ascii=False), flush=True)
+    if args.defer_evaluation:
+        write_json(args.output / "training-complete.json", {"elapsed_s": time.perf_counter() - started, "evaluation": "deferred"})
+        return
     del model, optimizer
     if args.device == "mps":
         torch.mps.empty_cache()
