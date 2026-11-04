@@ -586,6 +586,9 @@ fn shelter_and_night_branches_use_observed_facts_not_generated_words() {
     ));
 }
 
+// 見込み: 話者を区別した既存履歴と直近5件の反復回避指示を、同じ環境判断へ渡せる。
+// 合格: 履歴の全行・順序を保ち、共有指示はsystemに一度だけ入り、状況文と重複しない。
+// 範囲: オフラインの要求構築。モデルが意味の重複を避けるかは実モデルで別確認する。
 #[test]
 fn spontaneous_history_labels_speakers_without_changing_stored_roles_or_events() {
     let conversation = json!([
@@ -606,7 +609,7 @@ fn spontaneous_history_labels_speakers_without_changing_stored_roles_or_events()
     assert!(situation.contains("今はプレイヤーから新しい発言を受けてへん"));
     assert!(situation.contains("自分の発言に相づちや返事をせず"));
     for rule in [
-        "同じ意味合いの話をしたばかりだったら、黙ってな。",
+        "話す前に、会話履歴のうち自分（ドギド）の直近5件の発言を確認してな。5件に満たんときは、ある分を確認してな。その中のどれかと同じ意味合いの話なら、言葉を変えて繰り返さんと黙ってな。",
         "プレイヤーはちゃんと聞いとるから大丈夫やで。",
     ] {
         assert_eq!(p.request.messages[0].content.matches(rule).count(), 1);

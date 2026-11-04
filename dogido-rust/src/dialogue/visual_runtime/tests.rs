@@ -99,6 +99,10 @@ fn server(wait_ms: u64) -> (Arc<Dialogue>, Source) {
     config.chat_image.wait_ms = wait_ms;
     config.haiku.enabled = false;
     config.haiku.memory_enabled = false;
+    config.haiku.internal_capture_enabled = false;
+    config.haiku.capture_dir = Some(config.haiku.memory_dir.join("capture"));
+    config.haiku.screenshot_dir = Some(config.haiku.memory_dir.join("screenshots"));
+    config.audio_dir = config.haiku.memory_dir.join("audio");
     let d = Dialogue::new(config).unwrap();
     d.register("s", "test", false);
     d.bind_body_owner("s", Some(OWNER));
@@ -372,8 +376,8 @@ async fn image_notice_refreshes_all_current_facts_and_history_in_the_common_cont
     }
 }
 
-// 見込み: 環境判断一回に前後画像と変化一文を渡し、必要な観測と履歴を保つ。
-// 合格: 模擬HTTP一件でsilent、カメ・天候・匂い・履歴と撮影との時間差を保持し、撮影台帳・内部revisionを送らない。実モデルは対象外。
+// 見込み: 環境判断一回に前後画像・変化一文・観測・履歴と直近5件の反復回避指示を渡せる。
+// 合格: 模擬HTTP一件でsilent、共有指示はsystemに一度。カメ・天候・匂い・履歴と撮影との時間差を保持し、撮影台帳・内部revisionを送らない。実モデルは対象外。
 #[tokio::test]
 async fn existing_environment_model_gets_one_image_request_and_can_select_silence() {
     let sent=Arc::new(std::sync::Mutex::new(Vec::<Value>::new()));let recorded=sent.clone();
@@ -385,6 +389,12 @@ async fn existing_environment_model_gets_one_image_request_and_can_select_silenc
     let http=tokio::spawn(async move {axum::serve(socket,app).await.unwrap();});
     let llm=crate::llm::RigLlm::new(&url,None,Duration::from_secs(2)).unwrap();
     let mut config=super::super::DialogueConfig {model:"fixture".into(),..Default::default()};config.reading_engine="off".into();
+    config.audio_enabled = false;
+    config.haiku.memory_enabled = false;
+    config.haiku.internal_capture_enabled = false;
+    config.haiku.capture_dir = Some(config.haiku.memory_dir.join("capture"));
+    config.haiku.screenshot_dir = Some(config.haiku.memory_dir.join("screenshots"));
+    config.audio_dir = config.haiku.memory_dir.join("audio");
     let (_d, action) = environment_with_image();
     let input=json!({"kind":"environment_reaction","model":"fixture","max_tokens":200,"fallback_text":"",
         "details":action.leaf.as_ref().unwrap().details});
@@ -417,7 +427,7 @@ async fn existing_environment_model_gets_one_image_request_and_can_select_silenc
     assert!(context["situation"].as_str().unwrap().contains("今はプレイヤーから新しい発言を受けてへん"));
     let shared = crate::reaction_leaf::context("surroundings_notice", &json!({})).unwrap();
     assert_eq!(context["situation"], shared["situation"]);
-    let rule = "同じ意味合いの話をしたばかりだったら、黙ってな。プレイヤーはちゃんと聞いとるから大丈夫やで。";
+    let rule = "話す前に、会話履歴のうち自分（ドギド）の直近5件の発言を確認してな。5件に満たんときは、ある分を確認してな。その中のどれかと同じ意味合いの話なら、言葉を変えて繰り返さんと黙ってな。プレイヤーはちゃんと聞いとるから大丈夫やで。";
     assert_eq!(requests[0]["messages"][0]["content"].as_str().unwrap().matches(rule).count(), 1);
     assert!(!context["situation"].as_str().unwrap().contains(rule));
     assert!(context["world_context"].get("revision").is_none());

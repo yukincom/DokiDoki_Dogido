@@ -590,6 +590,8 @@ mod tests {
             );
         }
     }
+    // 見込み: 通常返答の各モードへ、自分の直近5件を対象とする反復回避指示を共通で渡せる。
+    // 合格: 返答用systemに指示が一度だけ入り、発話専用の経路は従来どおり。範囲: 要求構築のみ。生成内容は検証しない。
     #[test]
     fn player_reply_uses_reply_purpose_and_preserves_speech_only_path() {
         for mode in ["normal", "tension", "base"] {
@@ -614,7 +616,7 @@ mod tests {
                 )
             );
             for rule in [
-                "同じ意味合いの話をしたばかりだったら、黙ってな。",
+                "話す前に、会話履歴のうち自分（ドギド）の直近5件の発言を確認してな。5件に満たんときは、ある分を確認してな。その中のどれかと同じ意味合いの話なら、言葉を変えて繰り返さんと黙ってな。",
                 "プレイヤーはちゃんと聞いとるから大丈夫やで。",
             ] {
                 assert_eq!(reply[0].content.matches(rule).count(), 1);
