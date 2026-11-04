@@ -37,6 +37,84 @@ class ThreatObserverTest {
             new MobClassifier(), bosses, () -> {}, tick::get);
     }
 
+    // 見込み: 身体で実視認した個体は初回から既存台帳へ入り、同じ個体のrayだけ外側5blockへ伸びる。
+    // 合格: 新規16/確認済み21を実Sight呼出しへ渡し、別UUIDへ貸さない。距離を記録する模擬Sightで接続を検査。
+    @Test void bodySightRegistersImmediatelyAndPassesIndividualMarginToRay() {
+        var body=defaultTimingObserver(16,16);
+        var ranges=new java.util.ArrayList<Double>();
+        var origin=new dogido.fabric.observation.ObservationOrigin(UUID.randomUUID(),UUID.randomUUID(),
+            net.minecraft.util.math.Vec3d.ZERO,net.minecraft.util.math.Vec3d.ZERO,0,0,
+            new net.minecraft.util.math.Box(0,0,0,1,1,1),null,new dogido.fabric.observation.ObservationOrigin.Sight() {
+                public boolean entity(net.minecraft.client.world.ClientWorld world,net.minecraft.entity.Entity target,double range) {
+                    ranges.add(range); return true;
+                }
+                public boolean point(net.minecraft.client.world.ClientWorld world,net.minecraft.util.math.Vec3d target,
+                        net.minecraft.util.math.BlockPos allowed,double range) { fail("entity sight expected"); return false; }
+            });
+        assertTrue(body.lineOfSight(origin,null,null,ENEMY_A));
+        assertEquals(List.of(ENEMY_A),body.filterVisibleThreats(List.of(threat(ENEMY_A,true,16)),true)
+            .stream().map(ThreatObservation::uuid).toList());
+        assertTrue(body.lineOfSight(origin,null,null,ENEMY_A));
+        assertTrue(body.lineOfSight(origin,null,null,ENEMY_B));
+        assertEquals(List.of(16.0,21.0,16.0),ranges);
+    }
+
+    // 見込み: 外周の未知の敵や同種の別個体を新規発見せず、確認済み一体だけを保持できる。
+    // 合格: 16で見たAだけ21まで残り、外周のBと21超過のAは空。再入域は16以内が必要。固定実視認入力の台帳検査。
+    @Test void bodyMarginRetainsKnownIndividualAndRequiresInnerReacquisition() {
+        var body=defaultTimingObserver(16,16);
+        assertTrue(body.filterVisibleThreats(List.of(threat(ENEMY_B,true,16.01)),true).isEmpty());
+        assertEquals(1,body.filterVisibleThreats(List.of(threat(ENEMY_A,true,16)),true).size());
+        for (double distance : List.of(16.01,20.0,21.0)) {
+            tick.incrementAndGet();
+            assertEquals(List.of(ENEMY_A),body.filterVisibleThreats(List.of(
+                threat(ENEMY_A,true,distance),threat(ENEMY_B,true,distance)),true)
+                .stream().map(ThreatObservation::uuid).toList());
+        }
+        assertTrue(body.filterVisibleThreats(List.of(threat(ENEMY_A,true,21.01)),true).isEmpty());
+        assertEquals(16,body.visualRange(ENEMY_A));
+        assertTrue(body.filterVisibleThreats(List.of(threat(ENEMY_A,true,20)),true).isEmpty());
+        assertEquals(1,body.filterVisibleThreats(List.of(threat(ENEMY_A,true,16)),true).size());
+    }
+
+    // 見込み: 身体の外周保持は現在視認だけに限り、playerの遮蔽猶予や別セッションの台帳を使わない。
+    // 合格: 遮蔽/走査から消失/resetの各経路ですぐ解除し、外周だけの再登場は空。実ゲームではなく固定観測を使う。
+    @Test void bodyOcclusionMissingAndResetClearMarginWithoutAVisibilityHold() {
+        for (String disappearance : List.of("occluded","missing","reset")) {
+            var body=defaultTimingObserver(16,16);
+            assertEquals(1,body.filterVisibleThreats(List.of(threat(ENEMY_A,true,16)),true).size());
+            tick.incrementAndGet();
+            switch (disappearance) {
+                case "occluded" -> assertTrue(body.filterVisibleThreats(List.of(threat(ENEMY_A,false,20)),true).isEmpty());
+                case "missing" -> assertTrue(body.filterVisibleThreats(List.of(),true).isEmpty());
+                case "reset" -> body.resetTracking();
+            }
+            assertEquals(16,body.visualRange(ENEMY_A));
+            assertTrue(body.filterVisibleThreats(List.of(threat(ENEMY_A,true,20)),true).isEmpty());
+        }
+    }
+
+    // 見込み: 設定の通常範囲を変えても、身体とplayerは同じ既存の外周5blockを使う。
+    // 合格: max/visibleの両設定で24→29、29超過で解除。playerは6tick待ち、身体は即時で互いの台帳を借りない。
+    @Test void bodyMarginUsesConfiguredRangeWithoutChangingPlayerConfirmation() {
+        for (double[] distances : new double[][] {{24,16},{16,24}}) {
+            tick.set(100);
+            var body=defaultTimingObserver(distances[0],distances[1]);
+            var player=defaultTimingObserver(distances[0],distances[1]);
+            var inside=List.of(threat(ENEMY_A,true,24));
+            assertEquals(1,body.filterVisibleThreats(inside,true).size());
+            assertTrue(player.filterVisibleThreats(inside).isEmpty());
+            assertEquals(29,body.visualRange(ENEMY_A));
+            assertEquals(24,player.visualRange(ENEMY_A));
+            assertEquals(1,body.filterVisibleThreats(List.of(threat(ENEMY_A,true,29)),true).size());
+            tick.set(106);
+            assertEquals(1,player.filterVisibleThreats(inside).size());
+            assertTrue(body.filterVisibleThreats(List.of(threat(ENEMY_A,true,29.01)),true).isEmpty());
+            assertEquals(24,body.visualRange(ENEMY_A));
+            assertEquals(29,player.visualRange(ENEMY_A));
+        }
+    }
+
     // 視認だけでは本人の交戦を立てない。AIの攻撃対象か本人の攻撃が届いた後だけ、既存の終了猶予まで保持。
     // 模擬tickで戦闘台帳の開始・保持・終了を確認。MinecraftのAI・攻撃packetはこの試験の範囲外。
     @Test void playerEngagementIsIndependentOfMerePresenceAndEndsWithCombat() {

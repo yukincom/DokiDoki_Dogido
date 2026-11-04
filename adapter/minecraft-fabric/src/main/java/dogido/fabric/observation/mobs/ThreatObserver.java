@@ -210,9 +210,17 @@ public final class ThreatObserver {
         return this.encounterOpponents.contains(id) && distance <= scanDistance();
     }
 
+    double visualRange(UUID id) {
+        return this.confirmedVisibleTicks.containsKey(id) ? scanDistance() : acquisitionDistance();
+    }
+
     private boolean withinVisualRange(UUID id, double distance) {
-        double limit = this.confirmedVisibleTicks.containsKey(id) ? scanDistance() : acquisitionDistance();
-        return Double.isFinite(distance) && distance >= 0.0 && distance <= limit;
+        return Double.isFinite(distance) && distance >= 0.0 && distance <= visualRange(id);
+    }
+
+    /** 走査の許可と実rayへ同じ個体の内側/外側の距離を渡す。 */
+    boolean lineOfSight(ObservationOrigin origin, ClientWorld world, Entity entity, UUID id) {
+        return origin.visible(world,entity,visualRange(id));
     }
 
     public List<ThreatObservation> scanThreats(ClientPlayerEntity player, ClientWorld world) {
@@ -270,7 +278,7 @@ public final class ThreatObserver {
             boolean approaching = isApproaching(entity.getUuid(), distance);
             boolean rearThreat = distance <= Math.min(this.settings.rearWarningDistance(), 3.0)
                 && ("back".equals(horizontal) || "back_left".equals(horizontal) || "back_right".equals(horizontal));
-            boolean lineOfSight = origin.visible(world,entity,acquisitionDistance());
+            boolean lineOfSight = lineOfSight(origin,world,entity,entityUuid);
             if (origin.body() && !lineOfSight) continue;
             float currentHealth = living.getHealth();
             Float previousHealth = this.lastThreatHealths.get(entity.getUuid());
@@ -315,7 +323,8 @@ public final class ThreatObserver {
         }
 
         threats.sort(Comparator.comparingDouble(ThreatObservation::distance));
-        return threats;
+        // 身体も同じ個体別台帳へ実視認を登録する。playerの確認待ち・遮蔽猶予は身体の現在観測へ混ぜない。
+        return origin.body() ? filterVisibleThreats(threats,true) : threats;
     }
 
     private boolean isThreatScanCandidateEntity(Entity entity) {
@@ -507,6 +516,11 @@ public final class ThreatObserver {
     }
 
     public List<ThreatObservation> filterVisibleThreats(List<ThreatObservation> threats) {
+        return filterVisibleThreats(threats,false);
+    }
+
+    /** 身体は今見える個体を即時登録し、playerは従来の確認・遮蔽猶予を使う。外周と台帳は共通。 */
+    List<ThreatObservation> filterVisibleThreats(List<ThreatObservation> threats, boolean currentSightOnly) {
         // 現在の走査から消えた個体は保持しない。再登場は内側から確認し直す。
         Set<UUID> observed = threats.stream().map(ThreatObservation::uuid).collect(Collectors.toSet());
         this.lineOfSightStartedTicks.keySet().retainAll(observed);
@@ -520,14 +534,14 @@ public final class ThreatObserver {
         }
         boolean immediateForVisibleCluster = lineOfSightCount >= 2;
         for (ThreatObservation threat : threats) {
-            if (shouldTreatAsVisible(threat, immediateForVisibleCluster)) {
+            if (shouldTreatAsVisible(threat, immediateForVisibleCluster, currentSightOnly)) {
                 visibleThreats.add(threat);
             }
         }
         return visibleThreats;
     }
 
-    private boolean shouldTreatAsVisible(ThreatObservation threat, boolean immediateForVisibleCluster) {
+    private boolean shouldTreatAsVisible(ThreatObservation threat, boolean immediateForVisibleCluster, boolean currentSightOnly) {
         UUID id = threat.uuid();
         if (!withinVisualRange(id, threat.distance())) {
             this.lineOfSightStartedTicks.remove(id);
@@ -537,7 +551,7 @@ public final class ThreatObserver {
         if (threat.lineOfSight()) {
             this.lineOfSightStartedTicks.putIfAbsent(id, this.tickSource.getAsLong());
             long visibleFor = this.tickSource.getAsLong() - this.lineOfSightStartedTicks.getOrDefault(id, this.tickSource.getAsLong());
-            boolean immediate = threat.distance() <= this.settings.panicDistance() || threat.isRearThreat() || threat.fuseActive();
+            boolean immediate = currentSightOnly || threat.distance() <= this.settings.panicDistance() || threat.isRearThreat() || threat.fuseActive();
             if (immediate || immediateForVisibleCluster || visibleFor >= this.settings.visualConfirmTicks()) {
                 this.confirmedVisibleTicks.put(id, this.tickSource.getAsLong());
                 return true;
@@ -546,6 +560,10 @@ public final class ThreatObserver {
         }
 
         this.lineOfSightStartedTicks.remove(id);
+        if (currentSightOnly) {
+            this.confirmedVisibleTicks.remove(id);
+            return false;
+        }
         Long confirmedTick = this.confirmedVisibleTicks.get(id);
         if (confirmedTick == null) {
             return false;
