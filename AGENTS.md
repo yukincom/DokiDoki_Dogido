@@ -1,388 +1,168 @@
 # AGENTS.md — AI コーディングエージェント向け
 
-このリポジトリで作業する AI 向けの導入メモ。  
-人間向けのコンセプトは [README.md](README.md)、完成度の方針は [docs/companion-maturity.md](docs/companion-maturity.md)。
+現行の作業入口と、変更時に守る境界をまとめる。**2026-11-05に書類側mainの実装・仕様書と照合**。日付付き文書の計画・実装結果・実機結果は分けて読む。このファイルを過去の作業ログや次の依頼の代わりに使わない。
 
-開発・文言調整は、ユーザーの書類フォルダ内にある `DokiDoki-Dogido` のmainブランチで行う。Codex内部のworktreeを継続開発の本体にしない。分離作業が必要な場合もmainブランチへの統合を完了し、ユーザーへ案内するファイルと起動場所は書類側へ揃える。
+## 1. 最初に確認すること
 
-[11月2日の川柳材料・モブ質問・一行編集の仕様](docs/2026-11-02-senryu-materials-mob-chat-edit-input.md)は各担当で変更完了との本人報告。該当する旧仕様よりこちらを優先する。この3件は担当別に実機確認してから書類側mainへコミットする。
+1. 開発の本体はユーザーの書類フォルダ内の `DokiDoki-Dogido`、ブランチは `main`。作業場所・現在のHEAD・`git status --short` を確認する。Codex内部のworktreeを継続開発の本体にせず、分離作業も書類側mainへ統合し、案内するファイルと起動場所を揃える。
+2. [README](README.md)で構成と起動方法を把握し、下の責務表から変更対象を探す。[文書案内](docs/README.md)と対象分野の現行仕様・実装・テストを照合する。
+3. 11月2日の川柳材料・モブ質問・一行編集と視覚入力のA〜Fは、**11月3日に本線へ統合済み**。[統合後の確認手順](dev_tools/実機確認_20261102/手順.md)を参照。古い仕様書冒頭の「次は」「専用作業ツリー」「統合待ち」や番号付き復元コマンドを現在の作業指示にしない。
+4. 実装済み・自動確認済み・実モデル／Minecraft／音声で確認済みを区別する。過去の成功件数や他ブランチでの確認を、現在の変更の合格根拠へ読み替えない。文書と実装が食い違えば差を報告し、古い方式を復活させて帳尻を合わせない。
 
-次は[視覚入力の時系列フレーム仕様](docs/2026-11-02-vision-frames.md)を優先する。モデルには比較した画像、変化の有無、撮影時の身体の方位変化、実際にあるPLAYER枠の説明だけを添える。ハッシュ・マスの説明・処理番号はコード内で扱う。通常会話・環境反応へは、その出力に関係する材料だけを送り、同じ辞書描写を重ねない。この作業でプロンプト文面を変えるときは「元プロンプト → 新プロンプト」の変更箇所を本人に示し、了承後に反映・試験する。
+### 作業の進め方
 
-**常用の生成LLM（2026-11-02確認）** は llama.cpp の `llama-server` で動く Gemma 4 26B-A4B のGGUF版。通常会話・画像・川柳には `default_model` を指定し、サーバー側のプロンプトキャッシュを使う。モデルファイルの保存先と確認方法は[共有LLMの運用プロファイル](docs/shared-llm-profile.md)を参照する。
+- ユーザーの依頼範囲・優先順位・締切を守る。必要な確認が済んだら完了報告し、無関係な修正・リファクタリング・テスト期待値更新・文書整理へ広げない。発見した別件は報告に分ける。
+- 既存のユーザー変更を保護する。無断のstash・reset・restore・一括stageはしない。大きな変更前に復旧できるHEADを記録し、現在の依頼に属する差分だけをレビュー・検証した安全な区切りでローカルcheckpointを作れる。コミットは日本語。push・公開・履歴書換えは別途の明示依頼に従う。
+- 並行作業は範囲を分け、編集する担当ごとにworktreeを分離する。親担当が統合と最終確認を行う。実機確認を統合条件として指定された変更は、その条件を守る。
+- **モデル向けプロンプトを変える前に「元プロンプト → 新プロンプト」を本人へ示し、了承後に反映・試験する。** JSON正本だけでなくRust内の指示文・tool説明・観測文面も対象。文書更新とモデル入力の変更は区別する。
+- 本体・モデル・マイク・Mod・配布アプリの起動、再起動、差し替えは、その作業の依頼範囲を確認して行う。ビルド成功を配備済み・実機確認済みとは報告しない。
+- コメントは日本語で、担当機能・入力と出力・状態更新の所有者・単位・省略時の意味を説明する。CASは元句と版の取り違え防止、epochは古い処理結果の混入防止など、条件の理由を近くに残す。
+- 秘密情報・認証値・私的な画像や採取データをコミットしない。READMEや共有文書に特定マシンのホーム絶対パスを埋め込まない。
 
-**本棚の個人データ（2026-11-03）**。SSDを正本にした環境では本体・本棚・相談室が同じ `DOGIDO_MEMORY_DIR` を使う。川柳は `YYYY/YYMMDDHHmm`、旅は `journeys/YYMMDDHHmm/<旅ID>.json`（日本時間）。画像・内部表現の一時入力は対応するSSD実体と照合後に整理する。[保存構成](docs/2026-10-13-bookshelf-integration.md#ssdを個人データの正本にする構成2026-11-03)を参照。
+## 2. 構成と責務
 
-## 作業範囲と完了報告
-
-- Pythonテスト・模擬worker・テストデータは `dogido-rust/tests/python/`（リポジトリ共通のPythonテストは `tests/`）へ置き、本体起動用の `scripts/` に混在させない。
-- 自動テスト・模擬接続の保存先は試験ごとの一時ディレクトリへ固定する。旅・句・短期記録・本棚・画像・内部表現・評価ログを含めて隔離し、親の本番SSD設定を引き継がない。保存先を隔離できない試験は起動しない。通常試験は模擬モデル・採取なし。実採取の試験はモデル側も専用の一時採取先へ向ける。Python HTTP試験は共通の `storage_fixture.isolated_storage` を使い、終了後は所有する一時領域を整理する。
-- ユーザーはスケジュールを立てて計画的に進行している。依頼の範囲・優先順位・締切を尊重し、エージェントの判断で作業を広げて待たせない。
-- **依頼した機能が動き、必要な確認が済んだら、すぐ完了報告する。** 完了報告を後回しにして別の作業を始めない。
-- 関係ない不具合修正、リファクタリング、古いテスト期待値の更新、文書整理などには勝手に手を入れない。見つけたものは「発見した問題点・提案」として完了報告に分けて記載し、ユーザーが依頼してから着手する。
-- 検証は依頼した機能と変更の影響を確認するために必要な範囲で行う。必要な確認が済んだ後、新たな失敗や具体的な懸念がなければ、検証や整備を追加・反復しない。
-
----
-
-## 1. これは何か（30 秒）
-
-Minecraft の状況イベントを受け取り、怖がり相棒 **ドギド** が警告・雑談・川柳を返す **リアルタイム相棒サーバー**。
+Minecraftの状況を受け取り、怖がり相棒ドギドが警告・雑談・川柳を返すリアルタイム相棒サーバー。
 
 ```text
-adapter/minecraft-fabric  →  dogido-rust (状態機械 + LLM leaf)  →  TTS / テキスト
+Fabric（身体・観測・限定操作） → Rust（状態・配送・保存） → ローカルLLM / TTS
 ```
 
-- **判断の主**はRustのコード（状態機械 / 優先規則 / 検証）
-- **ローカル処理はコード・辞書・分類器を優先**し、LLMは自然な返答・説明・新しい句案など、生成が必要な箇所に絞る。workshopの本文・新しい案・語句・採否・lesson解除の解釈を生成モデルへ任せる。意図は共通BERT、戦闘からの再開は現在観測でコードが決める。OS AI分類と旧fallbackは撤去済み。状態変更・保存の実行と整合性管理はコード
-- **記憶**は JSONL（few-shot 山盛りや Hermes 系汎用エージェントは使わない）
-
-汎用チャットボットや「なんでもできるエージェント」に改造しない。
-
-ドギドはフィジカルAIではない。Minecraft内の身体・撮影を一般的な実ロボットの姿勢制御や静止・整定の前提で設計しない。画像のぶれへの対応や補正をAI側でも担える方向で設計し、将来の能力に備える。特定の現行モデルが補正できると断定したり、補正できない可能性を理由にコードで撮影を拒否したりしない。移動と向き変更は並行し、先に撮った一枚を使うLLMの返答生成・出力中もコードの身体移動は続ける。位置差・角度差・停止状態を明示撮影の採否条件にせず、撮影後の姿勢で画像を破棄しない。 詳細は[身体と撮影の方針](docs/2026-10-26-look-capture-and-darkness.md)。
-
----
-
-## 2. 触る場所の地図
+判断・優先制御・取消・世界操作・保存の整合性はRustとFabric、意図分類はBERT、自然な返答・意味説明・句案・川柳相談の語句や採否の解釈はLLMが担当する。既知の実行データを別のLLMへ再質問しない。汎用エージェント基盤や旧Python本体へ置き換えない。
 
 | パス | 役割 |
 |---|---|
-| `dogido-rust/src/dialogue/` | セッション、入力、会話・川柳・音声・記憶の配線。状態変更と取消の所有者 |
-| `dogido-rust/src/combat/` · `environment/` | 戦闘・環境・発話優先。降水は `environment/precipitation.rs` |
-| `dogido-rust/src/foreground.rs` · `dialogue/history.rs` | 会話所有権、戦闘保留、実再生完了後の短期履歴 |
-| `dogido-rust/src/chat_materials.rs` · `chat_observation.rs` · `chat_validation.rs` | 通常会話の一回生成用材料、形式補完と明らかな出力破損の検査 |
-| `dogido-rust/src/conversation_observation.rs` · `catalog_knowledge.rs` | 共通観測と、観測へ昇格させない一般知識 |
-| `dogido-rust/src/haiku/` · `python_worker.rs` | 材料・発句準備・生成・検査・再生成 |
-| `dogido-rust/src/workshop_*.rs` · `workshop_*/` | 一句の相談、モデル出力の受信、行対象、CAS、採否・保存の実行 |
-| `dogido-rust/src/workshop_edit.rs` | 未採用差分、CAS検証、revision追記保存の契約 |
-| `dogido-rust/src/workshop_editing/` | 解釈済みの語句・材料から編集差分を構成。正本は変更しない |
-| `dogido-rust/src/dialogue/workshop_edits.rs` | 現在の句・版へ再照合し、採用・保存・表示へ反映 |
-| `dogido-rust/tests/python/check_workshop_edits.py` | モデル・音声・tokenを模擬し、pending・CAS・保存の接続を検査 |
-| `dogido-rust/src/dialogue/workshop_runtime.rs` | 受信した相談結果を既存の実行処理へ接続し、局所編集はworkshop_editsへ渡す |
-| `dogido-rust/src/dialogue/workshop_combat_runtime.rs` | 句・候補を保持した戦闘中断と、コードで確定する再開 |
-| `dogido-rust/src/haiku_record/verse.rs` | 表示・確定読み・行概念・出典を束ねた一行の正本 |
-| `dogido-rust/src/haiku_memory.rs` · `dialogue/memory_runtime.rs` | JSONLの句・revision・critique・soft lessonと明示想起 |
-| `dogido-rust/src/episode_log.rs` · `dialogue/episode_runtime.rs` | 評価用の決定記録。会話・川柳記憶へ読み戻さない |
-| `dogido-rust/src/knowledge/` | 詩の基礎知識・Minecraftの正本DB検索。旧learnの処理・設定・データは撤去済み |
-| `dogido-rust/src/assist/` | 明示依頼と現在hotbarを検証する限定操作。`horse_recall/` は乗れる動物14種の候補要求・選択と実行前検証 |
-| `dogido-rust/src/player_text.rs` · `contextual_asr.rs` · `input_policy.rs` | 原文を残す正規化、現在候補だけのSTT補正、入力優先 |
-| `dogido-rust/src/voice/` · `dialogue/audio.rs` · `tts_reading.rs` | 録音・STTの制御、配送・取消・実再生結果、読みの判定 |
-| `dogido-rust/scripts/` · `dogido_server/` | 起動設定、UniDic token、Whisper設定、AEC、BERT分類のPython補助 |
-| `dogido_server/llm/companion_prompts.json` · `reaction_situations.json` | 人が編集する共有プロンプト・状況文。Rustビルドへ反映する |
-| `adapter/minecraft-fabric/` | rootはtick・送信・ライフサイクル。`observation/` は観測と履歴、`protocol/` は通信契約、`commands/` は限定操作、`display/` はHUD。詳細はadapter README |
-| `docs/` | 現行仕様と履歴。終了文書には後継を明記し、古い計画を再実装しない |
-| `dogido-rust/tests/` · `dogido-rust/tests/python/check_*.py` | Rust単体検証と模擬通信。実機確認とは区別する |
-| `dev_tools/` | 表示・音声診断・ラボ・独立試作。本体接続の有無は各READMEで区別 |
+| `dogido-rust/src/dialogue/` | 入力・セッション・会話・音声・記憶の配線。取消と状態適用の所有者。`mod.rs`へドメイン処理を集積しない |
+| `dogido-rust/src/request_classifier.rs` · `dogido-rust/src/dialogue/request_runtime.rs` | 川柳／通常のBERT受付、入力世代とモードの固定 |
+| `dogido-rust/src/combat/` · `dogido-rust/src/environment/` · `dogido-rust/src/foreground.rs` | 戦闘・環境・発話優先、会話の所有権 |
+| `dogido-rust/src/chat_materials/` · `dogido-rust/src/chat_observation.rs` · `dogido-rust/src/conversation_observation.rs` | 現在観測・直前の視認・音・対話由来の材料。`dogido-rust/src/catalog_knowledge.rs`は一般知識 |
+| `dogido-rust/src/chat_validation.rs` · `dogido-rust/src/dialogue/history.rs` | 通常会話の形式補完、配送後の短期履歴 |
+| `dogido-rust/src/body/` · `dogido-rust/src/dialogue/visual_runtime.rs` · `dogido-rust/src/llm/image.rs` | 身体の依頼・観測、画像の時系列入力 |
+| `dogido-rust/src/haiku/` | 自動発句の材料選択・前置き・生成・形式検査・再生成 |
+| `dogido-rust/src/workshop_prompt/` · `dogido-rust/src/workshop_projection/` · `dogido-rust/src/workshop_response/` | 川柳相談の入力、モデル出力の受信・補完 |
+| `dogido-rust/src/workshop_editing/` · `dogido-rust/src/workshop_edit.rs` · `dogido-rust/src/dialogue/workshop_edits.rs` | 差分・未採用案、元句と版の照合、採用・保存・表示 |
+| `dogido-rust/src/dialogue/workshop_runtime.rs` · `dogido-rust/src/dialogue/workshop_combat_runtime.rs` | 相談の配線、句と返答を保持した戦闘中断・再開 |
+| `dogido-rust/src/haiku_record/verse.rs` · `dogido-rust/src/haiku_memory.rs` · `dogido-rust/src/dialogue/memory_runtime.rs` | 行の表記・読み・材料・来歴、句・revision・critique・soft lesson |
+| `dogido-rust/src/haiku_artifacts.rs` · `dogido-rust/src/episode_log.rs` | 発句素材の帰属と保存／整理、会話記憶へ読み戻さない評価記録 |
+| `dogido-rust/src/assist/` · `dogido-rust/src/knowledge/` | 明示依頼の限定操作、詩の基礎知識・Minecraft正本DBの照会 |
+| `dogido-rust/src/player_text.rs` · `dogido-rust/src/contextual_asr.rs` · `dogido-rust/src/voice/` · `dogido-rust/src/tts_reading.rs` | 原文を残す入力正規化、現在候補のSTT補正、録音・認識・読み・配送 |
+| `dogido-rust/scripts/` · `dogido_server/` | 起動・設定、UniDic token、Whisper、AEC、BERT等のPython補助。会話判断や保存判断を戻さない |
+| `dogido_server/llm/companion_prompts.json` · `dogido_server/llm/reaction_situations.json` | 共有人格・対話目的・状況文の正本。Rustビルドへ反映 |
+| `adapter/minecraft-fabric/` | tick・通信・観測・身体・限定操作・HUD。配置とビルドは[adapter README](adapter/minecraft-fabric/README.md) |
+| `dogido-rust/tests/` · `tests/` · `dev_tools/` | Rust／Python検証と独立試作。試作の存在を本体接続済みと扱わない |
 
-設定の既定値は `dogido_server/runtime_defaults.json` に集約する。Pythonの型・制約とRustの検証処理を、既定値の別定義と数えない。設定を撤去する前に、本体起動・`--voice`・配布の消費先まで追う。`voice_vad_cli` は `voice_settings.py` → 音声起動JSON → Rust STTで使う。
+Python補助の存続範囲は[Rust README](dogido-rust/README.md#残すpython補助と資料)を参照。読み判定はRust、UniDic取得は `dogido-rust/scripts/tts_shared_tokens.py` の共有 `Unidic()`、データ整備補助は `dev_tools/catalog_tools/`。旧Python本体・比較oracleを再導入してfixtureを作り直さない。
 
-旧Python本体・比較oracleの運用は終了。移植時のfixtureはRustの回帰資産として保持し、旧本体を再導入して再生成しない。Python補助へ会話判断・状態管理・保存判断を戻さない。
+## 3. 入力・会話・音声
 
-残すPythonモジュールと資料の一覧は [Rust本体の補助一覧](dogido-rust/README.md#残すpython補助と資料) を正とする。旧 `dogido_server/tts_reading.py` は廃止し、UniDic取得は `dogido-rust/scripts/tts_shared_tokens.py` の共有 `Unidic()` に限定する。読みの判定・整形はRust。データ整備用補助は `dev_tools/catalog_tools/` へ分離する。
+### BERTの受付
 
-一般起動は `python dogido-rust/scripts/launch_dialogue.py --settings-dir .` と別ターミナルの `--voice`。`scripts/start_dogido.command server|voice`、`dogido-rust/start_dialogue.command` / `start_voice.command` も同じ一般設定のポート（既定5055）と `memory_dir` を使う。入口ごとの5056・記憶保存先の固定指定は廃止した。テキスト相談室も同じ `memory_dir` を読み、独立したHTTP窓口の既定5057は維持する。既存の記憶は設定で保存先を指定して引き継ぎ、起動時に自動移動・統合しない。
+- 共通受付 `request_runtime::Binding` でモードを固定し、一入力を一度だけ分類する。川柳相談中は8分類、それ以外・戦闘中断中は通常16分類。掛け軸の非表示だけではモードを変えない。掛け軸・STT文脈も同じ受付状態を使う。
+- 採用モデルは川柳が `models/dogido-senryu424-seed42`、通常が `models/dogido-normal16-seed48-mob`。設定は `request_classifier_senryu_model_root` / `request_classifier_normal_model_root`。導入は[同梱分類器の設定](docs/2026-10-24-bundled-request-classifier.md)に従い、Git LFS実体と設定を確認する。共有JSONのパス既定はnullで、未設定側を自動選択しない。両モデルの推論は共有Mutexで合計1件に制限する。
+- 失敗・対象外・片側未設定でも他方・旧23分類・OS AI・旧LLM分類へfallbackしない。入力元・接続・句ID／版・中断境界を照合し、遅延結果を新モードへ付け替えない。
+- 通常のモブ情報ラベル `EnemyInformation` は `player_chat` へ渡す。モブの有無・数・方向の質問を旧戦闘定型文へ戻さず、危険警告のコード経路とは分ける。
+- `dev_tools/edit_span_extractor/` の語句抽出は独立試作で、本体の一行編集へは未接続。分類・抽出の拡張は担当の進捗と正本教材を確認し、ラベル案・教材・学習済み・本体採用を区別する。
 
----
+詳細：[BERT分離](docs/2026-10-24-bert-mode-routing.md)、[モブ質問と一行編集](docs/2026-11-02-senryu-materials-mob-chat-edit-input.md)。
 
-## 2026-10-21 現在の生成・知識範囲
+### 通常会話と配送
 
-自動発句は意味・日本語の自然さの評価LLMを使わない。今使える材料の本文を渡し、管理IDはコードで持つ。空行・折返しは補完し、再生成は初案＋設定上限で管理する。行別材料は渡した資料の記録であって使用出典の検証結果ではない。国語は詩形・枕詞等の最低限の詩の知識だけを残し、一般文法・漢字学年の専用回答と国語学習workerは本体対象外。Minecraft知識全般の専用BERTラベルは未収録。2026-10-23にモブ情報を含む23分類を本体へ接続した。重複分類を増設しない。[現行仕様](docs/2026-10-21-generation-and-knowledge-scope.md)。以前の国語・評価LLMの記述はこの方針で更新する。
+- `player_chat` は今回入力・現在観測・確定済み短期履歴から一回で話題と返答を生成する。前段planner、生成後の意味・観測整合の再審査、形式修復の再生成を追加しない。通常会話・環境反応には関連する材料だけを渡し、辞書描写を重ねない。
+- JSON末尾や単純な型違いはコードで補完する。空・文字化け・明らかな反復・補完不能な外形だけを不成立とし、日本語・方言・名前・嗅覚・内容の解釈を固定語句で拒否しない。
+- 通常会話と環境反応は `speak / silent` を使う。沈黙は発話のない出来事で、再生済み発話や川柳材料に数えない。通常会話の不成立・通信失敗も、先行再生前だけ「難しい話だったので、ドギドは沈黙を選んだ」の出来事へ接続する。先行再生後の失敗を沈黙へ読み替えない。
+- 新しい文字・認識入力は前の音声完了を待たず共通受付へ進める。次の生成と音声配送の枠を分け、音声は順番に再生する。通常の観測変化・失効・期限だけで再生を止めず、緊急警告・明示停止・voice off・接続／世界／サーバー終了の取消は維持する。
+- 川柳の生成・前置き・本文・相談中、および通常会話の再生中の夕方警告は、既存の抑止・保留を維持する。緊急警告や戦闘の優先制御とは分ける。
+- 音声ありの通常会話とWSの会話返答は、actionと本文の文境界が確定した順に読み補正・合成・再生する。JSONキー・reasoning・未完成のtool引数は読まない。操作結果、音声なし、自動発句、環境反応はそれぞれの完了後処理を使う。
+- assistant履歴は全文の表示ACKまたは全音声の成功で一度だけ確定する。`text_displayed` と `playback_status` は別。失敗・取消・古い世代を発話済みにせず、確認済みの全文表示履歴は後続の音声失敗でも失わない。固定警告・支援・前置きも配送済みなら共有し、句本文・相談・記憶操作は出来事として扱い川柳材料へ重複登録しない。
+- `voice off` はマイク・STT・TTSを休止する。STT補正は `source=voice` と現在候補に限定し、原文・正規化文を保持する。typed入力や語句の会話を音声用の操作補正へ流さない。
 
-## 2026-10-22 川柳相談の検査撤去
+詳細：[本体対話](docs/main-dialogue-integration.md)、[文字配送](docs/2026-10-09-minecraft-text-dialogue.md)、[通常会話の文ストリーム](docs/2026-10-26-chat-sentence-stream.md)、[WSの文ストリーム](docs/2026-11-02-workshop-sentence-stream.md)。
 
-川柳WSから音数計測・5/7/5との比較・固定の音数案内を撤去した。撤去済みの品質・語形・confidenceの判定を、tool説明やプロンプトの要求として残さない。本人の依頼からモデルが解釈した語句を編集へ渡し、コードが対象・元句・版・保存結果を管理する。読み方と保存材料は本人の質問に必要なときだけ参照し、編集失敗後の再応答には参照toolを提示しない。自動発句の生成条件はこの撤去の対象外。[現行仕様](docs/rust-workshop-validation.md)。自動発句と川柳WSの検査範囲を混同しない。
+## 4. 川柳相談と自動発句を分ける
 
-## 2026-10-28 川柳WSはBERT・LLMの解釈を受け取る
+### 川柳相談（workshop / WS）
 
-行指定・具体変更・終了はBERT、語句・採否・称賛・lesson解除の解釈はLLMが担当する。具体変更は原文の正規表現から直接実行せず、既存のnative `stage_player_edit` でLLMから変更後の一行全体を受け取り、コードが元の行と比較する（2026-10-30）。`workshop_response` はactionと必要な項目を実行用に整える。`evidence`・`confidence`は任意の記録で、原文一致・語形・確信度・品質による足切りや再試行の条件にしない。原文の再解析でモデルの語句を上書きせず、語尾・誤認識語ごとの例外も追加しない。新案は表記を保持し、材料の欠落・重複で拒否しない。WS内の `clear_lessons` はLLMのactionから既存の保存処理へ渡す。原文・入力世代の記録、対象・現在句・版・対象外不変・取消・保存整合性は維持する。この方針は過去のWS検査記述に優先する。自動発句・assist・戦闘とWS外の既存shortcutは対象外。[変更記録](docs/2026-10-28-workshop-interpreted-edits.md)。
+川柳は人間とAIの認知のぶれを集める窓口で、あとから句集でも編集できる。その場の句をコードの品質判定で完成形へ絞らない。
 
-## 3. 設計の不変条件（破ると方針と衝突）
+- 行指定・具体変更・終了はBERT、語句・新案・採否・称賛・lesson解除はLLMが解釈する。コードは現在句・対象行・元句と版・入力世代・対象外の二行・取消・保存を照合して実行する。
+- 行指定だけなら相談対象を保持する。具体変更は専用入力で、現在三行・対象・今回依頼・直前の通常会話と相談履歴・該当する案を渡す。履歴本文を削って短縮せず、不要な操作説明・例文・出典を外す。
+- 一回の呼出しで `stage_player_edit` の変更後の一行全体、または `ask` を受け取る。分類済みの行を選び直さず、原文の正規表現から直接実行したり、モデルの語句を再抽出して上書きしたりしない。同文なら保存しない。本人指定の表記を尊重し、未知の読みは未確定のまま保持する。
+- 音数計測・5/7/5比較・固定の音数案内・品質評価・原文一致・confidence閾値・疑問や否定等の語形・hard禁止語・材料の欠落や重複を編集の拒否条件にしない。`evidence / confidence` は任意の記録。旧 `workshop_validation`・`workshop_input_guard` を復元しない。
+- 読みや保存材料を本人が尋ね、手元に情報がないときだけ既存の参照toolで調べ、一度だけ返答を続ける。編集の前提検査や、編集失敗後の再応答生成へ戻さない。
+- 新案は一案だけ生成して未採用案へ置く。本人による現在句の編集は保存後に反映し、未採用案の編集はpendingだけを更新する。採用時は同じ元句と版へ再照合して保存する。材料IDの一致を意味や実使用出典の検証済みと扱わない。
+- BERT終了でpendingがなければ閉じる。pendingがあればLLMが採用・破棄・会話を選び、採用／破棄の成功後だけ閉じる。採否不明・askではopenとpendingを保持する。称賛だけで終了・lesson解除はしない。終了を伴わない採用後は相談を続ける。
+- 戦闘では句・pendingと受付済み返答を保持する。敵の現在観測と警戒解除条件からコードで再開し、再開のAI分類や同意語判定を戻さない。同じworkerの生成・編集・保存を重複実行せず、再生済み文は繰り返さない。明示停止・voice off・死亡・次元変更・切断・終了は保留を終端する。
+- WSの受付がopenの間は通常の周辺走査・定期画像を休み、体力・足場・交戦等の軽量観測とプレイヤーへの注視を使う。未測定項目を新材料にせず、明示撮影・句集用撮影は別扱い。終了・戦闘移行時には通常観測へ戻す。
 
-**BERT分離（2026-10-24）:** 共通受付の `request_runtime::Binding` で川柳相談の受付状態を固定し、川柳中は8分類、それ以外・戦闘中断中は通常16分類へ一回だけ配送する。掛け軸・STT文脈も同じ受付状態を使う。UI非表示だけではモードを変えない。共有Mutexで両モデル合計1推論に限定し、失敗・対象外・片側未設定でも他方や旧23分類へ回さない。入力元・接続・句のID/版・中断境界を再照合し、旧音声・遅延結果を新モードへ付け替えない。川柳は `models/dogido-senryu424-seed42`、通常は全16分類の `models/dogido-normal16-seed48-mob`。設定は `request_classifier_senryu_model_root` / `request_classifier_normal_model_root`。詳細は [分離仕様](docs/2026-10-24-bert-mode-routing.md)。
+詳細：[受信と適用](docs/rust-workshop-validation.md)、[一行全体の編集](docs/2026-10-30-workshop-complete-line.md)、[戦闘保留](docs/2026-10-28-workshop-reply-resume.md)、[WS中の観測](docs/2026-11-03-workshop-observations.md)。全文直し・自作句保存は `poem_input.rs`、読み辞書の編集はあんちょこ画面が入口。
 
+### 自動発句と記憶
 
-**2026-10-23のBERT接続（移行前の記録）:** 890件版の元seed42・23分類を既存の共通受付へ接続する。現在発話だけを一度分類し、モブ情報・剣・乗用動物・ドギド呼び出し・視線11種・川柳の行3種／具体変更3種／終了へ渡す。川柳の行分類だけで編集を開始しない。当時は原文の置換語と現在句・版を照合していた。WSの原文一致による拒否は2026-10-28の方針で撤去し、保存は引き続き既存処理が所有する。モブ情報は友好・敵対を含む現在のドギド視点を使う。Minecraft知識・その他の現在観測の専用ラベルは未収録。再開・継続は敵の現在観測と警戒解除条件でコードが決めるため、OS AI・chat分類fallback・再開同意判定・敵が残る間の暫定再開は撤去した。旧判定へ戻さない。[接続記録](docs/2026-10-23-modernbert-23class-integration.md)。未収録の知識・観測分類は、この23分類への接続とは別の課題として扱う。
+- 通常周期は10分。通常返答の後ろ／安全なqueue境界で開始し、`knowledge`中は時計を凍結する。試験用の短縮設定を通常運用へ持ち越さない。
+- 景色・天候・モブ、直近の視認、配送済み会話を出典と時点を保って材料へ渡す。持ち物は発句時の空でないhotbarだけ。欠測・全枠空でも全インベントリへ拡張しない。落下物は周辺観測として別に扱う。
+- `haiku_irony` と `haiku_scene` は同じ元材料候補を使い、前置きで選んだ材料を三行生成・再生成へ引き継ぐ。前置きで使った材料が1〜3件なら全件、それ以上なら選択された部分集合。未選択の全観測を後段から足さない。
+- 自動発句には既存の音数・文字種・道具／読みのhard制約と再生成上限がある。空行・折返しを補完し、意味・自然さの評価LLMや材料固定語リストによる棄却は行わない。この検査をWS編集へ流用しない。
+- `line_sources` は提示資料の記録で、意味的な実使用の証明ではない。句は基本auto-save、revision・critique・lessonは既存記憶処理で保持する。過去revisionを常時few-shotへ積まず、想起は明示クエリで行う。
+- player lessonはsoft参考。`forbidden_fragments`をhard禁止に合流しない。称賛はcritiqueだけでlessonを消さず、解除は `polarity=loosen`・`lesson_type="*"`。WS内はLLMの `clear_lessons` を既存保存へ渡す。日数・発句回数のTTLを維持し、strengthを新たな強制条件にしない。
 
-**文字配送の補足（2026-10-09、関連自動テスト確認済み）:** `dialogue_text.v1` のMinecraft接続では音声完了に加え、画面へ挿入後の表示ACKも会話の配送完了に使う。`text_displayed` と音声の `playback_status` は分離し、同じ返答の履歴確定は一度だけ。以下の「実再生後だけ」という履歴記述にはこの表示確認を含める。`voice off` はマイク・STT・TTSを休止する。詳しくは [文字会話仕様](docs/2026-10-09-minecraft-text-dialogue.md)。
+詳細：[前置きと材料](docs/2026-10-29-haiku-preface-materials.md)、[11月2日の材料仕様](docs/2026-11-02-senryu-materials-mob-chat-edit-input.md)、[生成・知識範囲](docs/2026-10-21-generation-and-knowledge-scope.md)。
 
-### 3.0 ローカルでは軽量処理を優先し、LLMを必要な箇所に絞る
+## 5. 身体・観測・限定操作
 
-**2026-10-18の設計方針。** ローカルシステムでは、まず既存コード・辞書・DB・BERT等の軽量な分類器で処理できるかを確認する。LLMの仕事は、自然な返答・意味説明・新しい句案の生成など、ここぞという箇所に限定する。
+- ドギドはMinecraft内の相棒で、実ロボットの静止・整定を撮影の前提にしない。移動と向き変更を並行し、生成・発話中も身体移動を続ける。位置差・角度差・停止状態を明示撮影の採否に使わず、撮影後の姿勢で画像を破棄しない。特定モデルのぶれ補正能力を断定しない。
+- 自分の身体の地点・向きに基づく観測を使い、プレイヤーの視界・所持品・報告と混同しない。画像は比較が成立した変化時だけ比較元→今回の2枚、それ以外は今回1枚。身体の方位変化と実在するPLAYER枠の説明を添え、ハッシュ・マス・処理番号をモデル説明へ出さない。
+- 周囲の視認一覧と身体を向ける注目候補は別。注目対象だけを「見えているもの」の一覧にしない。現在視認・直前の視認・音を分け、辞書の一般知識やプレイヤーの報告を自分の目撃へ昇格させない。
+- 通常会話・環境反応のモブ提示は「いま見えとるもん」と「さっきまで見えとったもん」に分ける。後者は既存の直前の視認変化から、現在見えていない種類だけを取り出す。不完全観測や世界変更から消失を推定しない。現在見える音源の実音は会話材料へ重複して載せず、自発反応では同じ音源・音種の継続を新着扱いしない。戦闘用の聴覚は別に維持する。
+- 敵の視認は、同じ個体の実視認が続く間だけ既存の外周まで保持する。喪失した個体を死亡・撃破へ読み替えず、音だけから視認・召喚成功・プレイヤー撃破を確定しない。友好・資源モブへの操作禁止を語らず、中立モブには優しく接する方針を使う（[モブ反応のトーン](docs/mob-interaction-tone.md)）。
+- 匂いはFabricの `smell_policy_v2`（`none / present / suppressed` とcomponents）が正本。同種非加算・異種の抑制を解決した各成分と強さを使い、方向・距離・個数・entity IDを足さない。匂い単独で戦闘／WS中断を起こさない。雨上がり候補は通常臭と別で、反応完了／沈黙確定後に通常へ戻す。
+- 空・地下・降水は既存の投影条件を守る。乗車は乗車中だけ主語付き事実で渡す。照明のinventory増加をクラフト／設置と断定せず、既存の抑制を通った場合だけ反応選択と本文を一回で生成する。環境の候補・間隔・優先・取消はコード、話す／黙ると本文は既存会話モデル。
+- `select_sword` は明示依頼だけで、自動持ち替えはしない。乗れる動物14種の呼び戻しは依頼後の `list_horses / select_horse` の二段階。所有者・装備・現在候補・世代・期限・重複をRust、足場・水域・身体空間と実移動を統合サーバーで再検査する。汎用の世界操作toolへ拡張しない。
 
-- 意図は学習済み分類器、現在句・版など既知の実行データはコードで準備してから、必要な材料をLLMへ渡す。WSの自由な語句・採否の解釈はLLMが担当する。分類済みの意図や、手元にある句・観測から計算できる事実を、別のLLMへ再質問しない。
-- 川柳は現在句・未採用案・保持中の相談対象と、BERTの分類・LLMの語句解釈を使う。コードは解釈された編集を対象の句と版へ適用できるか照合する。原文の語句を再抽出して対象や置換語を上書きしない。川柳WSでは音数を計測しない。存在しない対象や別の句・版への適用を、古い対象で補って実行しない。
-- 感想・批評・質問と修正依頼の区別はBERT・LLMに任せる。「文字数が多いのがちょっと気になるな」等の語句や音数から、コードが修正意思を追加・撤回しない。修正・採用・破棄・終了はモデルの結果を受け取り、対象・元句・版・現在pending等をコードで確認して実行する。
-- 一つの応答で必要な生成は原則1回。反応の選択と本文は同じ呼出しで生成する。前段planner、同じ分類の再判定、別LLMによる自然さ・意味の採点、形式修復や修正失敗後の返答再生成を連鎖させない。追加呼出しが必要なら、途中で初めて得られる情報などの理由と回数上限を設計時に示す。
-- 分類拡張は担当チャットと正本データの進捗を確認して接続する。ラベル案・収集済みデータ・学習済みモデル・本体採用を区別し、並行作業と重複して分類体系を作らない。
+詳細：[身体と撮影](docs/2026-10-26-look-capture-and-darkness.md)、[身体観測と会話](docs/2026-11-03-body-observation-dialogue.md)、[時系列画像](docs/2026-11-02-vision-frames.md)、[視認と注目](docs/2026-11-04-vision-and-attention.md)、[モブ提示](docs/2026-11-04-visible-mob-presentation.md)、[敵の外周追跡](docs/2026-11-04-hostile-vision-margin.md)、[匂い](docs/smell-policy.md)、[動物呼び戻し](docs/2026-10-11-horse-recall.md)。
 
-2026-10-18に照明の一回生成と、川柳修正の意味LLM検査・編集後再応答生成の撤去を実装。2026-10-23に川柳の行・具体変更・終了とモブ情報等の23分類をBERTへ接続した。Minecraft知識等の未収録部分だけを今後の分類拡張候補とし、戦闘後の再開をAI分類へ戻さない。応答への不満に対してLLM分類を積み増さない。実装と検証結果は区別する。詳細と移行状況は [モデル呼び出し監査と軽量処理への移行](docs/2026-10-18-dialogue-model-call-audit.md) を参照。
+## 6. 保存・設定・起動
 
-### 3.0a コードはLLMの出力を受け取り、補完し、実行する
+- 常用の生成系はllama.cppの `llama-server` とGemma 4 26B-A4BのGGUF。通常会話・画像・川柳は `default_model` とサーバーのプロンプトキャッシュを使う。保存場所・起動プロファイル・確認方法は[共有LLM](docs/shared-llm-profile.md)を参照し、実際の起動状態はその都度確認する。
+- 共有の動作既定値は `dogido_server/runtime_defaults.json`、一般設定・ポート・保存先の解決は `dogido_server/config.py` と起動処理を確認する。Python型・制約とRust検証を既定値の重複と誤認しない。設定を撤去する前に本体・`--voice`・配布の消費先まで追う。`voice_vad_cli` は音声起動JSONからRust STTへ渡る現役設定。
+- 本体・本棚・相談室は同じ `memory_dir` を使う。SSDを正本にする環境では `DOGIDO_MEMORY_DIR` を揃え、旧ローカル保存先へ混在させない。既存記憶は設定で引き継ぎ、起動時に自動移動・統合しない。[本棚の保存構成](docs/2026-10-13-bookshelf-integration.md)を参照。
+- SSD正本環境の研究履歴は原句日時で `YYYY/YYMMDDHHmm`、旅は `journeys/YYMMDDHHmm/<旅ID>.json`（日本時間）。句の編集・想起は同じ保存先の `sessions/`・`long_term/` のJSONLを使う。研究履歴の配置と句の正本を混同しない。
+- 画像・内部表現は対応する正本と照合して保全・整理する。`artifact-jobs` の帰属・保存状態とwriter終了・参照・内容照合を使い、取消／不成立の専有素材だけを整理する。保存待ち・保存失敗・処理中・帰属や参照が不明の素材を古さや句の不在だけで削除しない。[素材のライフサイクルと確認結果](docs/2026-11-04-haiku-artifact-lifecycle-plan.md)を参照。
+- `eval/episodes.jsonl` は発話なしも含む決定記録で、句の記憶や会話へ読み戻さない。`service_decision` は実再生成功ではない。記録失敗をリアルタイム処理へ伝播させない。
+- 通常のローカル起動は `apps/ドギド サーバー.app`、CLIは下記。家庭内LANは[遊ぶMacの導入](scripts/lan/遊ぶMacの導入.md)と[LAN運用](docs/2026-11-03-remote-mac-runtime-and-multiplayer-plan.md)を使う。Bonjour・初回双方承認・HTTPSで共有LLMへ接続し、本体・音声・記憶は遊ぶMacごとに分ける。本棚・研究資料の共有計画を実装済みと扱わず、旧SSH起動計画や統合前のMod復元コマンドへ戻さない。
 
-**川柳は、人間とAIの認知のぶれデータを収集するための窓口。あとで句集の方でも編集できる。** その場の句をコードの品質判定で完成形へ絞ることを目的にしない。
+リポジトリルートで、準備済みのPython補助環境を使う。`--check`はサーバー・生成・録音を始めない事前確認。
 
-**2026-10-21のユーザー指定。コードはLLMの邪魔をしない。** LLMに任せた意味・意図・表現をコードが固定語句で再審査しない。既知の句・対象・版・形式から不足を補完し、選ばれた操作を実行する。川柳WSでは疑問・条件・引用・伝聞・否定の語形や、読み未確定・音数・hard禁止語・表現重複を理由に拒否しない。元句・版・取消・保存整合性は実行のために扱う。語句例外や追加の意味検査器を生やさない。自動発句の検査を川柳WSの編集前提へ戻さない。詳細と実装状況は [Rustの川柳相談処理](docs/rust-workshop-validation.md)。
+```sh
+python dogido-rust/scripts/launch_dialogue.py --settings-dir . --check
+# 本体を起動する依頼のとき
+python dogido-rust/scripts/launch_dialogue.py --settings-dir .
+# 音声を使うときは別ターミナル
+python dogido-rust/scripts/launch_dialogue.py --settings-dir . --voice
+```
 
-### 3.1 キャラクター判断はコード
+`scripts/start_dogido.command server|voice` と `dogido-rust/start_dialogue.command` / `start_voice.command` も一般設定のポート（既定5055）と保存先を使う。相談室の独立HTTPは既定5057。準備・依存関係・その他の入口は[Rust README](dogido-rust/README.md)、テキスト注入は[adapter API](docs/adapter-api.md#21-post-apiv1player-input)を参照する。
 
-- panic / 警告の優先、発話抑制、いつ川柳かは **状態機械側**
-- LLM に「今パニックすべきか」を委ねない
-- Rust本体の通常会話と環境反応は、共通Base・場面・観測の扱い・対話目的・`speak/silent` 契約を使う。人格の正本は `dogido_server/llm/companion_prompts.json`、共通観測は `dogido-rust/src/conversation_observation.rs`。通常会話でも観測された雨・匂いを返事へ織り交ぜたり沈黙を選べる。生成開始前に待機中の観測・短期履歴を更新し、生成中の新しい変化は次の判断へ残す。沈黙は短期履歴の `role=event, reaction=silent`、再生成功だけがassistant発話。通常対話の不成立・生成通信失敗は下記の出来事として残す。再生失敗・取消・古いepochでは沈黙記録を作らない。川柳・共同編集の発話も同じBaseを参照するが、分類器・検証器の役割には混ぜない
-- Rust本体の環境対話は `dogido-rust/src/environment/reaction.rs`。モブ・ブロックの種類、全バイオーム、通常の匂い・天候・場所は共通観測の気づきテーブルへ統合する（[現行仕様](docs/2026-10-08-surroundings-notice.md)）。旧個別timerと互換fallbackは残さない。既定3分ごとの全snapshotを前回の周期表と比較し、差分と対話履歴からコメント済みかも踏まえて判断する。比較基準は発話結果に依存せず、古い差分を持ち越さない。種類の境界は通常範囲で発見・外側5ブロックの実視認で保持し、周期の発話は普通の移動や種類変化で取消さない。雷鳴・特定ゾンビの匂い・遮蔽入口は既存優先度を維持する。これらについて、既存会話モデルが実観測・一般的性質・再生完了した会話から「話す／黙る」と内容を選ぶ。候補・優先順位・間隔・観測の現在性・取消・状態／操作／保存はコード。無言は生成失敗と区別し、`event/silent` の発話なしの反応として共通短期履歴へ残す。再生済みの一往復や川柳材料へは数えない。戦闘経路は変えず、雷の悲鳴cueもモデルを待たない。小型モデル専用経路や新規の語句による意味判定は設けず、出力予算は既存会話設定を使う
-- 環境対話のモデル向け指示文も関西弁で書く。語句・方言・短い相槌で出力を棄却せず、fallbackは生成失敗・空出力・形式不正・明確なループや生成崩れに限る
-- 通常対話以外のleafは既存のカタログfallbackを維持する。通常対話の不成立時は下記の沈黙記録を使う
-- BERT・LLMの結果を受け取り、入力世代・対象行・現在pending・元句と版のCASを照合してから既存処理で状態変更・保存を実行する。成功は実行結果で確定する。WSの語句・採否・称賛・lesson解除の解釈を、原文一致・confidence・語形・品質で再審査しない。
-- 通常workshopの意図は共通BERTで一度分類し、行指定だけでは編集を始めない。会話モデルは現在句・pending・直近対話から返答・説明・質問・比較・新案生成・採否・lesson解除などを選ぶ。普通の会話はactionと非空のspeechで受け取り、付随項目の不備で棄却しない。本人から読み方・保存材料を尋ねられ、手元の情報で答えられないときだけ `inspect_verse` の `reading / source` を参照し、一度だけ返答を続ける。音数の計測・比較・固定案内はしない。具体変更は分類済みの対象と解釈済みの変更後の一行全体を既存編集へ渡し、終了はBERTの結果をコードが扱う。修正結果はコードで返し、編集後の返答をLLMで再生成しない。現在句・版・採否の実行・保存・戦闘中断はコードが所有する。
-- workshopは会話・読み取り・操作を分け、`workshop_response` でactionが必要とする項目だけを受信・補完する。`evidence`・`confidence`は任意で、原文意思を再審査しない。対象・現在句・版・取消・保存整合性は既存の実行処理が確認する。assist等の structured 出力は kind ごとにRustの各ドメイン検証器で現行外形を検査する。自動川柳の `haiku_draft` / `haiku_irony` / `haiku_scene` / `haiku_line_regeneration` は、空行・折返しのコード補完と既存の音数・文字種・hard制約を使う。意味・自然さの評価LLMと出力の出典・表現重複棄却は撤去し、未採用材料を渡して既定最大6回の再生成を行う。新kind追加時は呼出箇所・prompt例・fallback・consumer・テストを同時に揃える
-- STT文脈補正は `source=voice` と現在候補だけ。`raw/normalized` を入力記録として保持し、`interpreted/semantic` は会話理解と語句解釈に使う。WSではモデルの解釈を原文一致で制限せず、対象・元句・版・取消・保存整合性を確認する。assist等の既存の操作契約はそれぞれの処理で維持する。剣支援の実測誤変換 `県に持ち替え/変えて/ハインコ（変更）/チェンに変更` は voice-only・操作語直結の閉じた規則で解釈面だけ補正し、typed・単独の候補語・その語の会話は対象外
-- 乗り物は乗車中だけ `player.vehicle` を送る。LLM には必ず「プレイヤーはXXに乗って…」の主語付き事実として渡す
-- 本体の一般雑談は既存 `player_chat`。詩の基礎知識とMinecraft資料だけを既存の正本DBへ渡す。旧learnの専用対話・Web調査・宛先確認・互換設定・一般文法／漢字／語彙資料は撤去済み。foregroundは `none / casual / knowledge / haiku_preparation / haiku_workshop`。戦況、assist、workshop、状態変更と保存はコードが所有する。assistant履歴と会話由来の川柳材料は実再生または表示確認後だけ確定し、失敗・取消・古いepochを混ぜない。
-- 新入力は音声の完了を待たない（2026-10-30）。相槌・くしゃみを含む音声認識結果・文字入力は、通常返答・川柳・環境コメントの再生中も共通受付へ進める。元の出力は止めず、生成・状態適用と音声配送の枠を分け、前の音声中に次の生成を進める。音声は順番に再生し、各turnの実完了を一度だけ履歴へ残す。通常の観測変化・観測失効・期限だけで途中停止せず、緊急警告・明示停止・voice off・接続／世界／サーバー終了は取消を維持する。川柳の生成・前置き・本文・相談中の夕方警告は、従来どおり発話前にコードで抑止する。通常会話の再生中にも夕方警告の保留を追加する。詳細は `docs/main-dialogue-integration.md`。
-- 実再生完了した発話は、モデル生成・固定警告・支援返答・川柳の前置きで分けず短期履歴へ入れる。句本文・相談・記憶操作の返答は出来事形式で共有し、新しい川柳材料へ重複登録しない。未完了・失敗・取消・古い世代を発話済みにしない。
-- 通常 `player_chat` は今回入力・現在観測・確定済み短期履歴から、話題選択と返答を一回のモデル呼出しで行う。前段plannerと生成後の意味・観測整合検査は使わない。観測・一般知識・player報告・assistant履歴を別の材料として渡し、世界操作・保存・戦況判断はコードが所有する。
-- 通常 `player_chat` はJSON末尾と単純な型違いをコード補完し、空・文字化け・明らかな反復・補完不能な外形だけを不成立にする。音声の先行再生がまだ始まっていなければ発話なしにする。日本語・方言・名前・嗅覚・内容整合を採否の条件にせず、再生成と定型fallbackは行わない。再生開始前の不成立・生成通信失敗は「難しい話だったので、ドギドは沈黙を選んだ」を短期の出来事として残す。壊れた本文を履歴へ入れず、この出来事を再生済み発話・川柳材料に数えない。川柳・workshopの検査経路は別。
-- 音声ありの通常 `player_chat` は、一回の生成の受信中に `action=speak` と本文の文境界が確定した順で、読み補正・合成・再生を始める。JSONのキー・reasoningは読まず、action後置はその確定を待つ。全文生成が完了した後、全文の表示確認または全音声の成功でassistant履歴を一度だけ確定する。先行再生後に生成・形式・音声が失敗しても「沈黙を選んだ」へ読み替えない。既に全文の表示が確認済みなら、その配送履歴は維持する。川柳WSの会話返答も同じ文ストリーム処理を使い、respond / explain / ask / compare / show_current / acknowledge_meaning の確定した本文だけを文ごとに届ける。編集・採否・lesson解除とnative toolの引数は先行発話せず、既存の実行結果を返す。音声なし・自動発句・WSの操作結果・環境反応は従来の完了後処理を使う。詳細は [通常会話の文ごとの音声](docs/2026-10-26-chat-sentence-stream.md)・[川柳相談の文ごとの音声](docs/2026-11-02-workshop-sentence-stream.md)。
-- 嗅覚はFabricの閉じたスメル規則で解決する。`smell_policy_v2` の `none / present / suppressed` と `components` を必須にし、旧flat形や旧basisの互換は残さない。同種非加算、ゾンビ系は1差・その他は4差から弱い異種を隠し、残った各種類の強度をモデルにも渡す（1は仄か、8は強烈）。コンポスターの基礎値は3。雨上がりは一度の気づき候補を通常成分と分け、既存匂い反応の出力完了／沈黙確定後は即座に通常へ戻す。180秒は候補期限だけで、通常臭を消さない。ゾンビ系は敵対状態・視認・聴取と独立して収集する。匂いの方位計算・保持・送受信は撤去済み。方向・位置・距離・個数・entity IDは渡さない。匂い単独で戦闘mode／workshop pauseを立てない。現在の匂いへの問いは各成分の強さを反映したコード固定文。Rust通常雑談にも解決済みの各匂いを共通観測として渡し、通常対話の嗅覚断言を生成後に棄却しない。正本は `docs/smell-policy.md`
-- 照明器具のinventory増加はクラフト／設置とは断定しない。半スタック以上＋暗所警告外、5分以内の重複、継続中の危険な暗さはコードで無言にし、それ以外だけ `light_source_comment_plan` が反応選択と本文を一回で生成する。不正出力・生成失敗は無言で終え、再試行や別の発話leafを呼ばない。暗所状態の停止は現在観測でコード確定し、モデルへ正確な本数を渡さない
-- 雑談中の自動川柳は通常10分周期を維持し、現在のplayer replyの後ろまたは次の安全なqueue境界で始める。再生完了済みの直近3 turnだけを、最大80字・最大3 motif・source turn IDつきの `player_reported_context` soft材料として使う。正本DBの資料照会を扱う `knowledge` foreground中は発句時計を凍結する
-- 世界操作を汎用のtools一覧としてLLMへ渡さない。代表命令はコード、自然形は閉じたintent/evidence/confidence抽出まで。乗れる動物の呼び戻しは馬系・ラクダ系・ブタ・ストライダー・ハッピーガスト・オウムガイ系・ラマ系の14種に限り、本人の依頼を受けてからMinecraftの候補一覧を渡し、native APIの `list_horses / select_horse` で一頭を選ばせる二段階だけ。名前の完全一致で入口を絞らず、原文・種類・所有者・最新個体・会話世代・期限・重複をRustが検証し、実移動と着地点は統合サーバーで再検査する。Ownerありは本人だけ、Ownerがない許可済み種類は名札と鞍／ハーネスを条件にする。オウムガイ2種は横3×3の水域、ハッピーガストは身体全体の空間を必須にする。失敗理由は既存結果から短期の出来事へ返し、一覧にない理由を距離と断定しない。相手を確認できない場合の案内は「声が届かへんかったみたいや」。呼べる候補が0頭なら選択toolを公開せず、同じ二回目の会話へ候補と具体的な理由を渡す。逃走用途の明示依頼は戦闘・警告中も既存assistの入力世代で受け付け、足場・空間等の実状態検査は維持する。実行結果と出現演出の完了は分ける（[仕様](docs/2026-10-11-horse-recall.md)）。その他の実行capability・現在snapshot・slot・期限・期待item・重複もコード検証する
-- `select_sword` は明示依頼だけ。非戦闘中の明示依頼は可だが自動持ち替えは禁止。共通BERTの分類を使い、現在hotbar・世代・期限・結果をコードで検証する
+## 7. 変更の確認
 
-### 3.2 川柳 lesson は soft
+- Pythonテスト・模擬worker・fixtureは `dogido-rust/tests/python/`、共通Pythonテストは `tests/`。本体起動用 `scripts/` へ混ぜない。
+- **自動テスト・模擬接続は試験ごとの一時保存先へ隔離する。** 旅・句・短期記録・本棚・画像・内部表現・評価ログを含め、本番SSDの設定を継承しない。Python HTTP試験は `storage_fixture.isolated_storage` を使い、所有する一時領域を終了後に整理する。隔離できない試験は起動しない。
+- 通常試験は模擬モデル・採取なし。実採取を試す場合はモデル側も専用の一時採取先へ向ける。`check_*.py`がすべて模擬とは限らないため、ファイル冒頭・引数・fixtureを読んで選ぶ。
+- 検証は変更の影響範囲に合わせる。テストを新設・改訂するときは期待動作・観測できる合格条件・検証範囲を明記し、接続確認と実モデル／実機の品質確認を分ける。無関係な既存失敗は別件として報告する。
+- 該当確認が通ったら、`git diff --check`、完全な未stage差分とstage済み差分、`git status --short`を確認して完了報告する。別の懸念がなければ全体試験の反復や追加整備を続けない。
 
-- player lessons は **参考行**（「強制ではない」）
-- **自動発句では道具・読みの allowed/forbidden だけ hard**（例: シャベルなのにつるはし禁止）
-- lesson の `forbidden_fragments` を hard 禁止に合流しない
-- **praise（いい句）→ lesson は触らない**（過去の指摘をキープ。critique 保存のみ）
-- **lesson解除は `polarity: loosen` + `lesson_type: "*"`**（全軸抑止）。WS内では「気にせんで」等の依頼を会話LLMが `clear_lessons` と解釈し、既存memory runtimeが実行する。WS外の固定shortcutは別の既存範囲として維持する
-- TTL: 日数 + 発句回数で自然減衰（`dogido-rust/src/haiku_memory.rs`）
-- **strength 段階は当面使わない**（フィールドはあるが list 未参照）
+必要に応じてリポジトリルートから実行する。文書のみの変更ではリンク先・記述の根拠・差分を確認し、実モデルやサービスを起動する必要はない。
 
-### 3.3 H6 固定語 materials 突合は撤回済み
-
-- 「うみ」等の **drift 単語リストで句を reject しない**
-- 場外れはプレイヤー workshop 講評 or 生成品質で見る
-- 湖の隣で「うみ」が自然なこともある。材料＝プレイヤー視界ではない
-
-### 3.4 雑談は overfit しない
-
-- 弱い topic で偽 identify しない（**none を守る**）
-- 詳細: [docs/player-chat-casual-plan.md](docs/player-chat-casual-plan.md)
-
-### 3.4b ambient / モブ反応トーンは公式に合わせる
-
-- 友好・資源モブに「触るな」系の操作禁止を言わない
-- 中立は「触るな」より **優しく・怒らせない**（Be nice to animals）
-- 正: [docs/mob-interaction-tone.md](docs/mob-interaction-tone.md)
-
-### 3.5 記憶の載せ方
-
-- 発句は基本 auto-save（entries）
-- revision / critique / lesson は JSONL
-- **プロンプトに過去 revision を常時 few-shot しない**
-- 想起は明示クエリ時（「句思い出して」等）
-
-### 3.5b エピソード決定記録は記憶ではない
-
-- `dogido-rust/src/episode_log.rs` は `trigger → observation → state_before → decision → action → result` を schema version 付きで追記する
-- 発話なしも含む非重複イベント1件を1行とし、重複受信は新しい判断として記録しない
-- `eval/episodes.jsonl` を句の記憶、会話文脈、川柳生成へ読み戻さない
-- `result.scope=service_decision` はserviceが選んだ結果であり、TTS／スピーカーの実再生成功ではない。adapter結果を受けた行だけ `adapter_execution_observed` とcommand IDで記録する
-- serialize・ディレクトリ作成・追記失敗をリアルタイム処理へ伝播させない
-
-### 3.6 完成度の本丸（機能追加の前に）
-
-1. 観測 materials をプレイヤー視界に近づける  
-2. 外したあとも関係を壊さない（workshop / soft）  
-3. 飛び道具（VLM 常時 / Vector RAG / 状態・保存まで含む汎用エージェント化）は後回し
-
-→ [docs/companion-maturity.md](docs/companion-maturity.md)
-
----
-
-## 4. よく触るドメイン詳細
-
-### 川柳 workshop（H1–H5.2 + H7-lite + H9 / 共同編集 / 連続局所編集 / 戦闘中断）
-
-- pin: Rustのsession内のworkshop状態（会話 5 往復とは別）
-- open: 発句後 / close: drift・timeout・完成三行のformal/conversational revise・BERTの終了分類・次の句。pending案の明示採用は現在句へ昇格してopen維持
-- 進行: 行指定・具体変更・終了はBERT、自然な返答・説明・比較・新案・採否・lesson解除は会話モデルが担当する。WS内の `clear_lessons` はLLMのactionから既存memory runtimeへ渡す。完成三行revisionの既存入口とWS外のshortcutは維持する。普通の会話は本文を受け取り、付随項目の不備だけで定型文へ戻さない。局所編集の実行に必要な対象・元句・版が対応しなければ、元句を保持してコードの結果文を返す。操作外形の既存補完は残す。具体変更の語句や根拠に認識原文との文字列一致は求めない。生成失敗・解釈できない外形・空の会話本文では正本を維持してfallbackする。confidenceの閾値や文の語形で意味を再判定しない。`unrelated` は同じ入力を通常雑談へ渡し、既存の二回driftへ参加させる。
-- ループ: 説明だけなら一手で返す。本人が読み方・保存材料を尋ね、手元の情報で答えられないときだけ `inspect_verse` で現在句／pendingの保存済み読み・材料、または `inspect_text` の辞書読みを参照し、一度だけ返答を続ける。`propose_revision` は一案だけ生成し、コードが対象・元句・版等を照合する。成功は未採用案と採用案内、失敗は元句を保持した旨をコードで返す。意味評価・音数計測・再試行・編集後の返答再生成はしない。未実行の保存・採用・修正を成功したように話さず、辞書や保存記録の確認結果とモデルの解釈を分ける。
-- 意味説明後の納得: `explain / understand_meaning` の実再生完了後だけ会話段階を保持し、「そうなんだ」等の意味的ackを会話モデルで抽出する。ackターンはfinding・critique・lessonへ流さず納得への返事に留め、終了確認へ進めない
-- `propose_revision`: 置換語が指定されず、新しい表現案を求められた場合だけ、分類済みまたは保持中の対象行を既存haiku routeの一案生成へ渡す。内部記録のintentは `request_repair`。コードが元行一致・対象外不変・版を確認する。材料IDは実在するものだけを任意の注記にし、欠落・未使用・重複で案を拒否しない。生成された表記を保持し、音数・hard制約・表現重複でWSの修正を拒否しない。意味保持・自然さの別LLM評価と案の再生成はしない。出典IDの一致を意味の検証済みと扱わない。案は採用まで保存せず、採用時にも同じ元句へ適用できるか照合する。句本文・採用案内はコードで返す。
-- プレイヤー局所編集: 三行は安定ID `line_1/2/3`、概念番号1/2/3、配列index 0/1/2、位置upper/middle/lower、正規名上五/中七/下五を持ち、各行の表示・読み・材料・provenanceを同じオブジェクトへ保持する。BERTが行指定と具体変更を分け、行指定だけなら相談対象を保持する。具体変更は分類済みの行を選び直さず、既存native `stage_player_edit` でLLMが解釈した変更後の一行全体を受け取る。コードが元の行と比較し、同じなら変更なし、違えば他の二行を保持して適用する。原文の正規表現から直接編集を実行しない。コードは現在句・版・対象外不変を照合する。LLMが返した変更後の一行を認識原文から再構成して上書きしない。読みは取得できた値だけを保持し、未知読みは未確定のまま扱う。現在句への本人指定変更は保存後に反映する。未採用AI案への本人編集は元句と対象外行の材料・来歴を保持し、pendingだけを更新する。編集だけでは採用・保存せず、採用後に保存する。本文・現在句照会はコードが返す。意味質問には句・保存材料・見どころ・直近対話から説明し、材料IDの一致を使用根拠や意味の検証済みと扱わない。句・材料記録を説明だけで書き換えず、不明な由来を作らない。
-- pending採否: 共同編集stepが採用／破棄／比較／継続を選び、コードが現在pending・CAS・入力世代を照合して実行する。evidenceは任意の記録であり、原文との一致・欠落で採否を拒否したり再試行したりしない。利用不可時は未採用案を保持して採否確認へ戻す。終了はBERTの分類結果を使い、モデルへ再判定させない。BERTが終了に分類し、未採用案がなければ直接閉じる。未採用案がある場合はLLMが採用・破棄・会話を選ぶ。採否が未確定なら尋ね、askや会話の応答ではopenとpendingを保持する。LLMが採用または破棄を選んだときだけ、その操作の成功後に閉じる。採否と終了は既存の一つのtransactionとして扱う。`accept+close` は保存後、`reject+close` は破棄後にcloseする。称賛だけでは終了しない。入力のacceptedと終了後のclosedは別に確認する。終了を伴わない採用後は句を次の基準へ昇格しpinを維持する。
-- 戦闘中断: visual／auditory脅威・直近被弾で句とpendingを保持したままpauseし、workshop用ASR補正・timeout・driftを止める。通常敵はadapterの論理サーバー死亡イベント／クライアント死亡状態／実爆発パケットを使い、プレイヤー撃破／爆発死／その他死亡／クリーパー爆散／離脱で復帰文を分ける。死亡音・経験値・攻撃履歴・観測範囲からの消失だけではプレイヤー撃破扱いにしない。死亡は `hostile_defeated`、爆散は `creeper_detonated` で即時に一度だけ反応し、後の `combat_ended` は安全確認の安堵へ分ける。導火開始と通常／帯電クリーパー爆散は慌て方を変え、一度話した個体IDは後の敵離脱へ持ち越さない。敵が警戒範囲から消え、既存の警戒解除と配送条件を満たしたらコードで再開する。戦闘前に川柳分類が完了した入力だけは同じ句・版を再照合して再開後に一度戻し、新たな戦闘中入力は通常16分類へ送る。通常側の入力を再開後の川柳操作へ読み替えない。終了は川柳モードのBERT、現在句・版・pending・保存はコードで照合する。再開のAI分類・語句による同意判定・敵が残る間の暫定再開は撤去済み。旧判定へ戻さない。
-- 受付済み川柳返答は、生成中・発話中に敵の戦闘へ移っても同じworkerを保留し、安全確認と復帰案内の後に続ける。再中断にも同じ処理を使い、完了済みの文は繰り返さず、途中の文だけ文頭から再開する。原文を再投入せず、LLM生成・編集・保存・配送履歴を二重実行しない。文字のみの返答は再公開したIDで表示確認をやり直す。明示停止・voice off・死亡・次元変更・接続／サーバー終了は永久取消。詳細は[川柳返答の戦闘保留と再開](docs/2026-10-28-workshop-reply-resume.md)。
-- 全文直し・自作句保存の入口は `dogido-rust/src/poem_input.rs`。自然な相談は有界stepの解釈を受け取り、対象・元句・版を照合して適用する
-- 明示緩めはworkshop外でも可。保存の所有者はRustのmemory runtime
-- 読み辞書の編集はあんちょこ画面から行う。会話を辞書保存命令にしない
-- 相談の配線は `dogido-rust/src/dialogue/workshop_runtime.rs`、応答の受信は `workshop_response`、差分の適用と保存は `workshop_editing`・`workshop_edit`・`dialogue/workshop_edits` が担当する。旧 `workshop_validation`・`workshop_input_guard` を復元しない
-
-### 発句制約
-
-- `dogido-rust/src/haiku/preparation.rs` とmemory runtimeが、道具・読みhard＋`player_lessons` softを組み立てる（空ならキー省略）
-- scene は見どころ発話の補助。`found=false` / 契約不合格でも一次 source atom が足りれば共通生成器へ進み、固定川柳カタログは LLM 利用不可時だけ使う
-- 漢字混じり候補は既存UniDicが使える場合だけコードでかな化し、同じ行を共通検査へ戻す。未知語や辞書無しで読みを推測しない
-
-### LLM routes
-
-- `chat` … 雑談・助言  
-- `haiku` … 句（irony/scene 経由のことも）  
-- 低レイテンシ戦況は LLM なし  
-- route ごとに provider を分けられる（`.env` / Settings）
-- OS AI専用のSDK・worker・設定・依存は撤去済み。共通BERTが利用できない場合に旧LLM分類や語句判定へfallbackしない。
-
----
-
-## 5. やってはいけないこと
-
-| NG | 理由 |
-|---|---|
-| `dialogue/mod.rs` にドメインロジックを集積する／旧Python本体へ戻す | Rustの専用モジュールとruntimeの責務を分ける |
-| soft lesson を hard 禁止に昇格 | H5.1 方針破壊 |
-| 材料固定語リスト（旧 H6）の復活 | 撤回済み・誤検知とメンテ地獄 |
-| プロンプト肥大（履歴・revision 山盛り） | 設計上やらない |
-| 無関係なリファクタ・docs 大量生成を PR に混ぜる | 差分が追えなくなる |
-| ユーザー依頼以外のコミット / push / 破壊的 git | 明示依頼があるまでしない |
-| Hermes 等の汎用エージェント基盤導入 | プロジェクト方針で不要 |
-| VLM を必須経路にする | 将来・イベント駆動のみ想定 |
-
----
-
-## 6. 変更時の作法
-
-1. **既存方針 docs を先に確認**（haiku-player-improvement / companion-maturity / casual-plan）  
-2. 小さな単位で直す。テストを通す  
-   - 例: `./dogido-rust/cargo.sh test --all-targets --locked`。変更対象の模擬通信とPython補助のテストを追加する
-3. 挙動を変えたら **docs の状態表記も合わせる**（「実装前」のままにしない）  
-4. 絶対パス（特定マシンのホーム）を README や docs に書かない  
-5. 秘密情報・`.env` の実キーをコミットしない  
-
-### コードコメント
-
-- モジュール先頭に、担当する機能と、入力・出力、状態変更や外部処理の担当を日本語で説明する。
-- 主要な型・処理の入口には、入力・出力と正常時の処理順を書く。値の単位、省略時の意味、状態の更新担当も、読み手が実装を追わずに確認できるようにする。
-- 保存前の再照合、取消後の結果破棄、実再生後の履歴確定などは、成立する根拠と、その条件が必要な理由を近くに残す。禁止事項だけで説明を終えない。
-- CAS（編集前の句と版の一致確認）やepoch（処理世代）などは、何の取り違えを防ぐ仕組みかを説明する。コードの逐語訳や、すぐ古くなる試験件数はコメントに並べない。
-- 挙動を変えるときはコメントと現行手順を同時に見直し、試験済み・実機未確認の区別は手順書に残す。
-
-### テストの心構え
-
-- 川柳・workshop・雑談 policy はユニットで守られている  
-- LLM 実呼び出しに依存するテストを増やしすぎない  
-- 失敗が「chat の usable」など別領域なら、無関係に「直したことにしない」
-
----
-
-## 7. 起動・確認（最短）
-
-```bash
+```sh
 ./dogido-rust/cargo.sh test --all-targets --locked
 ./dogido-rust/cargo.sh clippy --all-targets --locked -- -D warnings
 ./dogido-rust/cargo.sh build --release --locked
-# 準備済みのPython補助環境で確認。checkはサーバーを起動しない
-python dogido-rust/scripts/launch_dialogue.py --settings-dir . --check
+python -m pytest -q tests dogido-rust/tests/python/test_*.py
 ```
 
-起動とマイクは [Rust本体の案内](dogido-rust/README.md)。実モデル・録音・再生・Minecraftを使う検証は、自動検証と分けて記録する。
+模擬HTTP試験は[Rust Pythonテスト案内](dogido-rust/tests/python/README.md)、Fabricは[adapter README](adapter/minecraft-fabric/README.md)、実機は[本体の実機チェック](dogido-rust/manual-dialogue-check.md)と[統合版の確認項目](dev_tools/実機確認_20261102/手順.md)を参照する。
 
-player テキスト注入（開発用・**アクティブセッション必須**）は
-[docs/adapter-api.md §21](docs/adapter-api.md#21-post-apiv1player-input) を参照。
+## 8. 文書の読み方と保守
 
-永続化ルートは設定の `memory_dir`（多くの場合 `.dogido_memory` 系）。`long_term/` 等は記憶の正本、`eval/episodes.jsonl` は読み戻さない評価ログ。JSONL を手で壊すと履歴・集計がおかしくなる。
-
----
-
-## 8. ドキュメント優先度（迷ったら）
-
-**目次・読む順番の正:** [docs/README.md](docs/README.md)
-
-| 優先 | ドキュメント |
-|---|---|
-| コンセプト | `docs/concept.md` · README |
-| 完成度・何を足すか | `docs/companion-maturity.md` |
-| 川柳 workshop | `docs/haiku-player-improvement-plan.md` |
-| 本体と起動 | `dogido-rust/README.md` · `docs/current-spec.md`（旧Python再配置計画は終了） |
-| 雑談 | `docs/player-chat-casual-plan.md` |
-| ボイス速度・間・コール断片 | `docs/voice-delivery-plan.md`（#13、うしろ named §11） |
-| TTS 読み・UniDic | `docs/tts-reading-unidic-plan.md`（Phase 1–2 済・optional `[tts-reading]`） |
-| 複数ユーザー（交代） | `docs/multi-user-tenancy.md`（#20） |
-| イベント形 | `docs/event-schema.md` · `docs/adapter-api.md` |
-| 状態機械 | `docs/state-machine.md` |
-
-計画書に「済 / 撤回」と書いてある項目を、古い記述のまま再実装しないこと。
-
----
-
-## 9. 旧Python本体と移行前の実装記録（運用終了）
-
-以下は当時の実装・試験記録として保持する。Pythonモジュール名、未接続という記述、当時の残件は現在の作業指示ではない。現行の実装先は上の地図、仕様は [現行仕様](docs/current-spec.md)、移植後の変更は [Rust移行記録](docs/rust-migration-plan.md) を参照する。旧版の実機確認を移植後の確認済みへ読み替えない。
-
-- 2026-09-16通常会話修復: 本人の明示訂正を対象turn／引用／原文evidenceで検証し、短期会話へ注記する。意味未確定なら対象を示して聞き返し、実再生completed後の直後の説明だけを同じ対象へ接続。元発話・世界観測・操作・長期記憶は変更しない。workshopは既存経路。**コード・全Python自動テスト済み。実マイク／Minecraft／TTSは未確認。** [詳細](docs/conversation-repair.md)。
-
-- **旧learnの履歴（2026-10-21撤去、再実装しない）** 2026-09-12本体Chrome統合: 限定国語対話へ、専用MCP実行ファイル・MCP SDK・可視設定・Google Chromeの副作用なし確認と、休眠providerを接続。同意確認→「ほな一緒にいこか！」の実再生 `completed`→game-event worker外の一度だけの検索を本体台帳へ結び、失敗・取消・開始前の戦闘・古いepoch・満杯では開かない。既に読書中なら敵対警告後も調査文脈を保持する。成功後は `web` foregroundと30分の読書期限でambient／発句時計を抑止し、明示復帰で調査話題一件だけを本体短期digestへ戻す。専用clientはsession終了時に閉じ、通常Chrome・ページ本文・URL・長期記憶・世界操作を触らない。**コード・自動テスト・非起動preflight済み。実Minecraft／LLM／TTS／Chrome E2E、OS前面復帰は未確認。2026-09-14にユーザー環境のMinecraft自動ポーズと川柳カウント停止を確認済み。** [詳細](docs/main-dialogue-integration.md)。
-
-- **当時の記録。WSの原文evidence・語形・品質による拒否は2026-10-28の[受信・適用方針](docs/rust-workshop-validation.md)で廃止。以下を現行検査として復元しない。** 2026-09-12川柳workshop共同編集: 自然な句相談を、現在句・未採用案・直近4往復・保存済み出典・当該ターンの実検査結果を読む一つの有界agent stepへ統合。説明／質問／読み・音数・出典検査／修正提案／比較／表示／局所編集／採否／終了から一手を選び、検査・editor結果後は一度だけ返答を再判断する。同一turnのeditor再実行、未実行の成功断言、直接の正本・pending・保存変更は禁止。正本、行対象、CAS、音数、hard制約、採否、保存、戦闘中断はコード。局所編集・採否・終了は音声認識原文中の行為evidenceを必須にし、疑問・否定・条件・引用・伝聞を棄却する。採否＋終了は両意思を検証したtransaction、`unrelated`は通常雑談の返答が成立した同じ入力だけを二回driftへ数える。この時点では初手不成立を旧分類器へ戻していたが、現在は初手・実観測後ともコード固定fallbackを使う。相談目的・action・outcome・checks・validation code・発話evidence・原文／解釈・正本／pending前後だけを`haiku_workshop_turns.jsonl`へ残し、思考文・agent speech・長期会話は保存／常時注入しない。**コード・自動テスト済み。ローカルQwen独立stepで意味説明、inspect後の返答、修正方向の質問、合成validator不合格後の再質問、schema再試行後の採用＋終了を確認。実Minecraft・実TTS・editor込みE2Eは未確認。**
-
-- 2026-09-11通常雑談の一回再考: `player_chat` の旧い広域禁止語から自然な「ドギド」自己言及・謝罪・「例」「本番」と表面上の方言差を外した。無害な `ドギド:` 話者ラベルは除去して採用する。最初の候補が外形またはgrounding検査に落ちた場合だけ、同じ会話へ候補とコード由来の理由を返し、意味と人格を残した言い直しを最大1回生成する。二案目も危険助言・未観測名・現在嗅覚の補作・突き放し・移動方針衝突を再検査し、再不合格なら従来どおり固定fallback。不合格案は履歴・状態・保存へ入れず、結果をログで区別する。**コード・全Python自動テスト済み。ローカルQwenの独立テキスト試験で、英語ラベル混入と未観測嗅覚の二経路は一回再考後に採用、warm時の追加生成は各約0.7秒。実Minecraft・実TTS・長時間の採用率／自然さは未確認。**
-
-- 2026-10-08スメルバトルv2: 各成分の強度を会話まで保持し、混合を親IDへ潰す処理と旧入力形式を廃止。コンポスター3、ゾンビピグリン追加、敵対一覧からの嗅覚収集を独立化。方位計算・送受信・固定返答を同日撤去。未再生の優先匂い反応は強度・発生源属性変更で一度だけ再判断する。**2026-10-11に撤去後を含むRust単体512件成功、Fabric123件成功の記録とofflineビルドを確認。全体検査の残件は[再確認記録](docs/2026-10-11-checkpoint-verification.md)を参照。撤去前の匂い・雨上がりの自動回帰テストと両ビルドは実施済み。実モデル8条件で各成分の強度到達を確認したが、英字混入・未観測の動きや景色の補作が残る。実Minecraft・実TTSは未確認。** [仕様](docs/smell-policy.md)・[全体検査の残件と実モデル結果](docs/2026-10-08-smell-v2-test-results.md)。
-
-- 2026-10-01スメルバトル方角観測（2026-10-08撤去済み）: 外部源の単独勝者へ勝者の実方角を丸めた粗い方向を追加。Rust環境対話と明示質問に推定として渡し、再生前に古くなった推定を取り消す。個体IDや実位置はadapter内部に留め、混合・所持品・雨上がり全般には推定を付けない。実Minecraft・実TTSは未確認。
-
-- 2026-09-11スメルバトル（方向追加前）: Fabricが実近接源・hotbar 9slot・現在バイオーム・温度・天候を閉じた規則で競わせ、`smell_observation` の `none / present / suppressed` 一件へ解決する。同種非加算、分類tie、腐った肉によるゾンビmask、温度減衰、焚き火の実調理slot、雨上がり180秒、雨雪雷・水中抑止をコードで確定。serverは2観測安定後、同状態一度＋全体2分クールダウンの固定文だけを話す。方向・距離・個数・entity IDは渡さず、匂い単独でcombat／panic／alert／workshop pauseへ入れない。当時の `zombie_scent_clues` 移行互換は現在廃止済み。1.21.11に実IDがない硫黄ブロック・金のタンポポは保留。**コード・Python/Java自動テスト済み、実Minecraft・実LLM・実TTSは未確認。** [詳細](docs/smell-policy.md)。
-
-- 2026-09-11照明コメント判断: inventory snapshot の照明器具増加は所持数の増加としてだけ扱い、有界plannerが無言／備え増加への相槌／実際の暗所回復後の安堵から一件だけ選ぶ。半スタック以上＋暗所警告外、同種コメント後5分以内、継続中の危険な暗さはコードで即時に無言。`dark_push` は所持数だけでは止めず、現在の明るさ・危険度による回復判定を維持する。最終leafへ正確な本数を渡さず、入手方法・本数の補作も棄却する。**コード・自動テスト済み、実Minecraft・実LLM・実TTSは未確認。**
-
-- 2026-09-11通常雑談grounding: 本文生成前に、発話内evidence付きの有界 `player_chat_plan` が会話継続・在否照合・対象同定・観測回答・参照確認・過去誤断言訂正から一件だけ選ぶ。会話継続ではカタログを読まず、対象照合時だけ候補IDをvisual／passive／hearing／現在構造物／乗車／視線先entityのコード観測へ照合する。候補は発話だけで先に決め、関連Mob観測で別対象へすり替えない。明示在否問いとplayerの平叙存在報告もコードrouting hintでactionを再検査する。カタログ一致、player報告、assistant履歴は観測へ昇格しない。全通常雑談の種名白リストも現在観測・player発話・planner同定候補だけへ限定した。未観測の在否は不在断定を避けた固定文、過去誤断言は固定の謝罪・現在観測の切り分け。世界操作・保存・戦況・assist・workshopは従来どおりコード。**コード・自動テスト済み、実Minecraft・実LLM・実TTSは未確認。**
-
-- 2026-09-11通常雑談の家らしさ: 設定済みリスポーン地点から既存距離内にいて、周辺にベッドまたはドアがあるときだけ場所投影を `home_base` にする。暗い拠点を単なる洞窟へ落とさない一方、水中と実破壊根拠のある採掘中を優先する。窓、リスポーン地点単独、遠いベッド／ドアは家の根拠にせず、暗所危険度・洞窟検出・安全判定は変えない。**コード・自動テスト済み、実Minecraft・実LLM・実TTSは未確認。**
-
-- **旧learnの履歴（2026-10-21撤去、再実装しない）** 2026-09-09本体会話更新: `none / casual / learning / web / haiku_workshop` のforeground所有権を維持し、通常雑談・正本DB回答・限定国語workerのID付き完了履歴を共有。一般話題は独立試験文脈で答えず元turnを本体 `player_chat` へ一度だけ戻す。学習中の突然の別話題は2分以上または明示名指し／転換なら即時移管、2分未満の宛先不明入力は無言で一件・5分保留し、呼び直しの固定確認が実再生完了した後の肯定でだけ元turnを移管する。有効な本人入力は本体TTSへbarge-inし、取得済みbatch末尾もterminal化するが、読み終えた実 `completed` は生成取消で上書きしない。純粋な音声叫声は通常履歴へ入れず、原文を非永続診断、コード観測を状況メモにする。危険前5往復は危険後3通常turn目まで保護し、`player_died` でforeground戦闘を解放。一件だけの戦闘話題保留10 accepted player turn、雷・夕方の入力再queue、ambient抑止、雑談中10分周期川柳、学習・Web中の周期凍結は維持。固定の会話中川柳導入では未発話解釈をspoken provenanceにしない。**この時点では実Minecraft・実モデル・実TTS・家庭音声は未確認。本体Webとゲームpauseは未接続、Fabric変更なし。** [詳細](docs/main-dialogue-integration.md)。
-
-- 2026-09-09対話・参加予測: 独立音声試験は、起動／明示リセット後の最初の入力を必ず受理し、受理後に常駐chatモデルで次の意味上の発話型を5件だけ予測する。明示名指し・話題転換語・質問・Minecraft話題はコードで必ず通す。それ以外も、予測不一致の大きな話題断絶を発話内根拠つき・信頼度0.85以上で `possibly_not_addressed` と抽出できた場合だけ通常履歴外へ保留し、失敗・低信頼・迷いは受理側へ倒す。保留は上限5件をログに残し、「待たせたね」等は `side_conversation_resolved` として「ええんやで。」、明示訂正は直近1件だけ再処理する。`handoff` は静音契機にせず、5分無活動後の `QUIET` と `/listen` の `MIC_OFF` は分離する。StackChanの未検証scene分類器は移植していない。解釈契約は情報要求・雑談・その他を分離し、一般雑談を本体既存 `player_chat` leafへ渡す。参加予測は返答を生成しない。独立音声hostは `turn_id` と発話IDを結ぶ5往復・5分の台帳を持ち、assistant発話を実再生 `completed` 後だけ履歴へ確定する。生成・参加分類・Google処理は有界直列workerで行い、完了時にepochを再検証する。次の音声は生成・再生中に直近1件だけ保留し、自動barge-inはせず `/interrupt` を明示手段とする。実Google概要は15秒後の1回だけ読み、自動再取得なし。研究中の別質問推定は確認を挟む。ドギド関連380件＋87 subtests成功、Chromeモック50件は直前の15秒化で成功。**通常会話・完了履歴・worker・予測保留の変更後は、実モデル・実家庭音声で未確認**。
-
-- **旧learnの履歴（2026-10-21撤去、再実装しない）** 2026-09-09閲覧集中: 16:34のユーザー実試験で通常会話→Web同意→15秒後の単発取得→取得内容を使う後続対話まで通った。検索完了直後の追加TTSは読む集中を妨げたため削除し、`awaiting_report`・取得内容・Web診断はログへ残したまま可視ページを静かに読めるようにした。無音化後の実音声再確認は未実施。
-
-- 2026-09-09起動修正: 独立音声試験がAEC形式判定で二度停止。形式表示はUSBマイク16kHz／tap48kHzだが、実コールバックは同じI/O周期として双方512フレームだった。一度目のrate比フレーム数の仮定を撤回し、同じフレーム位置のマイク＋参照左右を3chで一つの常駐AudioConverterへ渡す方式へ変更。機器設定は不変。合成インパルス位置・左右・frame不一致停止はnative自己検査済み。helper差替え・旧版退避済み、**再修正後の実キャプチャ・音響品質は再試験待ち**。[詳細](docs/voice-echo-cancellation.md)。
-
-- **旧learnの履歴（2026-10-21撤去、再実装しない）** 2026-09-09: ユーザー操作用の独立 `language_dialogue.voice_test` を追加。本体と共通のAEC/RMS/Silero/Whisperをcallbackで国語対話へ渡し、設定済みTTSを再生する。再生中もマイクを維持し、実再生プロセスの正常終了と発話IDで同意済みの実Chrome起動へ接続。約58分の実行とフエラムネ／タイマー音試験は完走し自己音再帰なし。一方、宛先のない家族会話を拾う問題が見つかり、上記参加状態を追加した。**修正後の再試験、本体・workshop・実OS前面検知への接続は未実施**。[読み上げ台本と起動](docs/language-dialogue-voice-test.md)。
-
-- 2026-09-08: macOSの `voice_input` に任意のCore Audio同期参照＋WebRTC AEC3を追加。Mac再生音全体を一時参照し、RMS/VAD/STTより前に処理する。独立環境・既定off・障害時は生マイクへ自動復帰しない。非録音native自己検査と関連88件＋49 subtests成功。架空TTSの漏れ音のみ約42dB減衰、重なり近端成分は約8dB減衰が残り、自前疑似音声の重なり検査は不合格。**実マイク・実スピーカー・Minecraftとの同時試験は未確認**。Web対話の本体接続も未実施。[導入と実機試験](docs/voice-echo-cancellation.md)。
-
-- **旧learnの履歴（2026-10-21撤去、再実装しない）** 2026-09-08同意ゲート: 独立 `language_dialogue` のWeb起動を、指定文による同意確認→「ほな一緒にいこか！」→発話ID付き正常再生完了通知→一度だけ起動へ変更。拒否・撤回・中断・失効・音声失敗では開かない。関連202件＋32 subtests、ローカルQwenの合成4会話を確認。本体のID付き再生完了通知は未実装で、今回は明示的な模擬完了入力。**本体・実音声には未接続**。
-
-- 2026-09-08待ち時間更新（履歴）: 初回8秒・未完成時の同一タブ再読を実装していたが、2026-09-09に15秒・自動再取得なしへ置き換えた。
-
-- **旧learnの履歴（2026-10-21撤去、再実装しない）** 2026-09-08: 独立 `language_dialogue --web` をGoogle AI概要の対話引き継ぎへ変更。子どもの問いをユーザー提案の関西弁依頼文で検索し、完成概要と紹介文を分離。再読はMinecraft復帰時の歓迎配送後に同じタブだけ一度（前面イベント非対応時は次の発話）。実検索はロボット判定のユーザー報告で停止したまま、`--virtual-web` で取得済み金床概要を再生し、模擬復帰→関西弁の歓迎→概要注入→後続会話を確認。Qwenで4発話＋制御4件、引用一致2件。ドギド168件＋30 subtests、Chrome120件は前段の結果。新文型＋再読の実概要取得、多様な問いの品質は未確認。**実OS前面検知・本体・workshop・音声には未接続**。詳細は `docs/research/language-overview-dialogue-2026-09-08.md`。以下の教材カタログ経路は旧試作で診断用に残す。
-
-- **旧learnの履歴（2026-10-21撤去、再実装しない）** 2026-09-07比較後: 独立 `language_dialogue/` の検索結果に規則・適用範囲を保持。確定かなの音数は既存計数器、一字の学年は検索済み配当を使い、再検索・回答LLMを省く。資料不足と本人の文脈不足を分離。関連115件＋30 subtests、同じQwenで54ターンを確認し数値11件は正答。ただし不要検索・辞書質問の誤分類・意味説明の誤りは残る。**本体・workshop・音声には未接続**。詳細は `docs/research/language-retrieval-comparison-2026-09-07.md` 末尾。
-
-- **旧learnの履歴（2026-10-21撤去、再実装しない）** 2026-09-07: `language_dialogue/` の独立テキスト試験に任意chrome-web接続を追加。裏の根拠資料は非表示、確認済みの対象学年別教材だけ表示し、両本文を読み取りに渡す。通常復帰時は調べた質問1件だけ残して本文と学習中の履歴を外す。関連自動試験90件＋30 subtests、実MCPで非表示資料と小学3・4年向け方位ページの取得を確認。国語の子ども用教材は未充足、Google実検索はCAPTCHA、Geminiと後続の閲覧追跡は未実装。**service・workshop・音声には未接続**。詳細は `docs/research/language-web-dialogue-evaluation-2026-09-07.md`。
-
-- **旧learnの履歴（2026-10-21撤去、再実装しない）** 2026-09-06: `language_dialogue/` に国語の対象・観点・曖昧さの抽出、確認後の検索、根拠付き説明、一時文脈と模擬中断を持つ **独立テキスト試験経路** を追加。ユーザー境界例15件＋短い模擬会話6件。関連自動テスト84件と実モデル21会話＋対象3会話の再確認を実施。説明の付け足し・学習対象の分類に課題が残り、**service・workshop・音声には未接続**。詳細は `docs/language-dialogue-text-test.md` と試験結果文書。
-
-- 所持品質問の省略形は、アイテム語に有無・数量の述語が続く場合に限定。「石炭じゃない？」等の同定や意味質問を、単なる「ない」「何」の部分一致で所持品へ流さない。明示の所持品確認は維持。句の意味質問→通常の所持品確認を続けたサービス経路は **自動テスト済み**。実機音声は未確認。
-
-- 2026-09-05: 一句専用4往復＋見どころ・材料・行別照合・修正結果の共通文脈、再試行への不合格案と具体的コメントの受け渡しは **コード・自動テスト済み**。通常会話は既存5往復で訂正・困惑に答え直す方針を追加。生成回数・採用・保存・戦闘優先は維持。意味説明もユーザー承認のうえ既存の共同編集者leafへ移し、保存済み対応と材料・見どころ・対話を比較する。出典記録は自動変更せず、生成失敗時も旧材料名固定文へ戻さない。実モデルの品質・速度、音声は未確認。
-
-- workshop H1〜H5.2 + H7-lite + H9検証付き共同編集 + 連続局所編集 + 戦闘中断: **済**（現在句・pending・直近対話から相談目的と次手を一つ選び、必要時だけ読み／音数／出典を実検査、既存editor検証結果を見て一度だけ返答を再判断。実行したstepと検証結果を`haiku_workshop_turns.jsonl`へ有界記録するが思考文は保存・常時注入しない。soft lesson / loosen / TTL / 行概念→`line_1/2/3` / ひらがなCAS / 明示採用後も継続 / 状態・保存・戦闘安全はコード。戦闘中は句とpendingを保持してpauseし、通常敵の撃破／死亡／爆散／離脱も分離）
-- H1.1 materials 厚み（motifs/held/nearby + 全インベントリからの代表候補 + short candidates + fragment_links）: **済**（#28 phase 0–1）。周辺ブロック・落下物・手持ち・所持品を背景より優先し、空が見えない場面では対話・川柳とも時刻／天候と非洞窟バイオームを投影しない。直近の実破壊＋採掘道具を主根拠に「採掘中」、静止環境だけなら「坑道らしい場所」と分ける
-- H6 materials 固定語: **撤回**  
-- 雑談 P1〜P5 + 現在ターン予定／安全方針: **済**（帰宅予定は現在発話だけ、地表夕方／雷雨は毎フレーム導出、洞窟オフ）
-- 出典付き知識質問: 詩の基礎資料とMinecraft 1.21.11公式技術資料を、現在ターンの明示質問だけ遅延検索し、最大3事実＋出典をコード固定で返す。[現行範囲](docs/2026-10-21-generation-and-knowledge-scope.md)。一般国語の専用回答と旧learnは撤去済み。
-- ゲーム外診断ログ: `/dogido` で発言・参考資料に加え、LLM／川柳／STT／TTSの上限付きプロセス内ログを表示し、全ログをコピーできる経路は **コード・自動テスト済み**。音声認識原文・棄却理由・配送結果を区別する。成功した高頻度APIアクセスは端末と画面で省略し、400以上は残す。音声波形・認証情報・内部プロンプトは保存しない
-- TTS 読み: 例外表 + optional UniDic（`[tts-reading]`）**Phase 1–2 済**  
-- 川柳 preface: **見どころ→ここで一句→句** + 自分の世界（pending 中 chat 抑止）**済**  
-- 川柳 source atom 品質ゲート: カタログ原文snapshot + 短い詩的解釈を関西弁で発話 + 節単位preface provenance/主張範囲をコード検査 + 見どころ明示要素から一次atomへの再結合 + 詩的解釈を句全体で共有する行別出典 + 表示／読み／行概念を束ねた一行正本 + 出典確定後の一意なカタログ名かな訂正（全文必須ではない）+ UniDicによる漢字候補の事前かな化 + 4生成方式の固定比較 + 行別失敗理由つき最大6回再生成 + 既出候補即時棄却 + fail-closed **済**。自動川柳の一節／一行objectと配列外形はconsumerの同じドメイン検査へ通し、外形だけで創作経路を打ち切らない
-- 発句間隔は通常の10分（600000ms）へ復帰済み。短期比較ではローカル環境変数だけを一時変更し、終了後は10分へ戻す
-- 降雪・積雪材料: 現在Y×バイオーム気温/降雪高度をコード判定。Y/Z・気温・閾値・downfallはLLMへ出さず、閉じた降水/雷/降雪環境と実測地表雪だけを共有 **済**
-- 乗り物材料: 乗車中のみ種別・操縦・実移動を観測し、主語付き事実として川柳・雑談で共有 **済**（エリトラは別課題）
-- ambient: プレイヤー入力優先（priority mute 共通 + pending キュー中禁止）+ player主体foreground中の友好・中立 Mob 抑止 + 地表雷雨中の抑止（洞窟は維持）**済**
-- 通常敵の視認索敵: 見通しあり16ブロック以内。現在視認中に「どっち？」と聞かれたら絶対8方位＋概算距離をコード固定で返す **済**
-- エピソード決定記録 A: 非重複イベントごとに発話あり／なしを `eval/episodes.jsonl` へbest-effort追記 **済**（記憶へは混ぜない）
-- 支援 B/C `select_sword`: hotbar 0〜8実測 + 実行capability分離 + game-event応答のtyped command + Fabricメインスレッド再検証 + result/ack + episode相関まで **コード・自動テスト・Minecraft実機確認済み**（2026-08-16。自動持ち替え・救助・馬は未）
-- 完成度の次の本丸: **観測 materials の解像度**（水辺・旗など。地下での地表背景抑止・落下物・採掘文脈は済）
-- 任意: BERT分類・警戒解除後の復帰・通常workshop会話と修正案の実ログ評価、Phase E整理、VLM、TTS読みPhase 3実測、5-7-5分割読み
-
-この節は履歴として保持する。新しい仕様・検証結果は現行仕様と対象ドメインの文書へ記録する。
+- コンセプトは[README](README.md)・[concept](docs/concept.md)、完成度の考え方は[companion-maturity](docs/companion-maturity.md)。後者の昔の段階表を現行の実装チェックリストにしない。
+- 旧23分類・旧learn／国語学習・Web対話・通常会話planner・WS音数検査・評価LLMの履歴は再実装の根拠にしない。知識回答の現行範囲は詩の基礎資料とMinecraft正本DB。
+- `plan`という名前だけで未実装と判断しない。本文末尾の実装・検証結果と、実際の呼出箇所・設定・consumerを確認する。反対に試作・教材・モデル重みの存在だけで本体採用と判断しない。
+- 挙動を変えたら対象の現行仕様と検証範囲を更新する。AGENTS.mdには導入時に必要な境界と参照先を残し、日々の試験件数・一時的な担当状況・「次にやること」を追記し続けない。過去の詳細は対象文書やGit履歴で追う。
