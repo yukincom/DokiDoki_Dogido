@@ -376,7 +376,7 @@ async fn image_notice_refreshes_all_current_facts_and_history_in_the_common_cont
     }
 }
 
-// 見込み: 環境判断一回に前後画像・変化一文・観測・履歴と直近5件の反復回避指示を渡せる。
+// 見込み: 環境判断一回に前後画像・変化一文・観測・履歴と件数を指定しない反復回避指示を渡せる。
 // 合格: 模擬HTTP一件でsilent、共有指示はsystemに一度。カメ・天候・匂い・履歴と撮影との時間差を保持し、撮影台帳・内部revisionを送らない。実モデルは対象外。
 #[tokio::test]
 async fn existing_environment_model_gets_one_image_request_and_can_select_silence() {
@@ -427,7 +427,7 @@ async fn existing_environment_model_gets_one_image_request_and_can_select_silenc
     assert!(context["situation"].as_str().unwrap().contains("今はプレイヤーから新しい発言を受けてへん"));
     let shared = crate::reaction_leaf::context("surroundings_notice", &json!({})).unwrap();
     assert_eq!(context["situation"], shared["situation"]);
-    let rule = "話す前に、会話履歴のうち自分（ドギド）の直近5件の発言を確認してな。5件に満たんときは、ある分を確認してな。その中のどれかと同じ意味合いの話なら、言葉を変えて繰り返さんと黙ってな。プレイヤーはちゃんと聞いとるから大丈夫やで。";
+    let rule = "会話履歴で自分（ドギド）の発言を確認してな。プレイヤーはちゃんと聞いとるから、返事がなくても似たような意味の発言はせんといてな。";
     assert_eq!(requests[0]["messages"][0]["content"].as_str().unwrap().matches(rule).count(), 1);
     assert!(!context["situation"].as_str().unwrap().contains(rule));
     assert!(context["world_context"].get("revision").is_none());
