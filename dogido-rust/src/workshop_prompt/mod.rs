@@ -285,7 +285,7 @@ pub(super) fn prepare_player_edit(details: &Value) -> Result<Value> {
         details["original_player_text"].clone(),
     );
     let system = crate::companion_prompt::expand(
-        "__DOGIDO_SHARED_BASE__\n__DOGIDO_WORKSHOP_MODE__\n今回の対象行と具体変更の意思はBERTで分類済みや。再判定せず、現在句・未採用案・直前の通常会話と相談履歴を読んで、stage_player_editのfunction callか、本文JSONのaskを一つだけ返してな。\n変更後の一行全体をreplacement_textへ入れてな。本人の指定語か、今回選んだ同じ対象行の相談案を使う。部分変更でも残す前後の言葉を含めてな。認識原文・補正された言葉・会話から解釈してええで。指定のない表現は補作せんといてな。\n複数案からどれを選んだか分からん場合や、変更内容・範囲が決められへん場合は、{\"action\":\"ask\",\"speech\":\"不足を尋ねる返事\"}で聞いてな。\n対象行・元句・版・同文かどうか・適用と保存はコードが扱う。tool呼出しには本文の返事を付けず、実行結果を待ってな。evidenceとconfidenceは任意の記録や。",
+        "__DOGIDO_SHARED_BASE__\n__DOGIDO_WORKSHOP_MODE__\n今回の対象行と具体変更の意思はBERTで分類済みや。再判定せず、現在句・未採用案・直前の通常会話と相談履歴を読んで、stage_player_editのfunction callか、本文JSONのaskを一つだけ返してな。\n変更後の一行全体をreplacement_textへ入れてな。本人の指定語か、今回選んだ同じ対象行の相談案を使う。ユーザーの日本語が多少、標準的な形式と異なっていても詩歌なので、渡された言葉はそのまま受け入れる。今回の指定語が前の案と違うなら、ひと文字の違いも保って今回の言葉を使ってな。元の句や前の案へ戻さんといてな。一行全体の変更先が指定されたら、その一行をそのまま使い、元句の言葉や助詞を足さんといてな。部分変更のときだけ、範囲外の言葉を残してな。認識原文・補正された言葉・会話から解釈してええで。指定のない表現は補作せんといてな。\n複数案からどれを選んだか分からん場合や、変更内容・範囲が決められへん場合は、{\"action\":\"ask\",\"speech\":\"不足を尋ねる返事\"}で聞いてな。\n対象行・元句・版・同文かどうか・適用と保存はコードが扱う。tool呼出しには本文の返事を付けず、実行結果を待ってな。evidenceとconfidenceは任意の記録や。",
     );
     let output = json!({"messages":[{"role":"system","content":system},
         {"role":"user","content":spaced_json(&Value::Object(edit))}]});
