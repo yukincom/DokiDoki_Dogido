@@ -154,6 +154,9 @@ impl Context {
             observations.remove("rain_heard");
             observations.remove("thunder_heard");
         }
+        // この差分は個体IDを失っている。最新の視認で抑制できるhearingだけをモデルへ渡す。
+        // 内部の周期比較・保留差分は元のContextに残る。
+        self.changes.retain(|change| change.kind != "heard_hostile_sounds");
         for change in &mut self.changes {
             if matches!(change.kind.as_str(), "body_self_position" | "body_player_position" | "body_self_orientation" | "body_player_orientation") {
                 // 既に表示用に変換した差分は、反応用コピーを作るときにも保持する。

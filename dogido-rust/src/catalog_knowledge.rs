@@ -276,11 +276,13 @@ pub fn for_event(event: &GameEvent, structure: Option<&str>) -> Knowledge {
         out.add(mob(&target.r#type, None, false, "visual"));
     }
     for target in &event.auditory_threats {
-        if target.spoken_name_allowed {
+        if target.spoken_name_allowed
+            && !crate::conversation_observation::hearing::source_visible(event, target.source_id.as_deref()) {
             out.add(mob(&target.label, None, false, "heard"));
         }
     }
     for target in &event.ambient_sounds {
+        if crate::conversation_observation::hearing::source_visible(event, target.source_id.as_deref()) { continue; }
         out.add(mob(&target.r#type, None, false, "heard"));
     }
     if let Some(key) = structure.or(event.world.structure.as_deref()) {

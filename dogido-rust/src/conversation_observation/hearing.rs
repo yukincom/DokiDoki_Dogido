@@ -11,6 +11,21 @@ pub(crate) use spontaneous::Spontaneous;
 fn owner(event: &GameEvent) -> Option<&str> {
     event.body_origin().and_then(|o| o.context.as_ref()).map(|c| c.owner_id.as_str())
 }
+/// 紐付け済みの同じ個体が今見えるときだけ、モデルの実音材料から外す。
+/// 種類・過去視認・遮蔽中の追跡を現在視認へ昇格させない。生の音と保持記録は変更しない。
+pub(crate) fn source_visible(event: &GameEvent, source: Option<&str>) -> bool {
+    let Some(source) = source.and_then(|id| uuid::Uuid::parse_str(id).ok()) else { return false; };
+    if event.body_origin().is_some_and(|origin| !origin.available) { return false; }
+    let same = |id: Option<&str>| id.and_then(|id| uuid::Uuid::parse_str(id).ok()) == Some(source);
+    if event.body_origin().is_some_and(|origin| {
+        same(owner(event)) && origin.body["current"]["vision"]["player_visibility"] == "visible"
+    }) { return true; }
+    event.passive_mobs.iter().any(|mob| same(mob.identity.as_ref().map(|id| id.entity_id.as_str())))
+        || event.visual_threats.iter().any(|mob| {
+            crate::chat_materials::mobs::currently_visible(mob.environment.as_ref())
+                && same(mob.entity_id.as_deref().or_else(|| mob.identity.as_ref().map(|id| id.entity_id.as_str())))
+        })
+}
 fn description(label: Option<&str>, kind: &str, sound: Option<&str>, named: bool) -> String {
     // 発音者の由来は専用欄が所有する。音種の説明に別の判定を残さない。
     chat_observation::sound_description(label, kind, sound, named)
@@ -76,9 +91,11 @@ pub(crate) fn project(event: &GameEvent, weather_age_ms: u64) -> Value {
     let mut seen = HashSet::new();
     let mut sounds = Vec::new();
     for sound in &event.ambient_sounds {
+        if source_visible(event, sound.source_id.as_deref()) { continue; }
         if seen.insert(json!(["ambient", sound]).to_string()) { sounds.push(ambient(event, sound)); }
     }
     for sound in &event.auditory_threats {
+        if source_visible(event, sound.source_id.as_deref()) { continue; }
         if seen.insert(json!(["threat", sound]).to_string()) { sounds.push(threat(event, sound)); }
     }
     let recent = |age: Option<i64>| age.is_some_and(|v| v >= 0 && v as u64 <= weather_age_ms);

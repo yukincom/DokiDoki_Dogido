@@ -862,6 +862,7 @@ mod tests {
 
     // 模擬身体snapshot→既存の周期選択・モデル材料・配送判定。プレイヤーだけが見た敵は数えず、
     // 身体が見た敵の増加と初めての声を一回の候補にする。同じ声の年齢の変化では繰り返さない。
+    // モデルには音の文字列差分を重ねず、最新hearingの一件だけを渡す。実モデルは対象外。
     #[test]
     fn passive_hostiles_reach_one_periodic_notice_from_dogidos_own_senses() {
         let dialogue = Dialogue::new(DialogueConfig::default()).unwrap();
@@ -910,8 +911,9 @@ mod tests {
             let changes = context["changes"].as_array().unwrap();
             let counted = changes.iter().find(|r| r["kind"] == "visible_hostiles").unwrap();
             assert_eq!((&counted["before"], &counted["now"]), (&json!({"zombie":1}), &json!({"zombie":2})));
-            let heard = changes.iter().find(|r| r["kind"] == "heard_hostile_sounds").unwrap();
-            assert_eq!(heard["now"], json!([context["observations"]["hearing"]["sounds"][0]["description"]]));
+            assert!(!changes.iter().any(|r| r["kind"] == "heard_hostile_sounds"));
+            assert_eq!(context["observations"]["hearing"]["sounds"].as_array().unwrap().len(), 1);
+            assert_eq!(context["observations"]["hearing"]["sounds"][0]["sound_event"], "entity.zombie.ambient");
             assert!(super::super::warnings::applicable(a, s, &dialogue.config.warnings, settings));
             s.chat_allowed = false;
             assert!(!super::super::warnings::applicable(a, s, &dialogue.config.warnings, settings));

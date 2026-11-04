@@ -49,6 +49,15 @@ fn event(change: impl FnOnce(&mut Value)) -> GameEvent {
     GameEvent::parse(raw).unwrap()
 }
 
+// 音源の由来・保持の試験は本人が視界外にいる条件で行う。
+// 現在視認中の実音抑制はspontaneous_hearing_testsで通常・自発の両入力を検査する。
+fn without_player_sight(event: GameEvent) -> GameEvent {
+    let mut value = json!(event);
+    value["body_observation"]["sample"]["vision"]["player_visibility"] = json!("not_visible");
+    value["body_observation"]["sample"]["vision"]["reason"] = json!("occluded");
+    GameEvent::parse(value).unwrap()
+}
+
 struct Requests {
     common: Value,
     normal: GenerationRequest,
@@ -291,6 +300,7 @@ async fn player_emitter_confirmation_requires_actual_owner_source_match() {
             ),
         ])
     });
+    let raw = without_player_sight(raw);
     let result = capture(&raw).await;
     let rows = sounds(&result);
     let own = rows
@@ -621,6 +631,7 @@ async fn direct_source_identity_takes_precedence_over_circumstantial_evidence() 
         let raw = attribution_event(STONE_STEP, "walking", |sound| {
             sound["source_id"] = json!(source_id);
         });
+        let raw = without_player_sight(raw);
         let result = capture(&raw).await;
         let row = &sounds(&result)[0];
         assert_eq!(row["emitter_attribution"], "confirmed");
@@ -662,6 +673,7 @@ async fn retained_sounds_preserve_time_certainty_and_attribution_in_both_request
             sound["certainty"] = json!("low");
             sound["source_context"]["survey"]["status"] = json!(survey);
         });
+        let first = without_player_sight(first);
         let d = server();
         let permit = d.serial.acquire().await.unwrap();
         d.observe("s", first.clone(), None);

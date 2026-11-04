@@ -993,7 +993,8 @@ fn sounds(event: &GameEvent, labels: &impl Labels) -> Vec<Sound> {
 /// 現在音と同じキーは除き、既存の保持期間内にある過去の音だけを共通観測へ渡す。
 pub(crate) fn retained_hearing<'a>(event: &GameEvent, snapshot: &'a Snapshot, labels: &impl Labels) -> Vec<&'a HearingMemo> {
     let current: std::collections::HashSet<_> = sounds(event, labels).into_iter().map(|s| s.key).collect();
-    snapshot.recent.hearing_memos.iter().filter(|memo| !current.contains(&memo.dedupe_key)).collect()
+    snapshot.recent.hearing_memos.iter().filter(|memo| !current.contains(&memo.dedupe_key)
+        && !crate::conversation_observation::hearing::source_visible(event, memo.source_id.as_deref())).collect()
 }
 
 /// 共通聴覚と同じ現在音・保持音を、音源を内部照合できる形で読む。記録は更新しない。
@@ -1002,6 +1003,7 @@ pub(crate) fn hearing_candidates(event: &GameEvent, snapshot: &Snapshot, labels:
         .chain(retained_hearing(event, snapshot, labels).into_iter()
             .filter(|memo| !(memo.sound_event.is_none() && memo.dedupe_key.starts_with("environment:weather:")))
             .map(|memo| SoundCandidate { current: false, memo: memo.clone() }))
+        .filter(|sound| !crate::conversation_observation::hearing::source_visible(event, sound.memo.source_id.as_deref()))
         .collect()
 }
 pub(crate) fn current_hearing_candidates(event: &GameEvent, labels: &impl Labels) -> Vec<SoundCandidate> {
