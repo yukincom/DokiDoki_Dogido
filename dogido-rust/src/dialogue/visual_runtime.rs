@@ -28,8 +28,6 @@ pub(super) struct State {
     context: Option<Context>,
     pending: Option<Pending>,
     latest: Option<Captured>,
-    // 次の撮影が参照できる直近4枚。PNGを複製せず、古い比較元を再帰的に保持しない。
-    history: VecDeque<Arc<Frame>>,
     ready: bool,
     // 連続した照合済み「変化なし」の先頭画像。発話の有無にかかわらず一回の入力で消費する。
     unchanged_since: Option<String>,
@@ -56,7 +54,6 @@ impl State {
                 context.as_ref().is_some_and(|next| next != &look.request.look.context)) {
                 self.cancel_look();
             }
-            self.history.clear();
             self.unchanged_since = None;
             if self.look.is_none() && let Some(p) = self.pending.take() {
                 self.finish(p.command["command_id"].as_str().unwrap_or(""));
@@ -119,17 +116,14 @@ impl State {
     pub fn commands(&self, now: DateTime<Utc>) -> Vec<Value> {
         self.pending.as_ref().filter(|p| now < p.expires).map(|p| vec![p.command.clone()]).unwrap_or_default()
     }
-    /// Fabricが指定した実画像だけを使う。4枚前は通常の静止撮影で40秒以上前にもなるので、
-    /// 現在画像の鮮度は各受理間隔に適用し、途中で観測が失効した系列は引き継がない。
-    fn remember(&mut self, captured: &mut Captured, now: DateTime<Utc>) {
-        if self.history.back().is_some_and(|last| !fresh(&last.captured_at, now)) {
-            self.history.clear();
-        }
+    /// 直前に受理した同じ身体の実画像と、Fabricの参照が一致するときだけ比較結果を使う。
+    fn verify_previous(&self, captured: &mut Captured, now: DateTime<Utc>) {
         if let Some(comparison) = &captured.image.scene_comparison
             && let Some(id) = &comparison.reference
-            && let Some(old) = self.history.iter().find(|old|
-                old.capture_id == id.capture_id && old.captured_at == id.captured_at
-                    && old.sha256.eq_ignore_ascii_case(&id.sha256))
+            && let Some(old) = self.latest.as_ref().filter(|p| p.context == captured.context).map(|p| &p.image.current)
+            && fresh(&old.captured_at, now)
+            && old.capture_id == id.capture_id && old.captured_at == id.captured_at
+            && old.sha256.eq_ignore_ascii_case(&id.sha256)
         {
             captured.image.turned_to = old.heading().zip(captured.image.heading())
                 .and_then(|(before, after)| (before != after).then_some(after));
@@ -139,8 +133,6 @@ impl State {
                 ComparisonStatus::NotCompared => ComparedFrames::NotCompared,
             };
         }
-        self.history.push_back(Arc::clone(&captured.image.current));
-        if self.history.len() > 4 { self.history.pop_front(); }
     }
     /// 一撮影一画像を検証する。変化と、変化なしが続いたときの気づきは別の契機として扱う。
     pub fn receive(&mut self, result: &AdapterCommandResult, now: DateTime<Utc>) -> bool {
@@ -148,7 +140,7 @@ impl State {
         let explicit = self.look.as_ref().is_some_and(|v| v.request.capture_id == result.command_id);
         let captured = (now < p.expires && result.status == Status::Succeeded).then(|| parse_image(result,p,now)).flatten();
         if let Some(mut captured) = captured.filter(|v| v.sequence > self.sequence) {
-            self.remember(&mut captured, now);
+            self.verify_previous(&mut captured, now);
             let changed = matches!(captured.image.frames, ComparedFrames::Changed { .. });
             if !explicit && matches!(captured.image.frames, ComparedFrames::Unchanged) {
                 if self.unchanged_since.is_none() {

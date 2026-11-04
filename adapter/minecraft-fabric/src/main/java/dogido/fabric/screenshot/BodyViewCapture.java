@@ -57,7 +57,7 @@ public final class BodyViewCapture {
     private static volatile String lastResult="none";
     private record Live(ClientWorld world,Object network,Entity owner,LivingEntity body,JsonObject sample,JsonObject autonomy,long age) {}
     private record Request(String id,Live live,long deadline,BodyViewProtocol.Command command,ScreenshotProtocol.Command screenshot,
-                           BooleanSupplier sessionCurrent,Consumer<JsonObject> result,AtomicBoolean completed,long motionSequence,long translation,
+                           BooleanSupplier sessionCurrent,Consumer<JsonObject> result,AtomicBoolean completed,long motionSequence,
                            BodyViewAfterLook.Proof afterLook) {}
     private record Owner(Vec3d position,Box box,float delta,boolean invisible,int clearRays,String pose) {}
 
@@ -99,7 +99,7 @@ public final class BodyViewCapture {
         if (DEADLINE.busy() || pending!=null) { message("前の撮影が完了するまで待ってください。");return 0; }
         Live live=live();
         if (live==null) { message("身体の取得待ちです。ゲーム画面に戻り少し待ってから実行してください。");return 0; }
-        pending=new Request("view_"+UUID.randomUUID(),live,System.nanoTime()+Duration.ofSeconds(10).toNanos(),null,null,()->true,null,new AtomicBoolean(),0,0,null);
+        pending=new Request("view_"+UUID.randomUUID(),live,System.nanoTime()+Duration.ofSeconds(10).toNanos(),null,null,()->true,null,new AtomicBoolean(),0,null);
         DEADLINE.start(pending.id,pending.deadline); currentRequest=pending;lastResult="requested";
         message("撮影を予約しました。次の描画frameで1枚保存します。"); return 1;
     }
@@ -123,7 +123,7 @@ public final class BodyViewCapture {
             }
             long remaining=Duration.between(Instant.now(),command.expiresAt()).toNanos();
             stopRequest=new Request(proof==null?"view_"+UUID.randomUUID():command.id(),current,
-                System.nanoTime()+Math.max(0,remaining),command,null,sessionCurrent,result,new AtomicBoolean(),0,0,
+                System.nanoTime()+Math.max(0,remaining),command,null,sessionCurrent,result,new AtomicBoolean(),0,
                 proof);
         });
     }
@@ -145,7 +145,7 @@ public final class BodyViewCapture {
             }
             long remaining=Duration.between(Instant.now(),command.expiresAt()).toNanos();
             poemRequest=new Request("view_"+UUID.randomUUID(),current,System.nanoTime()+Math.max(0,remaining),null,command,
-                sessionCurrent,result,new AtomicBoolean(),0,0,null);
+                sessionCurrent,result,new AtomicBoolean(),0,null);
         });
     }
     /** ACKが画像利用を確定した時刻を共有retentionへ反映する。別readerの排他中なら次tick以降に再試行する。 */
@@ -245,7 +245,7 @@ public final class BodyViewCapture {
                     || MOTION.still(pose(observed)) && MOTION.sequence()>request.command.afterMotionSequence())) {
                 stopRequest=null;
                 pending=new Request(request.id,request.afterLook!=null?request.live:observed,request.deadline,request.command,null,request.sessionCurrent,
-                    request.result,request.completed,MOTION.sequence(),MOTION.translation(),request.afterLook);
+                    request.result,request.completed,MOTION.sequence(),request.afterLook);
                 DEADLINE.start(pending.id,pending.deadline);currentRequest=pending;lastResult=request.afterLook==null?"stopped":"after_look";
             }
         }
@@ -310,7 +310,7 @@ public final class BodyViewCapture {
         }
         pending=null;
         Request fresh=new Request(request.id,current,request.deadline,request.command,request.screenshot,request.sessionCurrent,request.result,request.completed,
-            sequence,request.command==null?request.translation:MOTION.translation(),request.afterLook);
+            sequence,request.afterLook);
         currentRequest=fresh;
         active=new Frame(fresh,camera);
         return active;
@@ -440,7 +440,9 @@ public final class BodyViewCapture {
             if(frame.request.command!=null)BodyViewTargets.remember(frame.request.id,frame.targets,original);
             BodyViewChange.Result change=null;
             if(frame.request.command!=null) {
-                change=CHANGES.observe(frame.request.command.sessionId()+"/"+data.get("context"),frame.request.translation,original,
+                JsonObject eye=data.getAsJsonObject("camera_eye");
+                change=CHANGES.observe(frame.request.command.sessionId()+"/"+data.get("context"),
+                    eye.get("x").getAsDouble(),eye.get("y").getAsDouble(),eye.get("z").getAsDouble(),original,
                     new BodyViewChange.Reference(frame.request.id,frame.capturedAt,resized.sha256()));
                 data.addProperty("motion_sequence",frame.request.motionSequence);
                 data.add("scene_comparison",change.diagnosticJson());

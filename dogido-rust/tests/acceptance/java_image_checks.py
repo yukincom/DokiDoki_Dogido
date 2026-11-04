@@ -43,11 +43,11 @@ def checked(result):
 
 
 def wire_checks(golden):
-    """見込み: 三状態と保存実画像の判定が符号化後も保持される。合格: 3合成状態と実pair_06の4枚前参照・PNG hashが一致し、セルは未送信。範囲: Java→event JSON。受付世代は固定し、Rust受信・HTTP・発話は別確認。"""
+    """見込み: 三状態と保存実画像の判定が符号化後も保持される。合格: 3合成状態と実pair_06の直前参照・PNG hashが一致し、セルは未送信。範囲: Java→event JSON。受付世代は固定し、Rust受信・HTTP・発話は別確認。"""
     command = {"type": "capture_body_view", "command_id": "view_00000000-0000-0000-0000-000000000200",
         "session_id": "java-image-test", "issued_at": "2026-10-29T00:00:04Z", "expires_at": "2026-10-29T00:00:10Z",
         "body_entity_uuid": "00000000-0000-0000-0000-000000000001", "body_epoch": "00000000-0000-0000-0000-000000000002",
-        "owner_uuid": "00000000-0000-0000-0000-000000000003", "dimension": "minecraft:overworld", "after_motion_sequence": 4}
+        "owner_uuid": "00000000-0000-0000-0000-000000000003", "dimension": "minecraft:overworld", "after_motion_sequence": 1}
     document = json.loads(golden.read_text(encoding="utf-8"))
     pair = next(row for row in document["cases"] if row["id"] == "pair_06")
     grey_hash = None
@@ -64,7 +64,7 @@ def wire_checks(golden):
         value = event["command_results"][0]
         assert value["status"] == "succeeded" and value["command_id"] == command["command_id"]
         view = value["body_view"]
-        assert view["capture_id"] == command["command_id"] and view["motion_sequence"] == 5
+        assert view["capture_id"] == command["command_id"] and view["motion_sequence"] == 2
         assert hashlib.sha256(base64.b64decode(view["png_base64"], validate=True)).hexdigest() == view["sha256"]
         assert not set(view).intersection({"visual_change", "compared_to_four_before", "pixel_mean_difference", "pixel_changed_fraction"})
         comparison = view["scene_comparison"]
@@ -77,7 +77,7 @@ def wire_checks(golden):
         else:
             ref = comparison["reference"]
             assert ref["capture_id"] == "view_00000000-0000-0000-0000-000000000100"
-            assert ref["captured_at"] == "2026-10-29T00:00:01Z"
+            assert ref["captured_at"] == "2026-10-29T00:00:04Z"
             if not actual_images:
                 assert ref["sha256"] == grey_hash
         print(f"PASS: wire {scenario}{' pair_06 actual images' if actual_images else ' synthetic'}", flush=True)

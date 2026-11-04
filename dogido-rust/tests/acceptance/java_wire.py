@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""見込み: 本体Javaの比較結果を通信JSONへ渡せばRustと同じ三状態を保てる。合格: fixtureが未比較・無変化・変化と4枚前参照を検査してeventを返す。範囲: 合成・保存画像と本体Java。GPU、HTTP、モデルは未確認。"""
+"""見込み: 本体Javaの比較結果を通信JSONへ渡せばRustと同じ三状態を保てる。合格: fixtureが未比較・無変化・変化と直前参照を検査してeventを返す。範囲: 合成・保存画像と本体Java。GPU、HTTP、モデルは未確認。"""
 import argparse
 import json
 import os

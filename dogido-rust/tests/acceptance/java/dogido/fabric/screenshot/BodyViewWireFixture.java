@@ -11,7 +11,7 @@ import java.util.Set;
 import javax.imageio.ImageIO;
 
 /** 見込み: 本体比較の三状態と参照をJSONへ移せばRustで同じ根拠を使える。
- * 合格: 指定状態・4枚前参照・セルを検査してevent化。範囲: 合成画素または指定保存画像、本体符号化・通信契約。GPU・HTTP・モデルは未確認。
+ * 合格: 指定状態・直前参照・セルを検査してevent化。範囲: 合成画素または指定保存画像、本体符号化・通信契約。GPU・HTTP・モデルは未確認。
  */
 public final class BodyViewWireFixture {
     private static BufferedImage image(int color) {
@@ -41,28 +41,27 @@ public final class BodyViewWireFixture {
         metadata.addProperty("annotation_status", "owner_not_in_render_list");
         var previousPixels = realImages ? read(input.get("before_path").getAsString()) : image(0x808080);
         var previousImage = BodyViewImage.encode(previousPixels, metadata);
-        BodyViewChange.Reference firstReference = null;
-        if (!scenario.equals("unknown")) for (int i = 0; i < 4; i++) {
-            var ref = new BodyViewChange.Reference("view_00000000-0000-0000-0000-%012d".formatted(100 + i),
-                now.minusSeconds(4 - i), previousImage.sha256());
-            if (i == 0) firstReference = ref;
-            changes.observe("body", 1, previousPixels, ref);
+        BodyViewChange.Reference previousReference = null;
+        if (!scenario.equals("unknown")) {
+            previousReference = new BodyViewChange.Reference("view_00000000-0000-0000-0000-000000000100",
+                now.minusSeconds(1), previousImage.sha256());
+            changes.observe("body", 0, 64, 0, previousPixels, previousReference);
         }
         var pixels = realImages ? read(input.get("after_path").getAsString()) : image(scenario.equals("changed") ? 0xffffff : 0x808080);
         var image = BodyViewImage.encode(pixels, metadata);
-        var change = changes.observe("body", 1, pixels, new BodyViewChange.Reference(command.id(), now, image.sha256()));
-        // 見込み: 未比較は変化ではなく、比較済みの2状態には4枚前が根拠として残る。
-        // 合格: unknownはnull/空、unchangedは旧参照/空、changedは旧参照/非空。合成changedは全48マスlighter。範囲: 本体JavaからJSON。実画像も過去4回の受付は模擬。
+        var change = changes.observe("body", 0, 64, 0, pixels, new BodyViewChange.Reference(command.id(), now, image.sha256()));
+        // 見込み: 未比較は変化ではなく、比較済みの2状態には直前画像が根拠として残る。
+        // 合格: unknownはnull/空、unchangedは旧参照/空、changedは旧参照/非空。合成changedは全48マスlighter。範囲: 本体JavaからJSON。実画像も直前撮影の受付は模擬。
         var expected = switch (scenario) {
             case "unknown" -> BodyViewChange.Status.NOT_COMPARED;
             case "unchanged" -> BodyViewChange.Status.UNCHANGED;
             default -> BodyViewChange.Status.CHANGED;
         };
-        if (change.status() != expected || !Objects.equals(change.reference(), firstReference))
+        if (change.status() != expected || !Objects.equals(change.reference(), previousReference))
             throw new AssertionError("comparison status/reference: " + scenario);
         var comparison = change.json();
         if (!comparison.keySet().equals(Set.of("status", "reference"))) throw new AssertionError("comparison keys");
-        if (firstReference == null ? !comparison.get("reference").isJsonNull() : !firstReference.json().equals(comparison.get("reference")))
+        if (previousReference == null ? !comparison.get("reference").isJsonNull() : !previousReference.json().equals(comparison.get("reference")))
             throw new AssertionError("wire reference");
         var diagnostics = change.diagnosticJson();
         int cells = diagnostics.getAsJsonArray("cells").size();

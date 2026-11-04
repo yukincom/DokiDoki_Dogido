@@ -10,12 +10,12 @@ class BodyViewMotionTest {
         for(int i=1;i<20;i++){motion.observe("world",pose(i*.1,0));assertFalse(motion.still(pose(i*.1,0)));}
         assertEquals(1,motion.sequence());motion.observe("world",pose(1.9,0));motion.observe("world",pose(1.9,0));assertEquals(2,motion.sequence());
     }
-    @Test void stationaryViewRefreshesEveryTenSecondsWithoutInventingTranslation() {
+    @Test void stationaryViewRefreshesEveryTenSeconds() {
         var motion=new BodyViewMotion();for(int i=0;i<3;i++)motion.observe("world",pose(0,0));
-        long translation=motion.translation();
+
         for(int i=1;i<BodyViewMotion.REFRESH_TICKS;i++)motion.observe("world",pose(0,0));
         assertEquals(1,motion.sequence());
-        motion.observe("world",pose(0,0));assertEquals(2,motion.sequence());assertEquals(translation,motion.translation());
+        motion.observe("world",pose(0,0));assertEquals(2,motion.sequence());
         for(int i=0;i<BodyViewMotion.REFRESH_TICKS;i++)motion.observe("world",pose(0,0));
         assertEquals(3,motion.sequence());assertTrue(motion.still(pose(0,0)));
     }
@@ -28,16 +28,16 @@ class BodyViewMotionTest {
     }
     @Test void turningStopsOnceAndWrappedAnglesDoNotCreateFalseMotion() {
         var motion=new BodyViewMotion();for(int i=0;i<3;i++)motion.observe("world",pose(0,179));
-        long translation=motion.translation();motion.observe("world",pose(0,-179));assertFalse(motion.still(pose(0,-179)));
-        motion.observe("world",pose(0,-179));motion.observe("world",pose(0,-179));assertEquals(1,motion.sequence());assertEquals(translation,motion.translation());
+        motion.observe("world",pose(0,-179));assertFalse(motion.still(pose(0,-179)));
+        motion.observe("world",pose(0,-179));motion.observe("world",pose(0,-179));assertEquals(1,motion.sequence());
         motion.observe("world",pose(0,181));assertTrue(motion.still(pose(0,181)));assertEquals(1,motion.sequence());
-        stop(motion,pose(0,-170));assertEquals(2,motion.sequence());assertEquals(translation,motion.translation());
+        stop(motion,pose(0,-170));assertEquals(2,motion.sequence());
     }
-    @Test void smallButContinuingMotionIsNotMistakenForAStopAndRoundTripCountsAsTranslation() {
-        var motion=new BodyViewMotion();for(int i=0;i<3;i++)motion.observe("world",pose(0,0));long before=motion.translation();
+    @Test void smallButContinuingMotionIsNotMistakenForAStop() {
+        var motion=new BodyViewMotion();for(int i=0;i<3;i++)motion.observe("world",pose(0,0));
         for(int i=1;i<15;i++)motion.observe("world",pose(i*.002,i*.1));assertEquals(1,motion.sequence());
         motion.observe("world",pose(0,0));motion.observe("world",pose(0,0));motion.observe("world",pose(0,0));
-        assertEquals(1,motion.sequence());assertTrue(motion.translation()>before);
+        assertEquals(1,motion.sequence());
     }
     @Test void explicitCaptureConsumesTheCurrentTurnWithoutAnImmediateSecondOrdinaryCapture() {
         var motion=new BodyViewMotion();for(int i=0;i<3;i++)motion.observe("world",pose(0,0));
@@ -58,10 +58,10 @@ class BodyViewMotionTest {
     }
     @Test void hoverExtremesDoNotTriggerExtraViewsOrResetTheRefreshClock() {
         var motion=new BodyViewMotion();stop(motion,new BodyViewMotion.Pose(0,64.18,0,0,0));
-        long translation=motion.translation();
+
         // 浮遊の上下端は0.36 block差。撮影時点の記録に合わせた停止姿勢列で、実tick列の再現ではない。
         for(int i=0;i<6;i++)stop(motion,new BodyViewMotion.Pose(0,i%2==0?63.82:64.18,0,0,0));
-        assertEquals(1,motion.sequence());assertTrue(motion.translation()>translation);
+        assertEquals(1,motion.sequence());
         for(int i=18;i<BodyViewMotion.REFRESH_TICKS-1;i++)motion.observe("world",new BodyViewMotion.Pose(0,64.18,0,0,0));
         assertEquals(1,motion.sequence());
         motion.observe("world",new BodyViewMotion.Pose(0,64.18,0,0,0));assertEquals(2,motion.sequence());
@@ -88,9 +88,9 @@ class BodyViewMotionTest {
         }
     }
     @Test void returningBeforeStoppingDoesNotLeaveALatchedCapture() {
-        var motion=new BodyViewMotion();stop(motion,pose(0,0));long translation=motion.translation();
+        var motion=new BodyViewMotion();stop(motion,pose(0,0));
         motion.observe("world",pose(1,90));motion.observe("world",pose(0,0));
-        stop(motion,pose(0,0));assertEquals(1,motion.sequence());assertTrue(motion.translation()>translation);
+        stop(motion,pose(0,0));assertEquals(1,motion.sequence());
     }
     @Test void recordedSubsecondPitchAndYawCorrectionsProduceOnlyTheFirstNewView() {
         var motion=new BodyViewMotion();stop(motion,new BodyViewMotion.Pose(0,64,0,-413.4375,37.856));

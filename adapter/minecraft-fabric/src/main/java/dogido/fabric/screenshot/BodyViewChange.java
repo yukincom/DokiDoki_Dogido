@@ -10,8 +10,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-/** 同じ身体世代・地点・画面比率の4枚前と、枠なし原画像の8×6マスを比較する。
- * マスはコードが変化の有無を測るために使う。時系列入力の前画像は、ここで選んだreferenceに対応する。
+/** 直前の撮影と水平距離が1ブロック未満なら同じ場所。場所は撮影座標、景色の変化は枠なし原画像で判定する。
+ * 目線の上下による背景のずれは、景色を測る64×48の標本だけで補正する。モデルには撮影した原画像を渡す。
  */
 final class BodyViewChange {
     enum Status { NOT_COMPARED, UNCHANGED, CHANGED }
@@ -23,7 +23,7 @@ final class BodyViewChange {
             value.addProperty("sha256", sha256); return value;
         }
     }
-    record Sample(String context, long translation, int width, int height, int[] pixels, Reference reference) {}
+    record Sample(String context, double x, double y, double z, int width, int height, int[] pixels, Reference reference) {}
     // 数値は計測の診断用に留め、通信・モデル・HUDへ渡さない。
     record Cell(int row, int column, boolean localChange, Brightness brightness,
             float localTopMean, int localConnectedSamples, double lumaMedianDelta, int brightnessSupportSamples) {
@@ -36,7 +36,7 @@ final class BodyViewChange {
             return value;
         }
     }
-    record Result(Status status, Reference reference, List<Cell> cells) {
+    record Result(Status status, Reference reference, List<Cell> cells, double verticalShiftRows) {
         JsonObject json() {
             JsonObject value = new JsonObject();
             value.addProperty("status", status.name().toLowerCase(java.util.Locale.ROOT));
@@ -45,21 +45,84 @@ final class BodyViewChange {
         }
         JsonObject diagnosticJson() {
             JsonObject value = json();
+            value.addProperty("vertical_shift_rows", verticalShiftRows);
             JsonArray changed = new JsonArray();
             for (Cell cell : cells) if (cell.changed()) changed.add(cell.json());
             value.add("cells", changed); return value;
         }
     }
-    private final ArrayDeque<Sample> history = new ArrayDeque<>();
-    Result observe(String context, long translation, BufferedImage image, Reference reference) {
-        Sample current = new Sample(context, translation, image.getWidth(), image.getHeight(), BodyViewBox.samples(image), reference);
-        Sample old = history.size() == 4 ? history.getFirst() : null;
-        boolean compared = old != null && history.stream().allMatch(s -> s.context.equals(context) && s.translation == translation)
-            && (long)old.width * current.height == (long)current.width * old.height;
-        List<Cell> cells = compared ? measure(old.pixels, current.pixels) : List.of();
-        Status status = !compared ? Status.NOT_COMPARED : cells.stream().anyMatch(Cell::changed) ? Status.CHANGED : Status.UNCHANGED;
-        history.addLast(current); while (history.size() > 4) history.removeFirst();
-        return new Result(status, compared ? old.reference : null, cells);
+    private Sample previous;
+    Result observe(String context, double x, double y, double z, BufferedImage image, Reference reference) {
+        Sample old = previous;
+        Sample current = new Sample(context, x, y, z, image.getWidth(), image.getHeight(), BodyViewBox.samples(image), reference);
+        previous = current;
+        if (old == null || !old.context.equals(context) || !(Math.hypot(x - old.x, z - old.z) < 1.0)
+                || (long)old.width * current.height != (long)current.width * old.height) {
+            return new Result(Status.NOT_COMPARED, null, List.of(), 0);
+        }
+        double shift = backgroundShift(old.pixels, current.pixels, y - old.y);
+        int[] aligned = shift == 0 ? old.pixels : shifted(old.pixels, shift);
+        List<Cell> cells = measure(aligned, current.pixels);
+        Status status = cells.stream().anyMatch(Cell::changed) ? Status.CHANGED : Status.UNCHANGED;
+        return new Result(status, old.reference, cells, shift);
+    }
+
+    // 上昇時は背景が下へ、下降時は上へずれる。視差は奥行きで異なるので、Y差だけでずれ量を決めない。
+    // 48行中最大8行、かつ実際のY差に応じた範囲だけを探索し、左右に広く共通するずれがなければ補正しない。
+    private static double backgroundShift(int[] before, int[] after, double dy) {
+        double limit = Math.min(8.0, Math.abs(dy) * 48);
+        if (!(limit >= .25)) return 0;
+        int margin = (int)Math.ceil(limit) + 1;
+        double[] baseline = edgeErrors(before, after, 0, margin);
+        double bestError = Arrays.stream(baseline).sum() * .85;
+        double bestShift = 0;
+        for (double magnitude = .25; magnitude <= limit; magnitude += .25) {
+            double shift = Math.copySign(magnitude, dy);
+            double[] errors = edgeErrors(before, after, shift, margin);
+            int supportingBands = 0;
+            for (int i = 0; i < errors.length; i++) {
+                if (errors[i] < baseline[i] * .85) supportingBands++;
+            }
+            double error = Arrays.stream(errors).sum();
+            if (supportingBands >= 2 && error < bestError) {
+                bestError = error;
+                bestShift = shift;
+            }
+        }
+        return bestShift;
+    }
+
+    // 同じ共通領域で縦方向の輪郭を照合する。画面全体の明るさの差は位置合わせに使わず、後段でそのまま測る。
+    private static double[] edgeErrors(int[] before, int[] after, double shift, int margin) {
+        double[] bands = new double[4];
+        for (int y = margin; y < 48 - margin; y += 2) {
+            for (int x = 0; x < 64; x += 2) {
+                for (int channel = 0; channel < 3; channel++) {
+                    int i = (y * 64 + x) * 3 + channel;
+                    double oldEdge = sample(before, x, y + 1 - shift, channel) - sample(before, x, y - shift, channel);
+                    int newEdge = after[i + 64 * 3] - after[i];
+                    bands[x / 16] += Math.min(48.0, Math.abs(oldEdge - newEdge));
+                }
+            }
+        }
+        return bands;
+    }
+
+    private static int[] shifted(int[] before, double shift) {
+        int[] aligned = new int[before.length];
+        for (int y = 0; y < 48; y++) for (int x = 0; x < 64; x++) for (int channel = 0; channel < 3; channel++) {
+            aligned[(y * 64 + x) * 3 + channel] = (int)Math.round(sample(before, x, y - shift, channel));
+        }
+        return aligned;
+    }
+
+    // 新しく写った端は一番近い旧画像の縁と比べ、そこに現れた物を無条件には除外しない。
+    private static double sample(int[] pixels, int x, double y, int channel) {
+        double row = Math.clamp(y, 0.0, 47.0);
+        int top = (int)row;
+        int i = (top * 64 + x) * 3 + channel;
+        int next = top == 47 ? i : i + 64 * 3;
+        return pixels[i] + (row - top) * (pixels[next] - pixels[i]);
     }
 
     static List<Cell> measure(int[] before, int[] after) {

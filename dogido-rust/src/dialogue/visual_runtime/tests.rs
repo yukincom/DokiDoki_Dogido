@@ -22,27 +22,28 @@ pub(super) fn pending() -> (State,AdapterCommandResult,DateTime<Utc>) {
         "motion_sequence":1,"scene_comparison":comparison("changed",now)}})).unwrap();
     (state,result,now)
 }
-// 既存の通知試験には比較元の4画像を、通常の受信検証を通して用意する。
+// 既存の通知試験には、直前の比較元1枚を同じ受信検証で用意する。
 pub(super) fn seed_reference(state: &mut State, result: &mut AdapterCommandResult) {
     let now = DateTime::parse_from_rfc3339(result.body_view.as_ref().unwrap().0["captured_at"].as_str().unwrap()).unwrap().with_timezone(&Utc);
+    let at = now - chrono::Duration::seconds(1);
     let mut past = State {enabled:true, ..Default::default()};
-    for sequence in 1..=4 {
-        let at = now - chrono::Duration::seconds(5 - sequence);
-        past.arm("s", state.context.clone(), at);
-        let mut old = result.clone();
-        old.command_id = past.commands(at)[0]["command_id"].as_str().unwrap().into();
-        let view = &mut old.body_view.as_mut().unwrap().0;
-        view["capture_id"] = json!(format!("view_{}", uuid::Uuid::new_v4()));
-        view["captured_at"] = json!(at);
-        view["motion_sequence"] = json!(sequence);
-        view["scene_comparison"] = comparison("not_compared", at);
-        past.receive(&old, at);
-    }
-    assert_eq!(past.history.len(), 4);
-    let old = past.history.front().unwrap();
-    result.body_view.as_mut().unwrap().0["scene_comparison"]["reference"] =
+    past.arm("s", state.context.clone(), at);
+    let mut old = result.clone();
+    old.command_id = past.commands(at)[0]["command_id"].as_str().unwrap().into();
+    let view = &mut old.body_view.as_mut().unwrap().0;
+    view["capture_id"] = json!(format!("view_{}", uuid::Uuid::new_v4()));
+    view["captured_at"] = json!(at);
+    view["motion_sequence"] = json!(1);
+    view["scene_comparison"] = comparison("not_compared", at);
+    assert!(past.receive(&old, at));
+    let previous = past.latest.unwrap();
+    let old = &previous.image.current;
+    let current = &mut result.body_view.as_mut().unwrap().0;
+    current["scene_comparison"]["reference"] =
         json!({"capture_id":old.capture_id, "captured_at":old.captured_at, "sha256":old.sha256});
-    state.history = past.history;
+    current["motion_sequence"] = json!(2);
+    state.latest = Some(previous);
+    state.sequence = 1;
 }
 // 見込み: 同じ撮影要求を再利用し、成功画像の再送で通知を増やさない。合格: 命令IDを保ち、受理後の次命令だけIDと停止番号を更新し、snapshotにPNGを含めない。確認範囲: 模擬結果による受付状態。
 #[test]
@@ -57,7 +58,7 @@ fn stop_request_reuses_sequence_and_acknowledges_accepted_image_exactly_once() {
 }
 // 見込み: 無変化でも画像を保持し、身体文脈を失えば通常画像を破棄する。合格: unchangedでlatestあり・readyなし、文脈消失後は画像と命令なし。確認範囲: 固定比較結果を使うRust受信。
 #[test]
-fn equivalent_fourth_image_updates_cache_but_creates_no_change_and_context_loss_clears_it() {
+fn unmatched_reference_updates_only_current_image_and_context_loss_clears_it() {
     let (mut state,mut result,now)=pending();let view=&mut result.body_view.as_mut().unwrap().0;
     view["scene_comparison"]=comparison("unchanged",now);
     state.receive(&result,now);assert!(!state.ready);assert!(state.latest.is_some());
@@ -112,8 +113,8 @@ fn server(wait_ms: u64) -> (Arc<Dialogue>, Source) {
     (d, source)
 }
 
-// 通常撮影の受付を通し、Fabricが4枚前を参照する比較結果だけを模擬する。
-fn receive_scene(state: &mut State, status: &str) {
+// 通常撮影の受付を通し、Fabricが直前の画像を参照する比較結果だけを模擬する。
+pub(super) fn receive_scene(state: &mut State, status: &str) {
     let (_, mut receipt, _) = pending();
     let context = state.context.clone();
     state.arm("s", context, Utc::now());
@@ -125,8 +126,7 @@ fn receive_scene(state: &mut State, status: &str) {
     view["motion_sequence"] = json!(state.sequence + 1);
     view["scene_comparison"] = comparison(status, at);
     if status != "not_compared" {
-        assert_eq!(state.history.len(), 4);
-        let reference = state.history.front().unwrap();
+        let reference = &state.latest.as_ref().unwrap().image.current;
         view["scene_comparison"]["reference"] = json!({"capture_id":reference.capture_id,
             "captured_at":reference.captured_at, "sha256":reference.sha256});
     }
@@ -140,10 +140,8 @@ async fn repeated_unchanged_scenes_add_one_model_only_notice_per_run() {
     let (d, _) = server(100);
     let mut data = d.data.lock().unwrap();
     let s = data.sessions.get_mut("s").unwrap();
-    for _ in 0..4 {
-        receive_scene(&mut s.visual, "not_compared");
-        assert!(opportunity(s).is_none());
-    }
+    receive_scene(&mut s.visual, "not_compared");
+    assert!(opportunity(s).is_none());
     for _ in 0..2 {
         receive_scene(&mut s.visual, "unchanged");
         assert!(opportunity(s).is_none());
@@ -175,7 +173,7 @@ async fn stale_unchanged_notice_cannot_consume_a_new_run() {
     let (d, _) = server(100);
     let mut data = d.data.lock().unwrap();
     let s = data.sessions.get_mut("s").unwrap();
-    for status in ["not_compared","not_compared","not_compared","not_compared","unchanged","unchanged"] {
+    for status in ["not_compared","unchanged","unchanged"] {
         receive_scene(&mut s.visual, status);
     }
     let mut old = opportunity(s).unwrap();
@@ -216,7 +214,7 @@ async fn ongoing_scene_notice_uses_the_normal_environment_turn_and_can_stay_sile
     {
         let mut data = d.data.lock().unwrap();
         let s = data.sessions.get_mut("s").unwrap();
-        for status in ["not_compared","not_compared","not_compared","not_compared","unchanged","unchanged"] {
+        for status in ["not_compared","unchanged","unchanged"] {
             receive_scene(&mut s.visual,status);
         }
     }
@@ -310,10 +308,11 @@ async fn changed_image_creates_one_existing_notice_with_frozen_image_and_unchang
     assert!(action.leaf.as_ref().unwrap().details["reaction_context"].is_null());
     assert!(super::super::environment_runtime::refresh_dialogue_context(s, std::slice::from_mut(&mut action)));
     assert!(action.leaf.as_ref().unwrap().details["reaction_context"]["world_context"]["changes"].as_array().unwrap().iter().any(|c|c["kind"]=="body_view"));
-    let context=s.visual.context.clone();s.visual.arm("s",context,Utc::now());
-    result.command_id=s.visual.commands(Utc::now())[0]["command_id"].as_str().unwrap().into();let view=&mut result.body_view.as_mut().unwrap().0;
-    view["captured_at"]=json!(Utc::now());view["motion_sequence"]=json!(2);view["scene_comparison"]=comparison("unchanged",Utc::now());
-    s.visual.receive(&result,Utc::now());assert!(opportunity(s).is_none());assert_eq!(s.visual.latest.as_ref().unwrap().sequence,2);
+    receive_scene(&mut s.visual,"unchanged");
+    let unchanged = s.visual.latest.as_ref().unwrap();
+    assert_eq!(unchanged.sequence,3);
+    assert!(matches!(unchanged.image.frames,ComparedFrames::Unchanged));
+    assert!(opportunity(s).is_none());
     assert_eq!(action.image.as_ref().unwrap().png_base64,PNG);
 }
 // 画像受理から既存の環境入力までを通す。変わらないカメと匂いは現在表に残し、天候だけを差分にする。

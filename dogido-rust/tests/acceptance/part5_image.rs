@@ -136,12 +136,10 @@ async fn acceptance_image_compared_change_emits_once_and_unchanged_still_updates
         true
     );
     assert!(opportunity(session).is_none());
-    session.visual.arm("s", Some(context()), Utc::now());
-    let now = Utc::now();
-    session
-        .visual
-        .receive(&receipt(&session.visual, now, 2, "unchanged"), now);
-    assert_eq!(session.visual.latest.as_ref().unwrap().sequence, 2);
+    super::tests::receive_scene(&mut session.visual, "unchanged");
+    let unchanged = session.visual.latest.as_ref().unwrap();
+    assert_eq!(unchanged.sequence, 3);
+    assert!(matches!(unchanged.image.frames, ComparedFrames::Unchanged));
     assert!(opportunity(session).is_none());
 }
 
@@ -319,27 +317,24 @@ impl JavaWireFixture {
         fixture
     }
 
-    // Javaが符号化した比較元の画素を、現在とは別の撮影ACKとして4回受ける。
-    fn previous_captures(&self, input: &Value, now: DateTime<Utc>) -> VecDeque<Arc<Frame>> {
+    // Javaが符号化した直前の画像を別の撮影ACKとして受理し、次の比較にはその画像だけを使う。
+    fn previous_capture(&self, input: &Value, now: DateTime<Utc>) -> Captured {
         let mut earlier = input.clone();
         earlier["scenario"] = json!("unknown");
         earlier["after_path"] = earlier["before_path"].clone();
         let event = self.event(&earlier);
+        let at = now - chrono::Duration::seconds(1);
         let mut past = State {enabled:true, ..Default::default()};
-        for i in 0..4 {
-            let at = now - chrono::Duration::seconds(4-i);
-            past.arm("s", Some(context()), at);
-            let mut receipt = event.command_results[0].clone();
-            receipt.command_id = past.commands(at)[0]["command_id"].as_str().unwrap().into();
-            let v = &mut receipt.body_view.as_mut().unwrap().0;
-            v["capture_id"] = json!(format!("view_00000000-0000-0000-0000-{:012}",100+i));
-            // Instant.toString()で書かれたJavaの表現（Z、3桁の組単位）に揃える。
-            v["captured_at"] = json!(at.to_rfc3339_opts(chrono::SecondsFormat::AutoSi, true));
-            v["motion_sequence"] = json!(i+1);
-            past.receive(&receipt, at);
-        }
-        assert_eq!(past.history.len(), 4);
-        past.history
+        past.arm("s", Some(context()), at);
+        let mut receipt = event.command_results[0].clone();
+        receipt.command_id = past.commands(at)[0]["command_id"].as_str().unwrap().into();
+        let v = &mut receipt.body_view.as_mut().unwrap().0;
+        v["capture_id"] = json!("view_00000000-0000-0000-0000-000000000100");
+        // Instant.toString()で書かれたJavaの表現（Z、3桁の組単位）に揃える。
+        v["captured_at"] = json!(at.to_rfc3339_opts(chrono::SecondsFormat::AutoSi, true));
+        v["motion_sequence"] = json!(1);
+        assert!(past.receive(&receipt, at));
+        past.latest.unwrap()
     }
 
     fn event(&self, input: &Value) -> crate::events::GameEvent {
@@ -477,19 +472,28 @@ async fn acceptance_image_three_routes_send_verified_frames_in_one_generation() 
     ] {
         let (d, source) = server();
         let now = Utc::now();
-        let input = {
+        let mut input = {
             let data = d.data.lock().unwrap();
             let s = &data.sessions["s"];
             json!({"commands":s.visual.commands(now),"event":s.latest,"captured_at":now,"scenario":if scenario == "missing" {"changed"} else {scenario},
                 "before_path":base.join(if scenario == "unchanged" {"after-native.png"} else {"before-native.png"}),
                 "after_path":base.join("after-native.png")})
         };
+        if !matches!(scenario, "unknown" | "missing") {
+            let previous = wire_fixture.previous_capture(&input, now);
+            let mut data = d.data.lock().unwrap();
+            let visual = &mut data.sessions.get_mut("s").unwrap().visual;
+            let pending = visual.pending.take().unwrap();
+            visual.finish(pending.command["command_id"].as_str().unwrap());
+            visual.sequence = previous.sequence;
+            visual.latest = Some(previous);
+            visual.arm("s", Some(context()), now);
+            input["commands"] = json!(visual.commands(now));
+        }
         let received = wire_fixture.event(&input);
-        let past = if matches!(scenario, "unknown" | "missing") { VecDeque::new() } else { wire_fixture.previous_captures(&input, now) };
         let (normal, action) = {
             let mut data = d.data.lock().unwrap();
             let s = data.sessions.get_mut("s").unwrap();
-            s.visual.history = past;
             // 期限そのものの検査はvisual_runtimeの単体試験に任せる。
             s.visual.receive(&received.command_results[0], now + chrono::Duration::seconds(1));
             let image = &s.visual.latest.as_ref().expect("実画像を保持").image;
@@ -609,8 +613,8 @@ async fn acceptance_image_three_routes_send_verified_frames_in_one_generation() 
                 if status == "changed" {
                     let labels: Vec<_> = content.iter().enumerate().filter(|(_,part)| part["type"] == "image_url")
                         .map(|(index,_)| content[index-1]["text"].as_str().unwrap().lines().next().unwrap()).collect();
-                    // Java fixtureは1秒刻みの4枚前。実際の4秒間隔を送り、周期既定値で置き換えない。
-                    assert_eq!(labels, ["00:00", "00:04"]);
+                    // 直前画像との実際の1秒間隔を送り、周期既定値で置き換えない。
+                    assert_eq!(labels, ["00:00", "00:01"]);
                 }
                 for forbidden in ["image_observation", "sha256", "captured_at", "annotation_status", "capture_id", "image/png", "横8", "行目", "scene_comparison"] {
                     assert!(!image_text.contains(forbidden), "{scenario}/{route}: {forbidden}");

@@ -1,4 +1,4 @@
-//! 見込み: 実際に受理した4枚前の画像だけを組にできる。合格: 画像・撮影時刻・枠・方位・失効が期待どおり。範囲: Fabricの結果を模擬し、Rustの命令・受信・保持を通す。
+//! 見込み: 実際に受理した直前の画像だけを組にできる。合格: 画像・撮影時刻・枠・方位・失効が期待どおり。範囲: Fabricの結果を模擬し、Rustの命令・受信・保持を通す。
 use super::tests::{comparison, pending};
 use super::*;
 use crate::chat_image::{Heading, tests::image};
@@ -7,11 +7,12 @@ fn sequence(status: &str, fault: &str, old_yaw: Option<f64>, new_yaw: Option<f64
     let (mut state, template, start) = pending();
     let context = state.context.clone().unwrap();
     let mut reference = Value::Null;
-    for n in 0..5 {
+    let current = if fault == "older" { 2 } else { 1 };
+    for n in 0..=current {
         let mut receipt = template.clone();
         let mut at = start + chrono::Duration::seconds(n * 12);
         let mut context = context.clone();
-        if n == 4 {
+        if n == current {
             match fault {
                 "world" => context.dimension = "minecraft:the_nether".into(),
                 "body" => context.epoch = uuid::Uuid::new_v4().to_string(),
@@ -47,7 +48,7 @@ fn sequence(status: &str, fault: &str, old_yaw: Option<f64>, new_yaw: Option<f64
             v["sha256"] = json!(old.sha256);
             reference = json!({"capture_id":v["capture_id"],"captured_at":v["captured_at"],"sha256":v["sha256"]});
         }
-        if n == 4 && status != "not_compared" {
+        if n == current && status != "not_compared" {
             v["scene_comparison"] = comparison(status, at);
             v["scene_comparison"]["reference"] = reference.clone();
             match fault {
@@ -69,7 +70,7 @@ fn sequence(status: &str, fault: &str, old_yaw: Option<f64>, new_yaw: Option<f64
     state
 }
 
-// 見込み: 12秒間隔の5枚は、48秒前の照合済み画像と現在の画像を組にできる。
+// 見込み: 12秒間隔の2枚は、直前の照合済み画像と現在の画像を組にできる。
 // 合格: PNG・時刻・PLAYER枠を各画像で区別し、北から東への旋回と通知を一度確定。範囲: 模擬受付・重複ACKは既存試験で確認。
 #[test]
 fn changed_keeps_exact_old_pixels_time_and_box_separate_from_current() {
@@ -92,18 +93,11 @@ fn changed_keeps_exact_old_pixels_time_and_box_separate_from_current() {
     );
     let delta = DateTime::parse_from_rfc3339(&pair.current.captured_at).unwrap()
         - DateTime::parse_from_rfc3339(&previous.captured_at).unwrap();
-    assert_eq!(delta.num_seconds(), 48);
+    assert_eq!(delta.num_seconds(), 12);
     assert!(previous.has_player_box());
     assert!(!pair.current.has_player_box());
     assert_eq!(pair.turned_to, Some(Heading::East));
     assert!(state.ready);
-    assert_eq!(state.history.len(), 4);
-    assert!(
-        !state
-            .history
-            .iter()
-            .any(|frame| frame.capture_id == previous.capture_id)
-    );
 }
 
 // 見込み: 方位は画素とは独立して決まり、未取得の姿勢を補わない。
@@ -125,11 +119,11 @@ fn unchanged_can_turn_and_wraparound_or_missing_pose_does_not_claim_a_turn() {
 }
 
 // 見込み: 旧画像の照合失敗は現在の撮影成功と分けられる。
-// 合格: ID・hash・時刻の不一致、身体・世界・接続の交代、失効、未比較は今回PNGのみ、方位・通知なし。範囲: 実受信処理。
+// 合格: 直前より古い実画像、ID・hash・時刻の不一致、身体・世界・接続の交代、失効、未比較は今回PNGのみ、方位・通知なし。範囲: 実受信処理。
 #[test]
 fn unmatched_expired_or_replaced_context_uses_only_current_frame() {
     for fault in [
-        "id", "hash", "time", "body", "world", "session", "expired", "initial",
+        "id", "hash", "time", "older", "body", "world", "session", "expired", "initial",
     ] {
         let state = sequence(
             if fault == "initial" {
