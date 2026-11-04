@@ -3,7 +3,7 @@
 use super::contracts::{
     Activity, Candidate, CandidateKind, Mode, Observation, Observed, Reassurance, distance_squared, short_text,
 };
-use crate::body::contracts::{Context, PlayerVisibility, Sample};
+use crate::body::contracts::{Context, PlayerVisibility, Sample, VisibilityReason};
 use crate::events::{AdapterCommandResult, AdapterCommandResultStatus};
 use anyhow::{Result, anyhow, ensure};
 use chrono::{DateTime, Duration as UtcDuration, Utc};
@@ -174,7 +174,9 @@ impl State {
             self.next_owner_look = None;
             self.owner_concern_sent = false;
         }
-        if matches!(accepted.vision.player_visibility, PlayerVisibility::Visible) {
+        // 背後・遮蔽でも距離が観測範囲内なら帰還済み。次の範囲外だけを新しい通知にする。
+        if matches!(accepted.vision.reason,
+            VisibilityReason::InView | VisibilityReason::OutsideFov | VisibilityReason::Occluded) {
             self.owner_concern_sent = false;
         }
         self.accepted = Some(accepted.clone());
@@ -282,7 +284,7 @@ impl State {
             .filter(|r| self.accepted.as_ref().is_some_and(|a| a.context == r.data.context))
             .map(|r| &r.data.reassurance)
     }
-    /// 未確認や欠測は通知にも再通知の根拠にも使わない。視認と安心度は同じ身体フレームで照合する。
+    /// 距離による観測範囲外と安心度を同じ身体フレームで照合する。背後・遮蔽・欠測では通知しない。
     pub fn owner_concern_pending(&self, now: Instant) -> bool {
         self.current.as_ref().zip(self.accepted.as_ref()).is_some_and(|(reading, sample)| {
             !self.owner_concern_sent && reading.fresh(now)
@@ -290,6 +292,7 @@ impl State {
                 && reading.data.snapshot_revision == sample.snapshot_revision
                 && reading.data.reassurance.value < OWNER_CONCERN_THRESHOLD
                 && matches!(sample.vision.player_visibility, PlayerVisibility::NotVisible)
+                && matches!(sample.vision.reason, VisibilityReason::OutOfRange)
         })
     }
     pub fn take_owner_concern(&mut self, now: Instant) -> bool {

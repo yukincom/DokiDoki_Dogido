@@ -38,6 +38,11 @@ fn server(mock: &Mock, capability: bool) -> Arc<Dialogue> {
     let mut c = DialogueConfig { base_url: mock.url.clone(), model: "fixture".into(), audio_enabled: false, llm_enabled: true, ..Default::default() };
     c.haiku.enabled = false;
     c.haiku.memory_enabled = false;
+    c.haiku.internal_capture_enabled = false;
+    // 単体試験の専用一時rootへ揃え、本番の画像・内部採取・音声保存先を使わない。
+    c.haiku.capture_dir = Some(c.haiku.memory_dir.join("capture"));
+    c.haiku.screenshot_dir = Some(c.haiku.memory_dir.join("screenshots"));
+    c.audio_dir = c.haiku.memory_dir.join("audio");
     let d = Dialogue::new(c).unwrap();
     d.register("s","呼称",false);
     d.bind_body_owner("s",Some(OWNER));
@@ -465,14 +470,16 @@ async fn low_reassurance_and_candidates_do_not_start_periodic_model_calls() {
     d.shutdown().await;
 }
 
-fn concern_wire(sequence: i64, value: f64, visibility: &str) -> Value {
-    let reason = match visibility {
-        "visible" => "in_view",
-        "not_visible" => "occluded",
-        "unavailable" => "area_unloaded",
+fn concern_wire(sequence: i64, value: f64, reason: &str) -> Value {
+    let (visibility, distance) = match reason {
+        "in_view" => ("visible", 8.0),
+        "outside_fov" | "occluded" => ("not_visible", 8.0),
+        "out_of_range" => ("not_visible", 17.0),
+        "area_unloaded" => ("unavailable", 8.0),
         _ => unreachable!(),
     };
-    let mut event = inside_wire(sequence);
+    // 観測範囲は16block。追従境界は24blockに離し、別の退出通知を混ぜない。
+    let mut event = range_wire(sequence, distance, 24.0);
     let vision = &mut event["body_observation"]["sample"]["vision"];
     vision["player_visibility"] = json!(visibility);
     vision["reason"] = json!(reason);
@@ -482,25 +489,28 @@ fn concern_wire(sequence: i64, value: f64, visibility: &str) -> Value {
     event
 }
 
-// 見込み: 30未満かつ明示的な非視認だけが一回の気づきになる。値は本文・観測・注意範囲に出ない。
-// 合格: 同じ状態と欠測を挟む再観測で増えず、再視認または30への回復で再通知できる。模擬HTTPで沈黙も選べる。
+// 見込み: 30未満かつ距離による観測範囲外だけが気づきになる。後ろ向き・遮蔽では呼ばない。
+// 合格: 同じ範囲外と欠測では一回、範囲内への帰還または30への回復後は再通知。数値はモデルへ渡さない。模擬HTTPのみ。
 #[tokio::test]
 async fn owner_concern_only_reaches_the_model_once_per_observed_episode() {
     let mock = Mock::new(Duration::ZERO,r#"{"action":"silent","speech":""}"#).await;
     let d = server(&mock,true);
-    for (seq, (value, visibility, expected_calls)) in [
-        (30.0,"not_visible",0), (29.875,"visible",0), (29.875,"unavailable",0),
-        (29.875,"not_visible",1), (29.875,"not_visible",1), (29.875,"unavailable",1), (29.875,"not_visible",1),
-        (29.875,"visible",1), (29.875,"not_visible",2),
-        (30.0,"not_visible",2), (29.875,"not_visible",3),
+    for (seq, (value, reason, expected_calls)) in [
+        (30.0,"out_of_range",0), (29.875,"in_view",0), (29.875,"area_unloaded",0),
+        (29.875,"outside_fov",0), (29.875,"occluded",0),
+        (29.875,"out_of_range",1), (29.875,"out_of_range",1), (29.875,"area_unloaded",1), (29.875,"out_of_range",1),
+        (29.875,"outside_fov",1), (29.875,"out_of_range",2),
+        (29.875,"occluded",2), (29.875,"out_of_range",3),
+        (29.875,"in_view",3), (29.875,"out_of_range",4),
+        (30.0,"out_of_range",4), (29.875,"out_of_range",5),
     ].into_iter().enumerate() {
-        observe(&d,concern_wire(seq as i64,value,visibility));
+        observe(&d,concern_wire(seq as i64,value,reason));
         until(|| d.data.lock().unwrap().sessions["s"].warning.is_none()).await;
         assert_eq!(mock.seen.lock().unwrap().len(),expected_calls, "frame {seq}");
     }
     {
         let data = d.data.lock().unwrap();
-        assert_eq!(data.rows.iter().filter(|row| row["environment_reaction_outcome"] == "silent").count(), 3);
+        assert_eq!(data.rows.iter().filter(|row| row["environment_reaction_outcome"] == "silent").count(), 5);
         assert!(data.rows.iter().all(|row| !row["text"].as_str().unwrap_or("").contains(OWNER_CONCERN)));
         let world = super::super::body_runtime::context(&data.sessions["s"]).unwrap();
         let ordinary = crate::chat_prompt::messages(&json!({"user_text":"いまどこ？","world_context":world})).unwrap();
@@ -521,20 +531,22 @@ async fn owner_concern_only_reaches_the_model_once_per_observed_episode() {
     d.shutdown().await;
 }
 
-// 見込み: 生成待ちに相棒を再視認すれば、古い気づきをモデルへ送らない。
-// 合格: 枠の解放後も模擬HTTPが0件で終了。実モデルや音声の試験ではない。
+// 見込み: 生成待ちに相棒が観測範囲へ戻れば、背後や遮蔽中でも古い気づきを送らない。
+// 合格: 各帰還理由で枠の解放後も模擬HTTPが0件。実モデルの発言やMinecraftの実視認は検証しない。
 #[tokio::test]
 async fn owner_concern_is_rechecked_after_waiting_for_the_model() {
-    let mock = Mock::new(Duration::ZERO,INSPECT).await;
-    let d = server(&mock,true);
-    let slot = d.serial.acquire().await.unwrap();
-    observe(&d,concern_wire(1,20.0,"not_visible"));
-    assert!(d.data.lock().unwrap().sessions["s"].warning.is_some());
-    observe(&d,concern_wire(2,20.0,"visible"));
-    drop(slot);
-    until(|| d.data.lock().unwrap().sessions["s"].warning.is_none()).await;
-    assert!(mock.seen.lock().unwrap().is_empty());
-    d.shutdown().await;
+    for reason in ["in_view", "outside_fov", "occluded"] {
+        let mock = Mock::new(Duration::ZERO,INSPECT).await;
+        let d = server(&mock,true);
+        let slot = d.serial.acquire().await.unwrap();
+        observe(&d,concern_wire(1,20.0,"out_of_range"));
+        assert!(d.data.lock().unwrap().sessions["s"].warning.is_some());
+        observe(&d,concern_wire(2,20.0,reason));
+        drop(slot);
+        until(|| d.data.lock().unwrap().sessions["s"].warning.is_none()).await;
+        assert!(mock.seen.lock().unwrap().is_empty(), "{reason}");
+        d.shutdown().await;
+    }
 }
 
 #[tokio::test]
