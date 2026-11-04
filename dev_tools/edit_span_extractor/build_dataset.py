@@ -1,4 +1,6 @@
-"""SSD句集を読み取り、出典付きの具体変更スロット教材を独立領域へ合成する。
+"""旧合成方式の記録。教材は不採用となり、CLI生成入口は停止中。
+
+SSD句集を読み取り、出典付きの具体変更スロット教材を独立領域へ合成する。
 
 見込み: 句の表現と実依頼に沿う文型を独立に組み合わせると未知の表現も抽出できる。
 合格: 全offsetが原文一致、同一句とrevisionは同一分割、実対話評価の句は学習不使用。
@@ -176,6 +178,7 @@ def main():
     parser.add_argument("--new-audit", type=Path)
     parser.add_argument("--augmentation-v2", action="store_true")
     args = parser.parse_args()
+    raise SystemExit("旧方式のランダム組合せ・文字切り出し教材は不採用です。この生成入口は停止しています。")
     if args.output.exists():
         raise ValueError("Output exists; create a new dataset version")
     args.output.mkdir(parents=True)

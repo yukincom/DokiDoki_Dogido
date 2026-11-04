@@ -42,6 +42,9 @@ def main():
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--defer-evaluation", action="store_true", help="Save dev-selected model; leave all final sets untouched")
     args = parser.parse_args()
+    status_path = args.data / "dataset-status.json"
+    if status_path.exists() and json.loads(status_path.read_text()).get("training_allowed") is False:
+        raise ValueError("この教材は学習対象外です。dataset-status.jsonを確認してください")
     if args.output.exists():
         raise ValueError("Output already exists; never overwrite a previous trial")
     if args.device == "mps" and not torch.backends.mps.is_available():

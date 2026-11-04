@@ -1,4 +1,6 @@
-"""句の分割を固定し、抽出語自体の漢字・仮名の配分を変える独立実験。
+"""旧合成方式の記録。教材は不採用となり、CLI生成入口は停止中。
+
+句の分割を固定し、抽出語自体の漢字・仮名の配分を変える独立実験。
 
 見込み: 依頼動詞だけでなく語句にも漢字を含め、漢字境界の欠落を減らす。
 合格: 分割・実対話評価の不変と変形後offset一致。実モデルの改善は別に測る。
@@ -113,6 +115,7 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--seed', type=int, default=42)
     args = parser.parse_args()
+    raise SystemExit("旧方式のランダム組合せ・文字切り出し教材は不採用です。この生成入口は停止しています。")
     if args.output.exists():
         raise ValueError('Never overwrite a dataset')
     materials = json.loads((args.previous_data / 'materials.json').read_text())
