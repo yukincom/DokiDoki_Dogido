@@ -15,8 +15,83 @@ import sys
 import threading
 import time
 import uuid
+from urllib.parse import urlsplit
 
 LOG_RETENTION_SECONDS = 24 * 60 * 60
+
+
+class DialogueRows:
+    """既存snapshotから原文と配送確定文だけを取り出す。識別子で再取得の重複を防ぐ。"""
+    def __init__(self):
+        self.seen = {}
+
+    def take(self, snapshot):
+        now = datetime.now().astimezone().isoformat()
+        events = []
+        voice_sessions = set()
+        for session in snapshot.get('sessions', []):
+            sid = session['session_id']
+            if isinstance(session.get('voice_inputs'), list):
+                voice_sessions.add(sid)
+                for item in session['voice_inputs']:
+                    events.append((sid + ':' + item['input_id'], '子供', item['text'], now))
+        rows = snapshot.get('utterances', [])
+        forwarded = {(row['session_id'], row['forwarded_input']['turn_id']) for row in rows
+                     if isinstance(row.get('forwarded_input'), dict) and row['forwarded_input'].get('turn_id')}
+        # 子の作成と親への転送ID記録の間にsnapshotを取った場合、同文の子だけを次回まで保留する。
+        pending = {(row['session_id'], row.get('source'), row.get('player_input_text')) for row in rows
+                   if row.get('category') == 'routing' and 'forwarded_input' not in row
+                   and row.get('playback_status') in ('routing', 'not_selected')}
+        for row in rows:
+            sid, turn = row['session_id'], row['turn_id']
+            key = sid + ':' + turn
+            text = row.get('player_input_text')
+            voice = row.get('source') == 'voice' and sid in voice_sessions
+            # 警告・匂い照会へ渡したplayer_inputは原入力の写し。元の受付行またはvoice_inputsで表示する。
+            copied = row.get('source') == 'player_input'
+            waiting = (row.get('category') != 'routing'
+                       and (sid, row.get('source'), text) in pending)
+            if text and not voice and not copied and (sid, turn) not in forwarded and not waiting:
+                events.append((key + ':user', '子供', text, row.get('created_at', now)))
+            if row.get('delivery_confirmed') is True and row.get('text'):
+                events.append((key + ':assistant', 'ドギド', row['text'], now))
+            if row.get('error'):
+                events.append((key + ':error', 'エラー', row['error'], now))
+        result = []
+        for key, speaker, text, at in events:
+            if key in self.seen or not isinstance(text, str):
+                continue
+            self.seen[key] = None
+            # Relayの8192文字分割より短いJSON一行にする。長い本文は同じ発話IDの連番で保持する。
+            for start in range(0, len(text), 1000):
+                result.append(json.dumps({'id': f'{key}:{start}', 'speaker': speaker,
+                                          'text': text[start:start + 1000], 'time': at}, ensure_ascii=False))
+        while len(self.seen) > 4096:
+            del self.seen[next(iter(self.seen))]
+        return result
+
+
+def relay_dialogue(stop, url, auth, emit):
+    """一括起動が所有する本体を1秒ごとに読む。表示ACKやゲーム操作は送らない。"""
+    endpoint = urlsplit(url)
+    rows = DialogueRows()
+    while not stop.is_set():
+        connection = http.client.HTTPConnection(endpoint.hostname, endpoint.port, timeout=2)
+        try:
+            headers = {'Authorization': 'Bearer ' + auth} if auth else {}
+            connection.request('GET', '/api/v1/rust-dialogue/snapshot', headers=headers)
+            response = connection.getresponse()
+            body = response.read(8 * 1024 * 1024 + 1)
+            if response.status != 200 or len(body) > 8 * 1024 * 1024:
+                raise ValueError('対話ログの応答を確認できません。')
+            for line in rows.take(json.loads(body)):
+                emit(line)
+        except (OSError, ValueError, KeyError, TypeError, http.client.HTTPException):
+            # 本体の起動待ち・通信断は次の周期で再取得する。発話処理のスレッドは待たせない。
+            pass
+        finally:
+            connection.close()
+        stop.wait(1)
 
 
 def _active_marker(path):

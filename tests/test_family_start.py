@@ -13,9 +13,10 @@ spec.loader.exec_module(launcher)
 
 
 # 見込み: 新しいkitの一括起動はペアリング窓口を開き、VOICEVOXを必要な場合だけ起動してから音声を開始する。
-# 合格: 旧接続情報なしで新clientを起動し、未起動時だけVOICEVOXを開き、準備順・停止対象が一致する。プロセスと通信は模擬。
+# 合格: 未起動時だけVOICEVOXを開き、準備順・停止対象が一致する。対話中継も同じ起動で開始・終了する。プロセスと通信は模擬。
 @pytest.mark.parametrize('voicevox_running', [True, False])
-def test_one_click_waits_for_readiness_and_stops_only_owned_children(tmp_path, monkeypatch, voicevox_running):
+@pytest.mark.parametrize('installed_app', [True, False])
+def test_one_click_waits_for_readiness_and_stops_only_owned_children(tmp_path, monkeypatch, voicevox_running, installed_app):
     (tmp_path / 'lan_tools').mkdir()
     (tmp_path / 'lan_tools/connection.py').touch()
     events, children = [], []
@@ -52,8 +53,20 @@ def test_one_click_waits_for_readiness_and_stops_only_owned_children(tmp_path, m
         events.append('open-voicevox')
         return SimpleNamespace(returncode=0)
     monkeypatch.setattr(launcher.subprocess, 'run', open_voicevox)
-    monkeypatch.setitem(sys.modules, 'log_relay', SimpleNamespace(Relay=Relay,
-        stop_child=lambda child: events.append('stop:' + child.name)))
+    helpers = SimpleNamespace(Relay=Relay,
+        relay_dialogue=lambda stop, url, auth, emit: stop.wait(),
+        stop_child=lambda child: events.append('stop:' + child.name))
+    monkeypatch.setitem(sys.modules, 'log_relay', helpers)
+    if installed_app:
+        # 旧kitが残る実導入配置でも、app内の起動スクリプトと同じ版のhelperが選ばれることを検査する。
+        app = tmp_path / 'app/client_tools'
+        app.mkdir(parents=True)
+        (tmp_path / 'client_tools').mkdir()
+        (tmp_path / 'client_tools/log_relay.py').write_text("raise AssertionError('old kit helper selected')")
+        (app / 'log_relay.py').write_text('from test_family_helper_hooks import Relay, stop_child, relay_dialogue')
+        monkeypatch.setattr(launcher, '__file__', str(app / 'start_client.py'))
+        monkeypatch.setitem(sys.modules, 'test_family_helper_hooks', helpers)
+        del sys.modules['log_relay']
     monkeypatch.setitem(sys.modules, 'dogido_server.config', SimpleNamespace(get_settings=lambda: SimpleNamespace(
         bind_host='127.0.0.1', bind_port=5111, auth_token=None, default_call_name="テスト", voicevox_url='http://127.0.0.1:50021')))
     def response(url):
@@ -76,6 +89,7 @@ def test_one_click_waits_for_readiness_and_stops_only_owned_children(tmp_path, m
     assert events.index('server-ready') < events.index('spawn:voice')
     assert [e for e in events if e.startswith('stop:')] == [
         'stop:voice', 'stop:server', 'stop:minecraft_log_relay.py', 'stop:client']
+    assert events.count('relay-close') == 2
 
 
 def test_single_click_runs_the_shared_launcher_source():

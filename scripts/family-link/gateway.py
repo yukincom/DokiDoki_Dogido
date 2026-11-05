@@ -107,13 +107,59 @@ def prune_logs(directory, suffix, *, now=None, exclude=()):
     return removed
 
 
+class DialogueDisplay:
+    """共有画面には会話・失敗だけを渡す。内部診断の保存はDebugLogが担当する。"""
+    def __init__(self):
+        self.seen = {}
+
+    def show(self, speaker, text, at=None):
+        at = at or datetime.now().astimezone().isoformat()
+        try:
+            clock = datetime.fromisoformat(at).astimezone().strftime('%H:%M:%S')
+        except (TypeError, ValueError):
+            return
+        print(f'[{clock}] {log_text(speaker)}　{log_text(text)}', flush=True)
+
+    def __call__(self, record):
+        source, message = record['source'], record['message']
+        if source == 'クライアント/dialogue':
+            try:
+                row = json.loads(message)
+            except ValueError:
+                return
+            if (not isinstance(row, dict) or set(row) != {'id', 'speaker', 'text', 'time'}
+                    or any(not isinstance(value, str) for value in row.values())
+                    or row['speaker'] not in ('子供', 'ドギド', 'エラー') or not row['text']):
+                return
+            if row['id'] in self.seen:
+                return
+            self.seen[row['id']] = None
+            if len(self.seen) > 4096:
+                del self.seen[next(iter(self.seen))]
+            self.show(row['speaker'], row['text'], row['time'])
+        elif message.startswith('[VOICE] '):
+            try:
+                row = json.loads(message[len('[VOICE] '):])
+            except ValueError:
+                return
+            if isinstance(row, dict) and row.get('level') == 'error':
+                self.show('エラー', str(row.get('detail') or row.get('reason') or '音声入力に失敗しました。'), record['time'])
+        elif (re.search(r'^(?:\d{4}-\d{2}-\d{2}[^\n]* )?\[(?:ERROR|FATAL)\]|^\[\d{2}:\d{2}:\d{2}\] \[[^\]]+/ERROR\]', message)
+              or (source == 'モデル' and message in ('生成失敗', '混雑のため受付拒否'))
+              or (message.startswith(('[本体終了]', '[音声起動前に停止]'))
+                  and re.search(r'\bexit=-?[1-9][0-9]*\b', message))
+              or message.startswith(('[事前確認NG]', '起動できません:', '[エラー]'))):
+            self.show('エラー', message, record['time'])
+
+
 class DebugLog:
-    def __init__(self, directory):
+    def __init__(self, directory, display=None):
         directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         prune_logs(directory, '.jsonl')
         self.path = directory / (datetime.now().strftime('%Y%m%d-%H%M%S-') + uuid.uuid4().hex[:6] + '.jsonl')
         self.file = os.fdopen(os.open(self.path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), 'w')
         self.lock = threading.Lock()
+        self.display = display
         self.next_maintenance = time.monotonic() + LOG_RETENTION_SECONDS
 
     def maintain(self):
@@ -129,7 +175,10 @@ class DebugLog:
         with self.lock:
             suffix = ' '.join(f'{key}={log_text(value)}' for key, value in details.items())
             try:
-                print(f"[{record['time'][11:23]}][{source}] {record['message']} {suffix}".rstrip(), flush=True)
+                if self.display is None:
+                    print(f"[{record['time'][11:23]}][{source}] {record['message']} {suffix}".rstrip(), flush=True)
+                else:
+                    self.display(record)
             except OSError:
                 pass  # A closing Terminal must not prevent shutdown.
             if self.file.closed:
@@ -158,7 +207,7 @@ class DebugLog:
 def checked_logs(body):
     if not isinstance(body, dict) or set(body) != {'source', 'lines'}:
         raise ValueError('Invalid log payload')
-    if body['source'] not in ('server', 'voice', 'minecraft'):
+    if body['source'] not in ('server', 'voice', 'minecraft', 'dialogue'):
         raise ValueError('Invalid log source')
     lines = body['lines']
     if (not isinstance(lines, list) or not 1 <= len(lines) <= 32

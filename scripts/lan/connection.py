@@ -254,10 +254,11 @@ def run_host(state):
     # ユノの受信部品と文面生成は共有アプリにだけ同梱する。
     from line_inbox import serve
     from message_wording import render_message
-    messages = MessageBox(state, lambda: (transport._read(state / "devices.json") or {}).keys(),
-                          on_ui_result=report_to_yuno)
     gateway = gateway_module()
-    debug = gateway.DebugLog(state / "logs")
+    display = gateway.DialogueDisplay()
+    messages = MessageBox(state, lambda: (transport._read(state / "devices.json") or {}).keys(),
+                          on_ui_result=report_to_yuno, on_event=display.show)
+    debug = gateway.DebugLog(state / "logs", display=display)
     try:
         with serving(gateway.make_proxy(port=0, upstream_port=8080, event=debug.emit)) as proxy, \
                 serve(state, messages.deliver_line), \

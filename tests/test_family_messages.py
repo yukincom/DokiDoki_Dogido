@@ -8,6 +8,24 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts/lan'))
 from family_messages import MessageBox, TIMEOUT
 
 
+# 見込みは保存成功後の通知を使うと、ユノの本文と結果を画面に一回ずつ表示できること。
+# 合格はLINE再送・結果再報告でも重複せず、失敗理由も出る。一時DBだけを使い実ユノへ送信しない。
+def test_yuno_message_and_result_display_after_commit(tmp_path):
+    events = []
+    box = MessageBox(tmp_path, lambda: ['a'], on_event=lambda *args: events.append(args))
+    assert not box.deliver_line('line-missing', '家族', 'テスト')['accepted']
+    assert events[0][0] == 'ユノ'
+    box.select('a')
+    box.poll('a', None, '仮名')
+    mid = box.enqueue('ごはんですよ', '家族', 'line-test')
+    assert box.enqueue('ごはんですよ', '家族', 'line-test') == mid
+    box.prepare_next(lambda *_: 'ごはんですよ')
+    box.poll('a', None, '仮名')
+    box.report('a', mid, 'delivered')
+    box.report('a', mid, 'delivered')
+    assert events[1:] == [('ユノ', '家族から　ごはんですよ'), ('ユノ', 'ゲームで伝言の表示または再生を確認しました。')]
+
+
 # 見込み: 選択した遊ぶMacから新しい状態を得たときだけ伝言を用意する。
 # 合格: 未指定・端末不在・ゲームなしは理由付き、交戦中でも選択端末へ送る。LINE再送は同じ受付と状態報告を使う。
 def test_selection_readiness_and_line_retry(tmp_path):

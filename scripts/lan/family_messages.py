@@ -49,6 +49,7 @@ def _result(status, activity):
 class _Transaction(sqlite3.Connection):
     """共有UIの報告はDBの確定後に、本文なしで呼出元へ渡す。"""
     ui_results: list
+    display_events: list
 
 
 class Unavailable(ValueError):
@@ -58,10 +59,11 @@ class Unavailable(ValueError):
 
 
 class MessageBox:
-    def __init__(self, root, devices, on_ui_result=None):
+    def __init__(self, root, devices, on_ui_result=None, on_event=None):
         self.path = root / 'family-messages.sqlite3'
         self.devices = devices
         self.on_ui_result = on_ui_result
+        self.on_event = on_event
         self.last_offered = {}
         # 状態はこの起動だけが持つ。DBトランザクションの中で読み書きし、定期報告をディスクに残さない。
         self.presence = {}
@@ -84,11 +86,14 @@ class MessageBox:
     def transaction(self):
         with closing(sqlite3.connect(self.path, factory=_Transaction)) as db, db:
             reports = db.ui_results = []
+            events = db.display_events = []
             db.execute('PRAGMA secure_delete = ON')
             db.execute('BEGIN IMMEDIATE')
             yield db
         for result in reports:
             self.on_ui_result(result)
+        for speaker, text in events:
+            self.on_event(speaker, text)
 
     def select(self, device):
         with self.transaction() as db:
@@ -104,7 +109,12 @@ class MessageBox:
                    (status, json.dumps(activity), message_id))
         if self.on_ui_result and db.execute('SELECT source FROM messages WHERE id=?', (message_id,)).fetchone() == (None,):
             db.ui_results.append(_result(status, activity))
-        print('ゲームで伝言の表示または再生を確認しました。' if status == 'delivered' else REASONS[status], flush=True)
+        text = 'ゲームで伝言の表示または再生を確認しました。' if status == 'delivered' else REASONS[status]
+        if self.on_event:
+            source, = db.execute('SELECT source FROM messages WHERE id=?', (message_id,)).fetchone()
+            db.display_events.append(('ユノ' if source else '伝言', text))
+        else:
+            print(text, flush=True)
 
     def revoked(self, device):
         with self.transaction() as db:
@@ -138,12 +148,16 @@ class MessageBox:
             mid = secrets.token_hex(16)
             db.execute("""INSERT INTO messages(id,device,sender,player,body,created,source,status)
                           VALUES(?,?,?,?,?,?,?,'preparing')""", (mid, device, sender, presence[2], text, now, source_id))
+            if self.on_event:
+                db.display_events.append(('ユノ' if source_id else '伝言', f'{sender}から　{text}'))
             return mid
 
     def deliver_line(self, source_id, sender, text):
         try:
             mid = self.enqueue(text, sender, source_id)
         except Unavailable as error:
+            if self.on_event:
+                self.on_event('ユノ', str(error))
             return _result(error.reason, [])
         while True:
             with self.transaction() as db:

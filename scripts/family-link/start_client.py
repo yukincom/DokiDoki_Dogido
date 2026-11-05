@@ -10,6 +10,7 @@ import signal
 import socket
 import subprocess
 import sys
+import threading
 import time
 from urllib.request import build_opener, ProxyHandler
 from urllib.error import HTTPError
@@ -86,8 +87,13 @@ def run(root, lan_tools=None):
                               (settings.bind_host, settings.bind_port, '02の本体')):
         if port_open(port, host):
             raise RuntimeError(f'{label}が既に動いています。以前の03→02→01をCtrl+Cで閉じてから開いてください。')
-    from log_relay import Relay, stop_child
+    # 導入済みappでは起動スクリプトと同梱版を揃え、旧キットの同名モジュールを先に読まない。
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from log_relay import Relay, stop_child, relay_dialogue
     children, relay = [], None
+    dialogue_relay = None
+    dialogue_stop = threading.Event()
+    dialogue_worker = None
     def say(message):
         print(message, flush=True)
         if relay is not None:
@@ -141,6 +147,10 @@ def run(root, lan_tools=None):
         def server_ready():
             return is_rust_ready(json_response(base_url + '/healthz'))
         wait_ready('ドギド本体', server_ready, children, say)
+        dialogue_relay = Relay('dialogue')
+        dialogue_worker = threading.Thread(target=relay_dialogue,
+            args=(dialogue_stop, base_url, settings.auth_token, dialogue_relay.put), daemon=True)
+        dialogue_worker.start()
         say('[3/3] 本体の準備ができたので、音声入力を開始します。')
         spawn('音声入力', [sys.executable, '-u', str(helpers / 'log_relay.py'), 'voice'])
         say('[待機] 音声入力の「待機中」が出たら、Minecraftで遊べます。この画面だけ開いたままにしてください。')
@@ -152,9 +162,17 @@ def run(root, lan_tools=None):
             time.sleep(0.3)
     except KeyboardInterrupt:
         say('[停止] 音声入力・本体・専用接続を終了します。')
+    except (OSError, ValueError, RuntimeError) as error:
+        say(f'[エラー] {error}')
+        raise
     finally:
         for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
             signal.signal(sig, signal.SIG_IGN)
+        dialogue_stop.set()
+        if dialogue_worker is not None:
+            dialogue_worker.join()
+        if dialogue_relay is not None:
+            dialogue_relay.close()
         for name, child in reversed(children):
             stop_child(child)
         if relay is not None:
