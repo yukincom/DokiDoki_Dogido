@@ -108,14 +108,13 @@ def test_first_pair_and_new_address_without_new_approval(world):
     assert not world.upstream_calls
 
 
-# 見込み: 認証済み端末の名前だけを登録へ足せば、既存の鍵・宛先とIP変更後の再接続を保てる。
-# 合格: 実TLSと一時保存で旧登録が同じtokenのまま名前付きになり、再起動後も名前と宛先が一致。
-def test_authenticated_computer_name_preserves_registration_and_recipient(world, monkeypatch):
+# 見込み: 認証済み端末の名前だけを登録へ足せば、既存の鍵とIP変更後の再接続を保てる。
+# 合格: 実TLSと一時保存で旧登録が同じtokenのまま名前付きになり、再起動後も登録名が一致。
+def test_authenticated_computer_name_preserves_registration(world, monkeypatch):
     credentials = world.pair()
     device = credentials['device']
     file = world.root / 'host/devices.json'
     old_digest = json.loads(file.read_text())[device]
-    world.host.messages.select(device)
     monkeypatch.setattr(transport, 'computer_name', lambda: '家のMac mini')
     transport.probe(world.address, credentials)
     assert json.loads(file.read_text())[device] == {'token_hash': old_digest, 'name': '家のMac mini'}
@@ -125,10 +124,9 @@ def test_authenticated_computer_name_preserves_registration_and_recipient(world,
     later, moved = world.new_host(world.root / 'host')
     transport.probe(moved, credentials)
     assert later.device_records() == [{'id': device, 'name': '家のMac mini'}]
-    assert later.messages.selected() == device
     assert len(world.host_codes) == 1 and not world.upstream_calls
     later.revoke(device)
-    assert later.device_records() == [] and later.messages.selected() is None
+    assert later.device_records() == []
 
 
 # 見込み: PC名は認証後にだけ受ければ、未登録要求や改行入りの名前で既存登録を書き換えない。
@@ -270,14 +268,13 @@ def test_loopback_blocks_browser_origins(world, headers):
 
 
 # 見込み: 認証した宛先でだけ配送し、表示ACKの転送に失敗しても同じ伝言を二重に再生しない。
-# 合格: 別端末の偽ACKは無効、選択先の模擬本体だけが原文を受け、再接続後も表示済み1回。実TLS・一時DB。
+# 合格: 別端末の偽ACKは無効、接続中の模擬本体だけが原文を受け、再接続後も表示済み1回。未接続が混じる全体結果は一部成功。実TLS・一時DB。
 def test_family_message_bound_to_peer_and_receipt_survives_lost_ack(world, monkeypatch):
     import message_client
     first = world.pair()
     world.host.open_pairing()
     other = transport.pair(world.root / 'other-client', world.address, lambda _: True)
     box = world.host.messages
-    box.select(first['device'])
     state = world.root / 'client'
     received = []
 
@@ -305,7 +302,7 @@ def test_family_message_bound_to_peer_and_receipt_survives_lost_ack(world, monke
     monkeypatch.setattr(transport, 'message_request', request)
     poll()
     assert received == [{'id': mid, 'text': '遊ぶ人、父から「18時にごはんですよー！」やで。'}]
-    assert box.deliver_line('line-1', '父', '同じ通知') == {'accepted': True, 'activity': ['combat']}
+    assert box.deliver_line('line-1', '父', '同じ通知') == {'accepted': False, 'reason': 'partial_delivery'}
     assert not (state / 'family-receipt.json').exists()
     assert not world.upstream_calls
 
@@ -390,7 +387,6 @@ def test_family_round_trip_across_listeners(tmp_path):
             credentials = transport.pair(tmp_path / 'client', ethernet, confirm)
             assert len(codes) == 2 and codes[0] == codes[1]
             box = wired.messages
-            box.select(credentials['device'])
             def poll(address):
                 return transport.message_request(address, credentials, transport.NEXT_MESSAGE,
                                                  {'reason': None, 'player': '遊ぶ人'})['message']

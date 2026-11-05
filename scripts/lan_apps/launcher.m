@@ -125,9 +125,7 @@ static int finderAlias(NSString *operation, NSString *file, NSString *app) {
 @property NSMutableString *hostOutputBuffer;
 @property NSArray<NSDictionary *> *registeredDevices;
 @property NSMutableSet<NSString *> *checkedDevices;
-@property NSString *recipientID;
 @property NSScrollView *deviceScroll;
-@property NSPopUpButton *recipientPicker;
 @property NSButton *deleteButton;
 @property NSFileHandle *input;
 @property NSFileHandle *reader;
@@ -255,13 +253,20 @@ static int finderAlias(NSString *operation, NSString *file, NSString *app) {
     return name;
 }
 - (void)buildSettingsInterface {
-    self.settingsWindow = [[NSPanel alloc] initWithContentRect:NSMakeRect(0,0,520,430)
+    self.settingsWindow = [[NSPanel alloc] initWithContentRect:NSMakeRect(0,0,520,370)
             styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
     self.settingsWindow.title = @"設定";
     self.settingsWindow.appearance = self.window.appearance;
-    self.settingsWindow.contentView = [[HostCanvas alloc] initWithFrame:NSMakeRect(0,0,520,430)];
+    self.settingsWindow.contentView = [[HostCanvas alloc] initWithFrame:NSMakeRect(0,0,520,370)];
+    NSButton *close = [self hostButton:@"" action:@selector(closeSettings:) frame:NSMakeRect(460,318,36,32) accent:NO];
+    close.image = [[NSImage imageWithSystemSymbolName:@"xmark" accessibilityDescription:@"閉じる"]
+        imageWithSymbolConfiguration:[NSImageSymbolConfiguration configurationWithPointSize:13 weight:NSFontWeightBold]];
+    close.imagePosition = NSImageOnly;
+    close.contentTintColor = hostInk();
+    close.accessibilityLabel = @"閉じる";
+    [self.settingsWindow.contentView addSubview:close];
     NSTextField *label = [NSTextField labelWithString:@"管理者名"];
-    label.frame = NSMakeRect(24,380,472,20);
+    label.frame = NSMakeRect(24,322,400,20);
     label.font = [NSFont monospacedSystemFontOfSize:13 weight:NSFontWeightBold];
     label.textColor = hostInk();
     [self.settingsWindow.contentView addSubview:label];
@@ -275,51 +280,38 @@ static int finderAlias(NSString *operation, NSString *file, NSString *app) {
     self.administratorField.textColor = hostInk();
     self.administratorField.font = [NSFont monospacedSystemFontOfSize:14 weight:NSFontWeightRegular];
     self.administratorField.usesSingleLineMode = YES;
-    self.administratorField.frame = NSMakeRect(24,341,360,30);
+    self.administratorField.frame = NSMakeRect(24,281,360,30);
     self.administratorField.accessibilityLabel = @"管理者名";
     self.administratorField.target = self;
     self.administratorField.action = @selector(saveSettings:);
     self.administratorField.cell.sendsActionOnEndEditing = NO;
     [self.settingsWindow.contentView addSubview:self.administratorField];
     self.settingsWindow.initialFirstResponder = self.administratorField;
-    NSButton *save = [self hostButton:@"保存" action:@selector(saveSettings:) frame:NSMakeRect(398,339,98,34) accent:YES];
+    NSButton *save = [self hostButton:@"保存" action:@selector(saveSettings:) frame:NSMakeRect(398,279,98,34) accent:YES];
     [self.settingsWindow.contentView addSubview:save];
     NSTextField *registered = [NSTextField labelWithString:@"登録PC"];
-    registered.frame = NSMakeRect(24,292,320,20);
+    registered.frame = NSMakeRect(24,232,220,20);
     registered.font = label.font;
     registered.textColor = hostInk();
     [self.settingsWindow.contentView addSubview:registered];
-    NSButton *add = [self hostButton:@"登録追加" action:@selector(pair:) frame:NSMakeRect(398,284,98,34) accent:NO];
+    NSButton *add = [self hostButton:@"登録追加" action:@selector(pair:) frame:NSMakeRect(398,224,98,34) accent:NO];
     [self.settingsWindow.contentView addSubview:add];
-    self.deviceScroll = [[NSScrollView alloc] initWithFrame:NSMakeRect(24,134,472,140)];
+    self.deviceScroll = [[NSScrollView alloc] initWithFrame:NSMakeRect(24,58,472,156)];
     self.deviceScroll.hasVerticalScroller = YES;
     self.deviceScroll.borderType = NSBezelBorder;
     self.deviceScroll.backgroundColor = NSColor.whiteColor;
     [self.settingsWindow.contentView addSubview:self.deviceScroll];
-    NSTextField *recipient = [NSTextField labelWithString:@"伝言の宛先"];
-    recipient.frame = NSMakeRect(24,94,100,20);
-    recipient.font = label.font;
-    recipient.textColor = hostInk();
-    [self.settingsWindow.contentView addSubview:recipient];
-    self.recipientPicker = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(132,86,250,32) pullsDown:NO];
-    self.recipientPicker.target = self;
-    self.recipientPicker.action = @selector(recipient:);
-    self.recipientPicker.accessibilityLabel = @"伝言の宛先";
-    self.recipientPicker.font = [NSFont systemFontOfSize:13];
-    [self.settingsWindow.contentView addSubview:self.recipientPicker];
-    self.deleteButton = [self hostButton:@"削除" action:@selector(revoke:) frame:NSMakeRect(398,86,98,34) accent:NO];
+    self.deleteButton = [self hostButton:@"削除" action:@selector(revoke:) frame:NSMakeRect(286,224,98,34) accent:NO];
     [self.settingsWindow.contentView addSubview:self.deleteButton];
     self.managementButtons = @[add, self.deleteButton];
     self.settingsError = [NSTextField wrappingLabelWithString:@""];
-    self.settingsError.frame = NSMakeRect(24,54,472,26);
+    self.settingsError.frame = NSMakeRect(24,20,472,26);
     self.settingsError.font = [NSFont systemFontOfSize:11];
     self.settingsError.textColor = hostColor(0x984b39);
     [self.settingsWindow.contentView addSubview:self.settingsError];
-    NSButton *close = [self hostButton:@"閉じる" action:@selector(closeSettings:) frame:NSMakeRect(398,16,98,34) accent:NO];
-    [self.settingsWindow.contentView addSubview:close];
     [self refreshDeviceList];
 }
-// チェックは削除候補だけ。宛先と登録の正本はworkerに置き、一覧の更新で保存済み値を反映する。
+// チェックは削除候補だけ。送信は全登録PCが対象で、チェック状態を送信先へ使わない。
 - (void)refreshDeviceList {
     if (!self.deviceScroll) return;
     NSMutableSet *live = [NSMutableSet new];
@@ -328,9 +320,6 @@ static int finderAlias(NSString *operation, NSString *file, NSString *app) {
     CGFloat width = self.deviceScroll.contentSize.width;
     CGFloat height = MAX(self.deviceScroll.contentSize.height, self.registeredDevices.count * 34 + 12);
     NSView *list = [[NSView alloc] initWithFrame:NSMakeRect(0,0,width,height)];
-    [self.recipientPicker removeAllItems];
-    [self.recipientPicker addItemWithTitle:@"未選択"];
-    self.recipientPicker.lastItem.enabled = NO;
     for (NSUInteger index = 0; index < self.registeredDevices.count; index++) {
         NSDictionary *device = self.registeredDevices[index];
         NSString *name = device[@"name"];
@@ -342,11 +331,6 @@ static int finderAlias(NSString *operation, NSString *file, NSString *app) {
         check.tag = index;
         check.state = [self.checkedDevices containsObject:device[@"id"]] ? NSControlStateValueOn : NSControlStateValueOff;
         [list addSubview:check];
-        // 同名PCもmenu itemのrepresentedObjectで区別し、表示名から登録IDを逆引きしない。
-        NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:name action:nil keyEquivalent:@""];
-        item.representedObject = device[@"id"];
-        [self.recipientPicker.menu addItem:item];
-        if ([self.recipientID isEqual:device[@"id"]]) [self.recipientPicker selectItem:item];
     }
     self.deviceScroll.documentView = list;
     [self setWorkerControlsEnabled:self.task.running];
@@ -394,7 +378,6 @@ static int finderAlias(NSString *operation, NSString *file, NSString *app) {
     for (NSButton *button in self.hostButtons) button.enabled = enabled;
     for (NSButton *button in self.managementButtons) button.enabled = enabled;
     self.deleteButton.enabled = enabled && self.checkedDevices.count > 0;
-    self.recipientPicker.enabled = enabled && self.registeredDevices.count > 0;
     for (NSButton *check in self.deviceScroll.documentView.subviews) check.enabled = enabled;
 }
 - (void)applicationDidFinishLaunching:(NSNotification *)note {
@@ -536,10 +519,7 @@ static int finderAlias(NSString *operation, NSString *file, NSString *app) {
                 [ids containsObject:row[@"id"]]) return;
         [ids addObject:row[@"id"]];
     }
-    id recipient = value[@"recipient"];
-    if (recipient != NSNull.null && ![ids containsObject:recipient]) return;
     self.registeredDevices = value[@"devices"];
-    self.recipientID = recipient == NSNull.null ? nil : recipient;
     [self refreshDeviceList];
 }
 - (void)pipeReady:(NSNotification *)notice {
@@ -593,12 +573,6 @@ static int finderAlias(NSString *operation, NSString *file, NSString *app) {
         [self.checkedDevices removeAllObjects];
         [self refreshDeviceList];
     }
-}
-- (void)recipient:(id)sender {
-    NSString *device = self.recipientPicker.selectedItem.representedObject;
-    if (device && ![device isEqual:self.recipientID]) [self deviceCommand:@"recipient" value:device];
-    // 書込み成功を保存成功とみなさず、workerの次の通知で選択を確定する。
-    [self refreshDeviceList];
 }
 - (void)sendMessage:(id)sender {
     // ボタン操作中も、日本語などの未確定文字列を送信しない。

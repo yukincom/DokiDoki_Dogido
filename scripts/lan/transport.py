@@ -236,6 +236,10 @@ class Pairings:
         return [{'id': device, 'name': value.get('name', '') if isinstance(value, dict) else ''}
                 for device, value in sorted(self._devices().items())]
 
+    def device_name(self, device):
+        value = self._devices().get(device)
+        return value.get('name') or '登録PC' if isinstance(value, dict) else '登録PC'
+
     def name_device(self, device, name):
         name = check_text(name, 80)
         with _locked(self.root / 'devices.lock'):
@@ -498,6 +502,7 @@ def host_listener(state_dir, upstream_port, confirm, messages=None, readings=Non
     pairings = Pairings(root, pin, confirm)
     if messages is None:
         messages = MessageBox(root, pairings.devices)
+    messages.device_name = pairings.device_name
 
     class HostHandler(Handler):
         def handle_route(self):

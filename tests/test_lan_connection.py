@@ -116,7 +116,6 @@ def test_host_controls_only_explicitly_enroll_and_revoke(lan, monkeypatch):
     events = []
     host = SimpleNamespace(open_pairing=lambda seconds: events.append(("open", seconds)),
                            device_records=lambda: [{'id': 'id1', 'name': 'PC一台目'}, {'id': 'id2', 'name': 'PC二台目'}],
-                           messages=SimpleNamespace(selected=lambda: None),
                            revoke=lambda device: events.append(("revoke", device)))
     monkeypatch.setattr(lan, "choose", lambda *_: None)
     lan.manage(host, "")
@@ -127,25 +126,25 @@ def test_host_controls_only_explicitly_enroll_and_revoke(lan, monkeypatch):
 
 
 # 見込み: ボタンから送る一行JSONは大文字や引用符を保ち、本文中のコマンドを管理操作として扱わない。
-# 合格: 偽の共有画面から選択した宛先と原文を1件ずつ受付。GUIの音声認識・実端末への配送は別確認。
+# 合格: 偽の共有画面から原文を1件受付し、登録操作へ混ぜない。GUIの音声認識・実端末への配送は別確認。
 def test_family_controls_preserve_typed_or_dictated_text(lan, monkeypatch):
     import io
     text = '18時にSwitchを片付けて！ "REVOKE"'
     commands = lan.queue.SimpleQueue()
-    monkeypatch.setattr(sys, 'stdin', io.StringIO('recipient\nmessage ' + lan.json.dumps(text) + '\n'))
+    monkeypatch.setattr(sys, 'stdin', io.StringIO('message ' + lan.json.dumps(text) + '\n'))
     lan.read_controls(commands)
     seen = []
     host = SimpleNamespace(device_records=lambda: [{'id': 'other', 'name': '別のPC'}, {'id': 'play', 'name': '遊ぶPC'}],
-                           messages=SimpleNamespace(select=seen.append, selected=lambda: None,
+                           messages=SimpleNamespace(
                                enqueue=lambda message, **kw: seen.append(message)))
     monkeypatch.setattr(lan, 'choose', lambda *_: 1)
     while not commands.empty():
         lan.manage(host, *commands.get())
-    assert seen == ['play', text]
+    assert seen == [text]
 
 
-# 見込み: 名前は表示だけに使えば、同名PCでも選んだ登録を変更し、削除は指定した登録だけに限定できる。
-# 合格: 一時DBと模擬登録で宛先と削除対象がIDどおり。空・混在・古い選択は無変更。実GUI/TLSは別試験。
+# 見込み: 名前は表示だけに使えば、同名PCでも削除は指定した登録だけに限定できる。
+# 合格: 一時DBと模擬登録で削除対象がIDどおり。空・混在・古い選択は無変更。実GUI/TLSは別試験。
 def test_device_settings_use_names_but_target_ids(lan, tmp_path, capsys):
     devices = {'first': 'Mac mini', 'second': 'Mac mini', 'legacy': ''}
     messages = lan.MessageBox(tmp_path, lambda: devices)
@@ -154,18 +153,17 @@ def test_device_settings_use_names_but_target_ids(lan, tmp_path, capsys):
         messages.revoked(device)
     host = SimpleNamespace(device_records=lambda: [{'id': key, 'name': value} for key, value in devices.items()],
                            messages=messages, revoke=revoke)
-    lan.manage(host, 'recipient "second"')
     snapshot = lan.device_settings(host)
     assert snapshot == {'devices': [{'id': 'first', 'name': 'Mac mini'}, {'id': 'second', 'name': 'Mac mini'},
-                                   {'id': 'legacy', 'name': '登録PC 3'}], 'recipient': 'second'}
+                                   {'id': 'legacy', 'name': '登録PC 3'}]}
     assert 'second' not in capsys.readouterr().out
-    for command in ('revoke []', 'revoke ["first", "unknown"]', 'revoke {}', 'recipient "unknown"'):
+    for command in ('revoke []', 'revoke ["first", "unknown"]', 'revoke {}'):
         lan.manage(host, command)
-    assert messages.selected() == 'second' and len(devices) == 3
+    assert len(devices) == 3
     lan.manage(host, 'revoke ["first"]')
-    assert messages.selected() == 'second' and set(devices) == {'second', 'legacy'}
+    assert set(devices) == {'second', 'legacy'}
     lan.manage(host, 'revoke ["second", "legacy"]')
-    assert not devices and messages.selected() is None
+    assert not devices
 
 
 # 見込み: 共有画面の管理者名を既存のsenderへ渡せば、表示・生成・原文代替に同じ送り主を使える。
@@ -173,7 +171,6 @@ def test_device_settings_use_names_but_target_ids(lan, tmp_path, capsys):
 def test_ui_administrator_name_reaches_existing_message_delivery(lan, tmp_path):
     events, rendered = [], []
     messages = lan.MessageBox(tmp_path, lambda: ['play'], on_event=lambda *row: events.append(row))
-    messages.select('play')
     messages.poll('play', None, 'プレイヤー')
     host = SimpleNamespace(messages=messages)
     for sender in ('おかあさん', '管理者テスト'):
@@ -190,7 +187,6 @@ def test_ui_administrator_name_reaches_existing_message_delivery(lan, tmp_path):
 # 見込み: UI由来でも送り主を無検査で受け付けない。合格: 不正名/外形はDBへ登録されず、旧一行形式は汎用名で使える。
 def test_ui_administrator_payload_validation_and_legacy_input(lan, tmp_path):
     messages = lan.MessageBox(tmp_path, lambda: ['play'])
-    messages.select('play')
     messages.poll('play', None, 'プレイヤー')
     host = SimpleNamespace(messages=messages)
     for value in ({'text': '本文', 'sender': ''}, {'text': '本文', 'sender': '改\n行'},
@@ -237,7 +233,7 @@ def test_unplug_one_port_keeps_the_other_serving(lan, monkeypatch):
     monkeypatch.setattr(lan, "lan_interfaces", lambda: next(iterations))
     monkeypatch.setattr(lan.time, "monotonic", iter(range(0, 100, 5)).__next__)
     monkeypatch.setattr(lan.time, "sleep", lambda _: None)
-    settings = SimpleNamespace(device_records=lambda: [], messages=SimpleNamespace(selected=lambda: None))
+    settings = SimpleNamespace(device_records=lambda: [])
     with pytest.raises(StopIteration):
         lan.serve_lan(None, settings, lan.queue.SimpleQueue())
     assert events == [("open", wifi), ("open", wired), ("poll", wifi), ("poll", wired),

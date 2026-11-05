@@ -1,4 +1,4 @@
-"""同じMac・同じ利用者のユノから伝言を受け、指定端末での受付結果を返す。"""
+"""同じMac・同じ利用者のユノから伝言を受け、登録PC全員への配送結果を返す。"""
 from contextlib import contextmanager
 import json
 import os
@@ -35,7 +35,7 @@ class _Handler(socketserver.StreamRequestHandler):
             response = {"accepted": False, "reason": "invalid_message"}
         else:
             try:
-                # 宛先選択、実際の配送完了、停止・失敗の判定はホスト側が所有する。
+                # 全登録への配送と実際の配送完了、停止・失敗の判定はホスト側が所有する。
                 response = self.server.deliver(**request)
             except Exception:
                 # 既に届いた可能性があるので未達と断定しない。例外詳細には本文を含み得る。

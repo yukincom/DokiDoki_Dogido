@@ -128,11 +128,11 @@ def report_to_yuno(result):
 
 
 def device_settings(host):
-    """UIへは名前・宛先・操作用IDだけを渡す。鍵やIPを表示用データへ混ぜない。"""
+    """UIへは名前と削除操作用IDだけを渡す。鍵やIPを表示用データへ混ぜない。"""
     rows = host.device_records()
     for index, row in enumerate(rows, 1):
         row['name'] = row['name'] or f'登録PC {index}'
-    return {'devices': rows, 'recipient': host.messages.selected()}
+    return {'devices': rows}
 
 
 def manage(host, command, received=None):
@@ -161,28 +161,7 @@ def manage(host, command, received=None):
         except (ValueError, sqlite3.Error) as error:
             print(f"伝言を受け付けられませんでした。{error}", flush=True)
             return
-        print("伝言を預かりました。ゲームでの表示または再生を待っています。", flush=True)
-    elif command == 'recipient' or command.startswith('recipient '):
-        rows = device_settings(host)['devices']
-        if not rows:
-            print("先に遊ぶMacを登録してください。", flush=True)
-            return
-        try:
-            if command == 'recipient':
-                selected = choose('この画面とLINEの伝言を届けるPCを選んでください。', [row['name'] for row in rows])
-                if selected is None:
-                    return
-                device = rows[selected]['id']
-            else:
-                device = json.loads(command[len('recipient '):])
-            row = next((row for row in rows if row['id'] == device), None)
-            if row is None:
-                raise ValueError('選んだPCは登録されていません。')
-            host.messages.select(device)
-        except (ValueError, sqlite3.Error) as error:
-            print(error, flush=True)
-            return
-        print(f"伝言の宛先を {row['name']} に設定しました。", flush=True)
+        print('登録PC全員への伝言を受け付けました。', flush=True)
     elif command == 'revoke' or command.startswith('revoke '):
         rows = device_settings(host)['devices']
         if not rows:
