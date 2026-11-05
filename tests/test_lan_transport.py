@@ -326,3 +326,35 @@ def test_client_uses_local_family_endpoint():
         assert message_client.local_request(url, 'key', 'token', message)['status'] == 'queued'
     assert requests == [(m, '/api/v1/family-message', 'key', 'Bearer token', data)
                         for m, data in [('GET', None), ('POST', message)]]
+
+
+# 見込み: 有線とWi-Fiの窓口で端末登録と伝言を共有し、受付後に経路が切り替わっても完了する。
+# 合格: 一方で登録受付を開き他方で1回ペアリング。本文を取った窓口を閉じても残る窓口で受領確定。実TLS＋一時DB。
+def test_family_round_trip_across_listeners(tmp_path):
+    from discovery import Peer
+    codes = []
+    def confirm(code):
+        codes.append(code)
+        return True
+    listen = transport.host_listener(tmp_path / 'host', 1, confirm)
+    wifi, wired = listen(('127.0.0.1', 0)), listen(('127.0.0.1', 0))
+    with serving(wired) as ethernet:
+        with serving(wifi) as wireless:
+            wifi.open_pairing()
+            candidates = [Peer('別の鍵', wireless, '0' * 64), Peer('共有', ethernet, wired.pin)]
+            assert transport.pairing_address(candidates) == ethernet
+            credentials = transport.pair(tmp_path / 'client', ethernet, confirm)
+            assert len(codes) == 2 and codes[0] == codes[1]
+            box = wired.messages
+            box.select(credentials['device'])
+            def poll(address):
+                return transport.message_request(address, credentials, transport.NEXT_MESSAGE,
+                                                 {'reason': None, 'player': '遊ぶ人'})['message']
+            assert poll(wireless) is None
+            mid = box.enqueue('ごはんだよ', source_id='line-fixture')
+            box.prepare_next(lambda sender, player, body: body)
+            assert poll(wireless) == {'id': mid, 'text': 'ごはんだよ'}
+        result = {'id': mid, 'status': 'delivered', 'activity': ['combat']}
+        transport.message_request(ethernet, credentials, transport.MESSAGE_RESULT, result)
+        assert box.deliver_line('line-fixture', 'お母さん', 'ごはんだよ') == {'accepted': True, 'activity': ['combat']}
+        assert poll(ethernet) is None

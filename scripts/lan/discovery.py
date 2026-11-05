@@ -89,6 +89,11 @@ def txt_pin(data):
     return ""
 
 
+def lan_ipv4(ip):
+    """家庭LANのIPv4。DHCPのない有線直結でmacOSが選ぶリンクローカルも含む。"""
+    return ip.is_private and not (ip.is_loopback or ip.is_unspecified or ip.is_reserved)
+
+
 @dataclass(frozen=True)
 class Peer:
     name: str
@@ -140,7 +145,13 @@ class Bonjour:
         for service in found:
             if time.monotonic() >= lookup_deadline:
                 break
-            peers.extend(self._resolve(service, lookup_deadline))
+            try:
+                peers.extend(self._resolve(service, lookup_deadline))
+            except PermissionDenied:
+                raise
+            except BonjourError:
+                # 探索中に片方のポートが外れても、他方で見つけた窓口を返す。
+                continue
         return peers
 
     def _resolve(self, service, deadline):
@@ -166,7 +177,7 @@ class Bonjour:
                 if length >= 8 and family == socket.AF_INET:
                     ip = socket.inet_ntoa(C.string_at(sockaddr, 8)[4:8])
                     addr = ipaddress.IPv4Address(ip)
-                    if addr.is_private and not (addr.is_loopback or addr.is_link_local or addr.is_unspecified):
+                    if lan_ipv4(addr):
                         peers.append(Peer(name.decode("utf-8", "replace"), (ip, port), pin))
 
             callback_addr = AddrCB(address)

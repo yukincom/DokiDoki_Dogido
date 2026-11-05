@@ -40,6 +40,7 @@ def test_first_pair_requires_explicit_selection(lan, monkeypatch, tmp_path, sele
              Peer("同じ名前", ("10.0.0.3", 2049), "two")]
     recorded = []
     monkeypatch.setattr(lan, "choose", lambda *_: selected)
+    monkeypatch.setattr(lan.transport, "pairing_address", lambda group: group[0].address, raising=False)
     monkeypatch.setattr(lan.transport, "pair", lambda *args: recorded.append(args), raising=False)
     if selected is None:
         with pytest.raises(RuntimeError, match="取り消"):
@@ -50,30 +51,35 @@ def test_first_pair_requires_explicit_selection(lan, monkeypatch, tmp_path, sele
         assert recorded == [(tmp_path, peers[1].address, lan.confirm)]
 
 
-# 見込み: 記録した相手を毎回照合すれば、スリープやIP変更後にも一度の登録で同じMacへ戻れる。
-# 合格: 消失中の転送を拒否し、同名の別鍵や認証失敗も拒否、別IPの同じ鍵だけ復帰する。発見・認証は模擬。
+# 見込み: 広告を見失っても旧経路を再認証し、経路が切れたら登録済みの別経路に移る。
+# 合格: 一時欠落中は到達、実切断中は配送不可。偽の鍵を避け、同じ鍵の別IPで復帰。認証は模擬。
 def test_paired_address_survives_sleep_and_ip_change(lan):
     from discovery import Peer
     credentials = {"pin": "registered"}
     route = lan.PeerRoute()
+    old = Peer("共有", ("10.0.0.2", 10), "registered")
+    fake = Peer("共有", ("10.0.0.3", 10), "different")
+    denied = Peer("共有", ("10.0.0.4", 10), "registered")
+    new = Peer("共有", ("10.0.0.5", 11), "registered")
+    online = {old.address}
     seen = []
     def authenticate(address, cred):
-        seen.append((address, cred))
-        if address[0] == "10.0.0.4":
-            raise lan.transport.IdentityError("未登録")
-    old = Peer("ドギド", ("10.0.0.2", 10), "registered")
-    fake = Peer("ドギド", ("10.0.0.3", 10), "different")
-    denied = Peer("ドギド", ("10.0.0.4", 10), "registered")
-    new = Peer("ドギド", ("10.0.0.5", 11), "registered")
+        seen.append(address)
+        if address == denied.address:
+            raise lan.transport.IdentityError("別のTLS鍵")
+        if address not in online:
+            raise OSError("切断")
     route.probe([old], credentials, authenticate)
+    route.probe([], credentials, authenticate)
     assert route.resolve() == old.address
-    for candidates in ([], [fake], [denied]):
-        route.probe(candidates, credentials, authenticate)
-        with pytest.raises(OSError):
-            route.resolve()
-    route.probe([fake, new], credentials, authenticate)
+    online.clear()
+    route.probe([fake, denied], credentials, authenticate)
+    with pytest.raises(OSError):
+        route.resolve()
+    online.add(new.address)
+    route.probe([fake, old, new], credentials, authenticate)
     assert route.resolve() == new.address
-    assert seen == [(p.address, credentials) for p in (old, denied, new)]
+    assert seen == [old.address, old.address, old.address, denied.address, old.address, new.address]
 
 
 # 見込み: 登録済みクライアントは毎回の確認画面なしにlocalhostで応答を待つ。
@@ -134,3 +140,43 @@ def test_family_controls_preserve_typed_or_dictated_text(lan, monkeypatch):
     while not commands.empty():
         lan.manage(host, *commands.get())
     assert seen == ['play', text]
+
+# 見込み: Wi-Fi・有線は同時に候補になり、DHCPのない有線も対象。VPNと公開アドレスは広報しない。
+# 合格: 模擬macOSから物理LANの2件だけを列挙する。接続と端末認証は別試験。
+def test_lists_all_physical_lan_ports(lan, monkeypatch):
+    ports = [(3, "en0"), (4, "en1"), (5, "utun0"), (6, "en3"), (7, "en4")]
+    listing = """en0: flags=8863<UP,RUNNING>
+    inet 192.168.2.4 netmask 0xffffff00
+en1: flags=8863<UP,RUNNING>
+    inet 169.254.1.4 netmask 0xffff0000
+utun0: flags=8051<UP,RUNNING>
+    inet 10.0.0.2 netmask 0xff000000
+en3: flags=8863<UP,RUNNING>
+en4: flags=8863<UP,RUNNING>
+    inet 8.8.8.8 netmask 0xffffff00"""
+    monkeypatch.setattr(lan.socket, "if_nameindex", lambda: ports)
+    monkeypatch.setattr(lan.subprocess, "run", lambda args, **kw: SimpleNamespace(stdout=listing))
+    assert lan.lan_interfaces() == {(3, "192.168.2.4"), (4, "169.254.1.4")}
+
+
+# 見込み: 有線を抜き差ししてもWi-Fiの待受け・広告は継続する。逆方向も同じ管理を通す。
+# 合格: 2経路を同時に公開し、有線を外した後も元のWi-Fi窓口でポーリング。広告・OS時刻を模擬。
+def test_unplug_one_port_keeps_the_other_serving(lan, monkeypatch):
+    wifi, wired = (1, "192.168.0.2"), (2, "192.168.0.3")
+    iterations = iter([{wifi, wired}, {wifi}])
+    events = []
+    @contextmanager
+    def advertise(discovery, listen, entry, port):
+        events.append(("open", entry))
+        try:
+            yield SimpleNamespace(server_port=9000), lambda _: events.append(("poll", entry))
+        finally:
+            events.append(("close", entry))
+    monkeypatch.setattr(lan, "advertised_port", advertise)
+    monkeypatch.setattr(lan, "lan_interfaces", lambda: next(iterations))
+    monkeypatch.setattr(lan.time, "monotonic", iter(range(0, 100, 5)).__next__)
+    monkeypatch.setattr(lan.time, "sleep", lambda _: None)
+    with pytest.raises(StopIteration):
+        lan.serve_lan(None, None, lan.queue.SimpleQueue())
+    assert events == [("open", wifi), ("open", wired), ("poll", wifi), ("poll", wired),
+                      ("close", wired), ("poll", wifi), ("close", wifi)]

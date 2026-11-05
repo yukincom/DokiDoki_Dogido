@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 import argparse
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from functools import partial
+import errno
 import fcntl
 import ipaddress
 import json
@@ -18,7 +19,7 @@ import sys
 import threading
 import time
 
-from discovery import Bonjour, BonjourError, PermissionDenied
+from discovery import Bonjour, BonjourError, PermissionDenied, lan_ipv4
 import transport
 import message_client
 from family_messages import MessageBox, TIMEOUT, Unavailable
@@ -75,22 +76,24 @@ def serving(server):
         worker.join()
 
 
-def lan_interface():
-    """Select the default physical interface, then another active LAN interface."""
-    interfaces = {name: index for index, name in socket.if_nameindex() if name.startswith("en")}
-    route = subprocess.run(["/sbin/route", "-n", "get", "default"], text=True, capture_output=True)
-    primary = next((line.partition(":")[2].strip() for line in route.stdout.splitlines()
-                    if line.strip().startswith("interface:")), "")
-    for name in sorted(interfaces, key=lambda item: (item != primary, item)):
-        result = subprocess.run(["/usr/sbin/ipconfig", "getifaddr", name],
-                                text=True, capture_output=True)
-        try:
-            ip = ipaddress.IPv4Address(result.stdout.strip())
-        except ValueError:
+def lan_interfaces():
+    """Wi-Fi・有線の全ポートを列挙する。既定ルートやインターネットの有無に依存しない。"""
+    indices = {name: index for index, name in socket.if_nameindex() if name.startswith("en")}
+    # 定期確認のたびに各ポートでプロセスを起動せず、OSのIPv4一覧を一度だけ受け取る。
+    listing = subprocess.run(["/sbin/ifconfig", "-a", "inet"], text=True, capture_output=True, check=True)
+    active = set()
+    index = None
+    for line in listing.stdout.splitlines():
+        if line and not line[0].isspace():
+            index = indices.get(line.partition(":")[0])
             continue
-        if ip.is_private and not (ip.is_loopback or ip.is_link_local or ip.is_unspecified):
-            return interfaces[name], str(ip)
-    return None
+        fields = line.split()
+        if index is not None and len(fields) >= 2 and fields[0] == "inet":
+            ip = ipaddress.IPv4Address(fields[1])
+            if lan_ipv4(ip):
+                active.add((index, str(ip)))
+                index = None
+    return active
 
 
 def gateway_module():
@@ -166,19 +169,59 @@ def manage(host, command, received=None):
             print("選んだ端末の登録を解除しました。", flush=True)
 
 
-def advertise_until_change(discovery, interface, host, commands):
-    index, _ = interface
-    with discovery.advertise(index, host.server_port, host.pin) as poll:
-        print("ドギド共有受付を開始しました。", flush=True)
-        next_check = time.monotonic() + 5
+@contextmanager
+def advertised_port(discovery, listen, interface, preferred_port):
+    index, address = interface
+    try:
+        server = listen((address, preferred_port))
+    except OSError as error:
+        if not preferred_port or error.errno != errno.EADDRINUSE:
+            raise
+        server = listen((address, 0))
+    with serving(server), discovery.advertise(index, server.server_port, server.pin) as poll:
+        yield server, poll
+
+
+def serve_lan(discovery, listen, commands):
+    # 各経路の待受けと広告を一緒に閉じる。一方の抜き差しでは他方の接続や端末登録を閉じない。
+    active = {}
+    next_check = 0
+    try:
         while True:
-            if not commands.empty():
-                manage(host, *commands.get())
-            poll(0.5)
             if time.monotonic() >= next_check:
-                if lan_interface() != interface:
-                    return
-                next_check = time.monotonic() + 5
+                interfaces = lan_interfaces()
+                if not interfaces and (active or next_check == 0):
+                    print("LANへの接続を待っています。", flush=True)
+                for entry in active.keys() - interfaces:
+                    active.pop(entry)[0].close()
+                for entry in sorted(interfaces - active.keys()):
+                    existing = next(iter(active.values()), None)
+                    port = existing[1].server_port if existing else 0
+                    stack = ExitStack()
+                    try:
+                        server, poll = stack.enter_context(advertised_port(discovery, listen, entry, port))
+                    except PermissionDenied:
+                        raise
+                    except OSError:
+                        # 抜き差しの途中やBonjour復旧中はこの経路だけ次回再試行する。
+                        continue
+                    active[entry] = stack, server, poll
+                    print("ドギド共有受付を開始しました。", flush=True)
+                next_check = time.monotonic() + 3
+            if active and not commands.empty():
+                manage(next(iter(active.values()))[1], *commands.get())
+            for entry, (stack, _, poll) in list(active.items()):
+                try:
+                    poll(0)
+                except PermissionDenied:
+                    raise
+                except BonjourError:
+                    active.pop(entry)
+                    stack.close()
+            time.sleep(0.2)
+    finally:
+        for stack, _, _ in active.values():
+            stack.close()
 
 
 @contextmanager
@@ -219,25 +262,8 @@ def run_host(state):
         with serving(gateway.make_proxy(port=0, upstream_port=8080, event=debug.emit)) as proxy, \
                 serve(state, messages.deliver_line), \
                 background(prepare_messages, messages, partial(render_message, proxy.server_port)):
-            waiting = False
-            while True:
-                interface = lan_interface()
-                if not interface:
-                    if not waiting:
-                        print("LANへの接続を待っています。", flush=True)
-                    waiting = True
-                    time.sleep(3)
-                    continue
-                waiting = False
-                _, address = interface
-                try:
-                    with serving(transport.make_host(state, (address, 0), proxy.server_port, confirm, messages)) as host:
-                        advertise_until_change(discovery, interface, host, commands)
-                except PermissionDenied:
-                    raise
-                except BonjourError:
-                    print("Bonjourの接続復旧を待っています。", flush=True)
-                    time.sleep(3)
+            listen = transport.host_listener(state, proxy.server_port, confirm, messages)
+            serve_lan(discovery, listen, commands)
     finally:
         debug.close()
 
@@ -253,12 +279,13 @@ class PeerRoute:
         selected = None
         revoked = False
         message = "共有Macを待っています。"
-        for peer in peers:
-            if peer.pin != credentials["pin"]:
-                message = "別の共有Macが見つかりました。登録済みのMacを待っています。"
-                continue
+        # Bonjourが一度見失っても、直前のアドレスで鍵と端末登録を確認できる間は使い続ける。
+        # Wi-Fiと有線で同じアドレスの候補が重なった場合も一回だけ検査する。
+        addresses = dict.fromkeys([self._address] if self._address else [])
+        addresses.update((peer.address, None) for peer in peers if peer.pin == credentials["pin"])
+        for address in addresses:
             try:
-                authenticate(peer.address, credentials)
+                authenticate(address, credentials)
             except transport.RevokedError:
                 revoked = True
                 message = "共有Macでこの端末の登録が解除されています。"
@@ -268,7 +295,7 @@ class PeerRoute:
                 continue
             except OSError:
                 continue
-            selected = peer.address
+            selected = address
             message = "登録済みの共有Macに接続しました。"
             break
         with self._lock:
@@ -299,12 +326,18 @@ def wait_for_pair(discovery, state):
     while True:
         peers = discover_peers(discovery)
         if peers:
-            peers = list({peer.pin: peer for peer in peers}.values())
-            labels = [f"{i + 1}. {peer.name} （{peer.address[0]}）" for i, peer in enumerate(peers)]
+            by_pin = {}
+            for peer in peers:
+                by_pin.setdefault(peer.pin, []).append(peer)
+            choices = list(by_pin.values())
+            labels = [f"{i + 1}. {group[0].name} （{group[0].address[0]}）" for i, group in enumerate(choices)]
             index = choose("初回登録する共有Macを選んでください。", labels)
             if index is None:
                 raise RuntimeError("ペアリングを取り消しました。")
-            return transport.pair(state, peers[index].address, confirm)
+            address = transport.pairing_address(choices[index])
+            if address is not None:
+                return transport.pair(state, address, confirm)
+            print("選んだ共有Macへの接続を待っています。", flush=True)
         time.sleep(2)
 
 

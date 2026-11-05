@@ -247,12 +247,12 @@ class Pairings:
         return None
 
 
-def _tls(address, pin=None):
+def _tls(address, pin=None, *, timeout=8):
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     ctx.minimum_version = ssl.TLSVersion.TLSv1_2
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE  # Verify the paired certificate before writing any HTTP bytes.
-    connection = http.client.HTTPSConnection(address[0], address[1], timeout=8, context=ctx)
+    connection = http.client.HTTPSConnection(address[0], address[1], timeout=timeout, context=ctx)
     try:
         connection.connect()
         actual = hashlib.sha256(connection.sock.getpeercert(binary_form=True)).hexdigest()
@@ -262,6 +262,18 @@ def _tls(address, pin=None):
     except BaseException:
         connection.close()
         raise
+
+
+def pairing_address(peers):
+    """登録を開始する前に、選んだ共有Macの広告とTLS鍵が一致する到達可能な経路を探す。"""
+    for peer in peers:
+        try:
+            conn, _ = _tls(peer.address, peer.pin, timeout=2)
+        except (IdentityError, OSError):
+            continue
+        conn.close()
+        return peer.address
+    return None
 
 
 def _enroll(address, pin, route, value):
@@ -311,7 +323,8 @@ def _auth(value):
 
 
 def probe(address, credentials):
-    conn, _ = _tls(address, credentials['pin'])
+    # 切断済みの経路が、同じ登録先の別経路への切り替えを長く塞がないようにする。
+    conn, _ = _tls(address, credentials['pin'], timeout=2)
     try:
         conn.request('GET', AUTH, headers={'Authorization': _auth(credentials)})
         response = conn.getresponse()
@@ -440,7 +453,8 @@ class Handler(BaseHTTPRequestHandler):
     do_GET = do_POST = dispatch
 
 
-def make_host(state_dir, bind, upstream_port, confirm, messages=None):
+def host_listener(state_dir, upstream_port, confirm, messages=None):
+    """同じ登録受付・TLS鍵・伝言を、LANアドレス別の待受けで共有する。"""
     root = _directory(state_dir)
     pin, ctx = _identity(root)
     pairings = Pairings(root, pin, confirm)
@@ -504,17 +518,24 @@ def make_host(state_dir, bind, upstream_port, confirm, messages=None):
             else:
                 self.forward(http.client.HTTPConnection('127.0.0.1', upstream_port, timeout=IO_TIMEOUT))
 
-    server = Server(bind, HostHandler, ctx)
-    server.pin = pin
-    server.open_pairing = lambda seconds=PAIR_SECONDS: pairings.open(seconds)
-    server.devices = pairings.devices
     def revoke(device):
         removed = pairings.revoke(device)
         messages.revoked(device)
         return removed
-    server.revoke = revoke
-    server.messages = messages
-    return server
+
+    def listen(bind):
+        server = Server(bind, HostHandler, ctx)
+        server.pin = pin
+        server.open_pairing = lambda seconds=PAIR_SECONDS: pairings.open(seconds)
+        server.devices = pairings.devices
+        server.revoke = revoke
+        server.messages = messages
+        return server
+    return listen
+
+
+def make_host(state_dir, bind, upstream_port, confirm, messages=None):
+    return host_listener(state_dir, upstream_port, confirm, messages)(bind)
 
 
 def make_client_relay(resolve, credentials, port=8080):
