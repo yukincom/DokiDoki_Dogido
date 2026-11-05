@@ -12,13 +12,12 @@ import pytest
 def lan(monkeypatch):
     folder = Path(__file__).resolve().parents[1] / "scripts/lan"
     monkeypatch.syspath_prepend(str(folder))
-    # Test discovery orchestration, not TLS (transport has independent tests).
-    identity_error = type("IdentityError", (ValueError,), {})
-    monkeypatch.setitem(sys.modules, "transport", SimpleNamespace(IdentityError=identity_error,
-                        RevokedError=type("RevokedError", (identity_error,), {})))
     spec = importlib.util.spec_from_file_location("dogido_test_connection", folder / "connection.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    # 発見の試験だけ通信を模擬する。伝言クライアントに模擬transportを残さない。
+    module.transport = SimpleNamespace(IdentityError=module.transport.IdentityError,
+                                       RevokedError=module.transport.RevokedError)
     return module
 
 

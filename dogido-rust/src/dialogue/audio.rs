@@ -12,7 +12,7 @@ use std::{
 };
 use tokio::{
     process::Command,
-    sync::{mpsc, watch},
+    sync::{RwLock, mpsc, watch},
 };
 
 const MAX_WAV_BYTES: usize = 10_000_000;
@@ -21,7 +21,37 @@ type Cache = VecDeque<(String, Arc<Vec<u8>>)>;
 pub struct Audio {
     http: reqwest::Client,
     cache: Mutex<Cache>,
+    // 通常playerは共有、家族の伝言は合成開始から全ての文の終了まで専有する。
+    speaker: RwLock<()>,
+    family_pending: watch::Sender<usize>,
 }
+
+struct Playback<'a> {
+    audio: &'a Audio,
+    family: bool,
+}
+
+// 待機中の取消・futureの破棄でも件数を戻し、通常音声を再開できるようにする。
+struct FamilyRequest<'a>(&'a watch::Sender<usize>);
+impl Drop for FamilyRequest<'_> {
+    fn drop(&mut self) {
+        self.0.send_modify(|n| *n -= 1);
+    }
+}
+
+fn cache_key(config: &DialogueConfig, spoken: &str) -> String {
+    format!(
+        "{}|{}|{}|{}|{}|{:?}|{}",
+        config.voicevox_url,
+        config.speaker,
+        config.speed,
+        config.pitch,
+        config.volume,
+        config.output_sampling_rate,
+        spoken
+    )
+}
+
 struct Temporary(PathBuf);
 impl Drop for Temporary {
     fn drop(&mut self) {
@@ -37,8 +67,51 @@ impl Audio {
                 .retry(reqwest::retry::never())
                 .build()?,
             cache: Mutex::new(VecDeque::new()),
+            speaker: RwLock::new(()),
+            family_pending: watch::Sender::new(0),
         })
     }
+    fn normal(&self) -> Playback<'_> {
+        Playback {
+            audio: self,
+            family: false,
+        }
+    }
+
+    /// 通常音声の停止とplayerの回収を待って伝言を読み切る。startedは最初のplayer起動時だけ。
+    pub(super) async fn speak_family(
+        &self,
+        config: &DialogueConfig,
+        spoken: &str,
+        cancel: &mut watch::Receiver<bool>,
+        started: impl FnOnce(),
+    ) -> Result<()> {
+        ensure!(config.audio_enabled, "audio_disabled");
+        ensure!(!cancelled_now(cancel), "cancelled");
+        ensure!(!spoken.trim().is_empty(), "empty_spoken_text");
+        self.family_pending.send_modify(|n| *n += 1);
+        let _request = FamilyRequest(&self.family_pending);
+        let _speaker = tokio::select! {
+            biased;
+            _ = cancelled(cancel) => anyhow::bail!("cancelled"),
+            guard = self.speaker.write() => guard,
+        };
+        let delivery = Playback {
+            audio: self,
+            family: true,
+        }
+        .speak_from(config, spoken, 0, cancel, started, |_| {})
+        .await;
+        // reqwestのaudio_queryエラーにはクエリ文字列（私信の原文）があり得る。
+        delivery.map_err(|_| {
+            if cancelled_now(cancel) {
+                anyhow::anyhow!("cancelled")
+            } else {
+                anyhow::anyhow!("family_audio_failed")
+            }
+        })
+    }
+
     /// 最初の再生プロセス起動時に開始通知を一度だけ返し、全文の正常終了でOkを返す。
     /// 途中の失敗・取消は完了扱いにしない。これはプロセスの結果であり、スピーカーの聞こえ方は実機確認する。
     pub async fn speak(
@@ -54,6 +127,29 @@ impl Audio {
 
     /// 完了済み文数から再開し、playerが正常終了した文だけをcompletedへ通知する。
     pub(super) async fn speak_from(
+        &self,
+        config: &DialogueConfig,
+        spoken: &str,
+        completed: usize,
+        cancel: &mut watch::Receiver<bool>,
+        started: impl FnOnce(),
+        sentence_completed: impl Fn(usize),
+    ) -> Result<()> {
+        self.normal()
+            .speak_from(
+                config,
+                spoken,
+                completed,
+                cancel,
+                started,
+                sentence_completed,
+            )
+            .await
+    }
+}
+
+impl Playback<'_> {
+    async fn speak_from(
         &self,
         config: &DialogueConfig,
         spoken: &str,
@@ -89,7 +185,7 @@ impl Audio {
                     biased;
                     _ = cancelled(&mut producer_cancel) => break,
                     _ = tx.closed() => break,
-                    result = self.prepare(config, text, index, count) => result,
+                    result = self.audio.prepare(config, text, index, count) => result,
                 };
                 let failed = result.is_err();
                 permit.send(result.map(|bytes| (index, bytes)));
@@ -132,7 +228,9 @@ impl Audio {
         let (_, result) = tokio::join!(produce, play);
         result
     }
+}
 
+impl Audio {
     pub(super) async fn prepare(
         &self,
         config: &DialogueConfig,
@@ -141,16 +239,7 @@ impl Audio {
         count: usize,
     ) -> Result<Arc<Vec<u8>>> {
         let began = Instant::now();
-        let key = format!(
-            "{}|{}|{}|{}|{}|{:?}|{}",
-            config.voicevox_url,
-            config.speaker,
-            config.speed,
-            config.pitch,
-            config.volume,
-            config.output_sampling_rate,
-            spoken
-        );
+        let key = cache_key(config, spoken);
         let cached = self
             .cache
             .lock()
@@ -242,14 +331,8 @@ impl Audio {
         index: usize,
         started: impl FnOnce(),
     ) -> Result<()> {
-        tokio::fs::create_dir_all(&config.audio_dir).await?;
-        let path = Temporary(
-            config
-                .audio_dir
-                .join(format!("{}.wav", uuid::Uuid::new_v4())),
-        );
-        tokio::fs::write(&path.0, bytes).await?;
-        self.play_file(config, &path.0, cancel, index, started)
+        self.normal()
+            .play(config, bytes, cancel, index, started)
             .await
     }
 
@@ -276,14 +359,70 @@ impl Audio {
         rate: f64,
         started: impl FnOnce(),
     ) -> Result<()> {
+        self.normal()
+            .play_file_at_rate(config, path, cancel, index, rate, started)
+            .await
+    }
+}
+
+fn cancelled_now(cancel: &watch::Receiver<bool>) -> bool {
+    *cancel.borrow() || cancel.has_changed().is_err()
+}
+
+impl Playback<'_> {
+    async fn play(
+        &self,
+        config: &DialogueConfig,
+        bytes: &[u8],
+        cancel: &mut watch::Receiver<bool>,
+        index: usize,
+        started: impl FnOnce(),
+    ) -> Result<()> {
+        tokio::fs::create_dir_all(&config.audio_dir).await?;
+        let path = Temporary(
+            config
+                .audio_dir
+                .join(format!("{}.wav", uuid::Uuid::new_v4())),
+        );
+        tokio::fs::write(&path.0, bytes).await?;
+        self.play_file_at_rate(config, &path.0, cancel, index, 1.0, started)
+            .await
+    }
+
+    async fn play_file_at_rate(
+        &self,
+        config: &DialogueConfig,
+        path: &Path,
+        cancel: &mut watch::Receiver<bool>,
+        index: usize,
+        rate: f64,
+        started: impl FnOnce(),
+    ) -> Result<()> {
         ensure!(
             rate.is_finite() && rate > 0.0 && rate <= 2.0,
             "invalid playback rate"
         );
         ensure!(config.audio_enabled, "audio_disabled");
-        if *cancel.borrow() {
-            anyhow::bail!("cancelled");
-        }
+        ensure!(!cancelled_now(cancel), "cancelled");
+        let mut pending = self.audio.family_pending.subscribe();
+        // 伝言は外側で専有済み。通常のcue・合成音声は伝言待ちも既存の取消を受ける。
+        let _normal = if self.family {
+            None
+        } else {
+            Some(tokio::select! {
+                biased;
+                _ = cancelled(cancel) => anyhow::bail!("cancelled"),
+                guard = async {
+                    loop {
+                        let _ = pending.wait_for(|&count| count == 0).await;
+                        let guard = self.audio.speaker.read().await;
+                        if *pending.borrow() == 0 {
+                            break guard;
+                        }
+                    }
+                } => guard,
+            })
+        };
         let mut command = Command::new(&config.player);
         command.arg(path);
         if rate != 1.0 {
@@ -293,11 +432,25 @@ impl Audio {
         let pid = child.id();
         tracing::info!(event = "audio_started", ?pid, sentence = index + 1);
         started();
+        let stop = async {
+            tokio::select! {
+                _ = cancelled(cancel) => {},
+                _ = pending.wait_for(|&count| count != 0), if !self.family => {},
+            }
+        };
         let outcome = tokio::select! {
-            _=cancelled(cancel) => { let _=child.kill().await; let _=child.wait().await; Err(anyhow::anyhow!("cancelled")) },
-            status=child.wait() => { ensure!(status?.success(), "audio player failed"); Ok(()) },
+            biased;
+            _ = stop => {
+                let _ = child.kill().await;
+                child.wait().await?;
+                Err(anyhow::anyhow!("cancelled"))
+            }
+            status = child.wait() => { ensure!(status?.success(), "audio player failed"); Ok(()) },
         };
         tracing::info!(event = "audio_stopped", ?pid, sentence = index + 1);
         outcome
     }
 }
+
+#[cfg(all(test, unix))]
+mod priority_tests;

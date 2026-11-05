@@ -32,17 +32,14 @@ class _Handler(socketserver.StreamRequestHandler):
         try:
             request = _request(self.rfile.readline(65537))
         except (ValueError, OSError, RecursionError):
-            reason = "invalid_message"
+            response = {"accepted": False, "reason": "invalid_message"}
         else:
             try:
                 # 宛先選択、実際の配送完了、停止・失敗の判定はホスト側が所有する。
-                reason = self.server.deliver(**request)
+                response = self.server.deliver(**request)
             except Exception:
                 # 既に届いた可能性があるので未達と断定しない。例外詳細には本文を含み得る。
-                reason = "delivery_unknown"
-        response = {"accepted": reason is None}
-        if reason is not None:
-            response["reason"] = reason
+                response = {"accepted": False, "reason": "delivery_unknown"}
         try:
             self.wfile.write(json.dumps(response).encode() + b"\n")
         except OSError:

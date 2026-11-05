@@ -21,7 +21,7 @@ import time
 from discovery import Bonjour, BonjourError, PermissionDenied
 import transport
 import message_client
-from family_messages import MessageBox, TIMEOUT
+from family_messages import MessageBox, TIMEOUT, Unavailable
 
 STATE = Path.home() / "Library/Application Support/Dogido LAN"
 PAIR_SECONDS = 120
@@ -109,6 +109,19 @@ def read_controls(commands):
         return
 
 
+def report_to_yuno(result):
+    """共有画面の配送結果だけを同一ユーザーのユノへ渡す。停止中でも共有側の結果は確定する。"""
+    if result.get("accepted") and not result.get("activity"):
+        return
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+            client.settimeout(1)
+            client.connect(str(STATE / "yuno/status.sock"))
+            client.sendall(json.dumps(result).encode() + b"\n")
+    except OSError:
+        print("ユノに伝言の状態を通知できませんでした。", flush=True)
+
+
 def manage(host, command, received=None):
     if command == "":
         selection = choose("端末の登録または解除を選んでください。", ["端末を追加", "登録を解除"])
@@ -121,6 +134,10 @@ def manage(host, command, received=None):
             if received is not None and time.time() - received >= TIMEOUT:
                 raise ValueError("共有Macの接続を待つ間に送信期限を過ぎました。")
             host.messages.enqueue(json.loads(command[len("message "):]))
+        except Unavailable as error:
+            report_to_yuno({"accepted": False, "reason": error.reason})
+            print(f"伝言を受け付けられませんでした。{error}", flush=True)
+            return
         except (ValueError, sqlite3.Error) as error:
             print(f"伝言を受け付けられませんでした。{error}", flush=True)
             return
@@ -194,7 +211,8 @@ def run_host(state):
     # ユノの受信部品と文面生成は共有アプリにだけ同梱する。
     from line_inbox import serve
     from message_wording import render_message
-    messages = MessageBox(state, lambda: (transport._read(state / "devices.json") or {}).keys())
+    messages = MessageBox(state, lambda: (transport._read(state / "devices.json") or {}).keys(),
+                          on_ui_result=report_to_yuno)
     gateway = gateway_module()
     debug = gateway.DebugLog(state / "logs")
     try:

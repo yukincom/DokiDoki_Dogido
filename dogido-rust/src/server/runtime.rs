@@ -68,8 +68,12 @@ pub(super) struct Published {
 }
 
 impl Published {
+    fn freshness_seconds(&self) -> u64 {
+        (self.heartbeat_interval_ms.saturating_mul(3) / 1000).max(15)
+    }
+
     pub fn display(&self, session_id: Option<String>, now: DateTime<Utc>) -> Value {
-        let freshness = (self.heartbeat_interval_ms.saturating_mul(3) / 1000).max(15);
+        let freshness = self.freshness_seconds();
         let game_sessions: Vec<_> = self
             .sessions
             .values()
@@ -391,9 +395,12 @@ impl Runtime {
                 let Some(dialogue) = &self.config.dialogue else {
                     return ApiReply::unsupported("family_message");
                 };
+                let now = Utc::now();
+                let freshness_ms = (self.data.freshness_seconds() * 1000) as i64;
                 let games = self.data.sessions.iter()
                     .filter(|(_, s)| s.registration.game == "minecraft-java"
-                        && s.registration.adapter_name == "dogido-fabric-client")
+                        && s.registration.adapter_name == "dogido-fabric-client"
+                        && (now - s.last_seen).num_milliseconds() <= freshness_ms)
                     .map(|(id, _)| id.as_str());
                 let message = request.as_ref().map(|r| (r.id.as_str(), r.text.as_str()));
                 ApiReply::ok(dialogue.family_message(games, message))

@@ -142,6 +142,7 @@ impl Dialogue {
             Self::cancel_assist(&mut d, sid);
             Self::cancel_light(&mut d, sid);
             let s = d.sessions.get_mut(sid).unwrap();
+            if !enabled { s.family_audio = None; }
             s.delivery.voice_enabled = enabled;
             s.delivery.generation = id("voice");
             s.delivery.pending.clear();
@@ -238,6 +239,10 @@ impl Dialogue {
         let mut displayed = Vec::new();
         let mut rejected = Vec::new();
         for display_id in display_ids {
+            if Self::acknowledge_family(&mut d, sid, display_id) {
+                displayed.push(display_id);
+                continue;
+            }
             let pending = d
                 .sessions
                 .get(sid)

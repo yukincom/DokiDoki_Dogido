@@ -535,19 +535,14 @@ impl Dialogue {
                 action.text.clear();
             }
         }
-        // 私信の本文は宛先の表示行と読み上げだけに渡す。観測・研究用のaction明細には載せない。
-        let family = actions.iter().any(|a| a.kind == super::family_message::KIND);
-        let source = if family { super::family_message::KIND }
-            else if input.is_some() { "player_input" } else { "game_observation" };
-        let public_actions = if family { &[] } else { actions };
         let session_instance = d.sessions[sid].instance_id.clone();
         d.rows.push_back(json!({"utterance_id":id("utt"),"turn_id":turn,"session_id":sid,"session_instance":session_instance,"category":category,
-            "source":source,"player_input_text":input,
+            "source":if input.is_some(){"player_input"}else{"game_observation"},"player_input_text":input,
             "text":display_text(&pending_display),"created_at":chrono::Utc::now(),"reference_ids":[],"output_mode":"both",
-            "playback_status":"queued","warning":plan,"combat_actions":public_actions,"utterance_kind":utterance_kind,
+            "playback_status":"queued","warning":plan,"combat_actions":actions,"utterance_kind":utterance_kind,
             "llm_reports":actions.iter().filter_map(|a|a.light_comment.as_ref()).flat_map(|c|c.reports.iter()).collect::<Vec<_>>()}));
         d.revision += 1;
-        tracing::info!(event="warning_queued",session_id=sid,turn_id=turn,actions=%json!(public_actions));
+        tracing::info!(event="warning_queued",session_id=sid,turn_id=turn,actions=%json!(actions));
         (turn, rx)
     }
     fn warning_update(
@@ -720,11 +715,6 @@ impl Dialogue {
             let body = row["text"].as_str().unwrap_or("");
             if body.is_empty() {
                 return false;
-            }
-            if row["source"] == super::family_message::KIND {
-                // 私信はゲーム世界の発話・短期履歴・川柳材料に使わず、配送結果のみ確定する。
-                d.rows.iter_mut().find(|r| r["turn_id"] == turn).unwrap()["delivery_confirmed"] = true.into();
-                return true;
             }
             // 固定返答の入力は本文だけで、元入力IDを持たない。直近の会話へ誤接続しない。
             s.history.push_spoken(

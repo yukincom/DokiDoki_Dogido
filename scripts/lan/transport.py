@@ -19,7 +19,7 @@ import tempfile
 import threading
 import time
 
-from family_messages import GAME_REASONS, MessageBox, check_text
+from family_messages import GAME_REASONS, MessageBox, check_activity, check_text
 
 
 PAIR_SECONDS = 120
@@ -490,10 +490,14 @@ def make_host(state_dir, bind, upstream_port, confirm, messages=None):
                         player = check_text(data['player'], 80) if data['player'] != '' else ''
                         self.reply(200, {'message': messages.poll(device, reason, player)})
                     else:
-                        if (set(data) != {'id', 'status'} or not re.fullmatch('[a-f0-9]{32}', data['id'])
+                        if (set(data) not in ({'id', 'status'}, {'id', 'status', 'activity'})
+                                or not re.fullmatch('[a-f0-9]{32}', data['id'])
                                 or data['status'] not in GAME_REASONS | {'delivered', 'delivery_failed', 'delivery_unknown'}):
                             raise ValueError
-                        messages.report(device, data['id'], data['status'])
+                        activity = check_activity(data.get('activity', []))
+                        if activity and data['status'] != 'delivered':
+                            raise ValueError
+                        messages.report(device, data['id'], data['status'], activity)
                         self.reply(200)
                 except (TypeError, ValueError, RecursionError):
                     raise Refusal(400)

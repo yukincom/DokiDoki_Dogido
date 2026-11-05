@@ -75,10 +75,13 @@ async fn connected(router: &Router) -> String {
     body["session_id"].as_str().unwrap().to_owned()
 }
 
-async fn observe(router: &Router, sid: &str, sequence: i64, engaged: bool) {
-    let event = json!({"schema_version":"2026-05-24","adapter":"dogido-fabric-client","sequence":sequence,
+fn observation(sequence: i64, engaged: bool) -> Value {
+    json!({"schema_version":"2026-05-24","adapter":"dogido-fabric-client","sequence":sequence,
         "observed_at":chrono::Utc::now(),"event":{"name":"status_snapshot","source_kind":"system","priority_hint":"background","certainty":"high"},
-        "combat":{"player_engaged":engaged}, "world":{"time_phase":"day","weather":"clear","local_light":15,"sky_visible":true}});
+        "combat":{"player_engaged":engaged,"combat_active_hint":engaged}, "world":{"time_phase":"day","weather":"clear","local_light":15,"sky_visible":true}})
+}
+
+async fn observe(router: &Router, sid: &str, event: Value) {
     assert_eq!(
         call(
             router,
@@ -93,10 +96,10 @@ async fn observe(router: &Router, sid: &str, sequence: i64, engaged: bool) {
     );
 }
 
-// 最新観測を持つ一人が安全な時だけ表示する。交戦中・複数・観測なしの再試行を保ち、
+// 模擬Fabricで、点火警告中も即座に本人画面に一件出す。未接続・宛先が複数なら配らない。
 // voice offは表示ACKのみ、voice onは模擬合成・再生が一回だけ成功し、私信が全体表示・履歴に漏れなければ合格。
 #[tokio::test]
-async fn family_message_waits_for_one_safe_game_and_deduplicates_through_display_ack() {
+async fn family_message_reaches_the_screen_during_a_warning_and_plays_once() {
     let directory =
         std::env::temp_dir().join(format!("dogido-family-test-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&directory).unwrap();
@@ -138,13 +141,43 @@ async fn family_message_waits_for_one_safe_game_and_deduplicates_through_display
     let router = app.router();
     let send = || call(&router, "POST", PATH, Some(message()), &[FAMILY]);
     let readiness = || call(&router, "GET", PATH, None, &[FAMILY]);
-    let sid = connected(&router).await;
     assert_eq!(readiness().await.1["reason"], "no_active_game");
     assert_eq!(send().await.1["reason"], "no_active_game");
-    observe(&router, &sid, 1, true).await;
-    assert_eq!(send().await.1["reason"], "game_busy");
+    let sid = connected(&router).await;
+    observe(&router, &sid, observation(1, false)).await;
+    let mut fuse = observation(2, true);
+    fuse["visual_threats"] =
+        json!([{"type":"creeper","entity_id":"c","distance":3,"fuse_active":true}]);
+    // 同じスレッドで点火を観測した直後に送る。模擬再生が完了する前の警告枠を検査する。
+    dialogue.observe(&sid, crate::events::GameEvent::parse(fuse).unwrap(), None);
+    assert!(
+        dialogue.snapshot(Some(&sid))["utterances"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|row| row["combat_actions"]
+                .as_array()
+                .is_some_and(|actions| actions
+                    .iter()
+                    .any(|action| action["kind"] == "creeper_fuse")))
+    );
+    let priority = dialogue.family_message(
+        std::iter::once(sid.as_str()),
+        Some((KEY, "ユノからの伝言やで")),
+    );
+    assert_eq!(priority["accepted"], true);
+    assert_eq!(priority["activity"], json!(["combat"]));
+    assert!(
+        dialogue.snapshot(Some(&sid))["utterances"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|row| row["text"] == "ユノからの伝言やで" && row["display_id"].is_string())
+    );
     let other = connected(&router).await;
-    observe(&router, &other, 1, false).await;
+    let mut fighting = observation(1, true);
+    fighting["visual_threats"] = json!([{"type":"zombie","entity_id":"z","distance":14}]);
+    observe(&router, &other, fighting).await;
     assert_eq!(send().await.1["reason"], "ambiguous_game");
     call(
         &router,
@@ -158,11 +191,11 @@ async fn family_message_waits_for_one_safe_game_and_deduplicates_through_display
     assert_eq!(readiness().await.1["ready"], true);
     assert_eq!(
         send().await.1,
-        json!({"accepted":true,"duplicate":false,"status":"queued"})
+        json!({"accepted":true,"duplicate":false,"status":"queued","activity":["combat"]})
     );
     assert_eq!(
         send().await.1,
-        json!({"accepted":true,"duplicate":true,"status":"queued"})
+        json!({"accepted":true,"duplicate":true,"status":"queued","activity":["combat"]})
     );
     let rows = &dialogue.snapshot(Some(&other))["utterances"];
     let family = rows
@@ -273,7 +306,7 @@ async fn family_message_waits_for_one_safe_game_and_deduplicates_through_display
     .await;
     assert_eq!(
         send().await.1,
-        json!({"accepted":true,"duplicate":true,"status":"delivered"})
+        json!({"accepted":true,"duplicate":true,"status":"delivered","activity":["combat"]})
     );
     app.shutdown().await.unwrap();
     server.abort();

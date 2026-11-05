@@ -9,26 +9,26 @@ from family_messages import MessageBox, TIMEOUT
 
 
 # 見込み: 選択した遊ぶMacから新しい状態を得たときだけ伝言を用意する。
-# 合格: 未指定・端末不在・ゲームなし・交戦は別々の失敗、音声オフでも表示可能なら準備。同一IDは一行。
+# 合格: 未指定・端末不在・ゲームなしは理由付き、交戦中でも選択端末へ送る。LINE再送は同じ受付と状態報告を使う。
 def test_selection_readiness_and_line_retry(tmp_path):
     box = MessageBox(tmp_path, lambda: ['a', 'b'])
     def send():
         return box.deliver_line('line-1', 'おとうさん', '18時ですよ')
-    assert send() == 'no_recipient'
+    assert send() == {'accepted': False, 'reason': 'no_recipient'}
     box.select('a')
-    assert send() == 'client_offline'
-    for reason in ('no_active_game', 'game_busy'):
+    assert send() == {'accepted': False, 'reason': 'client_offline'}
+    for reason in ('no_active_game', 'ambiguous_game', 'server_stopping'):
         box.poll('a', reason, '仮の名前')
-        assert send() == reason
-    box.poll('a', None, '仮の名前')
+        assert send() == {'accepted': False, 'reason': reason}
+    box.poll('a', 'game_busy', '仮の名前')
     mid = box.enqueue('ごはんですよ', 'おとうさん', 'line-1')
     assert box.enqueue('ごはんですよ', 'おとうさん', 'line-1') == mid
     box.select('b')
     box.prepare_next(lambda sender, player, text: f'{player}、{sender}から「{text}」やで')
     assert box.poll('b', None, '別の名前') is None
     assert box.poll('a', None, '仮の名前') == {'id': mid, 'text': '仮の名前、おとうさんから「ごはんですよ」やで'}
-    box.report('a', mid, 'delivered')
-    assert send() is None
+    box.report('a', mid, 'delivered', ['combat'])
+    assert send() == {'accepted': True, 'activity': ['combat']}
     with box.transaction() as db:
         assert db.execute('SELECT sender,player,body,spoken,status FROM messages').fetchall() == [(None,None,None,None,'delivered')]
 
@@ -50,6 +50,30 @@ def test_expiry_or_restart_after_offer(tmp_path, monkeypatch, restart):
         box = MessageBox(tmp_path, lambda: ['a'])
     else:
         now[0] += TIMEOUT
-    assert box.deliver_line('line-1', 'ママ', '一つ目') == 'delivery_unknown'
-    assert box.deliver_line('line-2', 'パパ', '二つ目') == ('delivery_unknown' if restart else 'client_offline')
+    assert box.deliver_line('line-1', 'ママ', '一つ目') == {'accepted': False, 'reason': 'delivery_unknown'}
+    assert box.deliver_line('line-2', 'パパ', '二つ目') == {
+        'accepted': False, 'reason': 'delivery_unknown' if restart else 'client_offline'}
     assert mid != second and box.poll('a', None, '仮名') is None
+
+
+# 見込み: 表示確認を待つ一件や呼び名の未設定が、次の伝言の受付を妨げない。
+# 合格: 模擬時計で生成待ちの二件目を原文で提示し、端末が確認した順にUIへ報告。LINE由来の一件は同期結果のみに含める。
+def test_unset_name_and_pending_messages_do_not_block_each_other(tmp_path, monkeypatch):
+    now = [1000.]
+    monkeypatch.setattr('family_messages.time.time', lambda: now[0])
+    reports = []
+    box = MessageBox(tmp_path, lambda: ['a'], reports.append)
+    box.select('a')
+    box.poll('a', 'game_busy', '')
+    first = box.enqueue('もうすぐだよ')
+    second = box.enqueue('18時に来てね', '父', 'line-1')
+    box.prepare_next(lambda sender, player, text: f'{sender}から伝言や。「{text}」')
+    assert box.poll('a', None, '')['id'] == first
+    now[0] += TIMEOUT / 2
+    assert box.poll('a', None, '') == {'id': second, 'text': '父から伝言や。「18時に来てね」'}
+    box.report('a', second, 'delivered', ['senryu'])
+    assert reports == []
+    assert box.deliver_line('line-1', '父', '18時に来てね') == {'accepted': True, 'activity': ['senryu']}
+    box.report('a', first, 'delivered', ['combat', 'senryu'])
+    box.report('a', first, 'delivered', ['combat', 'senryu'])
+    assert reports == [{'accepted': True, 'activity': ['combat', 'senryu']}]

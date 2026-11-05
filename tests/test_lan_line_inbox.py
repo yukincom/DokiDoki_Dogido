@@ -33,11 +33,12 @@ class LineSocketTests(unittest.TestCase):
 
     # 送信者・原文・IDが受付担当へ届く。成功とゲーム停止時の個別の応答、ソケットの権限・後片付けを実際の通信で見る。
     def test_delivery_and_status(self):
-        deliver = Mock(side_effect=[None, "no_active_game", RuntimeError()])
+        success = {"accepted": True, "activity": ["senryu"]}
+        deliver = Mock(side_effect=[success, {"accepted": False, "reason": "no_active_game"}, RuntimeError()])
         self.request["text"] = "𠮷" * 5000  # ASCIIエスケープで約60kBのLINE最大長。
         with inbox.serve(self.root, deliver):
             self.assertEqual(stat.S_IMODE(self.path.stat().st_mode), 0o600)
-            self.assertEqual(self.send(self.request), {"accepted": True})
+            self.assertEqual(self.send(self.request), success)
             self.assertEqual(self.send(self.request), {"accepted": False, "reason": "no_active_game"})
             self.assertEqual(self.send(self.request), {"accepted": False, "reason": "delivery_unknown"})
         deliver.assert_called_with(**self.request)

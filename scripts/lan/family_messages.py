@@ -1,5 +1,6 @@
 """共有Macで伝言の宛先と、ゲーム側の表示・再生結果を管理する。"""
 from contextlib import closing, contextmanager
+import json
 import secrets
 import sqlite3
 import time
@@ -32,6 +33,24 @@ def check_text(value, limit=500):
     return value
 
 
+def check_activity(value):
+    if (not isinstance(value, list) or len(value) > 2
+            or any(tag not in ('combat', 'senryu') for tag in value) or len(set(value)) != len(value)):
+        raise ValueError('ゲームの状態を確認できません。')
+    return value
+
+
+def _result(status, activity):
+    if status == 'delivered':
+        return {'accepted': True, 'activity': activity}
+    return {'accepted': False, 'reason': status}
+
+
+class _Transaction(sqlite3.Connection):
+    """共有UIの報告はDBの確定後に、本文なしで呼出元へ渡す。"""
+    ui_results: list
+
+
 class Unavailable(ValueError):
     def __init__(self, reason):
         super().__init__(REASONS[reason])
@@ -39,9 +58,11 @@ class Unavailable(ValueError):
 
 
 class MessageBox:
-    def __init__(self, root, devices):
+    def __init__(self, root, devices, on_ui_result=None):
         self.path = root / 'family-messages.sqlite3'
         self.devices = devices
+        self.on_ui_result = on_ui_result
+        self.last_offered = {}
         # 状態はこの起動だけが持つ。DBトランザクションの中で読み書きし、定期報告をディスクに残さない。
         self.presence = {}
         with self.transaction() as db:
@@ -52,6 +73,8 @@ class MessageBox:
                     created REAL NOT NULL, source TEXT UNIQUE, status TEXT NOT NULL
                 );
             """)
+            if 'activity' not in {row[1] for row in db.execute('PRAGMA table_info(messages)')}:
+                db.execute("""ALTER TABLE messages ADD COLUMN activity TEXT NOT NULL DEFAULT '[]'""")
             # 起動直後に前回の未確認分を再生すると、既に届いた私信を二度読むおそれがある。
             db.execute("""UPDATE messages SET status='delivery_unknown', body=NULL,spoken=NULL,sender=NULL,player=NULL
                           WHERE status IN ('preparing','ready','offered')""")
@@ -59,10 +82,13 @@ class MessageBox:
 
     @contextmanager
     def transaction(self):
-        with closing(sqlite3.connect(self.path)) as db, db:
+        with closing(sqlite3.connect(self.path, factory=_Transaction)) as db, db:
+            reports = db.ui_results = []
             db.execute('PRAGMA secure_delete = ON')
             db.execute('BEGIN IMMEDIATE')
             yield db
+        for result in reports:
+            self.on_ui_result(result)
 
     def select(self, device):
         with self.transaction() as db:
@@ -71,17 +97,20 @@ class MessageBox:
             db.execute('DELETE FROM recipient')
             db.execute('INSERT INTO recipient VALUES(?)', (device,))
 
-    @staticmethod
-    def _finish(db, message_id, status):
+    def _finish(self, db, message_id, status, activity=None):
         # 成否と受付IDのみを残し、送信者名・呼び名・原文・発話文は消す。
-        db.execute('UPDATE messages SET status=?, body=NULL,spoken=NULL,sender=NULL,player=NULL WHERE id=?',
-                   (status, message_id))
+        activity = activity or []
+        db.execute('UPDATE messages SET status=?,activity=?,body=NULL,spoken=NULL,sender=NULL,player=NULL WHERE id=?',
+                   (status, json.dumps(activity), message_id))
+        if self.on_ui_result and db.execute('SELECT source FROM messages WHERE id=?', (message_id,)).fetchone() == (None,):
+            db.ui_results.append(_result(status, activity))
         print('ゲームで伝言の表示または再生を確認しました。' if status == 'delivered' else REASONS[status], flush=True)
 
     def revoked(self, device):
         with self.transaction() as db:
             db.execute('DELETE FROM recipient WHERE device=?', (device,))
             self.presence.pop(device, None)
+            self.last_offered.pop(device, None)
             for mid, state in db.execute("SELECT id,status FROM messages WHERE device=? AND body IS NOT NULL", (device,)):
                 self._finish(db, mid, 'delivery_unknown' if state == 'offered' else 'no_recipient')
 
@@ -101,10 +130,8 @@ class MessageBox:
             now = time.time()
             if not presence or now - presence[0] > HEARTBEAT:
                 raise Unavailable('client_offline')
-            if presence[1]:
+            if presence[1] and presence[1] != 'game_busy':
                 raise Unavailable(presence[1])
-            if not presence[2]:
-                raise Unavailable('player_name_unset')
             count, = db.execute('SELECT count(*) FROM messages WHERE body IS NOT NULL').fetchone()
             if count >= 16:
                 raise Unavailable('queue_full')
@@ -117,12 +144,13 @@ class MessageBox:
         try:
             mid = self.enqueue(text, sender, source_id)
         except Unavailable as error:
-            return error.reason
+            return _result(error.reason, [])
         while True:
             with self.transaction() as db:
                 state = self._status(db, mid)
-            if state not in ACTIVE:
-                return None if state == 'delivered' else state
+                if state not in ACTIVE:
+                    row = db.execute('SELECT activity FROM messages WHERE id=?', (mid,)).fetchone()
+                    return _result(state, json.loads(row[0]) if row else [])
             time.sleep(0.25)
 
     def _status(self, db, mid):
@@ -137,7 +165,7 @@ class MessageBox:
             elif not presence or time.time() - presence[0] > HEARTBEAT:
                 state = 'client_offline'
             else:
-                state = presence[1] or 'game_busy'
+                state = presence[1] or 'delivery_failed'
             self._finish(db, mid, state)
         return state
 
@@ -161,24 +189,40 @@ class MessageBox:
 
     def poll(self, device, reason, player):
         with self.transaction() as db:
-            self.presence[device] = (time.time(), reason, player)
-            row = db.execute("""SELECT id,spoken,player FROM messages WHERE device=? AND body IS NOT NULL
-                                ORDER BY created,rowid LIMIT 1""", (device,)).fetchone()
-            if not row:
+            now = time.time()
+            rows = db.execute("""SELECT id,spoken,sender,body,created FROM messages WHERE device=? AND body IS NOT NULL
+                                 ORDER BY created,rowid""", (device,)).fetchall()
+            available = []
+            for mid, spoken, sender, body, created in rows:
+                state = self._status(db, mid)
+                if state not in ACTIVE:
+                    continue
+                if state != 'offered' and reason not in (None, 'game_busy'):
+                    self._finish(db, mid, reason)
+                    continue
+                if state == 'preparing':
+                    # モデルの生成待ちが重なっても、LINEの結果待ち期限内に原文を届ける余裕を取る。
+                    if now - created < TIMEOUT / 2:
+                        continue
+                    spoken = f'{sender}から伝言や。「{body}」'
+                available.append((mid, spoken))
+            self.presence[device] = (now, reason, player)
+            if not available:
                 return None
-            mid, spoken, recipient = row
-            state = self._status(db, mid)
-            if state not in ACTIVE:
-                return None
-            if state != 'offered' and (reason or recipient != player):
-                self._finish(db, mid, reason or 'player_name_unset')
-                return None
-            if state == 'preparing':
-                return None
-            db.execute("UPDATE messages SET status='offered' WHERE id=?", (mid,))
+            # 表示確認が遅い一件だけを再提示し続けず、同じ登録端末に届いた他の伝言も順に渡す。
+            ids = [mid for mid, _ in available]
+            last = self.last_offered.get(device)
+            index = (ids.index(last) + 1) % len(ids) if last in ids else 0
+            mid, spoken = available[index]
+            self.last_offered[device] = mid
+            db.execute("UPDATE messages SET status='offered',spoken=? WHERE id=?", (spoken, mid))
             return {'id': mid, 'text': spoken}
 
-    def report(self, device, mid, status):
+    def report(self, device, mid, status, activity=None):
         with self.transaction() as db:
             if db.execute('SELECT device,status FROM messages WHERE id=?', (mid,)).fetchone() == (device, 'offered'):
-                self._finish(db, mid, status)
+                if status == 'game_busy':
+                    # 旧本体が受付前に交戦等を返した場合だけ、期限内に同じIDで再度届ける。
+                    db.execute("UPDATE messages SET status='ready' WHERE id=?", (mid,))
+                else:
+                    self._finish(db, mid, status, activity)

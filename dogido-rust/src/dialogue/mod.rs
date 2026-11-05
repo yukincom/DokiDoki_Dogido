@@ -249,6 +249,8 @@ struct Session {
     deferred_input: Option<environment_runtime::DeferredInput>,
     /// 再生中の優先警告と取消情報。warningsが音声の寿命を管理する。
     warning: Option<warnings::Active>,
+    /// 家庭の伝言だけを順番に読む。警告・会話の取消から独立させる。
+    family_audio: Option<family_message::AudioQueue>,
     /// 優先警告をまだ開始できない間の配送候補。次の観測で再評価する。
     pending_warning: Option<Vec<crate::combat::model::Speech>>,
     /// 保留した警告・戦況質問に対応する元入力。候補と一緒に消費する。
@@ -259,8 +261,8 @@ struct Session {
 struct Data {
     sessions: HashMap<String, Session>,
     closed_journeys: Vec<journey_runtime::Draft>,
-    /// 同じ共有起動中の再送を重複発話にしない。本文を持たず、照会用に受付IDから表示・再生の行を引く。
-    family_messages: HashMap<uuid::Uuid, (String, Instant)>,
+    /// 家庭の表示と配送結果。ゲームの履歴・通常表示の件数上限から独立させる。
+    family_messages: VecDeque<family_message::Receipt>,
     rows: VecDeque<Value>,
     revision: u64,
     stopped: bool,
@@ -483,6 +485,7 @@ impl Dialogue {
                 light_cancel: None,
                 deferred_input: None,
                 warning: None,
+                family_audio: None,
                 pending_warning: None,
                 pending_input: None,
             },
@@ -621,7 +624,10 @@ impl Dialogue {
         let rows = d
             .rows
             .iter()
-            .filter(|r| selected.map_or(r["source"] != family_message::KIND, |id| r["session_id"] == id))
+            .filter(|r| selected.is_none_or(|id| r["session_id"] == id))
+            .chain(d.family_messages.iter().map(|r| &r.row).filter(|row| {
+                selected.and_then(|id| d.sessions.get(id)).is_some_and(|s| row["session_instance"] == s.instance_id)
+            }))
             .collect::<Vec<_>>();
         let mut snapshot = json!({"revision":d.revision,"phase":"dialogue","audio_enabled":self.config.audio_enabled,"llm_enabled":self.config.llm_enabled,
             "sessions":d.sessions.iter().map(|(id,s)|json!({"session_id":id,"session_instance":s.instance_id,"voice_enabled":s.delivery.voice_enabled,"voice_generation":request_runtime::voice_generation(s),"voice_inputs":s.delivery.voice_inputs,"text_enabled":s.delivery.enabled,"name":s.name,"status":s.status,"observation_mode":if s.preview{"none"}else{"minecraft"},"history":s.history.rows(),"history_retention":s.history.retention_status(),"foreground":s.foreground.snapshot(self.clock.elapsed().as_millis() as u64),"workshop_history":s.haiku.workshop.as_ref().map(|w| &w.dialogue),"workshop_followup":s.haiku.workshop.as_ref().map(|w| w.followup),"workshop_discussion_target":s.haiku.workshop.as_ref().and_then(|w| w.discussion_target.as_ref()),"state":s.mode,"chat_allowed":fresh(s),"horse_recall":horse_recall_runtime::snapshot(s),"body_observation":s.body_observation.project(Instant::now()),"body_probe":s.body_observation.diagnostic_sample(Instant::now()),"chat_image":json!({"enabled":self.config.chat_image.enabled,"wait_ms":self.config.chat_image.wait_ms,"state":s.visual.snapshot()}),"body_gaze":body_gaze_runtime::snapshot(s,&d.rows)})).collect::<Vec<_>>(),
@@ -645,6 +651,7 @@ impl Dialogue {
                 Self::cancel_assist(&mut d, &sid);
                 Self::cancel_light(&mut d, &sid);
                 if let Some(s) = d.sessions.get_mut(&sid) {
+                    s.family_audio = None;
                     body_interest_runtime::cancel(s);
                     s.body_requests.cancel();
                 }

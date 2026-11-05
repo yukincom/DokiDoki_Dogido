@@ -241,7 +241,7 @@ def test_family_message_bound_to_peer_and_receipt_survives_lost_ack(world, monke
         if message is None:
             return {'ready': True}
         received.append(message)
-        return {'accepted': True, 'status': 'delivered'}
+        return {'accepted': True, 'status': 'delivered', 'activity': ['combat']}
 
     def poll():
         message_client.poll_once(state, world.address, first, '遊ぶ人', 'run1', local)
@@ -261,9 +261,41 @@ def test_family_message_bound_to_peer_and_receipt_survives_lost_ack(world, monke
     monkeypatch.setattr(transport, 'message_request', request)
     poll()
     assert received == [{'id': mid, 'text': '遊ぶ人、父から「18時にごはんですよー！」やで。'}]
-    assert box.deliver_line('line-1', '父', '同じ通知') is None
+    assert box.deliver_line('line-1', '父', '同じ通知') == {'accepted': True, 'activity': ['combat']}
     assert not (state / 'family-receipt.json').exists()
     assert not world.upstream_calls
+
+
+# 見込み: 再起動時は複数伝言の未確定IDすべてを認識し、先に受け付けたゲームへ二度話さない。
+# 合格: 状態照会のtimeout後も同じ起動回に二件を提示し、片方のPOST応答が途切れても本体再起動後は両方とも不明と報告。LANとRustは模擬。
+def test_multiple_uncertain_receipts_survive_game_restart(tmp_path, monkeypatch):
+    import message_client
+    messages = [{'id': c * 32, 'text': '模擬伝言'} for c in 'ab']
+    offers = iter(messages * 2)
+    results, posted = [], []
+    def host(address, credentials, path, payload):
+        if path == transport.NEXT_MESSAGE:
+            assert payload['reason'] is None
+            return {'message': next(offers)}
+        results.append(payload)
+        return {}
+    def game(message=None):
+        if message is None:
+            raise TimeoutError
+        posted.append(message)
+        if message == messages[0]:
+            raise TimeoutError
+        return {'accepted': True, 'status': 'queued'}
+    monkeypatch.setattr(transport, 'message_request', host)
+    def poll(generation):
+        return message_client.poll_once(tmp_path, (), {'device': 'a', 'pin': 'p'}, '', generation, game)
+    with pytest.raises(TimeoutError):
+        poll('before')
+    poll('before')
+    poll('after')
+    poll('after')
+    assert posted == messages
+    assert results == [{'id': message['id'], 'status': 'delivery_unknown'} for message in messages]
 
 
 # 見込み: 同じ起動回の本体だけを照会し、受信しただけでゲームに表示済みと報告しない。
