@@ -137,7 +137,14 @@ def manage(host, command, received=None):
         try:
             if received is not None and time.time() - received >= TIMEOUT:
                 raise ValueError("共有Macの接続を待つ間に送信期限を過ぎました。")
-            host.messages.enqueue(json.loads(command[len("message "):]))
+            message = json.loads(command[len("message "):])
+            if isinstance(message, str):
+                host.messages.enqueue(message)
+            elif isinstance(message, dict) and set(message) == {"text", "sender"}:
+                # 共有画面が送信時に確定した管理者名を、既存の送り主検査・保存・読み上げへ渡す。
+                host.messages.enqueue(message["text"], sender=message["sender"])
+            else:
+                raise ValueError("メッセージの本文と送り主を確認してください。")
         except Unavailable as error:
             report_to_yuno({"accepted": False, "reason": error.reason})
             print(f"伝言を受け付けられませんでした。{error}", flush=True)

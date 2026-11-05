@@ -141,6 +141,41 @@ def test_family_controls_preserve_typed_or_dictated_text(lan, monkeypatch):
         lan.manage(host, *commands.get())
     assert seen == ['play', text]
 
+
+# 見込み: 共有画面の管理者名を既存のsenderへ渡せば、表示・生成・原文代替に同じ送り主を使える。
+# 合格: 模擬stdinと一時DBで指定名が表示/生成へ届き、次の名前変更が受付済み本文へ遡及しない。実音声は対象外。
+def test_ui_administrator_name_reaches_existing_message_delivery(lan, tmp_path):
+    events, rendered = [], []
+    messages = lan.MessageBox(tmp_path, lambda: ['play'], on_event=lambda *row: events.append(row))
+    messages.select('play')
+    messages.poll('play', None, 'プレイヤー')
+    host = SimpleNamespace(messages=messages)
+    for sender in ('おかあさん', '管理者テスト'):
+        lan.manage(host, 'message ' + lan.json.dumps({'text': 'ごはんですよ', 'sender': sender}))
+    def render(sender, player, body):
+        rendered.append((sender, player, body))
+        return f'{sender}から伝言や。「{body}」'
+    assert messages.prepare_next(render) and messages.prepare_next(render)
+    assert rendered == [('おかあさん', 'プレイヤー', 'ごはんですよ'), ('管理者テスト', 'プレイヤー', 'ごはんですよ')]
+    assert events == [('伝言', 'おかあさんから　ごはんですよ'), ('伝言', '管理者テストから　ごはんですよ')]
+    assert messages.poll('play', None, 'プレイヤー')['text'] == 'おかあさんから伝言や。「ごはんですよ」'
+
+
+# 見込み: UI由来でも送り主を無検査で受け付けない。合格: 不正名/外形はDBへ登録されず、旧一行形式は汎用名で使える。
+def test_ui_administrator_payload_validation_and_legacy_input(lan, tmp_path):
+    messages = lan.MessageBox(tmp_path, lambda: ['play'])
+    messages.select('play')
+    messages.poll('play', None, 'プレイヤー')
+    host = SimpleNamespace(messages=messages)
+    for value in ({'text': '本文', 'sender': ''}, {'text': '本文', 'sender': '改\n行'},
+                  {'text': '本文', 'sender': 'あ' * 81}, {'text': '本文'}, ['本文']):
+        lan.manage(host, 'message ' + lan.json.dumps(value))
+    with messages.transaction() as db:
+        assert db.execute('SELECT count(*) FROM messages').fetchone() == (0,)
+    lan.manage(host, 'message ' + lan.json.dumps('旧形式の本文'))
+    with messages.transaction() as db:
+        assert db.execute('SELECT sender,body FROM messages').fetchall() == [('管理者', '旧形式の本文')]
+
 # 見込み: Wi-Fi・有線は同時に候補になり、DHCPのない有線も対象。VPNと公開アドレスは広報しない。
 # 合格: 模擬macOSから物理LANの2件だけを列挙する。接続と端末認証は別試験。
 def test_lists_all_physical_lan_ports(lan, monkeypatch):

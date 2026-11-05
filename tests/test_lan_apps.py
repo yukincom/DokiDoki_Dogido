@@ -1,4 +1,4 @@
-"""Macの実バンドル・署名・Finderエイリアスを一時領域で確認する。GUI、LAN、Minecraft、VOICEVOXは起動しない。"""
+"""Macのバンドル・署名・エイリアスと非表示AppKitコントロールを一時領域で確認する。LAN・ゲーム・音声は起動しない。"""
 import importlib.util
 from pathlib import Path
 import plistlib
@@ -21,6 +21,19 @@ def binary(tmp_path_factory):
     path = tmp_path_factory.mktemp("launcher") / installer.LAUNCHER
     installer.build_launcher(path)
     return path
+
+
+# 見込み: 実AppKitの入力actionと設定を通すと、送信・保持・管理者名保存を外観から独立して確認できる。
+# 合格: 隔離した非表示window/設定で日本語本文・未確定文字・失敗時保持・管理操作・名前再読込が通る。実IMEと配送は含まない。
+def test_host_native_controls_share_commands_and_preserve_drafts(tmp_path):
+    harness = Path(__file__).parent / 'macos/lan_launcher_controls.m'
+    executable = tmp_path / 'host-controls'
+    subprocess.run(['/usr/bin/xcrun', 'clang', '-fobjc-arc', '-Wall', '-Werror',
+                    '-Wno-deprecated-declarations', '-mmacosx-version-min=14.2',
+                    '-framework', 'Cocoa', str(harness), '-o', str(executable)], check=True)
+    result = subprocess.run([str(executable), str(tmp_path / 'ui-settings.plist')], capture_output=True, text=True, timeout=20)
+    assert result.returncode == 0, result.stderr
+    assert 'host controls passed' in result.stdout
 
 
 @pytest.fixture()

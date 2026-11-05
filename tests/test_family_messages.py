@@ -42,7 +42,7 @@ def test_ui_message_displays_only_confirmed_delivery(tmp_path, monkeypatch, stat
     box = MessageBox(tmp_path, lambda: ['a'], on_event=lambda *args: events.append(args))
     box.select('a')
     box.poll('a', None, '仮名')
-    mid = box.enqueue('18時に来てね')
+    mid = box.enqueue('18時に来てね', sender='おかあさん')
     if fallback:
         now[0] += TIMEOUT / 2
         expected = 'おかあさんから伝言や。「18時に来てね」'

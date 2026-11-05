@@ -5,6 +5,78 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+// 共有画面だけの配色。ターミナルの白・茶・緑・水色を、角のある枠とボタンへ使う。
+static NSColor *hostColor(unsigned rgb) {
+    return [NSColor colorWithSRGBRed:((rgb >> 16) & 255) / 255.0
+                              green:((rgb >> 8) & 255) / 255.0 blue:(rgb & 255) / 255.0 alpha:1];
+}
+static NSColor *hostInk(void) { return hostColor(0x594010); }
+static void fillHostRect(NSRect frame, unsigned rgb) {
+    [hostColor(rgb) setFill];
+    NSRectFill(frame);
+}
+static void hostBevel(NSRect frame, BOOL pressed, unsigned face) {
+    fillHostRect(frame, 0x665737);
+    NSRect inner = NSInsetRect(frame, 2, 2);
+    fillHostRect(inner, face);
+    fillHostRect(NSMakeRect(NSMinX(inner), NSMaxY(inner)-3, inner.size.width, 3), pressed ? 0xb2ad96 : 0xffffff);
+    fillHostRect(NSMakeRect(NSMinX(inner), NSMinY(inner), 3, inner.size.height), pressed ? 0xb2ad96 : 0xffffff);
+    fillHostRect(NSMakeRect(NSMinX(inner)+3, NSMinY(inner), inner.size.width-3, 3), pressed ? 0xffffff : 0xb2ad96);
+    fillHostRect(NSMakeRect(NSMaxX(inner)-3, NSMinY(inner), 3, inner.size.height-3), pressed ? 0xffffff : 0xb2ad96);
+}
+
+@interface HostCanvas : NSView
+@end
+@implementation HostCanvas
+- (void)drawRect:(NSRect)dirty {
+    fillHostRect(self.bounds, 0xf5f4ed);
+    // 上端の草色と小さな段差だけに模様を留め、本文の背景は無地にする。
+    CGFloat top = NSMaxY(self.bounds);
+    fillHostRect(NSMakeRect(0, top-6, self.bounds.size.width, 6), 0x9bb58b);
+    for (NSInteger x = 0; x < self.bounds.size.width; x += 48)
+        fillHostRect(NSMakeRect(x, top-10, 20, 4), 0x9bb58b);
+}
+@end
+
+@interface HostPanel : NSView
+@property BOOL inset;
+@end
+@implementation HostPanel
+- (void)drawRect:(NSRect)dirty { hostBevel(self.bounds, self.inset, self.inset ? 0xffffff : 0xeceadc); }
+@end
+
+@interface HostButtonCell : NSButtonCell
+@property BOOL accent;
+@end
+@implementation HostButtonCell
+- (void)drawBezelWithFrame:(NSRect)frame inView:(NSView *)view {
+    unsigned face = !self.enabled ? 0xe7e5db : self.accent ? (self.highlighted ? 0xa6bd96 : 0xc2d5b2) : 0xeceadc;
+    hostBevel(frame, self.highlighted, face);
+}
+- (NSRect)drawTitle:(NSAttributedString *)title withFrame:(NSRect)frame inView:(NSView *)view {
+    NSMutableAttributedString *styled = [title mutableCopy];
+    [styled addAttributes:@{NSForegroundColorAttributeName:self.enabled ? hostInk() : hostColor(0x9a9483),
+                            NSFontAttributeName:[NSFont monospacedSystemFontOfSize:13 weight:NSFontWeightSemibold]}
+                   range:NSMakeRange(0, styled.length)];
+    return [super drawTitle:styled withFrame:frame inView:view];
+}
+@end
+
+// フォーカス直後の空欄も、入力中も同じカーソル・選択色を使う。
+@interface HostMessageCell : NSTextFieldCell
+@end
+@implementation HostMessageCell
+- (NSText *)setUpFieldEditorAttributes:(NSText *)text {
+    NSText *editor = [super setUpFieldEditorAttributes:text];
+    if ([editor isKindOfClass:NSTextView.class]) {
+        NSTextView *view = (NSTextView *)editor;
+        view.insertionPointColor = hostColor(0x1cb4c0);
+        view.selectedTextAttributes = @{NSBackgroundColorAttributeName:hostColor(0xb7d9ff), NSForegroundColorAttributeName:hostInk()};
+    }
+    return editor;
+}
+@end
+
 static int finderAlias(NSString *operation, NSString *file, NSString *app) {
     NSURL *alias = [NSURL fileURLWithPath:file];
     NSURL *target = [NSURL fileURLWithPath:app isDirectory:YES];
@@ -40,10 +112,16 @@ static int finderAlias(NSString *operation, NSString *file, NSString *app) {
 @interface Launcher : NSObject <NSApplicationDelegate, NSWindowDelegate>
 @property NSWindow *window;
 @property NSTextView *output;
+@property NSDictionary *outputAttributes;
 @property NSTask *task;
 @property NSButton *runButton;
 @property NSArray<NSButton *> *hostButtons;
 @property NSTextField *messageField;
+@property NSPanel *settingsWindow;
+@property NSArray<NSButton *> *managementButtons;
+@property NSTextField *administratorField;
+@property NSTextField *settingsError;
+@property NSString *administratorName;
 @property NSFileHandle *input;
 @property NSFileHandle *reader;
 @property NSMutableData *pending;
@@ -53,7 +131,10 @@ static int finderAlias(NSString *operation, NSString *file, NSString *app) {
 @implementation Launcher
 - (void)append:(NSString *)s {
     NSTextStorage *store = self.output.textStorage;
-    [store replaceCharactersInRange:NSMakeRange(store.length, 0) withString:s];
+    if (self.outputAttributes)
+        [store appendAttributedString:[[NSAttributedString alloc] initWithString:s attributes:self.outputAttributes]];
+    else
+        [store replaceCharactersInRange:NSMakeRange(store.length, 0) withString:s];
     if (store.length > 64000) [store deleteCharactersInRange:NSMakeRange(0, store.length - 48000)];
     [self.output scrollRangeToVisible:NSMakeRange(store.length, 0)];
 }
@@ -63,45 +144,210 @@ static int finderAlias(NSString *operation, NSString *file, NSString *app) {
     [self.window.contentView addSubview:button];
     return button;
 }
+- (NSButton *)hostButton:(NSString *)title action:(SEL)action frame:(NSRect)frame accent:(BOOL)accent {
+    NSButton *button = [[NSButton alloc] initWithFrame:frame];
+    HostButtonCell *cell = [HostButtonCell new];
+    cell.accent = accent;
+    cell.bezelStyle = NSBezelStyleRegularSquare;
+    button.cell = cell;
+    button.title = title;
+    button.target = self;
+    button.action = action;
+    button.buttonType = NSButtonTypeMomentaryPushIn;
+    button.bordered = YES;
+    button.contentTintColor = hostInk();
+    [self.window.contentView addSubview:button];
+    return button;
+}
+- (void)buildHostInterface {
+    NSDictionary *preferences = [NSDictionary dictionaryWithContentsOfURL:self.settingsFile];
+    BOOL exists = [NSFileManager.defaultManager fileExistsAtPath:self.settingsFile.path];
+    self.administratorName = exists ? [self checkedAdministratorName:preferences[@"administrator_name"]] : @"管理者";
+    self.window.appearance = [NSAppearance appearanceNamed:NSAppearanceNameAqua];
+    self.window.contentView = [[HostCanvas alloc] initWithFrame:NSMakeRect(0,0,780,590)];
+    NSTextField *heading = [NSTextField labelWithString:@"ドギド共有"];
+    heading.font = [NSFont monospacedSystemFontOfSize:22 weight:NSFontWeightBold];
+    heading.textColor = hostInk();
+    heading.frame = NSMakeRect(26,532,420,30);
+    [self.window.contentView addSubview:heading];
+    self.runButton = [self hostButton:@"停止" action:@selector(toggle:) frame:NSMakeRect(614,529,88,38) accent:NO];
+    NSButton *settings = [self hostButton:@"" action:@selector(showSettings:) frame:NSMakeRect(714,529,42,38) accent:NO];
+    settings.image = [[NSImage imageWithSystemSymbolName:@"gearshape.fill" accessibilityDescription:@"設定"]
+        imageWithSymbolConfiguration:[NSImageSymbolConfiguration configurationWithPointSize:18 weight:NSFontWeightSemibold]];
+    settings.imagePosition = NSImageOnly;
+    settings.accessibilityLabel = @"設定";
+    settings.toolTip = @"設定";
+    HostPanel *logPanel = [[HostPanel alloc] initWithFrame:NSMakeRect(24,164,732,348)];
+    logPanel.inset = YES;
+    [self.window.contentView addSubview:logPanel];
+    NSScrollView *scroll = [[NSScrollView alloc] initWithFrame:NSInsetRect(logPanel.frame, 5, 5)];
+    self.output = [[NSTextView alloc] initWithFrame:scroll.contentView.bounds];
+    self.output.editable = NO;
+    self.output.font = [NSFont monospacedSystemFontOfSize:13 weight:NSFontWeightRegular];
+    self.output.textColor = hostInk();
+    self.outputAttributes = @{NSFontAttributeName:self.output.font, NSForegroundColorAttributeName:hostInk()};
+    self.output.backgroundColor = NSColor.whiteColor;
+    self.output.textContainerInset = NSMakeSize(12,12);
+    self.output.selectedTextAttributes = @{NSBackgroundColorAttributeName:hostColor(0xb7d9ff), NSForegroundColorAttributeName:hostInk()};
+    scroll.documentView = self.output;
+    scroll.hasVerticalScroller = YES;
+    [self.window.contentView addSubview:scroll];
+    HostPanel *messagePanel = [[HostPanel alloc] initWithFrame:NSMakeRect(24,24,732,122)];
+    [self.window.contentView addSubview:messagePanel];
+    NSTextField *title = [NSTextField labelWithString:@"メッセージ"];
+    title.font = [NSFont monospacedSystemFontOfSize:13 weight:NSFontWeightBold];
+    title.textColor = hostInk();
+    title.frame = NSMakeRect(42,112,680,20);
+    [self.window.contentView addSubview:title];
+    NSTextField *hint = [NSTextField labelWithString:@"音声で入力するには、入力欄でMacの音声入力ショートカットを押します。"];
+    hint.font = [NSFont systemFontOfSize:11];
+    hint.textColor = hostColor(0x807457);
+    hint.frame = NSMakeRect(42,89,680,18);
+    [self.window.contentView addSubview:hint];
+    HostPanel *inputPanel = [[HostPanel alloc] initWithFrame:NSMakeRect(42,42,594,36)];
+    inputPanel.inset = YES;
+    [self.window.contentView addSubview:inputPanel];
+    self.messageField = [NSTextField textFieldWithString:@""];
+    self.messageField.cell = [[HostMessageCell alloc] initTextCell:@""];
+    self.messageField.editable = YES;
+    self.messageField.selectable = YES;
+    self.messageField.placeholderString = @"ドギドに伝えてほしいこと";
+    self.messageField.accessibilityLabel = title.stringValue;
+    self.messageField.usesSingleLineMode = YES;
+    self.messageField.bezeled = NO;
+    self.messageField.drawsBackground = NO;
+    self.messageField.focusRingType = NSFocusRingTypeNone;
+    self.messageField.font = [NSFont monospacedSystemFontOfSize:14 weight:NSFontWeightRegular];
+    self.messageField.textColor = hostInk();
+    self.messageField.frame = NSMakeRect(51,50,576,21);
+    // Cocoaのfield editorに変換確定を任せ、確定後のReturnだけを既存の送信へ渡す。
+    // フォーカス移動では送信せず、ボタン・Enterとも同じ検査と入力欄クリアを使う。
+    self.messageField.target = self;
+    self.messageField.action = @selector(sendMessage:);
+    self.messageField.cell.sendsActionOnEndEditing = NO;
+    [self.window.contentView addSubview:self.messageField];
+    self.window.initialFirstResponder = self.messageField;
+    self.hostButtons = @[[self hostButton:@"送信" action:@selector(sendMessage:) frame:NSMakeRect(648,40,90,40) accent:YES]];
+    for (NSButton *button in self.hostButtons) button.enabled = NO;
+}
+// 管理者名はこのアプリの設定が正本。送信時に名前を本文と一緒に確定し、受付済みの伝言へ遡及しない。
+- (NSURL *)settingsFile {
+    NSURL *root = [NSFileManager.defaultManager URLsForDirectory:NSApplicationSupportDirectory inDomains:NSUserDomainMask].firstObject;
+    NSString *identifier = NSBundle.mainBundle.bundleIdentifier ?: @"com.dokidoki-dogido.lan.host";
+    return [[root URLByAppendingPathComponent:identifier isDirectory:YES] URLByAppendingPathComponent:@"ui-settings.plist"];
+}
+- (NSString *)checkedAdministratorName:(id)value {
+    if (![value isKindOfClass:NSString.class]) return nil;
+    NSString *name = [value stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    if (!name.length || [name lengthOfBytesUsingEncoding:NSUTF32LittleEndianStringEncoding] / 4 > 80 ||
+            [name rangeOfCharacterFromSet:NSCharacterSet.controlCharacterSet].location != NSNotFound ||
+            [name rangeOfCharacterFromSet:NSCharacterSet.newlineCharacterSet].location != NSNotFound) return nil;
+    return name;
+}
+- (void)buildSettingsInterface {
+    self.settingsWindow = [[NSPanel alloc] initWithContentRect:NSMakeRect(0,0,420,352)
+            styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+    self.settingsWindow.title = @"設定";
+    self.settingsWindow.appearance = self.window.appearance;
+    self.settingsWindow.contentView = [[HostCanvas alloc] initWithFrame:NSMakeRect(0,0,420,352)];
+    NSTextField *label = [NSTextField labelWithString:@"管理者名"];
+    label.frame = NSMakeRect(24,302,372,20);
+    label.font = [NSFont monospacedSystemFontOfSize:13 weight:NSFontWeightBold];
+    label.textColor = hostInk();
+    [self.settingsWindow.contentView addSubview:label];
+    self.administratorField = [NSTextField textFieldWithString:@""];
+    self.administratorField.cell = [[HostMessageCell alloc] initTextCell:@""];
+    self.administratorField.editable = YES;
+    self.administratorField.selectable = YES;
+    self.administratorField.bezeled = YES;
+    self.administratorField.drawsBackground = YES;
+    self.administratorField.backgroundColor = NSColor.whiteColor;
+    self.administratorField.textColor = hostInk();
+    self.administratorField.font = [NSFont monospacedSystemFontOfSize:14 weight:NSFontWeightRegular];
+    self.administratorField.usesSingleLineMode = YES;
+    self.administratorField.frame = NSMakeRect(24,263,260,30);
+    self.administratorField.accessibilityLabel = @"管理者名";
+    self.administratorField.target = self;
+    self.administratorField.action = @selector(saveSettings:);
+    self.administratorField.cell.sendsActionOnEndEditing = NO;
+    [self.settingsWindow.contentView addSubview:self.administratorField];
+    self.settingsWindow.initialFirstResponder = self.administratorField;
+    NSButton *save = [self hostButton:@"保存" action:@selector(saveSettings:) frame:NSMakeRect(298,261,98,34) accent:YES];
+    [self.settingsWindow.contentView addSubview:save];
+    NSMutableArray *buttons = [NSMutableArray new];
+    NSArray *items = @[@[@"端末を追加", NSStringFromSelector(@selector(pair:))],
+                       @[@"登録を解除", NSStringFromSelector(@selector(revoke:))],
+                       @[@"伝言の宛先…", NSStringFromSelector(@selector(recipient:))]];
+    for (NSUInteger i = 0; i < items.count; i++) {
+        NSButton *button = [self hostButton:items[i][0] action:NSSelectorFromString(items[i][1])
+                frame:NSMakeRect(24,205-i*44,372,34) accent:NO];
+        button.enabled = self.task.running;
+        [self.settingsWindow.contentView addSubview:button];
+        [buttons addObject:button];
+    }
+    self.managementButtons = buttons;
+    self.settingsError = [NSTextField wrappingLabelWithString:@""];
+    self.settingsError.frame = NSMakeRect(24,65,372,40);
+    self.settingsError.font = [NSFont systemFontOfSize:11];
+    self.settingsError.textColor = hostColor(0x984b39);
+    [self.settingsWindow.contentView addSubview:self.settingsError];
+    NSButton *close = [self hostButton:@"閉じる" action:@selector(closeSettings:) frame:NSMakeRect(298,20,98,34) accent:NO];
+    [self.settingsWindow.contentView addSubview:close];
+}
+- (void)showSettings:(id)sender {
+    if (!self.settingsWindow) [self buildSettingsInterface];
+    if (self.settingsWindow.sheetParent) return;
+    self.administratorField.stringValue = self.administratorName ?: @"";
+    self.settingsError.stringValue = self.administratorName ? @"" : @"管理者名を設定してください。";
+    [self.window beginSheet:self.settingsWindow completionHandler:nil];
+}
+- (void)closeSettings:(id)sender {
+    if (self.settingsWindow.sheetParent) [self.window endSheet:self.settingsWindow];
+    [self.settingsWindow orderOut:nil];
+}
+- (void)saveSettings:(id)sender {
+    if ([(NSTextView *)self.administratorField.currentEditor hasMarkedText]) return;
+    NSString *name = [self checkedAdministratorName:self.administratorField.stringValue];
+    if (!name) { self.settingsError.stringValue = @"管理者名は1〜80文字の一行で入力してください。"; return; }
+    if (![name isEqual:self.administratorName]) {
+        NSURL *file = self.settingsFile;
+        NSError *error = nil;
+        NSMutableDictionary *preferences = [[NSDictionary dictionaryWithContentsOfURL:file] mutableCopy] ?: [NSMutableDictionary new];
+        preferences[@"administrator_name"] = name;
+        NSData *data = [NSPropertyListSerialization dataWithPropertyList:preferences format:NSPropertyListBinaryFormat_v1_0 options:0 error:&error];
+        BOOL ready = [NSFileManager.defaultManager createDirectoryAtURL:file.URLByDeletingLastPathComponent
+                withIntermediateDirectories:YES attributes:@{NSFilePosixPermissions:@0700} error:&error];
+        if (!ready || !data || ![data writeToURL:file options:NSDataWritingAtomic error:&error]) {
+            self.settingsError.stringValue = @"設定を保存できませんでした。入力した管理者名は残しています。";
+            return;
+        }
+        // ディスクの置換が成功した値だけを、その後に送るメッセージの送り主へ反映する。
+        self.administratorName = name;
+    }
+    [self closeSettings:nil];
+}
+- (void)setWorkerControlsEnabled:(BOOL)enabled {
+    for (NSButton *button in self.hostButtons) button.enabled = enabled;
+    for (NSButton *button in self.managementButtons) button.enabled = enabled;
+}
 - (void)applicationDidFinishLaunching:(NSNotification *)note {
     BOOL host = [[NSBundle.mainBundle objectForInfoDictionaryKey:@"DogidoRole"] isEqual:@"host"];
-    CGFloat messageHeight = host ? 78 : 0;
-    self.window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0,0,660,420 + messageHeight)
+    self.window = [[NSWindow alloc] initWithContentRect:host ? NSMakeRect(0,0,780,590) : NSMakeRect(0,0,660,420)
              styleMask:NSWindowStyleMaskTitled|NSWindowStyleMaskClosable|NSWindowStyleMaskMiniaturizable
              backing:NSBackingStoreBuffered defer:NO];
     self.window.title = [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleName"];
     self.window.delegate = self;
-    NSScrollView *scroll = [[NSScrollView alloc] initWithFrame:NSMakeRect(12,55 + messageHeight,636,353)];
-    self.output = [[NSTextView alloc] initWithFrame:scroll.contentView.bounds];
-    self.output.editable = NO;
-    self.output.font = [NSFont monospacedSystemFontOfSize:12 weight:NSFontWeightRegular];
-    scroll.documentView = self.output;
-    scroll.hasVerticalScroller = YES;
-    [self.window.contentView addSubview:scroll];
-    self.runButton = [self button:@"停止" action:@selector(toggle:) frame:NSMakeRect(542,10,100,34)];
     if (host) {
-        NSTextField *title = [NSTextField labelWithString:@"お母さんからの伝言"];
-        title.frame = NSMakeRect(15,103,155,20);
-        [self.window.contentView addSubview:title];
-        NSTextField *hint = [NSTextField labelWithString:@"音声で入力するには、入力欄でMacの音声入力ショートカットを押します。"];
-        hint.font = [NSFont systemFontOfSize:NSFont.smallSystemFontSize];
-        hint.textColor = NSColor.secondaryLabelColor;
-        hint.frame = NSMakeRect(175,103,470,18);
-        [self.window.contentView addSubview:hint];
-        self.messageField = [NSTextField textFieldWithString:@""];
-        self.messageField.placeholderString = @"ドギドに伝えてほしいこと";
-        self.messageField.accessibilityLabel = title.stringValue;
-        self.messageField.usesSingleLineMode = YES;
-        self.messageField.frame = NSMakeRect(14,65,515,28);
-        [self.window.contentView addSubview:self.messageField];
-        self.window.initialFirstResponder = self.messageField;
-        NSButton *recipient = [self button:@"伝言の宛先…" action:@selector(recipient:) frame:NSMakeRect(288,10,132,34)];
-        recipient.toolTip = @"この画面とLINEからの伝言を届ける、登録済みのMacを選びます。";
-        self.hostButtons = @[
-            [self button:@"端末を追加" action:@selector(pair:) frame:NSMakeRect(12,10,128,34)],
-            [self button:@"登録を解除" action:@selector(revoke:) frame:NSMakeRect(146,10,128,34)],
-            recipient, [self button:@"送信" action:@selector(sendMessage:) frame:NSMakeRect(542,62,100,34)]];
-        for (NSButton *button in self.hostButtons) button.enabled = NO;
+        [self buildHostInterface];
+    } else {
+        NSScrollView *scroll = [[NSScrollView alloc] initWithFrame:NSMakeRect(12,55,636,353)];
+        self.output = [[NSTextView alloc] initWithFrame:scroll.contentView.bounds];
+        self.output.editable = NO;
+        self.output.font = [NSFont monospacedSystemFontOfSize:12 weight:NSFontWeightRegular];
+        scroll.documentView = self.output;
+        scroll.hasVerticalScroller = YES;
+        [self.window.contentView addSubview:scroll];
+        self.runButton = [self button:@"停止" action:@selector(toggle:) frame:NSMakeRect(542,10,100,34)];
     }
     NSMenu *menu = [NSMenu new];
     NSMenuItem *root = [NSMenuItem new];
@@ -173,7 +419,7 @@ static int finderAlias(NSString *operation, NSString *file, NSString *app) {
     [self.reader waitForDataInBackgroundAndNotify];
     self.runButton.title = @"停止";
     self.runButton.enabled = YES;
-    for (NSButton *button in self.hostButtons) button.enabled = YES;
+    [self setWorkerControlsEnabled:YES];
     task.terminationHandler = ^(NSTask *ended){
         dispatch_async(dispatch_get_main_queue(), ^{
             [self finished:ended];
@@ -225,7 +471,7 @@ static int finderAlias(NSString *operation, NSString *file, NSString *app) {
     [self append:[NSString stringWithFormat:@"ドギドが終了しました（終了コード %d）。\n", task.terminationStatus]];
     self.runButton.title = @"再起動";
     self.runButton.enabled = YES;
-    for (NSButton *button in self.hostButtons) button.enabled = NO;
+    [self setWorkerControlsEnabled:NO];
     if (self.quitting) [NSApp replyToApplicationShouldTerminate:YES];
 }
 - (BOOL)command:(NSString *)command {
@@ -241,6 +487,10 @@ static int finderAlias(NSString *operation, NSString *file, NSString *app) {
 - (void)revoke:(id)sender { [self command:@"revoke\n"]; }
 - (void)recipient:(id)sender { [self command:@"recipient\n"]; }
 - (void)sendMessage:(id)sender {
+    // ボタン操作中も、日本語などの未確定文字列を送信しない。
+    NSTextView *editor = (NSTextView *)self.messageField.currentEditor;
+    if (editor.hasMarkedText) return;
+    if (!self.administratorName.length) { [self showSettings:nil]; return; }
     NSString *text = [self.messageField.stringValue stringByTrimmingCharactersInSet:
                       NSCharacterSet.whitespaceAndNewlineCharacterSet];
     if (!text.length) {
@@ -252,7 +502,8 @@ static int finderAlias(NSString *operation, NSString *file, NSString *app) {
         [self append:@"伝言は500文字以内にしてください。\n"];
         return;
     }
-    NSData *encoded = [NSJSONSerialization dataWithJSONObject:text options:NSJSONWritingFragmentsAllowed error:nil];
+    NSDictionary *message = @{@"text":text, @"sender":self.administratorName};
+    NSData *encoded = [NSJSONSerialization dataWithJSONObject:message options:0 error:nil];
     if (!encoded) {
         [self append:@"伝言の文字を読み取れませんでした。入力内容を確認してください。\n"];
         return;
@@ -260,8 +511,10 @@ static int finderAlias(NSString *operation, NSString *file, NSString *app) {
     // 本文に引用符・改行があっても、子プロセスへはコマンド一行だけを渡す。
     NSString *json = [[NSString alloc] initWithData:encoded encoding:NSUTF8StringEncoding];
     // 子プロセスへ渡せた入力だけ消し、停止中や書込み失敗なら再送できるよう残す。
-    if ([self command:[NSString stringWithFormat:@"message %@\n", json]])
+    if ([self command:[NSString stringWithFormat:@"message %@\n", json]]) {
         self.messageField.stringValue = @"";
+        [self.window makeFirstResponder:self.messageField];
+    }
 }
 - (void)toggle:(id)sender {
     if (!self.task) { [self start]; return; }

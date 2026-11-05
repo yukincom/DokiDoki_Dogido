@@ -128,7 +128,7 @@ class MessageBox:
             for mid, state in db.execute("SELECT id,status FROM messages WHERE device=? AND body IS NOT NULL", (device,)):
                 self._finish(db, mid, 'delivery_unknown' if state == 'offered' else 'no_recipient')
 
-    def enqueue(self, text, sender='おかあさん', source_id=None):
+    def enqueue(self, text, sender='管理者', source_id=None):
         text = check_text(text, 5000 if source_id else 500)
         sender = check_text(sender, 80)
         with self.transaction() as db:

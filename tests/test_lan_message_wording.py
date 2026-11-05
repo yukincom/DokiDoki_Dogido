@@ -52,15 +52,16 @@ def completion(content, reason="stop", **fields):
 # 見込み: 呼称入り指示と伝言本文が別々に届けば、通常会話や操作へ混ぜず読み上げ文を作れる。
 # 合格: 模擬の送信先と要求全文が一致し、40字を超える応答も切らず返す。呼び名は設定から注入。実モデルの解釈は別確認。
 @pytest.mark.parametrize(("configured", "expected"), [("テスター", "テスター"), ("仮の呼び名", "仮の呼び名")])
-def test_uses_approved_instruction_and_returns_complete_wording(model, configured, expected):
+@pytest.mark.parametrize("sender", ["おかあさん", "別の管理者"])
+def test_uses_approved_instruction_and_returns_complete_wording(model, configured, expected, sender):
     source = "18時半までに来てね。"
-    spoken = "おかあさんが、18時半までに来てほしいって言っとるで。" + "あと少しで時間やから、ぼちぼち準備しよか。"
+    spoken = f"{sender}が、18時半までに来てほしいって言っとるで。" + "あと少しで時間やから、ぼちぼち準備しよか。"
     model.body = completion(spoken, reasoning_content="テスト用の内部文")
-    assert render_message(19286, "おかあさん", configured, source) == "おかあさんからの伝言やで。" + spoken
+    assert render_message(19286, sender, configured, source) == f"{sender}からの伝言やで。" + spoken
     assert model.sent == [("POST", "/v1/chat/completions", {
         "model": "default_model",
         "messages": [
-            {"role": "system", "content": f"おかあさんから{expected}へ伝言や！４０字くらいで{expected}に伝えてや。メッセージの内容の意味は変えたらあかんで！"},
+            {"role": "system", "content": f"{sender}から{expected}へ伝言や！４０字くらいで{expected}に伝えてや。メッセージの内容の意味は変えたらあかんで！"},
             {"role": "user", "content": source},
         ],
         "max_tokens": 512, "stream": False, "chat_template_kwargs": {"enable_thinking": False},
