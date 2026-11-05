@@ -147,7 +147,7 @@ def package_lan_client(source: Path, target: Path) -> None:
         "LSMinimumSystemVersion": "14.2", "DogidoRole": "kit-entry",
     }))
     subprocess.run(["/usr/bin/codesign", "--force", "--sign", "-", str(entry)], check=True)
-    for name in ("connection.py", "transport.py", "discovery.py"):
+    for name in ("connection.py", "transport.py", "discovery.py", "family_messages.py", "message_client.py"):
         copy_file(scripts / "lan" / name, target / "lan_tools" / name)
     copy_file(scripts / "family-link/gateway.py", target / "lan_tools/gateway.py")
     copy_file(scripts / "lan/遊ぶMacの導入.md", target / "はじめに.md")

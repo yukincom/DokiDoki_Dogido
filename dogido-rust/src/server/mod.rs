@@ -35,6 +35,7 @@ use runtime::{Command, Operation, Published};
 #[derive(Clone, Default)]
 pub struct ServerConfig {
     pub auth_token: Option<String>,
+    pub family_session_key: Option<String>,
     pub settings: Settings,
     pub dialogue: Option<Arc<crate::dialogue::Dialogue>>,
 }
@@ -81,6 +82,7 @@ struct AppState {
     commands: mpsc::UnboundedSender<Command>,
     published: watch::Receiver<Arc<Published>>,
     auth_token: Option<Arc<str>>,
+    family_session_key: Option<Arc<str>>,
     dialogue: Option<Arc<crate::dialogue::Dialogue>>,
 }
 
@@ -116,12 +118,16 @@ impl Application {
             .as_deref()
             .filter(|key| !key.is_empty())
             .map(Arc::from);
+        let family_session_key = config.family_session_key.as_deref()
+            .filter(|key| (32..=64).contains(&key.len()) && key.bytes().all(|b| b.is_ascii_hexdigit()))
+            .map(Arc::from);
         let dialogue = config.dialogue.clone();
         let (commands, published, worker) = runtime::spawn(config);
         let state = AppState {
             commands,
             published,
             auth_token,
+            family_session_key,
             dialogue,
         };
         let router = Router::new()
@@ -146,6 +152,7 @@ impl Application {
             .route("/api/v1/game-events", post(game_event))
             .route("/api/v1/game-events/batch", post(game_event_batch))
             .route("/api/v1/player-input", post(player_input))
+            .route("/api/v1/family-message", get(family_readiness).post(family_message))
             .route("/api/v1/voice-input/context", get(voice_context))
             .route("/api/v1/voice-input/diagnostics", post(voice_diagnostic))
             .route("/api/v1/memory/haiku", get(memory_haiku))
@@ -199,6 +206,11 @@ async fn access(State(state): State<AppState>, request: Request, next: Next) -> 
                 .and_then(|value| value.to_str().ok())
                 .is_some_and(|value| value.strip_prefix("Bearer ") == Some(key.as_ref()))
         });
+    // 共有起動の子プロセスだけが知る鍵を照合する。ブラウザーからの送信も受付前に断る。
+    let authorized = authorized && (path != "/api/v1/family-message"
+        || !request.headers().contains_key(header::ORIGIN)
+            && state.family_session_key.as_ref().is_some_and(|key|
+                request.headers().get("x-dogido-family-key").is_some_and(|v| v.as_bytes() == key.as_bytes())));
     let mut response = if authorized {
         next.run(request).await
     } else {
@@ -365,6 +377,25 @@ async fn game_event_batch(
         })
         .await)
 }
+async fn family_readiness(State(state): State<AppState>) -> ApiReply {
+    state.submit(Operation::FamilyMessage(None)).await
+}
+
+async fn family_message(
+    State(state): State<AppState>,
+    payload: Result<Json<contracts::FamilyMessageRequest>, JsonRejection>,
+) -> Result<ApiReply, ApiReply> {
+    let request = parse(payload)?;
+    if request.id.len() != 32
+        || !request.id.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+        || request.text.trim().is_empty() || request.text.chars().count() > 5200
+        || request.text.chars().any(|c| c.is_control() || matches!(c, '\u{2028}' | '\u{2029}'))
+    {
+        return Err(ApiReply::error(StatusCode::UNPROCESSABLE_ENTITY, json!("invalid_family_message")));
+    }
+    Ok(state.submit(Operation::FamilyMessage(Some(request))).await)
+}
+
 async fn player_input(
     State(state): State<AppState>,
     payload: Result<Json<PlayerInputRequest>, JsonRejection>,

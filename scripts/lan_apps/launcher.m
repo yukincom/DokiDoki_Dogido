@@ -43,6 +43,7 @@ static int finderAlias(NSString *operation, NSString *file, NSString *app) {
 @property NSTask *task;
 @property NSButton *runButton;
 @property NSArray<NSButton *> *hostButtons;
+@property NSTextField *messageField;
 @property NSFileHandle *input;
 @property NSFileHandle *reader;
 @property NSMutableData *pending;
@@ -63,12 +64,14 @@ static int finderAlias(NSString *operation, NSString *file, NSString *app) {
     return button;
 }
 - (void)applicationDidFinishLaunching:(NSNotification *)note {
-    self.window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0,0,660,420)
+    BOOL host = [[NSBundle.mainBundle objectForInfoDictionaryKey:@"DogidoRole"] isEqual:@"host"];
+    CGFloat messageHeight = host ? 78 : 0;
+    self.window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0,0,660,420 + messageHeight)
              styleMask:NSWindowStyleMaskTitled|NSWindowStyleMaskClosable|NSWindowStyleMaskMiniaturizable
              backing:NSBackingStoreBuffered defer:NO];
     self.window.title = [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleName"];
     self.window.delegate = self;
-    NSScrollView *scroll = [[NSScrollView alloc] initWithFrame:NSMakeRect(12,55,636,353)];
+    NSScrollView *scroll = [[NSScrollView alloc] initWithFrame:NSMakeRect(12,55 + messageHeight,636,353)];
     self.output = [[NSTextView alloc] initWithFrame:scroll.contentView.bounds];
     self.output.editable = NO;
     self.output.font = [NSFont monospacedSystemFontOfSize:12 weight:NSFontWeightRegular];
@@ -76,16 +79,44 @@ static int finderAlias(NSString *operation, NSString *file, NSString *app) {
     scroll.hasVerticalScroller = YES;
     [self.window.contentView addSubview:scroll];
     self.runButton = [self button:@"停止" action:@selector(toggle:) frame:NSMakeRect(542,10,100,34)];
-    if ([[NSBundle.mainBundle objectForInfoDictionaryKey:@"DogidoRole"] isEqual:@"host"]) {
+    if (host) {
+        NSTextField *title = [NSTextField labelWithString:@"お母さんからの伝言"];
+        title.frame = NSMakeRect(15,103,155,20);
+        [self.window.contentView addSubview:title];
+        NSTextField *hint = [NSTextField labelWithString:@"音声で入力するには、入力欄でMacの音声入力ショートカットを押します。"];
+        hint.font = [NSFont systemFontOfSize:NSFont.smallSystemFontSize];
+        hint.textColor = NSColor.secondaryLabelColor;
+        hint.frame = NSMakeRect(175,103,470,18);
+        [self.window.contentView addSubview:hint];
+        self.messageField = [NSTextField textFieldWithString:@""];
+        self.messageField.placeholderString = @"ドギドに伝えてほしいこと";
+        self.messageField.accessibilityLabel = title.stringValue;
+        self.messageField.usesSingleLineMode = YES;
+        self.messageField.frame = NSMakeRect(14,65,515,28);
+        [self.window.contentView addSubview:self.messageField];
+        self.window.initialFirstResponder = self.messageField;
+        NSButton *recipient = [self button:@"伝言の宛先…" action:@selector(recipient:) frame:NSMakeRect(288,10,132,34)];
+        recipient.toolTip = @"この画面とLINEからの伝言を届ける、登録済みのMacを選びます。";
         self.hostButtons = @[
             [self button:@"端末を追加" action:@selector(pair:) frame:NSMakeRect(12,10,128,34)],
-            [self button:@"登録を解除" action:@selector(revoke:) frame:NSMakeRect(146,10,128,34)]];
+            [self button:@"登録を解除" action:@selector(revoke:) frame:NSMakeRect(146,10,128,34)],
+            recipient, [self button:@"送信" action:@selector(sendMessage:) frame:NSMakeRect(542,62,100,34)]];
+        for (NSButton *button in self.hostButtons) button.enabled = NO;
     }
     NSMenu *menu = [NSMenu new];
     NSMenuItem *root = [NSMenuItem new];
     [menu addItem:root];
     root.submenu = [NSMenu new];
     [root.submenu addItemWithTitle:@"終了" action:@selector(terminate:) keyEquivalent:@"q"];
+    if (host) {
+        NSMenu *edit = [[NSMenu alloc] initWithTitle:@"編集"];
+        NSMenuItem *editItem = [menu addItemWithTitle:@"編集" action:nil keyEquivalent:@""];
+        editItem.submenu = edit;
+        [edit addItemWithTitle:@"カット" action:@selector(cut:) keyEquivalent:@"x"];
+        [edit addItemWithTitle:@"コピー" action:@selector(copy:) keyEquivalent:@"c"];
+        [edit addItemWithTitle:@"ペースト" action:@selector(paste:) keyEquivalent:@"v"];
+        [edit addItemWithTitle:@"すべて選択" action:@selector(selectAll:) keyEquivalent:@"a"];
+    }
     NSApp.mainMenu = menu;
     [self.window center];
     [self.window makeKeyAndOrderFront:nil];
@@ -205,6 +236,28 @@ static int finderAlias(NSString *operation, NSString *file, NSString *app) {
 }
 - (void)pair:(id)sender { [self command:@"pair\n"]; }
 - (void)revoke:(id)sender { [self command:@"revoke\n"]; }
+- (void)recipient:(id)sender { [self command:@"recipient\n"]; }
+- (void)sendMessage:(id)sender {
+    NSString *text = [self.messageField.stringValue stringByTrimmingCharactersInSet:
+                      NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    if (!text.length) {
+        [self.window makeFirstResponder:self.messageField];
+        return;
+    }
+    // 共有側の上限と同じUnicodeスカラー数を数える。絵文字をUTF-16の2文字として数えない。
+    if ([text lengthOfBytesUsingEncoding:NSUTF32LittleEndianStringEncoding] / 4 > 500) {
+        [self append:@"伝言は500文字以内にしてください。\n"];
+        return;
+    }
+    NSData *encoded = [NSJSONSerialization dataWithJSONObject:text options:NSJSONWritingFragmentsAllowed error:nil];
+    if (!encoded) {
+        [self append:@"伝言の文字を読み取れませんでした。入力内容を確認してください。\n"];
+        return;
+    }
+    // 本文に引用符・改行があっても、子プロセスへはコマンド一行だけを渡す。
+    NSString *json = [[NSString alloc] initWithData:encoded encoding:NSUTF8StringEncoding];
+    [self command:[NSString stringWithFormat:@"message %@\n", json]];
+}
 - (void)toggle:(id)sender {
     if (!self.task) { [self start]; return; }
     self.runButton.enabled = NO;

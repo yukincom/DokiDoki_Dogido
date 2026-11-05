@@ -50,6 +50,14 @@ pub struct HeartbeatRequest {
     pub sent_at: DateTime<FixedOffset>,
 }
 
+/// 共有ランチャーが配信用に整えた私信。本文をプレイヤー入力として解釈しない。
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FamilyMessageRequest {
+    pub id: String,
+    pub text: String,
+}
+
 #[derive(Deserialize)]
 pub struct PlayerInputRequest {
     pub session_id: Option<String>,

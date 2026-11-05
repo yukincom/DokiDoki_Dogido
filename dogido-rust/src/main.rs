@@ -332,6 +332,7 @@ async fn serve(
         dialogue,
         settings,
         auth_token: std::env::var("DOGIDO_AUTH_TOKEN").ok(),
+        family_session_key: std::env::var("DOGIDO_FAMILY_SESSION_KEY").ok(),
     });
     println!(
         "{}",

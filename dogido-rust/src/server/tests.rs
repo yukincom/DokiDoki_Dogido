@@ -1029,3 +1029,5 @@ async fn dialogue_display_describes_connected_features() {
     assert!(!html.contains("<!--runtime-status-->"));
     app.shutdown().await.unwrap();
 }
+
+mod family_message;

@@ -4,6 +4,7 @@ import fcntl
 import argparse
 import json
 import os
+import secrets
 from pathlib import Path
 import signal
 import socket
@@ -66,6 +67,12 @@ def run(root, lan_tools=None):
         connector = lan_tools / 'connection.py'
         if not connector.is_file():
             raise RuntimeError('ドギドのLAN接続部品がありません。アプリを再配置してください。')
+        # 同じ一括起動で作る本体・接続係だけが、選んだ遊ぶMacの伝言窓口を使用する。
+        os.environ['DOGIDO_FAMILY_SESSION_KEY'] = secrets.token_hex(32)
+        os.environ['DOGIDO_FAMILY_LOCAL_URL'] = base_url
+        os.environ['DOGIDO_FAMILY_PLAYER'] = settings.default_call_name
+        if settings.auth_token:
+            os.environ['DOGIDO_AUTH_TOKEN'] = settings.auth_token
         connect = [sys.executable, '-u', str(connector), 'client']
     elif (root / '.dogido_tools/family-link/connection.json').is_file():
         # Only pre-existing, separately shipped SSH kits use this entry point.

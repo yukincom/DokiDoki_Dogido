@@ -223,3 +223,74 @@ def test_loopback_blocks_browser_origins(world, headers):
         finally:
             client.close()
     assert not world.upstream_calls
+
+
+# 見込み: 認証した宛先でだけ配送し、表示ACKの転送に失敗しても同じ伝言を二重に再生しない。
+# 合格: 別端末の偽ACKは無効、選択先の模擬本体だけが原文を受け、再接続後も表示済み1回。実TLS・一時DB。
+def test_family_message_bound_to_peer_and_receipt_survives_lost_ack(world, monkeypatch):
+    import message_client
+    first = world.pair()
+    world.host.open_pairing()
+    other = transport.pair(world.root / 'other-client', world.address, lambda _: True)
+    box = world.host.messages
+    box.select(first['device'])
+    state = world.root / 'client'
+    received = []
+
+    def local(message=None):
+        if message is None:
+            return {'ready': True}
+        received.append(message)
+        return {'accepted': True, 'status': 'delivered'}
+
+    def poll():
+        message_client.poll_once(state, world.address, first, '遊ぶ人', 'run1', local)
+    poll()
+    mid = box.enqueue('18時にごはんですよー！', sender='父', source_id='line-1')
+    box.prepare_next(lambda sender, player, text: f'{player}、{sender}から「{text}」やで。')
+    request = transport.message_request
+    assert request(world.address, other, transport.NEXT_MESSAGE, {'reason': None, 'player': '他'})['message'] is None
+    request(world.address, other, transport.MESSAGE_RESULT, {'id': mid, 'status': 'delivered'})
+    def lost_ack(address, credentials, path, data):
+        if path == transport.MESSAGE_RESULT:
+            raise OSError
+        return request(address, credentials, path, data)
+    monkeypatch.setattr(transport, 'message_request', lost_ack)
+    with pytest.raises(OSError):
+        poll()
+    monkeypatch.setattr(transport, 'message_request', request)
+    poll()
+    assert received == [{'id': mid, 'text': '遊ぶ人、父から「18時にごはんですよー！」やで。'}]
+    assert box.deliver_line('line-1', '父', '同じ通知') is None
+    assert not (state / 'family-receipt.json').exists()
+    assert not world.upstream_calls
+
+
+# 見込み: 同じ起動回の本体だけを照会し、受信しただけでゲームに表示済みと報告しない。
+# 合格: 模擬RustでGETとPOSTの経路・鍵・本文とqueued応答の区別を確認。実ゲームの表示は別試験。
+def test_client_uses_local_family_endpoint():
+    import message_client
+    requests = []
+    class Game(BaseHTTPRequestHandler):
+        def log_message(self, *_):
+            pass
+
+        def reply(self, body, result):
+            requests.append((self.command, self.path, self.headers['X-Dogido-Family-Key'], self.headers['Authorization'], body))
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(json.dumps(result).encode())
+
+        def do_GET(self):
+            self.reply(None, {'ready': False, 'reason': 'no_active_game'})
+
+        def do_POST(self):
+            self.reply(json.loads(self.rfile.read(int(self.headers['Content-Length']))), {'accepted': True, 'status': 'queued'})
+
+    message = {'id': 'c' * 32, 'text': 'お母さんからやで。「おいで」って。'}
+    with serving(ThreadingHTTPServer(('127.0.0.1', 0), Game)) as (host, port):
+        url = f'http://{host}:{port}'
+        assert message_client.local_request(url, 'key', 'token')['reason'] == 'no_active_game'
+        assert message_client.local_request(url, 'key', 'token', message)['status'] == 'queued'
+    assert requests == [(m, '/api/v1/family-message', 'key', 'Bearer token', data)
+                        for m, data in [('GET', None), ('POST', message)]]

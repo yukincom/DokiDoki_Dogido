@@ -31,6 +31,7 @@ pub(super) enum Operation {
         key: Option<String>,
     },
     PlayerInput(PlayerInputRequest),
+    FamilyMessage(Option<super::contracts::FamilyMessageRequest>),
     VoiceMode(VoiceModeRequest),
     Displayed(DisplayedRequest),
     Unsupported(&'static str),
@@ -385,6 +386,17 @@ impl Runtime {
                         results.into_iter().next().unwrap()
                     },
                 )
+            }
+            Operation::FamilyMessage(request) => {
+                let Some(dialogue) = &self.config.dialogue else {
+                    return ApiReply::unsupported("family_message");
+                };
+                let games = self.data.sessions.iter()
+                    .filter(|(_, s)| s.registration.game == "minecraft-java"
+                        && s.registration.adapter_name == "dogido-fabric-client")
+                    .map(|(id, _)| id.as_str());
+                let message = request.as_ref().map(|r| (r.id.as_str(), r.text.as_str()));
+                ApiReply::ok(dialogue.family_message(games, message))
             }
             Operation::PlayerInput(request) => {
                 if let Some(d) = &self.config.dialogue {

@@ -55,7 +55,7 @@ def test_one_click_waits_for_readiness_and_stops_only_owned_children(tmp_path, m
     monkeypatch.setitem(sys.modules, 'log_relay', SimpleNamespace(Relay=Relay,
         stop_child=lambda child: events.append('stop:' + child.name)))
     monkeypatch.setitem(sys.modules, 'dogido_server.config', SimpleNamespace(get_settings=lambda: SimpleNamespace(
-        bind_host='127.0.0.1', bind_port=5111, voicevox_url='http://127.0.0.1:50021')))
+        bind_host='127.0.0.1', bind_port=5111, auth_token=None, default_call_name="テスト", voicevox_url='http://127.0.0.1:50021')))
     def response(url):
         if url.endswith('/models'):
             events.append('model-ready'); return {'data': []}

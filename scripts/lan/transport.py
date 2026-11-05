@@ -19,6 +19,8 @@ import tempfile
 import threading
 import time
 
+from family_messages import GAME_REASONS, MessageBox, check_text
+
 
 PAIR_SECONDS = 120
 HEX64 = re.compile(r'[a-f0-9]{64}')
@@ -28,6 +30,8 @@ CHAT = '/v1/chat/completions'
 LOGS = '/dogido/client-logs'
 MODELS = '/v1/models'
 AUTH = '/dogido/auth'
+NEXT_MESSAGE = '/dogido/family/next'
+MESSAGE_RESULT = '/dogido/family/result'
 PAIR = '/dogido/pair/'
 MAX_BODY = {CHAT: 2 << 20, LOGS: 1 << 20}
 IO_TIMEOUT = 200
@@ -232,13 +236,15 @@ class Pairings:
             _save(self.root / 'devices.json', devices)
             return True
 
-    def authorized(self, headers):
+    def authorized_device(self, headers):
         if len(headers) != 1:
-            return False
+            return None
         prefix, _, credential = headers[0].partition(' ')
         device, _, token = credential.partition('.')
-        return (prefix == 'Bearer' and DEVICE_ID.fullmatch(device) and TOKEN.fullmatch(token)
-                and hmac.compare_digest(self._devices().get(device, ''), _digest(token)))
+        if (prefix == 'Bearer' and DEVICE_ID.fullmatch(device) and TOKEN.fullmatch(token)
+                and hmac.compare_digest(self._devices().get(device, ''), _digest(token))):
+            return device
+        return None
 
 
 def _tls(address, pin=None):
@@ -434,10 +440,12 @@ class Handler(BaseHTTPRequestHandler):
     do_GET = do_POST = dispatch
 
 
-def make_host(state_dir, bind, upstream_port, confirm):
+def make_host(state_dir, bind, upstream_port, confirm, messages=None):
     root = _directory(state_dir)
     pin, ctx = _identity(root)
     pairings = Pairings(root, pin, confirm)
+    if messages is None:
+        messages = MessageBox(root, pairings.devices)
 
     class HostHandler(Handler):
         def handle_route(self):
@@ -465,10 +473,30 @@ def make_host(state_dir, bind, upstream_port, confirm):
                 else:
                     self.reply(*pairings.finish(val))
                 return
-            if not pairings.authorized(self.headers.get_all('Authorization', [])):
+            device = pairings.authorized_device(self.headers.get_all('Authorization', []))
+            if not device:
                 raise Refusal(401)
             if self.path == AUTH and self.command == 'GET':
                 self.reply(200)
+            elif self.command == 'POST' and self.path in (NEXT_MESSAGE, MESSAGE_RESULT):
+                try:
+                    data = json.loads(self.body(2048))
+                    if not isinstance(data, dict):
+                        raise ValueError
+                    if self.path == NEXT_MESSAGE:
+                        reason = data.get('reason')
+                        if set(data) != {'reason', 'player'} or reason not in GAME_REASONS | {None}:
+                            raise ValueError
+                        player = check_text(data['player'], 80) if data['player'] != '' else ''
+                        self.reply(200, {'message': messages.poll(device, reason, player)})
+                    else:
+                        if (set(data) != {'id', 'status'} or not re.fullmatch('[a-f0-9]{32}', data['id'])
+                                or data['status'] not in GAME_REASONS | {'delivered', 'delivery_failed', 'delivery_unknown'}):
+                            raise ValueError
+                        messages.report(device, data['id'], data['status'])
+                        self.reply(200)
+                except (TypeError, ValueError, RecursionError):
+                    raise Refusal(400)
             else:
                 self.forward(http.client.HTTPConnection('127.0.0.1', upstream_port, timeout=IO_TIMEOUT))
 
@@ -476,7 +504,12 @@ def make_host(state_dir, bind, upstream_port, confirm):
     server.pin = pin
     server.open_pairing = lambda seconds=PAIR_SECONDS: pairings.open(seconds)
     server.devices = pairings.devices
-    server.revoke = pairings.revoke
+    def revoke(device):
+        removed = pairings.revoke(device)
+        messages.revoked(device)
+        return removed
+    server.revoke = revoke
+    server.messages = messages
     return server
 
 
@@ -502,3 +535,15 @@ def make_client_relay(resolve, credentials, port=8080):
             self.forward(conn, auth)
 
     return Server(('127.0.0.1', port), RelayHandler)
+
+
+def message_request(address, credentials, path, data):
+    conn, _ = _tls(address, credentials['pin'])
+    try:
+        conn.request('POST', path, json.dumps(data), {'Authorization': _auth(credentials), 'Content-Type': 'application/json'})
+        response = conn.getresponse()
+        if response.status != 200:
+            raise OSError(f'伝言窓口の応答 {response.status}')
+        return json.loads(response.read(65537))
+    finally:
+        conn.close()

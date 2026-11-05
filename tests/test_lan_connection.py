@@ -117,3 +117,21 @@ def test_host_controls_only_explicitly_enroll_and_revoke(lan, monkeypatch):
     monkeypatch.setattr(lan, "choose", lambda *_: 1)
     lan.manage(host, "revoke")
     assert events == [("open", 120), ("revoke", "id2")]
+
+
+# 見込み: ボタンから送る一行JSONは大文字や引用符を保ち、本文中のコマンドを管理操作として扱わない。
+# 合格: 偽の共有画面から選択した宛先と原文を1件ずつ受付。GUIの音声認識・実端末への配送は別確認。
+def test_family_controls_preserve_typed_or_dictated_text(lan, monkeypatch):
+    import io
+    text = '18時にSwitchを片付けて！ "REVOKE"'
+    commands = lan.queue.SimpleQueue()
+    monkeypatch.setattr(sys, 'stdin', io.StringIO('recipient\nmessage ' + lan.json.dumps(text) + '\n'))
+    lan.read_controls(commands)
+    seen = []
+    host = SimpleNamespace(devices=lambda: ['other', 'play'],
+                           messages=SimpleNamespace(select=seen.append,
+                               enqueue=lambda message, **kw: seen.append(message)))
+    monkeypatch.setattr(lan, 'choose', lambda *_: 1)
+    while not commands.empty():
+        lan.manage(host, *commands.get())
+    assert seen == ['play', text]

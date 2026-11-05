@@ -3,12 +3,15 @@ from __future__ import annotations
 
 import argparse
 from contextlib import contextmanager
+from functools import partial
 import fcntl
 import ipaddress
+import json
 import os
 from pathlib import Path
 import queue
 import signal
+import sqlite3
 import socket
 import subprocess
 import sys
@@ -17,6 +20,8 @@ import time
 
 from discovery import Bonjour, BonjourError, PermissionDenied
 import transport
+import message_client
+from family_messages import MessageBox, TIMEOUT
 
 STATE = Path.home() / "Library/Application Support/Dogido LAN"
 PAIR_SECONDS = 120
@@ -99,18 +104,40 @@ def gateway_module():
 def read_controls(commands):
     try:
         for line in sys.stdin:
-            commands.put(line.strip().lower())
+            commands.put((line.rstrip('\r\n'), time.time()))
     except (OSError, ValueError):
         return
 
 
-def manage(host, command):
+def manage(host, command, received=None):
     if command == "":
         selection = choose("端末の登録または解除を選んでください。", ["端末を追加", "登録を解除"])
-        command = {0: "pair", 1: "revoke"}.get(selection)
+        command = {0: "pair", 1: "revoke"}.get(selection, "")
     if command == "pair":
         host.open_pairing(PAIR_SECONDS)
         print("2分間、端末登録を受け付けます。遊ぶMacでドギドを起動してください。", flush=True)
+    elif command.startswith("message "):
+        try:
+            if received is not None and time.time() - received >= TIMEOUT:
+                raise ValueError("共有Macの接続を待つ間に送信期限を過ぎました。")
+            host.messages.enqueue(json.loads(command[len("message "):]))
+        except (ValueError, sqlite3.Error) as error:
+            print(f"伝言を受け付けられませんでした。{error}", flush=True)
+            return
+        print("伝言を預かりました。ゲームでの表示または再生を待っています。", flush=True)
+    elif command == "recipient":
+        devices = sorted(host.devices())
+        if not devices:
+            print("先に遊ぶMacを登録してください。", flush=True)
+            return
+        selected = choose("この画面とLINEの伝言を届けるMacの登録IDを選んでください。", devices)
+        if selected is not None:
+            try:
+                host.messages.select(devices[selected])
+            except ValueError as error:
+                print(error, flush=True)
+                return
+            print(f"伝言の宛先を {devices[selected]} に設定しました。", flush=True)
     elif command == "revoke":
         devices = sorted(host.devices())
         if not devices:
@@ -129,7 +156,7 @@ def advertise_until_change(discovery, interface, host, commands):
         next_check = time.monotonic() + 5
         while True:
             if not commands.empty():
-                manage(host, commands.get())
+                manage(host, *commands.get())
             poll(0.5)
             if time.monotonic() >= next_check:
                 if lan_interface() != interface:
@@ -137,15 +164,43 @@ def advertise_until_change(discovery, interface, host, commands):
                 next_check = time.monotonic() + 5
 
 
+@contextmanager
+def background(target, *args):
+    stop = threading.Event()
+    worker = threading.Thread(target=target, args=(stop, *args), daemon=True)
+    worker.start()
+    try:
+        yield
+    finally:
+        stop.set()
+        worker.join()
+
+
+def prepare_messages(stop, messages, render):
+    while not stop.is_set():
+        try:
+            if messages.prepare_next(render):
+                continue
+        except (OSError, ValueError, sqlite3.Error):
+            print("伝言の保管先を確認できません。少し待って再試行します。", flush=True)
+        stop.wait(0.3)
+
+
 def run_host(state):
     discovery = Bonjour()
     commands = queue.SimpleQueue()
     print("新しいMacを登録するときは「端末を追加」を押してください。", flush=True)
     threading.Thread(target=read_controls, args=(commands,), daemon=True).start()
+    # ユノの受信部品と文面生成は共有アプリにだけ同梱する。
+    from line_inbox import serve
+    from message_wording import render_message
+    messages = MessageBox(state, lambda: (transport._read(state / "devices.json") or {}).keys())
     gateway = gateway_module()
     debug = gateway.DebugLog(state / "logs")
     try:
-        with serving(gateway.make_proxy(port=0, upstream_port=8080, event=debug.emit)) as proxy:
+        with serving(gateway.make_proxy(port=0, upstream_port=8080, event=debug.emit)) as proxy, \
+                serve(state, messages.deliver_line), \
+                background(prepare_messages, messages, partial(render_message, proxy.server_port)):
             waiting = False
             while True:
                 interface = lan_interface()
@@ -158,7 +213,7 @@ def run_host(state):
                 waiting = False
                 _, address = interface
                 try:
-                    with serving(transport.make_host(state, (address, 0), proxy.server_port, confirm)) as host:
+                    with serving(transport.make_host(state, (address, 0), proxy.server_port, confirm, messages)) as host:
                         advertise_until_change(discovery, interface, host, commands)
                 except PermissionDenied:
                     raise
@@ -240,7 +295,10 @@ def run_client(state):
     while True:
         credentials = transport.load_pair(state) or wait_for_pair(discovery, state)
         route = PeerRoute()
-        with serving(transport.make_client_relay(route.resolve, credentials, port=8080)):
+        if 'device' in credentials:
+            print(f"このMacの伝言用の登録ID: {credentials['device']}", flush=True)
+        with serving(transport.make_client_relay(route.resolve, credentials, port=8080)), background(
+                message_client.run, state, route.resolve, credentials):
             while not route.probe(discover_peers(discovery), credentials, transport.probe):
                 time.sleep(3)
         choice = choose("共有Macで登録が解除されました。登録し直すには共有側で「端末を追加」を押してください。",
