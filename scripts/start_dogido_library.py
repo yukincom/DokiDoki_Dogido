@@ -58,15 +58,15 @@ def child_session(command, environment, admin_token):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=0)
-    parser.add_argument("--profile", choices=("self", "son", "child"), default="self")
+    parser.add_argument("--profile", choices=("self", "remote", "child"), default="self")
     parser.add_argument("--device", help="親の本棚が開く登録済みの遊ぶMac ID")
     parser.add_argument("--sync-research", action="store_true", help="研究用SSD保全だけを一回実行")
     parser.add_argument("--research-root", type=Path, help="研究用保存先を明示設定（--sync-researchと併用）")
     args = parser.parse_args()
     os.chdir(ROOT)
-    if args.profile == "son":
+    if args.profile == "remote":
         if args.sync_research or args.research_root:
-            parser.error("息子用の本棚は研究データを複製しません。")
+            parser.error("子機用の本棚は研究データを複製しません。")
         from bookshelf_remote import run
         run(ROOT, args.port, args.device)
         return

@@ -162,14 +162,14 @@ fn parent_access(app: &App, headers: &HeaderMap) -> bool {
 fn family_refusal(app: &App, path: &str, write: bool, parent: bool) -> Option<&'static str> {
     if !app.child_mode { return None; }
     if path == "/api/readings" {
-        return Some("読み方の辞書は、おうちの人の本棚で直してもらってな。");
+        return Some("読み方の辞書は、管理する人の本棚で直してもらってな。");
     }
     if write && (path == "/api/research-storage" || path == "/api/poems/export"
         || path.contains("/internal-capture/")) {
         return Some("この本棚では、今ある保存先の句をそのまま使うで。");
     }
     if path == "/api/trash" && !parent {
-        return Some("この本棚では句や写真を消されへんねん。消したいときは、おうちの人に頼んでな。");
+        return Some("この本棚では句や写真を消されへんねん。消したいときは、管理する人に頼んでな。");
     }
     None
 }
@@ -211,16 +211,16 @@ async fn guard(State(app): State<Arc<App>>, req: Request, next: Next) -> Respons
         let status = response.status();
         let reason = response.extensions().get::<FailureReason>().map(|value| value.0.as_str());
         let detail = match reason {
-            Some("memory_disabled") => "記憶を残す設定がお休み中みたいや。おうちの人に設定を見てもらってな。",
-            Some("player_photo_unavailable" | "photo_file_missing") => "写真が見つからへんみたいや。保存先がつながっているか、おうちの人に見てもらってな。",
+            Some("memory_disabled") => "記憶を残す設定がお休み中みたいや。管理する人に設定を見てもらってな。",
+            Some("player_photo_unavailable" | "photo_file_missing") => "写真が見つからへんみたいや。保存先がつながっているか、管理する人に見てもらってな。",
             Some("research_original_protected") => "オレが撮った元の写真は、そのまま残しておくで。",
-            Some("j_lens_not_prepared" | "j_lens_unconfigured" | "translation_not_prepared") => "この記録を読む準備がまだできてへんみたいや。おうちの人に見てもらってな。",
+            Some("j_lens_not_prepared" | "j_lens_unconfigured" | "translation_not_prepared") => "この記録を読む準備がまだできてへんみたいや。管理する人に見てもらってな。",
             Some("changed" | "reading_changed" | "saved_poem_changed" | "source_poem_changed"
                 | "parent_revision_mismatch" | "revision_id_conflict" | "player_photo_changed") =>
                 "別のところで先に更新されたみたいや。書いた内容を控えてから、もう一度開いてな。",
             _ => match status {
                 StatusCode::NOT_FOUND => "今はその記録が見つからへんみたいや。少し待って、もう一度開いてな。",
-                StatusCode::FORBIDDEN => "その操作はここではできへんねん。おうちの人に見てもらってな。",
+                StatusCode::FORBIDDEN => "その操作はここではできへんねん。管理する人に見てもらってな。",
                 StatusCode::UNPROCESSABLE_ENTITY | StatusCode::BAD_REQUEST => "うまく受け取れへんかったみたいや。入力した内容を確かめて、もう一度試してな。",
                 _ => "今はうまく確認できへんみたいや。少し待って、もう一度試してな。",
             },

@@ -131,7 +131,7 @@ class ProxyTests(unittest.TestCase):
         self.assertEqual(self.request("/api/library", headers={"Origin": "http://other.test"})[0], 403)
         self.assertEqual(before, sorted(str(p) for p in self.root.rglob("*")))
 
-    # 見込み: 一度選んだ息子の宛先は接続状況で変えない。合格: 登録一覧が変化しても同じIDへ送る。
+    # 見込み: 一度選んだ子機の宛先は接続状況で変えない。合格: 登録一覧が変化しても同じIDへ送る。
     # 範囲: 実HTTPと模擬登録一覧。兄弟の追加で別の句を変更しないための検査。
     def test_destination_stays_fixed_after_first_selection(self):
         self.request("/bootstrap.js")

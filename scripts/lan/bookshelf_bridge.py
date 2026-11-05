@@ -86,7 +86,7 @@ class Broker:
     def list(self):
         now = time.monotonic()
         with self.lock:
-            return [dict(row, name=row.get('name') or '息子用',
+            return [dict(row, name=row.get('name') or '子機用',
                          online=now - self.seen.get(row['id'], float('-inf')) < ONLINE_SECONDS)
                     for row in self.records()]
 
@@ -96,12 +96,12 @@ class Broker:
         rows = self.list()
         if device is None:
             if len(rows) != 1:
-                return _error(409, '開く息子さんのMacを設定してください。')
+                return _error(409, '開く子機を設定してください。')
             device = rows[0]['id']
         if not DEVICE.fullmatch(device) or not any(r['id'] == device for r in rows):
-            return _error(404, '登録済みの息子さんのMacが見つかりません。')
+            return _error(404, '登録済みの子機が見つかりません。')
         if not any(r['id'] == device and r['online'] for r in rows):
-            return _error(503, '息子さんのMacで本棚を開き、同じLANに接続してください。')
+            return _error(503, '子機で本棚を開き、同じLANに接続してください。')
         item = Pending(device, method, path, _encoded(body), time.monotonic() + REQUEST_SECONDS)
         key = secrets.token_hex(16)
         with self.lock:
@@ -311,8 +311,8 @@ def serve_child(stop, local_url, admin_token, csrf, state_dir=None):
         discovery = Bonjour()
         wording = {
             '共有Macを待っています。': '共有Macを待っとるで。このMacの句はそのまま見られるからな。',
-            '共有Macでこの端末の登録が解除されています。': '共有Macとの登録が外れてるみたいや。おうちの人に確認してな。',
-            '登録した相手を確認できません。共有側の登録を確認してください。': 'いつもの共有Macか確認できへんかった。おうちの人に確認してな。',
+            '共有Macでこの端末の登録が解除されています。': '共有Macとの登録が外れてるみたいや。管理する人に確認してな。',
+            '登録した相手を確認できません。共有側の登録を確認してください。': 'いつもの共有Macか確認できへんかった。管理する人に確認してな。',
             '登録済みの共有Macに接続しました。': '共有Macとつながったで。',
         }
         route = PeerRoute(lambda message: print(wording.get(message, message), flush=True))
@@ -322,7 +322,7 @@ def serve_child(stop, local_url, admin_token, csrf, state_dir=None):
             try:
                 if time.monotonic() >= next_probe:
                     if route.probe(discover_peers(discovery), credentials, transport.probe):
-                        print('共有Macとの登録が外れてるみたいや。おうちの人に確認してな。', flush=True)
+                        print('共有Macとの登録が外れてるみたいや。管理する人に確認してな。', flush=True)
                         return
                     next_probe = time.monotonic() + 3
                 address = route.resolve()

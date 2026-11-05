@@ -148,7 +148,7 @@
   window.DogidoBookshelfDeletePhoto=(id,label)=>confirmDelete('photo',id,label);
   async function showTrash(){
     if(!canDelete)return;
-    dialog.dataset.mode='trash';dialog.innerHTML=header('ごみ箱')+`<p>${boot.child_mode?'削除から30日間は復元できます。息子用の本棚では、期限後も元データの自動削除は行いません。':'削除から30日間は復元できます。期限後は本棚の起動時・起動中に、句と直し履歴・写真の元画像を削除します。'}</p>`+'<p data-dialog-status role="status">読み込み中…</p><ul class="trash-list"></ul>';
+    dialog.dataset.mode='trash';dialog.innerHTML=header('ごみ箱')+`<p>${boot.child_mode?'削除から30日間は復元できます。子機用の本棚では、期限後も元データの自動削除は行いません。':'削除から30日間は復元できます。期限後は本棚の起動時・起動中に、句と直し履歴・写真の元画像を削除します。'}</p>`+'<p data-dialog-status role="status">読み込み中…</p><ul class="trash-list"></ul>';
     if(!dialog.open)dialog.showModal();
     // 閉じた画面・別の確認画面・新しい読込へ、古い応答を反映しない。
     const status=dialog.querySelector('[data-dialog-status]'),list=dialog.querySelector('.trash-list');

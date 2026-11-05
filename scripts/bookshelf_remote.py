@@ -1,4 +1,4 @@
-"""親PCの本棚窓。表示中の応答だけを中継し、息子の川柳をディスクへ保存しない。"""
+"""親機の本棚窓。表示中の応答だけを中継し、子機の川柳をディスクへ保存しない。"""
 import html
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -28,7 +28,7 @@ def make_server(root, port=0, device=None, state_dir=None):
             if selected is None:
                 records = list_remote(state)
                 if len(records) != 1:
-                    raise ValueError("息子さんのMacを一台指定してください。登録済み端末の設定を確認してください。")
+                    raise ValueError("子機を一台指定してください。登録済み端末の設定を確認してください。")
                 selected = records[0]["id"]
         return request_remote(state, selected, method, path, body)
 
@@ -55,8 +55,8 @@ def make_server(root, port=0, device=None, state_dir=None):
             self.reply(code, "application/json; charset=utf-8", json.dumps({"detail": message}, ensure_ascii=False).encode())
 
         def disconnected(self):
-            message = "息子さんの本棚に接続できません。息子さんのMacで「ドギドの本棚」、こちらで「ドギド共有」を開いてください。"
-            page = '<!doctype html><html lang="ja"><meta charset="utf-8"><title>息子用の本棚</title><body style="background:#f8f0df;font:20px sans-serif;padding:48px"><h1>息子用の本棚</h1><p>' + html.escape(message) + '</p><p>保存場所は変えずに待っています。</p><a href="/">もう一度つなぐ</a></body></html>'
+            message = "子機の本棚に接続できません。子機で「ドギドの本棚」、こちらで「ドギド共有」を開いてください。"
+            page = '<!doctype html><html lang="ja"><meta charset="utf-8"><title>子機用の本棚</title><body style="background:#f8f0df;font:20px sans-serif;padding:48px"><h1>子機用の本棚</h1><p>' + html.escape(message) + '</p><p>保存場所は変えずに待っています。</p><a href="/">もう一度つなぐ</a></body></html>'
             self.reply(200, "text/html; charset=utf-8", page.encode())
 
         def missing_bootstrap(self):
@@ -135,7 +135,7 @@ def make_server(root, port=0, device=None, state_dir=None):
                 if self.path == "/bootstrap.js":
                     self.missing_bootstrap()
                 else:
-                    self.detail(503, "息子さんの本棚から応答を確認できません。接続を確認して、同じ操作をもう一度試してください。")
+                    self.detail(503, "子機の本棚から応答を確認できません。接続を確認して、同じ操作をもう一度試してください。")
 
     class Server(ThreadingHTTPServer):
         daemon_threads = True

@@ -8,6 +8,8 @@ DokiDoki Dogido の設計・仕様ドキュメントです。
 |---|---|
 | [../README.md](../README.md) | 製品コンセプト・クイックスタート |
 | [../AGENTS.md](../AGENTS.md) | 実装エージェント向けの制約と作業ガイド |
+| [子機の仕様と運用](family-client/README.md) | 起動、接続、記憶・画像の保存先と更新 |
+| [本棚の仕様と開発入口](bookshelf/README.md) | 親機・子機の権限、写真と切断案内、本体コードの場所 |
 | [ローカルの軽量処理優先とLLM呼出監査](2026-10-18-dialogue-model-call-audit.md) | コード・分類器を優先する方針、呼出回数、分類追加と移行の状況 |
 | [ModernBERT 23分類の本体接続](2026-10-23-modernbert-23class-integration.md) | 旧890件版seed42の接続記録。後継は川柳・通常のBERT分離 |
 | [川柳と通常対話のBERT分離](2026-10-24-bert-mode-routing.md) | 実装済み。川柳seed42・通常seed48-mobの採用、一入力一分類器、切替中の取消 |

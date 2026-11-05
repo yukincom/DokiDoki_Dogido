@@ -68,14 +68,14 @@ final class Bookshelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavi
         let title = NSTextField(labelWithString: "どちらの本棚を開きますか？")
         title.font = .systemFont(ofSize: 26, weight: .semibold)
         layout.addArrangedSubview(title)
-        for (label, identifier) in [("私用", "self"), ("息子用", "son")] {
+        for (label, identifier) in [("私用", "self"), ("子機用", "remote")] {
             let button = NSButton(title: label, target: self, action: #selector(openChosenShelf(_:)))
             button.identifier = NSUserInterfaceItemIdentifier(identifier)
             button.bezelStyle = .rounded; button.font = .systemFont(ofSize: 22)
             button.widthAnchor.constraint(equalToConstant: 260).isActive = true
             layout.addArrangedSubview(button)
         }
-        let hint = NSTextField(labelWithString: "息子用は、息子さんのMacで本棚を開いている間に使えます。")
+        let hint = NSTextField(labelWithString: "子機用は、子機で本棚を開いている間に使えます。")
         hint.textColor = .secondaryLabelColor; layout.addArrangedSubview(hint)
         let content = NSView(); layout.translatesAutoresizingMaskIntoConstraints = false
         content.addSubview(layout)
@@ -84,7 +84,7 @@ final class Bookshelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavi
     }
 
     @objc private func openChosenShelf(_ sender: NSButton) {
-        guard let choice = sender.identifier?.rawValue, ["self", "son"].contains(choice) else { return }
+        guard let choice = sender.identifier?.rawValue, ["self", "remote"].contains(choice) else { return }
         openShelf(choice)
     }
 
@@ -107,7 +107,7 @@ final class Bookshelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavi
         let generation = shelfGeneration
         selectedShelf = profile
         output = ""; launched = false; baseURL = nil
-        window.title = profile == "self" ? "ドギドの本棚 — 私用" : "ドギドの本棚 — 息子用"
+        window.title = profile == "self" ? "ドギドの本棚 — 私用" : "ドギドの本棚 — 子機用"
         window.contentView = web
         web.loadHTMLString("<html lang='ja'><body style='background:#f8f0df;font:22px sans-serif;padding:50px'>ドギドの本棚を開いています…</body></html>", baseURL: nil)
         guard let root = Bundle.main.object(forInfoDictionaryKey: "DogidoProjectRoot") as? String else {
@@ -116,7 +116,7 @@ final class Bookshelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavi
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/zsh")
         process.arguments = [root + "/scripts/start_dogido_library.command", "--port", "0", "--profile", profile]
-        if profile == "son", let device = Bundle.main.object(forInfoDictionaryKey: "DogidoChildDevice") as? String {
+        if profile == "remote", let device = Bundle.main.object(forInfoDictionaryKey: "DogidoChildDevice") as? String {
             process.arguments! += ["--device", device]
         }
         process.currentDirectoryURL = URL(fileURLWithPath: root)
@@ -157,7 +157,7 @@ final class Bookshelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavi
 
     private func awaitServer(_ url: URL, attempts: Int) {
         let generation = shelfGeneration
-        var request = URLRequest(url: url); request.timeoutInterval = selectedShelf == "son" ? 22 : 2
+        var request = URLRequest(url: url); request.timeoutInterval = selectedShelf == "remote" ? 22 : 2
         URLSession.shared.dataTask(with: request) { [weak self] _, response, _ in
             DispatchQueue.main.async {
                 guard let self = self, !self.mayClose, self.shelfGeneration == generation else { return }
@@ -176,8 +176,8 @@ final class Bookshelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavi
         if childEdition {
             alert.messageText = "うまく確認できへんかったみたいや。"
             alert.informativeText = message.contains("写真")
-                ? "写真の場所が見つからへんねん。保存場所を、おうちの人に見てもらってな。"
-                : "本棚を開き直してみてな。続くときは、おうちの人に見てもらおう。"
+                ? "写真の場所が見つからへんねん。保存場所を、管理する人に見てもらってな。"
+                : "本棚を開き直してみてな。続くときは、管理する人に見てもらおう。"
         } else { alert.messageText = message }
         alert.runModal()
     }
@@ -221,7 +221,7 @@ final class Bookshelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavi
               message.body as? String == "showMinecraftScreenshots",
               let port = baseURL?.port,
               origin.protocol == "http", origin.host == "127.0.0.1", origin.port == port else { return }
-        if selectedShelf == "son" { fail("写真は息子さんのMacにあります。息子さんの本棚から開いてください。"); return }
+        if selectedShelf == "remote" { fail("写真は子機にあります。子機の本棚から開いてください。"); return }
         let folder = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Application Support/minecraft/screenshots", isDirectory: true)
         var isDirectory: ObjCBool = false

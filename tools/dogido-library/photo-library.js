@@ -53,6 +53,7 @@
     const detail=$('detail'),stage=detail.querySelector(state.book==='catalog'?'.illustration':'.poem-scene');if(!stage)return;
     detail.querySelectorAll('.page-photos,.placed-photo-title').forEach(el=>el.remove());
     stage.querySelector('.collected-photo')?.remove();
+    stage.querySelectorAll('.photo-unavailable').forEach(el=>el.remove());
     stage.querySelectorAll('.art-caption,.specimen-mark').forEach(el=>el.hidden=true);
     const ids=model.slots(target),photos=ids.map(id=>id&&model.find(id));
     const active=model.mainPhoto(target,activePages.get(target))?.id;
@@ -124,4 +125,37 @@
   });
   picker.addEventListener('close',()=>{picking?.focus?.focus({preventScroll:true});picking=null;});
   renderAlbum();placeBookCover();renderPlaced();
+})();
+
+// 写真の取得失敗は画像枠で案内する。表示だけを変え、写真・貼付け・未保存編集は更新しない。
+(function photoAvailability(){
+  const pending=new WeakMap();
+  const ownPhoto=img=>img?.tagName==='IMG'&&/^\/api\/photos\/[^/]+\/image$/.test(img.getAttribute('src')||'');
+  document.addEventListener('load',event=>{
+    const img=event.target;if(!ownPhoto(img))return;
+    pending.get(img)?.remove();pending.delete(img);img.classList.remove('photo-load-failed');
+  },true);
+  document.addEventListener('error',async event=>{
+    const img=event.target;if(!ownPhoto(img)||!img.isConnected||pending.has(img))return;
+    const boot=window.DOGIDO_BOOTSTRAP,src=img.getAttribute('src');
+    const note=document.createElement('span');note.className='photo-unavailable';note.setAttribute('role','status');
+    const compact=Boolean(img.closest('.poem-list-thumbnail,.album-row,.picker-list'));
+    const message=(text,short='読込不可')=>{
+      note.textContent=compact?short:text;note.title=text;note.setAttribute('aria-label',text);
+    };
+    message(boot?.child_mode&&!boot.parent_view?'写真を読み込めへんかった。保存場所を確認してな。':'写真を読み込めません。保存場所を確認してください。');
+    pending.set(img,note);img.classList.add('photo-load-failed');img.after(note);
+    if(!boot?.parent_view)return;
+    // 接続切れと元画像の不在を区別する。失敗時だけ既存画像APIの応答を調べる。
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);
+    let text='子機とつながっていません。本棚を開いて、写真を選び直してください。',short='未接続';
+    try{
+      const response=await fetch(src,{cache:'no-store',signal:controller.signal});
+      await response.body?.cancel();
+      if(response.ok){text='接続できました。写真を選び直してください。';short='再表示';}
+      else if(response.status!==503&&response.status!==504){text='写真を読み込めません。子機で保存場所を確認してください。';short='読込不可';}
+    }catch(_){}finally{clearTimeout(timer);}
+    // 別の句へ移動した後や写真の再取得成功後に、古い失敗を戻さない。
+    if(img.isConnected&&note.isConnected&&pending.get(img)===note&&img.getAttribute('src')===src)message(text,short);
+  },true);
 })();

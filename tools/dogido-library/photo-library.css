@@ -93,3 +93,8 @@ body.library-photos { --accent:var(--photobook-cover); --cover:var(--photobook-c
   .header-actions { width:100%; justify-content:flex-end; gap:14px; flex-wrap:wrap; }
 }
 .player-photo-storage{font-size:.8rem;line-height:1.6;color:#786345;margin:.45rem 0 .6rem;overflow-wrap:anywhere}
+/* 読めない写真の位置を残し、接続案内を原画像と同じ枠に表示する。 */
+img.photo-load-failed{display:none!important}
+.photo-unavailable{display:grid;place-items:center;width:100%;min-height:90px;aspect-ratio:16/9;padding:16px;box-sizing:border-box;background:#eee6d4;color:#5c493c;font-size:16px;line-height:1.7;text-align:center;overflow-wrap:anywhere}
+.album-row>.photo-unavailable,.picker-list button>.photo-unavailable{flex-shrink:0;width:82px;min-height:64px;padding:5px;font-size:13px}
+.poem-list-thumbnail .photo-unavailable{width:40px;height:40px;min-height:0;aspect-ratio:1;padding:2px;font-size:10px;line-height:1.2}
