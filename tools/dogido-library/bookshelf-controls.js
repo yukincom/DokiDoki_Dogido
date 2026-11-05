@@ -2,7 +2,7 @@
 (function(){
   'use strict';
   const boot=window.DOGIDO_BOOTSTRAP;if(!boot)return;
-  const readings=window.DogidoReadingModel.create(boot.corrections);
+  const readings=window.DogidoReadingModel.create(boot.corrections,boot.readings_writable===true);
   let busy=false,readingNotice='',pendingPoemIds=[];
   const selectedReadings=new Set(),addition={surface:'',reading:''};
   const readingPageOpen=()=>state.book==='catalog'&&state.catalogPane==='readings';
@@ -47,10 +47,20 @@
   function renderReadingsPage(){
     const rows=readings.rows();
     for(const key of selectedReadings)if(!rows.some(r=>r.key===key))selectedReadings.delete(key);
-    $('detail').innerHTML=`<section class="readings-page" aria-labelledby="readings-title"><div class="entry-heading"><div><h2 id="readings-title">読み訂正</h2><p class="lead">読みの五十音順 <span aria-hidden="true">・</span> ${rows.length}件</p></div></div><section class="reading-add-section">${form()}</section><table class="reading-table"><thead><tr><th class="reading-check"><input type="checkbox" data-reading-select-all aria-label="すべての読み訂正を選択" ${rows.length?'':'disabled'}></th><th scope="col">読み</th><th scope="col">漢字・表記</th></tr></thead><tbody>${rows.map(r=>`<tr><td class="reading-check"><input type="checkbox" data-reading-select="${esc(r.key)}" aria-label="${esc(r.surface)}（${esc(r.reading)}）を選択" ${selectedReadings.has(r.key)?'checked':''}></td><td><input aria-label="${esc(r.surface)}の読み" data-reading-key="${esc(r.key)}" value="${esc(r.reading)}" maxlength="80"></td><td>${esc(r.surface)}</td></tr>`).join('')}</tbody></table>${rows.length?'':'<p class="reading-empty">登録された読み訂正はありません。</p>'}<p data-reading-page-status role="status">${esc(readingNotice)}</p><div class="reading-toolbar"><span data-reading-selection-count role="status"></span><button type="button" class="danger-button" data-remove-selected-readings disabled>選択した訂正を削除</button></div></section>`;
+    const writable=readings.writable;
+    const selectionHeader=writable?`<th class="reading-check"><input type="checkbox" data-reading-select-all aria-label="すべての読み訂正を選択" ${rows.length?'':'disabled'}></th>`:'';
+    const body=rows.map(row=>{
+      const selection=writable?`<td class="reading-check"><input type="checkbox" data-reading-select="${esc(row.key)}" aria-label="${esc(row.surface)}（${esc(row.reading)}）を選択" ${selectedReadings.has(row.key)?'checked':''}></td>`:'';
+      const reading=writable?`<input aria-label="${esc(row.surface)}の読み" data-reading-key="${esc(row.key)}" value="${esc(row.reading)}" maxlength="80">`:esc(row.reading);
+      return `<tr>${selection}<td>${reading}</td><td>${esc(row.surface)}</td></tr>`;
+    }).join('');
+    const additionForm=writable?`<section class="reading-add-section">${form()}</section>`:'';
+    const toolbar=writable?'<div class="reading-toolbar"><span data-reading-selection-count role="status"></span><button type="button" class="danger-button" data-remove-selected-readings disabled>選択した訂正を削除</button></div>':'';
+    $('detail').innerHTML=`<section class="readings-page" aria-labelledby="readings-title"><div class="entry-heading"><div><h2 id="readings-title">読み訂正</h2><p class="lead">読みの五十音順 <span aria-hidden="true">・</span> ${rows.length}件</p></div></div>${additionForm}<table class="reading-table"><thead><tr>${selectionHeader}<th scope="col">読み</th><th scope="col">漢字・表記</th></tr></thead><tbody>${body}</tbody></table>${rows.length?'':'<p class="reading-empty">登録された読み訂正はありません。</p>'}<p data-reading-page-status role="status">${esc(readingNotice)}</p>${toolbar}</section>`;
     updateSelection();
   }
   function updateSelection(){
+    if(!readings.writable)return;
     const page=document.querySelector('.readings-page');if(!page)return;
     const count=selectedReadings.size,total=readings.rows().length;
     page.querySelector('[data-reading-selection-count]').textContent=count?`${count}件を選択中`:'削除する項目にチェックをつけてください';
@@ -119,7 +129,7 @@
     const data=await response.json();if(!response.ok)throw Error(data.detail||'操作できませんでした。');return data;
   }
   async function save(){
-    if(!readings.hasChanges())return;
+    if(!readings.writable||!readings.hasChanges())return;
     readings.validate();
     for(const edit of readings.changes()){
       const data=await request('/api/readings',edit.method,edit.body);readings.accept(edit,data);
@@ -129,7 +139,7 @@
     if(readingPageOpen())document.querySelector('[data-reading-page-status]').textContent=readingNotice;else decorate();
     changed();
   }
-  window.DogidoReadings={hasChanges:()=>readings.hasChanges(),save,renderPage:renderReadingsPage,hasInput:()=>Boolean(addition.surface.trim()||addition.reading.trim()),busy:()=>busy};
+  window.DogidoReadings={hasChanges:()=>readings.hasChanges(),save,renderPage:renderReadingsPage,hasInput:()=>readings.writable&&Boolean(addition.surface.trim()||addition.reading.trim()),busy:()=>busy};
   window.DogidoBookshelfDeletePhoto=(id,label)=>confirmDelete('photo',id,label);
   async function showTrash(){
     dialog.dataset.mode='trash';dialog.innerHTML=header('ごみ箱')+'<p>削除から30日間は復元できます。期限後は本棚の起動時・起動中に、句と直し履歴・写真の元画像を削除します。</p><p data-dialog-status role="status">読み込み中…</p><ul class="trash-list"></ul>';
@@ -155,11 +165,12 @@
   }
   document.addEventListener('submit',event=>{
     if(!event.target.matches('[data-reading-add]'))return;
-    event.preventDefault();const f=event.target;
+    event.preventDefault();if(!readings.writable)return;const f=event.target;
     try{readings.add(f.elements.surface.value,f.elements.reading.value);addition.surface='';addition.reading='';readingNotice='追加しました。「変更を保存」で確定します。';renderReadingsPage();changed();}
     catch(e){f.querySelector('.reading-error').textContent=e.message;}
   });
   document.addEventListener('input',event=>{
+    if(!readings.writable)return;
     if(event.target.dataset.readingKey){readings.edit(event.target.dataset.readingKey,event.target.value);readingNotice='';changed();}
     if(event.target.closest('[data-reading-add]')){addition[event.target.name]=event.target.value;}
   });
@@ -170,15 +181,15 @@
       selectedPoems.set(poemId,event.target.checked);state.selected=poemId;renderList();
       [...document.querySelectorAll('[data-poem-select]')].find(box=>box.dataset.poemSelect===poemId)?.focus({preventScroll:true});
     }
-    if(event.target.dataset.readingSelect){const key=event.target.dataset.readingSelect;event.target.checked?selectedReadings.add(key):selectedReadings.delete(key);updateSelection();}
-    if(event.target.hasAttribute('data-reading-select-all')){selectedReadings.clear();if(event.target.checked)for(const row of readings.rows())selectedReadings.add(row.key);updateSelection();}
+    if(readings.writable&&event.target.dataset.readingSelect){const key=event.target.dataset.readingSelect;event.target.checked?selectedReadings.add(key):selectedReadings.delete(key);updateSelection();}
+    if(readings.writable&&event.target.hasAttribute('data-reading-select-all')){selectedReadings.clear();if(event.target.checked)for(const row of readings.rows())selectedReadings.add(row.key);updateSelection();}
   });
   document.addEventListener('click',async event=>{
     const b=event.target.closest('button');if(!b||busy)return;
     if(b.hasAttribute('data-close-bookshelf'))dialog.close();
     if(b.hasAttribute('data-show-readings'))showReadings();
     if(b.hasAttribute('data-confirm-poems')){await deleteSelectedPoems(b);return;}
-    if(b.hasAttribute('data-remove-selected-readings')){
+    if(readings.writable&&b.hasAttribute('data-remove-selected-readings')){
       const count=readings.removeMany([...selectedReadings]);selectedReadings.clear();
       readingNotice=`${count}件を削除対象にしました。「変更を保存」で確定します。`;
       renderReadingsPage();changed();

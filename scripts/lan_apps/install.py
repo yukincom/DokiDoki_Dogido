@@ -40,7 +40,7 @@ def copy_regular(source: Path, target: Path, executable=False) -> None:
 
 def app_config(role: str, kit: Path | None) -> dict:
     if role == "host":
-        return {"python": sys.executable}
+        return {"python": sys.executable, "readings_settings_dir": str(HERE.parents[1])}
     if kit is None:
         raise ValueError("遊ぶMacの初期設定済みフォルダを --kit で指定してください。")
     runpy.run_path(str(kit / "client_tools/family_runtime.py"))["validate_runtime"](kit)
@@ -64,10 +64,10 @@ def assemble(app: Path, role: str, kit: Path | None, config: dict, source: Path)
         build_launcher(binary)
     packaged = (source / "lan_tools").is_dir()
     lan = source / ("lan_tools" if packaged else "lan")
-    for name in ("connection.py", "transport.py", "discovery.py", "family_messages.py", "message_client.py"):
+    for name in ("connection.py", "transport.py", "discovery.py", "family_messages.py", "message_client.py", "shared_readings.py"):
         copy_regular(lan / name, resources / "lan" / name)
     if role == "host":
-        for name in ("line_inbox.py", "message_wording.py"):
+        for name in ("line_inbox.py", "message_wording.py", "export_readings.py"):
             copy_regular(lan / name, resources / "lan" / name)
     gateway = lan / "gateway.py" if packaged else source / "family-link/gateway.py"
     copy_regular(gateway, resources / "lan/gateway.py")

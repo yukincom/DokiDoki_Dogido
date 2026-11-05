@@ -1448,6 +1448,44 @@ async fn http_write_requires_same_host_and_token_and_updates_shared_reading() {
         StatusCode::NOT_FOUND
     );
 }
+// 見込み: 本棚を開いた後に共有印が届いた場合も、既存APIの保存時に編集不可を再確認する。
+// 合格: bootstrapは共有の読みと編集不可を返し、古いPUT/DELETEは403で両辞書のbyte不変。
+// 範囲: 一時保存先のbootstrap・実router/MemoryStore。実ブラウザー・実LAN・音声は別確認。
+#[tokio::test]
+async fn http_shared_readings_reject_stale_bookshelf_edits() {
+    use tower::ServiceExt;
+    let f = Fixture::new();
+    let app = test_app(&f);
+    assert_eq!(bootstrap(&app).unwrap()["readings_writable"], true);
+    let edit = json!({"surface":"草地","reading":"くさち","expected_id":null});
+    let (status, saved) = call(app.clone(), "/api/readings", Some(edit.clone()), "127.0.0.1:45678", "secret-test-token", None).await;
+    assert_eq!(status, StatusCode::OK);
+    let local_path = app.store.memory.join("long_term/catalog_corrections.jsonl");
+    let local_before = fs::read(&local_path).unwrap();
+    let shared = json!({"id":"host-1","surface":"草地","reading":"くさば",
+        "wrong_reading":null,"forbidden_readings":[],"source":"biome:meadow"});
+    let shared_path = app.store.memory.join("long_term/shared_readings.json");
+    let shared_bytes = serde_json::to_vec(&json!({"schema_version":1,"host_pin":"a".repeat(64),"corrections":[shared.clone()]})).unwrap();
+    fs::write(&shared_path, &shared_bytes).unwrap();
+    let boot = bootstrap(&app).unwrap();
+    assert_eq!(boot["status"]["memoryEnabled"], true);
+    assert_eq!(boot["readings_writable"], false);
+    assert_eq!(boot["corrections"], json!([shared]));
+    for (method, mut body) in [("PUT", edit), ("DELETE", json!({"surface":"草地"}))] {
+        body["expected_id"] = saved["correction"]["id"].clone();
+        let req = axum::http::Request::builder().uri("/api/readings").method(method)
+            .header("host", "127.0.0.1:45678").header("x-dogido-library", "secret-test-token")
+            .header("content-type", "application/json").body(Body::from(body.to_string())).unwrap();
+        let response = router(app.clone()).oneshot(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        let body = axum::body::to_bytes(response.into_body(), 1024).await.unwrap();
+        let failure: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(failure["detail"], "この読み辞書は閲覧専用です。");
+    }
+    assert_eq!(fs::read(local_path).unwrap(), local_before);
+    assert_eq!(fs::read(shared_path).unwrap(), shared_bytes);
+}
+
 #[tokio::test]
 async fn http_reading_validation_preserves_disabled_memory_priority() {
     use tower::ServiceExt;

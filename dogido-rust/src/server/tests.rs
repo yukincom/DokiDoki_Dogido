@@ -351,6 +351,57 @@ async fn catalog_form_is_authenticated_explicit_and_reversible_without_a_dialogu
     std::fs::remove_dir_all(root).unwrap();
 }
 
+// 見込み: 画面取得後に共有辞書へ切り替わっても、保存時の正本判定で古い編集要求を止める。
+// 合格: 新GETは共有の読みと編集不可を返し、PUT/DELETEは403、共有JSONと旧JSONLは不変。
+// 範囲: 一時保存先と実router/MemoryStore。モデル・音声・実LANは使わない。
+#[tokio::test]
+async fn catalog_shared_readings_reject_stale_writable_ui_requests() {
+    let root = std::env::temp_dir().join(format!("dogido-shared-catalog-{}", uuid::Uuid::new_v4()));
+    let mut config = crate::dialogue::DialogueConfig {
+        audio_enabled: false,
+        llm_enabled: false,
+        ..Default::default()
+    };
+    config.haiku.enabled = false;
+    config.haiku.memory_dir = root.clone();
+    let dialogue = crate::dialogue::Dialogue::new(config).unwrap();
+    let app = Application::new(ServerConfig {
+        auth_token: Some("catalog-test".into()),
+        dialogue: Some(dialogue),
+        ..Default::default()
+    });
+    let router = app.router();
+    let auth = [("authorization", "Bearer catalog-test")];
+    let (status, initial) = call(&router, "GET", "/api/v1/catalog", None, &auth).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(initial["readings_writable"], true);
+    let edit = json!({"surface":"草地","reading":"くさち","expected_id":null});
+    let (status, saved) = call(&router, "PUT", "/api/v1/catalog/readings", Some(edit.clone()), &auth).await;
+    assert_eq!(status, StatusCode::OK);
+    let local_path = root.join("long_term/catalog_corrections.jsonl");
+    let local_before = std::fs::read(&local_path).unwrap();
+    let shared = json!({"id":"host-1","surface":"草地","reading":"くさば",
+        "wrong_reading":null,"forbidden_readings":[],"source":"biome:meadow"});
+    let shared_path = root.join("long_term/shared_readings.json");
+    let shared_bytes = serde_json::to_vec(&json!({"schema_version":1,"host_pin":"a".repeat(64),"corrections":[shared.clone()]})).unwrap();
+    std::fs::write(&shared_path, &shared_bytes).unwrap();
+    let (status, view) = call(&router, "GET", "/api/v1/catalog", None, &auth).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(view["enabled"], true);
+    assert_eq!(view["readings_writable"], false);
+    assert_eq!(view["corrections"], json!([shared]));
+    for (method, mut body) in [("PUT", edit), ("DELETE", json!({"surface":"草地"}))] {
+        body["expected_id"] = saved["correction"]["id"].clone();
+        let (status, failure) = call(&router, method, "/api/v1/catalog/readings", Some(body), &auth).await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        assert_eq!(failure["detail"], "reading_read_only");
+    }
+    assert_eq!(std::fs::read(&local_path).unwrap(), local_before);
+    assert_eq!(std::fs::read(&shared_path).unwrap(), shared_bytes);
+    app.shutdown().await.unwrap();
+    std::fs::remove_dir_all(root).unwrap();
+}
+
 #[tokio::test]
 async fn sessions_heartbeat_close_and_reconnect_keep_existing_contracts() {
     let app = Application::new(ServerConfig::default());

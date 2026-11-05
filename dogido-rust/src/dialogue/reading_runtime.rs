@@ -25,13 +25,16 @@ impl Dialogue {
     pub async fn catalog_view(&self) -> Result<Value> {
         let enabled = self.config.haiku.memory_enabled;
         let root = self.config.haiku.memory_dir.clone();
-        let rows = if enabled {
-            tokio::task::spawn_blocking(move || MemoryStore::new(root).reading_corrections())
-                .await??
+        let (rows, readings_writable) = if enabled {
+            tokio::task::spawn_blocking(move || {
+                let store = MemoryStore::new(root);
+                Ok::<_, anyhow::Error>((store.reading_corrections()?, store.readings_writable()))
+            })
+            .await??
         } else {
-            vec![]
+            (vec![], false)
         };
-        Ok(json!({"enabled":enabled,"entries":catalog_editor::entries(),"corrections":rows}))
+        Ok(json!({"enabled":enabled,"readings_writable":readings_writable,"entries":catalog_editor::entries(),"corrections":rows}))
     }
 
     pub async fn edit_catalog_reading(&self, edit: catalog_editor::Edit) -> Result<Value> {

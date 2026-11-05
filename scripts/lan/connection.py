@@ -22,6 +22,7 @@ import time
 from discovery import Bonjour, BonjourError, PermissionDenied, lan_ipv4
 import transport
 import message_client
+import shared_readings
 from family_messages import MessageBox, TIMEOUT, Unavailable
 
 STATE = Path.home() / "Library/Application Support/Dogido LAN"
@@ -263,7 +264,8 @@ def run_host(state):
         with serving(gateway.make_proxy(port=0, upstream_port=8080, event=debug.emit)) as proxy, \
                 serve(state, messages.deliver_line), \
                 background(prepare_messages, messages, partial(render_message, proxy.server_port)):
-            listen = transport.host_listener(state, proxy.server_port, confirm, messages)
+            listen = transport.host_listener(state, proxy.server_port, confirm, messages,
+                                             shared_readings.parent_export())
             serve_lan(discovery, listen, commands)
     finally:
         debug.close()
@@ -346,11 +348,13 @@ def run_client(state):
     discovery = Bonjour()
     while True:
         credentials = transport.load_pair(state) or wait_for_pair(discovery, state)
+        replica = shared_readings.client_replica(credentials)
         route = PeerRoute()
         if 'device' in credentials:
             print(f"このMacの伝言用の登録ID: {credentials['device']}", flush=True)
         with serving(transport.make_client_relay(route.resolve, credentials, port=8080)), background(
-                message_client.run, state, route.resolve, credentials):
+                message_client.run, state, route.resolve, credentials), background(
+                shared_readings.run, replica, route.resolve, credentials):
             while not route.probe(discover_peers(discovery), credentials, transport.probe):
                 time.sleep(3)
         choice = choose("共有Macで登録が解除されました。登録し直すには共有側で「端末を追加」を押してください。",

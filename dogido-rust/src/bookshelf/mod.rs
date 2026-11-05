@@ -114,6 +114,10 @@ impl IntoResponse for ApiError {
                 StatusCode::CONFLICT,
                 "本体設定で記憶が無効になっています。保存できません。",
             ),
+            "reading_read_only" => (
+                StatusCode::FORBIDDEN,
+                "この読み辞書は閲覧専用です。",
+            ),
             "research_original_protected" => (
                 StatusCode::CONFLICT,
                 "ドギドから届いた研究原本は変更・削除できません。",
@@ -177,6 +181,7 @@ async fn guard(State(app): State<Arc<App>>, req: Request, next: Next) -> Respons
 }
 fn bootstrap(app: &App) -> Result<Value> {
     let view = app.store.library_view()?;
+    let readings = crate::haiku_record::MemoryStore::new(&app.store.memory);
     let catalog = store::catalog();
     let mut biomes = serde_json::Map::new();
     let mut english = serde_json::Map::new();
@@ -200,7 +205,7 @@ fn bootstrap(app: &App) -> Result<Value> {
         );
     }
     Ok(
-        json!({"catalog":catalog,"poems":view["poems"],"journeys":view["journeys"],"player":view["player"],"photos":view["photos"],"corrections":crate::haiku_record::MemoryStore::new(&app.store.memory).reading_corrections()?,"status":{"active":false,"memoryEnabled":app.memory_enabled,"message":"Minecraftを閉じた状態でも閲覧・編集できます。"},"csrf":app.csrf,"biomes":biomes,"biomeEnglish":english,"dataRepository":app.data_repository.as_ref().map(|c|json!({"url":data_repository::URL,"mode":c.mode}))}),
+        json!({"catalog":catalog,"poems":view["poems"],"journeys":view["journeys"],"player":view["player"],"photos":view["photos"],"corrections":readings.reading_corrections()?,"readings_writable":app.memory_enabled && readings.readings_writable(),"status":{"active":false,"memoryEnabled":app.memory_enabled,"message":"Minecraftを閉じた状態でも閲覧・編集できます。"},"csrf":app.csrf,"biomes":biomes,"biomeEnglish":english,"dataRepository":app.data_repository.as_ref().map(|c|json!({"url":data_repository::URL,"mode":c.mode}))}),
     )
 }
 async fn boot(State(app): State<Arc<App>>) -> Result<Response, ApiError> {

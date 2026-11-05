@@ -33,7 +33,7 @@ def prepared(tmp_path, monkeypatch, binary):
     for role in ("host", "client"):
         shutil.copy(SOURCE / "icons" / f"{role}.icns", here / "icons")
     monkeypatch.setattr(installer, "HERE", here)
-    for name in ("lan/connection.py", "lan/transport.py", "lan/discovery.py", "lan/family_messages.py", "lan/message_client.py",
+    for name in ("lan/connection.py", "lan/transport.py", "lan/discovery.py", "lan/family_messages.py", "lan/message_client.py", "lan/shared_readings.py", "lan/export_readings.py",
                  "lan/line_inbox.py", "lan/message_wording.py", "family-link/gateway.py",
                  "family-link/log_relay.py", "family-link/minecraft_log_relay.py",
                  "family-link/start_client.py", "family-client/check.py", "family-client/family_runtime.py"):
@@ -57,6 +57,10 @@ def test_host_alias_and_idempotent_install(prepared):
     assert info["NSBonjourServices"] == ["_dogido._tcp"]
     assert info["CFBundleIconFile"] == "host.icns"
     assert (app / "Contents/Resources/host.icns").read_bytes() == (SOURCE / "icons/host.icns").read_bytes()
+    # 見込み: 共有先の辞書は本体と同じ設定から読む。合格: 設定rootと専用readerを同梱。辞書取得は別試験。
+    config = plistlib.loads((app / "Contents/Resources/launch.plist").read_bytes())
+    assert config['readings_settings_dir'] == str(installer.HERE.parents[1])
+    assert (app / 'Contents/Resources/lan/export_readings.py').is_file()
     installer.install("host", *prepared)
     assert (app.stat().st_ino, alias.stat().st_ino) == initial
 
@@ -106,3 +110,4 @@ def test_client_embeds_runtime_and_targets_kit_python(tmp_path, prepared):
     assert (resources / "runtime/dogido-rust").read_bytes() == runtime.read_bytes()
     assert (resources / "runtime/dogido-rust").stat().st_mode & 0o111
     assert (resources / "client_tools/start_client.py").is_file()
+    assert (resources / 'lan/shared_readings.py').is_file()

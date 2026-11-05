@@ -17,6 +17,7 @@ DokiDoki Dogido の設計・仕様ドキュメントです。
 | [視覚入力の時系列フレーム仕様](2026-11-02-vision-frames.md) | 比較元と今回の画像、身体の向き、PLAYER枠、旧処理の削除・置換一覧（決定仕様） |
 | [通常会話のドギド視点画像](2026-10-21-chat-image.md) | 従来の撮影・192px・一時画像の保持 |
 | [Minecraftのテキスト会話](2026-10-09-minecraft-text-dialogue.md) | `/dogido`、音声の切替、表示確認の仕様と確認状況 |
+| [読み辞書の家庭内共有](2026-11-05-shared-reading-dictionary.md) | Mac Studioでの編集、遊ぶMacの閲覧専用辞書と同期 |
 | [2026-10-11の全体検査](2026-10-11-checkpoint-verification.md) | コミット整理前の成功・失敗内訳と実機確認報告 |
 | [実機チェック](../dogido-rust/manual-dialogue-check.md) | 起動条件、最初の一巡、個別の確認、結果の記録 |
 | 本ページ | 仕様・設計ドキュメントの索引 |

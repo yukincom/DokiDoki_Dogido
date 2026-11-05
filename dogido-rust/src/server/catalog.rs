@@ -6,7 +6,7 @@ pub(super) async fn page() -> Html<&'static str> {
 pub(super) async fn snapshot(State(state): State<AppState>) -> ApiReply {
     let Some(d) = state.dialogue else {
         return ApiReply::ok(
-            json!({"enabled":false,"entries":crate::catalog_editor::entries(),"corrections":[]}),
+            json!({"enabled":false,"readings_writable":false,"entries":crate::catalog_editor::entries(),"corrections":[]}),
         );
     };
     match d.catalog_view().await {
@@ -22,6 +22,7 @@ fn failure(error: anyhow::Error) -> ApiReply {
         | "invalid_wrong_reading"
         | "catalog_entry_mismatch" => StatusCode::UNPROCESSABLE_ENTITY,
         "reading_changed" | "memory_disabled" => StatusCode::CONFLICT,
+        "reading_read_only" => StatusCode::FORBIDDEN,
         "server_stopping" => StatusCode::SERVICE_UNAVAILABLE,
         _ => StatusCode::INTERNAL_SERVER_ERROR,
     };

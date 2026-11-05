@@ -25,6 +25,11 @@ struct Cli {
 // 一度だけ解析する起動引数。サーバーの反復処理・待ち列へこのenumは保持しない。
 #[allow(clippy::large_enum_variant)]
 enum Command {
+    /// 親Macの現行読み辞書だけを書き出す。通信・モデル・保存先の作成はしない。
+    ExportReadings {
+        #[arg(long)]
+        memory_dir: PathBuf,
+    },
     /// 本棚だけ起動する。ゲーム・モデル・音声入力は不要。
     ServeBookshelf {
         #[arg(long)]
@@ -139,6 +144,10 @@ enum Command {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
+        Command::ExportReadings { memory_dir } => {
+            let snapshot = dogido_rust::haiku_record::MemoryStore::new(memory_dir).export_readings()?;
+            println!("{}", serde_json::to_string(&snapshot)?);
+        }
         Command::ServeBookshelf { config, port } => {
             dogido_rust::bookshelf::run(serde_json::from_str(&config)?, port).await?;
         }

@@ -29,6 +29,7 @@ TOKEN = re.compile(r'[A-Za-z0-9_-]{43}')
 CHAT = '/v1/chat/completions'
 LOGS = '/dogido/client-logs'
 MODELS = '/v1/models'
+READINGS = '/dogido/readings'
 AUTH = '/dogido/auth'
 NEXT_MESSAGE = '/dogido/family/next'
 MESSAGE_RESULT = '/dogido/family/result'
@@ -401,7 +402,7 @@ class Handler(BaseHTTPRequestHandler):
     def forward(self, conn, auth=None):
         started = False
         try:
-            if self.command == 'GET' and self.path == MODELS:
+            if self.command == 'GET' and self.path in (MODELS, READINGS):
                 data = None
             elif self.command == 'POST' and self.path in MAX_BODY:
                 data = self.body(MAX_BODY[self.path])
@@ -453,7 +454,7 @@ class Handler(BaseHTTPRequestHandler):
     do_GET = do_POST = dispatch
 
 
-def host_listener(state_dir, upstream_port, confirm, messages=None):
+def host_listener(state_dir, upstream_port, confirm, messages=None, readings=None):
     """同じ登録受付・TLS鍵・伝言を、LANアドレス別の待受けで共有する。"""
     root = _directory(state_dir)
     pin, ctx = _identity(root)
@@ -492,6 +493,16 @@ def host_listener(state_dir, upstream_port, confirm, messages=None):
                 raise Refusal(401)
             if self.path == AUTH and self.command == 'GET':
                 self.reply(200)
+            elif self.path == READINGS:
+                if self.command != 'GET':
+                    raise Refusal(405)
+                if readings is None:
+                    raise Refusal(503)
+                try:
+                    value = readings()
+                except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):
+                    raise Refusal(503)
+                self.reply(200, value)
             elif self.command == 'POST' and self.path in (NEXT_MESSAGE, MESSAGE_RESULT):
                 try:
                     data = json.loads(self.body(2048))
@@ -534,8 +545,8 @@ def host_listener(state_dir, upstream_port, confirm, messages=None):
     return listen
 
 
-def make_host(state_dir, bind, upstream_port, confirm, messages=None):
-    return host_listener(state_dir, upstream_port, confirm, messages)(bind)
+def make_host(state_dir, bind, upstream_port, confirm, messages=None, readings=None):
+    return host_listener(state_dir, upstream_port, confirm, messages, readings)(bind)
 
 
 def make_client_relay(resolve, credentials, port=8080):
@@ -548,7 +559,7 @@ def make_client_relay(resolve, credentials, port=8080):
             port = self.server.server_port
             if self.headers.get_all('Host', []) not in ([f'127.0.0.1:{port}'], [f'localhost:{port}']) or 'Origin' in self.headers:
                 raise Refusal(403)
-            if (self.command, self.path) not in {('GET', MODELS), ('POST', CHAT), ('POST', LOGS)}:
+            if (self.command, self.path) not in {('GET', MODELS), ('GET', READINGS), ('POST', CHAT), ('POST', LOGS)}:
                 raise Refusal(404)
             try:
                 conn, _ = _tls(resolve(), pin)

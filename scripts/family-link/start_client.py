@@ -72,6 +72,7 @@ def run(root, lan_tools=None):
         os.environ['DOGIDO_FAMILY_SESSION_KEY'] = secrets.token_hex(32)
         os.environ['DOGIDO_FAMILY_LOCAL_URL'] = base_url
         os.environ['DOGIDO_FAMILY_PLAYER'] = settings.default_call_name
+        os.environ['DOGIDO_SHARED_READINGS_MEMORY_DIR'] = str(settings.memory_dir.resolve())
         if settings.auth_token:
             os.environ['DOGIDO_AUTH_TOKEN'] = settings.auth_token
         connect = [sys.executable, '-u', str(connector), 'client']

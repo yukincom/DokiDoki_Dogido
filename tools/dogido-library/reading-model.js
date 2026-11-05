@@ -1,6 +1,6 @@
 (function(root){
   'use strict';
-  function create(records=[]){
+  function create(records=[],writable=true){
     const base=new Map(),draft=new Map();let sequence=0;
     for(const r of records){const key='saved-'+r.id;base.set(key,{...r});draft.set(key,{key,surface:r.surface,reading:r.reading});}
     const order=new Intl.Collator('ja');
@@ -12,18 +12,20 @@
       return edits;
     }
     return {
-      rows,changes,hasChanges:()=>changes().length>0,
+      rows,changes,writable,hasChanges:()=>changes().length>0,
       add(surface,reading){
+        if(!writable)return null;
         surface=surface.trim();reading=reading.trim();
         if(!surface||surface.length>80||/[\u0000-\u001f]/.test(surface)||!(/^[ぁ-んー]{1,80}$/u.test(reading)))throw Error('言葉と、ひらがなの読みを入力してください。');
         if(rows().some(r=>r.surface===surface))throw Error('その言葉は登録済みです。既存の行を編集してください。');
         const key='new-'+(++sequence);draft.set(key,{key,surface,reading});return key;
       },
-      edit(key,reading){const d=draft.get(key);if(d)d.reading=reading;},
-      remove:key=>draft.delete(key),
-      removeMany(keys){let count=0;for(const key of new Set(keys))if(draft.delete(key))count++;return count;},
+      edit(key,reading){if(!writable)return;const d=draft.get(key);if(d)d.reading=reading;},
+      remove(key){return writable&&draft.delete(key);},
+      removeMany(keys){if(!writable)return 0;let count=0;for(const key of new Set(keys))if(draft.delete(key))count++;return count;},
       validate(){for(const r of rows())if(!/^[ぁ-んー]{1,80}$/u.test(r.reading))throw Error('読みはひらがなで入力してください。');},
       accept(edit,result){
+        if(!writable)return;
         if(edit.method==='DELETE')base.delete(edit.key);
         else base.set(edit.key,{...result.correction});
       }

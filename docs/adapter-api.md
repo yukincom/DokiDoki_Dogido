@@ -799,7 +799,7 @@ Rust本体の `/catalog` は、カタログの説明・読みを表示し、フ�
 
 | API | 内容 |
 |---|---|
-| `GET /api/v1/catalog` | `enabled`（記憶保存の有効・無効）、`entries`（カタログ一覧）、`corrections`（現在有効な訂正）を返す |
+| `GET /api/v1/catalog` | `enabled`（記憶保存の有効・無効）、`readings_writable`（読み辞書の編集可否）、`entries`（カタログ一覧）、`corrections`（現在有効な訂正）を返す |
 | `PUT /api/v1/catalog/readings` | 明示した読みを検証・保存し、`saved: true` と保存した `correction` を返す |
 | `DELETE /api/v1/catalog/readings` | 表記と現在の登録IDを照合して取消を追記し、`removed: true` を返す |
 
@@ -822,6 +822,8 @@ PUTの新規登録例:
 - DELETEは `surface` と `expected_id` を渡す。別の更新が先行したときは409 `reading_changed` とし、上書きしない。
 
 表記・読み・カタログ照合の不正は422、記憶保存が無効なら409 `memory_disabled`、停止中は503 `server_stopping`、保存処理の失敗は500 `reading_storage_failed`。成功応答だけを保存成功として扱う。
+
+共有辞書を使う遊ぶMacは `readings_writable: false` を返し、追加・変更・取消は403 `reading_read_only`。読み取りと既存の読み補正は続く。親の辞書と同期条件は [読み辞書の家庭内共有](2026-11-05-shared-reading-dictionary.md) を参照。
 
 2026-10-27: 入力の形式・静的カタログ照合は一度だけ行い、書き換えられない検証済み型で保存処理へ渡す。本体の辞書API・本棚・直接保存の各入口も同じ検証を使う。保存処理はプロセス内／ファイルロックの取得後に最新記録を読み、`expected_id` を照合する。別プロセスの更新を検出するこの版照合は省略しない。
 

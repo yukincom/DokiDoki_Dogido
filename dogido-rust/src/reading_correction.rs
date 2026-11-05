@@ -11,6 +11,9 @@ use std::{
     path::PathBuf,
 };
 
+mod shared;
+pub use shared::{MAX_SHARED_READINGS_BYTES, validate_reading_snapshot};
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Correction {
     pub surface: String,
@@ -60,6 +63,7 @@ impl MemoryStore {
         let _guard = SAVE_LOCK
             .lock()
             .map_err(|_| anyhow::anyhow!("haiku save mutex poisoned"))?;
+        ensure!(self.readings_writable(), "reading_read_only");
         let mut file = locked_file(&self.corrections_path())?;
         let rows = self.reading_corrections()?;
         let current = rows.iter().find(|row| row["surface"] == edit.surface);
@@ -85,6 +89,7 @@ impl MemoryStore {
         let _guard = SAVE_LOCK
             .lock()
             .map_err(|_| anyhow::anyhow!("haiku save mutex poisoned"))?;
+        ensure!(self.readings_writable(), "reading_read_only");
         let mut file = locked_file(&self.corrections_path())?;
         let rows = self.reading_corrections()?;
         let current = rows.iter().find(|row| row["surface"] == edit.surface);
@@ -114,6 +119,7 @@ impl MemoryStore {
         let _guard = SAVE_LOCK
             .lock()
             .map_err(|_| anyhow::anyhow!("haiku save mutex poisoned"))?;
+        ensure!(self.readings_writable(), "reading_read_only");
         let row = json!({"id":format!("corr_{}_{}", at.format("%Y%m%d_%H%M%S"),c.surface),
             "created_at":at.to_rfc3339(),"surface":c.surface,"reading":c.reading,
             "wrong_reading":c.wrong_reading,"forbidden_readings":c.wrong_reading.iter().collect::<Vec<_>>(),
@@ -122,8 +128,18 @@ impl MemoryStore {
         Ok(row)
     }
 
-    /// Read only. Missing storage is empty, not created. Latest correction wins.
+    /// 子機は共有済み辞書だけを読み、破損時にも手元の旧JSONLへ戻さない。
+    /// 親のJSONLは従来どおり最新の有効行を使い、読込で保存先を作らない。
     pub fn reading_corrections(&self) -> Result<Vec<Value>> {
+        if !self.readings_writable() {
+            return self.shared_reading_corrections();
+        }
+        self.local_reading_corrections(false)
+    }
+
+    /// 通常読込は既存の寛容性を保ち、配布用だけは一行でも壊れていたら全体を失敗にする。
+    /// 古い版へ戻ったり空の辞書を配布したりしないため、strictでは取消行の形式も調べる。
+    fn local_reading_corrections(&self, strict: bool) -> Result<Vec<Value>> {
         let file = match File::open(self.corrections_path()) {
             Ok(f) => f,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(vec![]),
@@ -131,13 +147,24 @@ impl MemoryStore {
         };
         let mut latest = std::collections::BTreeMap::new();
         for line in BufReader::new(file).lines() {
-            let Ok(row) = serde_json::from_str::<Value>(&line?) else {
-                continue;
+            let row = match serde_json::from_str::<Value>(&line?) {
+                Ok(row) => row,
+                Err(error) if strict => return Err(error.into()),
+                Err(_) => continue,
             };
             if row["operation"] == "remove" {
+                if strict {
+                    shared::validate_removal(&row)?;
+                }
                 if let Some(surface) = row["surface"].as_str() {
                     latest.remove(surface);
                 }
+                continue;
+            }
+            if strict {
+                ensure!(row.get("operation").is_none(), "invalid_reading_operation");
+                let safe = shared::project_correction(&row)?;
+                latest.insert(safe["surface"].as_str().unwrap().to_owned(), safe);
                 continue;
             }
             if let (Some(surface), Some(reading)) =

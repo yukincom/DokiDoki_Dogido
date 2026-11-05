@@ -1,7 +1,7 @@
 """隔離した鍵・登録情報と実loopback TLSを使う。Bonjour探索、2台間Wi-Fi、実モデルは別確認。"""
 from __future__ import annotations
 
-from contextlib import ExitStack, contextmanager
+from contextlib import ExitStack, closing, contextmanager
 import hashlib
 import http.client
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -33,6 +33,7 @@ class World:
         self.root, self.stack = root, stack
         self.upstream_calls, self.host_codes, self.client_codes = [], [], []
         self.finish_stream = threading.Event()
+        self.readings = {'schema_version': 1, 'corrections': []}
         self.should_confirm = True
         calls, release = self.upstream_calls, self.finish_stream
 
@@ -71,7 +72,8 @@ class World:
         def confirm(code):
             self.host_codes.append(code)
             return self.should_confirm
-        server = transport.make_host(root, ('127.0.0.1', 0), self.upstream[1], confirm)
+        server = transport.make_host(root, ('127.0.0.1', 0), self.upstream[1], confirm,
+                                     readings=lambda: self.readings)
         return server, self.stack.enter_context(serving(server))
 
     def pair(self, approve=True):
@@ -358,3 +360,35 @@ def test_family_round_trip_across_listeners(tmp_path):
         transport.message_request(ethernet, credentials, transport.MESSAGE_RESULT, result)
         assert box.deliver_line('line-fixture', 'お母さん', 'ごはんだよ') == {'accepted': True, 'activity': ['combat']}
         assert poll(ethernet) is None
+
+
+# 見込み: 辞書は登録済み端末のGETだけで配り、同じTLS経路で追加・削除を取得できる。
+# 合格: 実loopback TLSで取得→削除、未認証・失効・更新を拒否し、LLMへの転送は0回。実LANなし。
+def test_readings_are_paired_get_only_and_sync_deletions(world):
+    from shared_readings import Replica
+    credentials = world.pair()
+    replica = Replica(world.root / 'memory', credentials['pin'])
+    world.readings['corrections'] = [{'id': 'corr_1', 'surface': '草地', 'reading': 'くさち',
+        'wrong_reading': None, 'forbidden_readings': [], 'source': None}]
+    replica.sync(world.address, credentials)
+    assert json.loads(replica.path.read_bytes())['corrections'] == world.readings['corrections']
+    relay = transport.make_client_relay(lambda: world.address, credentials, port=0)
+    client = world.stack.enter_context(serving(relay))
+    with closing(http.client.HTTPConnection(*client, timeout=2)) as conn:
+        conn.request('GET', transport.READINGS)
+        response = conn.getresponse()
+        assert response.status == 200 and json.load(response) == world.readings
+    for method, auth, expected in [('GET', {}, 401), ('POST', {'Authorization': transport._auth(credentials)}, 405)]:
+        conn, _ = transport._tls(world.address, world.host.pin)
+        try:
+            conn.request(method, transport.READINGS, headers=auth)
+            assert conn.getresponse().status == expected
+        finally:
+            conn.close()
+    world.readings['corrections'] = []
+    replica.sync(world.address, credentials)
+    assert json.loads(replica.path.read_bytes())['corrections'] == []
+    world.host.revoke(credentials['device'])
+    with pytest.raises(OSError):
+        replica.sync(world.address, credentials)
+    assert not world.upstream_calls
