@@ -547,6 +547,14 @@ pub async fn run(config: Config, port: u16) -> Result<()> {
         memory: config.memory,
         photos: config.photos,
     };
+    if config.child_mode && config.memory_enabled {
+        let source = store.clone();
+        if let Err(error) = blocking(move || crate::haiku_artifacts::Manager::new(
+            source.memory, source.capture_dir, source.screenshots
+        ).register_saved_photos()).await {
+            tracing::warn!(event="bookshelf_photo_registration_failed",error=%error.0);
+        }
+    }
     // 子の本棚を開くだけで別保存先への複製や期限整理を始めない。
     let research = (!config.child_mode).then(|| spawn_research_worker(store.clone()));
     purge_for_mode(store.clone(), config.child_mode).await;

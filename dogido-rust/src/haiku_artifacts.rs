@@ -297,14 +297,8 @@ impl Manager {
                             "action":if record.state==State::Saved {"keep"} else {"discard"}}));
                     }
                 }
-                if record.state == State::Saved && !photo.registered && let Some(receipt) = photo.receipt.clone() {
-                    let store = self.photo_store();
-                    match store.register_capture(&photo.command_id, &Receipt { poem_id: format!("session:{}:{}", record.session_id, record.entry_id.as_deref().unwrap()), ..receipt }) {
-                        Ok(()) => record.photo.as_mut().unwrap().registered = true,
-                        Err(error) => record.error = Some(error.to_string()),
-                    }
-                }
             }
+            if let Err(error) = self.register_saved_photo(&mut record) { record.error = Some(error.to_string()); }
             if record.state==State::Discard && record.requests.iter().all(|r|r.removed)
                 && record.photo.as_ref().is_none_or(|p|p.settled) {record.error=None;}
             if serde_json::to_value(&record)?!=before {
@@ -316,6 +310,37 @@ impl Manager {
         }
         *self.cache.lock().unwrap() = commands;
         Ok(())
+    }
+    /// 本棚からは保存済み原句への写真登録だけを再開する。生成・保存待ち・素材整理には触れない。
+    pub fn register_saved_photos(&self) -> Result<usize> {
+        let mut registered = 0;
+        for id in self.ids()? {
+            let _lock = self.lock(&id)?;
+            let mut record = match self.load(&id) {
+                Ok(value) => value,
+                Err(error) => { tracing::warn!(event="bookshelf_photo_registration_held",job_id=id,%error); continue; }
+            };
+            match self.register_saved_photo(&mut record) {
+                Ok(true) => { self.store(&record)?; registered += 1; }
+                Ok(false) => (),
+                Err(error) => tracing::warn!(event="bookshelf_photo_registration_held",job_id=id,%error),
+            }
+        }
+        Ok(registered)
+    }
+    // 既存の登録が元句hash・撮影先・画像hashを照合する。台帳の元句IDをUIから選び直さない。
+    fn register_saved_photo(&self, record: &mut Record) -> Result<bool> {
+        if record.state != State::Saved { return Ok(false); }
+        let Some(photo) = &record.photo else { return Ok(false); };
+        if photo.registered { return Ok(false); }
+        let Some(receipt) = photo.receipt.clone() else { return Ok(false); };
+        let entry = record.entry_id.as_deref().context("artifact_entry_id_missing")?;
+        self.photo_store().register_capture(&photo.command_id, &Receipt {
+            poem_id: format!("session:{}:{}", record.session_id, entry), ..receipt
+        })?;
+        record.photo.as_mut().unwrap().registered = true;
+        if record.error.as_deref() == Some("capture_directory_mismatch") { record.error = None; }
+        Ok(true)
     }
     fn photo_store(&self) -> crate::bookshelf::store::Store {
         crate::bookshelf::store::Store { memory: self.memory.clone(), capture_dir: self.capture.clone(),

@@ -527,7 +527,27 @@ fn late_photo_binds_once_to_the_saved_canonical_entry_after_restart() {
     );
     assert!(m.receive_photo(Some(PHOTO_OWNER), &wrong).is_err());
     assert!(m.receive_photo(Some(PHOTO_OWNER), &result).unwrap());
-    m.reconcile().unwrap();
+    // 見込み: 本棚の登録再開は設定を直した保存済み写真だけを扱い、取消素材や次の生成には触れない。
+    // 合格: 誤った撮影先・画像hashでは未登録、復旧後は一度だけ登録。原句と取消素材はバイト不変。
+    // 範囲: 本棚と同じ限定入口＋実ファイル。Minecraft・実画像は使用しない。
+    let cancelled = f.job("cancelled_during_shelf");
+    let held = f.bundle(&cancelled, "held_cancelled_capture");
+    cancelled.discard().unwrap();
+    let original = fs::read(f.entries()).unwrap();
+    let wrong_screens = f.dir.join("wrong-screenshots");
+    fs::create_dir(&wrong_screens).unwrap();
+    let misconfigured = Manager::new(f.dir.join("memory"), None, wrong_screens);
+    assert_eq!(misconfigured.register_saved_photos().unwrap(), 0);
+    assert!(!persisted(&m, &j).photo.unwrap().registered);
+    fs::write(screens.join(name), b"changed image").unwrap();
+    assert_eq!(m.register_saved_photos().unwrap(), 0);
+    fs::write(screens.join(name), bytes).unwrap();
+    assert_eq!(m.register_saved_photos().unwrap(), 1);
+    assert_eq!(m.register_saved_photos().unwrap(), 0);
+    assert_eq!(fs::read(f.entries()).unwrap(), original);
+    held.intact();
+    assert_eq!(persisted(&m, &next).state, State::Active);
+    assert!(!persisted(&m, &cancelled).requests[0].removed);
     let record = persisted(&m, &j);
     assert!(record.photo.unwrap().registered, "{:?}", record.error);
     assert!(persisted(&m, &next).photo.unwrap().receipt.is_none());
