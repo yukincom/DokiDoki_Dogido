@@ -103,6 +103,10 @@ class MessageBox:
             db.execute('INSERT INTO recipient VALUES(?)', (device,))
 
     def _finish(self, db, message_id, status, activity=None):
+        # 端末で表示・再生を確認した本文だけを画面へ渡す。失敗時の生成文は発話済みにしない。
+        spoken, = db.execute('SELECT spoken FROM messages WHERE id=?', (message_id,)).fetchone()
+        if self.on_event and status == 'delivered' and spoken:
+            db.display_events.append(('ドギド', spoken))
         # 成否と受付IDのみを残し、送信者名・呼び名・原文・発話文は消す。
         activity = activity or []
         db.execute('UPDATE messages SET status=?,activity=?,body=NULL,spoken=NULL,sender=NULL,player=NULL WHERE id=?',

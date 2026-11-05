@@ -228,11 +228,14 @@ static int finderAlias(NSString *operation, NSString *file, NSString *app) {
     for (NSButton *button in self.hostButtons) button.enabled = NO;
     if (self.quitting) [NSApp replyToApplicationShouldTerminate:YES];
 }
-- (void)command:(NSString *)command {
-    if (!self.task.running) return;
+- (BOOL)command:(NSString *)command {
+    if (!self.task.running) return NO;
     NSError *error = nil;
-    if (![self.input writeData:[command dataUsingEncoding:NSUTF8StringEncoding] error:&error])
+    if (![self.input writeData:[command dataUsingEncoding:NSUTF8StringEncoding] error:&error]) {
         [self append:[error.localizedDescription stringByAppendingString:@"\n"]];
+        return NO;
+    }
+    return YES;
 }
 - (void)pair:(id)sender { [self command:@"pair\n"]; }
 - (void)revoke:(id)sender { [self command:@"revoke\n"]; }
@@ -256,7 +259,9 @@ static int finderAlias(NSString *operation, NSString *file, NSString *app) {
     }
     // 本文に引用符・改行があっても、子プロセスへはコマンド一行だけを渡す。
     NSString *json = [[NSString alloc] initWithData:encoded encoding:NSUTF8StringEncoding];
-    [self command:[NSString stringWithFormat:@"message %@\n", json]];
+    // 子プロセスへ渡せた入力だけ消し、停止中や書込み失敗なら再送できるよう残す。
+    if ([self command:[NSString stringWithFormat:@"message %@\n", json]])
+        self.messageField.stringValue = @"";
 }
 - (void)toggle:(id)sender {
     if (!self.task) { [self start]; return; }

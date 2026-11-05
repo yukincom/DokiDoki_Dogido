@@ -8,8 +8,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts/lan'))
 from family_messages import MessageBox, TIMEOUT
 
 
-# 見込みは保存成功後の通知を使うと、ユノの本文と結果を画面に一回ずつ表示できること。
-# 合格はLINE再送・結果再報告でも重複せず、失敗理由も出る。一時DBだけを使い実ユノへ送信しない。
+# 見込みは配達確定時に本文を読むと、原文に加えてドギドの加工後の伝言を表示できること。
+# 合格はLINE再送・結果再報告でも原文・加工後本文・結果が一度ずつ出て、本文はDBから消える。一時DB・模擬生成のみ。
 def test_yuno_message_and_result_display_after_commit(tmp_path):
     events = []
     box = MessageBox(tmp_path, lambda: ['a'], on_event=lambda *args: events.append(args))
@@ -19,11 +19,42 @@ def test_yuno_message_and_result_display_after_commit(tmp_path):
     box.poll('a', None, '仮名')
     mid = box.enqueue('ごはんですよ', '家族', 'line-test')
     assert box.enqueue('ごはんですよ', '家族', 'line-test') == mid
-    box.prepare_next(lambda *_: 'ごはんですよ')
+    box.prepare_next(lambda *_: '家族から伝言やで。ごはんできたんやって。')
     box.poll('a', None, '仮名')
+    assert events[1:] == [('ユノ', '家族から　ごはんですよ')]
     box.report('a', mid, 'delivered')
     box.report('a', mid, 'delivered')
-    assert events[1:] == [('ユノ', '家族から　ごはんですよ'), ('ユノ', 'ゲームで伝言の表示または再生を確認しました。')]
+    assert events[1:] == [('ユノ', '家族から　ごはんですよ'),
+                          ('ドギド', '家族から伝言やで。ごはんできたんやって。'),
+                          ('ユノ', 'ゲームで伝言の表示または再生を確認しました。')]
+    with box.transaction() as db:
+        assert db.execute('SELECT body,spoken FROM messages WHERE id=?', (mid,)).fetchone() == (None, None)
+
+
+# 見込み: 画面からの伝言も、生成待ちを原文で代替した場合を含めて実際の配送本文を示せる。
+# 合格: 未送達ではドギド欄に出ず、送達では端末へ渡した全文だけが一度出る。一時DB・模擬時計で確認する。
+@pytest.mark.parametrize('status', ['delivered', 'delivery_failed', 'delivery_unknown'])
+@pytest.mark.parametrize('fallback', [False, True])
+def test_ui_message_displays_only_confirmed_delivery(tmp_path, monkeypatch, status, fallback):
+    now = [1000.]
+    monkeypatch.setattr('family_messages.time.time', lambda: now[0])
+    events = []
+    box = MessageBox(tmp_path, lambda: ['a'], on_event=lambda *args: events.append(args))
+    box.select('a')
+    box.poll('a', None, '仮名')
+    mid = box.enqueue('18時に来てね')
+    if fallback:
+        now[0] += TIMEOUT / 2
+        expected = 'おかあさんから伝言や。「18時に来てね」'
+    else:
+        expected = 'おかあさんが18時に来てなって言うとるで。'
+        box.prepare_next(lambda *_: expected)
+    assert box.poll('a', None, '仮名') == {'id': mid, 'text': expected}
+    assert events == [('伝言', 'おかあさんから　18時に来てね')]
+    box.report('a', mid, status)
+    box.report('a', mid, status)
+    spoken = [text for speaker, text in events if speaker == 'ドギド']
+    assert spoken == ([expected] if status == 'delivered' else [])
 
 
 # 見込み: 選択した遊ぶMacから新しい状態を得たときだけ伝言を用意する。
