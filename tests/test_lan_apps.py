@@ -46,7 +46,7 @@ def prepared(tmp_path, monkeypatch, binary):
     for role in ("host", "client"):
         shutil.copy(SOURCE / "icons" / f"{role}.icns", here / "icons")
     monkeypatch.setattr(installer, "HERE", here)
-    for name in ("lan/connection.py", "lan/transport.py", "lan/discovery.py", "lan/family_messages.py", "lan/message_client.py", "lan/shared_readings.py", "lan/export_readings.py",
+    for name in ("lan/connection.py", "lan/transport.py", "lan/discovery.py", "lan/family_messages.py", "lan/message_client.py", "lan/shared_readings.py", "lan/bookshelf_bridge.py", "lan/export_readings.py",
                  "lan/line_inbox.py", "lan/message_wording.py", "family-link/gateway.py",
                  "family-link/log_relay.py", "family-link/minecraft_log_relay.py",
                  "family-link/start_client.py", "family-client/check.py", "family-client/family_runtime.py"):

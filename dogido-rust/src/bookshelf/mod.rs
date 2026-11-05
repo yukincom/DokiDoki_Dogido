@@ -28,7 +28,7 @@ use axum::{
     Json, Router,
     body::Body,
     extract::{DefaultBodyLimit, Path, Query, Request, State},
-    http::{StatusCode, header},
+    http::{HeaderMap, StatusCode, header},
     middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::{get, put},
@@ -44,6 +44,8 @@ struct App {
     origin: String,
     authority: String,
     memory_enabled: bool,
+    child_mode: bool,
+    admin_token: Option<String>,
     j_lens: Option<j_lens::Config>,
     readout_lock: Arc<std::sync::Mutex<()>>,
     translation_lock: Arc<tokio::sync::Mutex<()>>,
@@ -68,6 +70,12 @@ pub struct Config {
     pub ui: PathBuf,
     #[serde(default = "enabled")]
     pub memory_enabled: bool,
+    /// 子の原本を開くときは削除・辞書・保存先変更を制限する。省略時は従来の本人用。
+    #[serde(default)]
+    pub child_mode: bool,
+    /// 家庭内の接続係だけが保持する実行ごとの秘密値。画面へは渡さない。
+    #[serde(default)]
+    pub admin_token: Option<String>,
 }
 fn enabled() -> bool {
     true
@@ -75,6 +83,8 @@ fn enabled() -> bool {
 fn default_game_port() -> u16 { 5055 }
 type ApiResult = Result<Json<Value>, ApiError>;
 struct ApiError(anyhow::Error);
+#[derive(Clone)]
+struct FailureReason(String);
 impl<E: Into<anyhow::Error>> From<E> for ApiError {
     fn from(e: E) -> Self {
         Self(e.into())
@@ -128,7 +138,9 @@ impl IntoResponse for ApiError {
             ),
         };
         tracing::warn!(event="bookshelf_request_failed",error=%self.0);
-        (status, Json(json!({"detail":detail,"diagnostic":diagnostic}))).into_response()
+        let mut response = (status, Json(json!({"detail":detail,"diagnostic":diagnostic}))).into_response();
+        response.extensions_mut().insert(FailureReason(reason));
+        response
     }
 }
 async fn blocking<T: Send + 'static>(
@@ -139,6 +151,29 @@ async fn blocking<T: Send + 'static>(
         .map_err(anyhow::Error::from)?
         .map_err(ApiError)
 }
+fn parent_access(app: &App, headers: &HeaderMap) -> bool {
+    app.child_mode && app.admin_token.as_ref().is_some_and(|token| {
+        !token.is_empty() && headers.get("x-dogido-bookshelf-admin")
+            .and_then(|value| value.to_str().ok()) == Some(token.as_str())
+    })
+}
+
+// UIの表示可否とは別に、保存入口でも家庭内の役割を照合する。
+fn family_refusal(app: &App, path: &str, write: bool, parent: bool) -> Option<&'static str> {
+    if !app.child_mode { return None; }
+    if path == "/api/readings" {
+        return Some("読み方の辞書は、おうちの人の本棚で直してもらってな。");
+    }
+    if write && (path == "/api/research-storage" || path == "/api/poems/export"
+        || path.contains("/internal-capture/")) {
+        return Some("この本棚では、今ある保存先の句をそのまま使うで。");
+    }
+    if path == "/api/trash" && !parent {
+        return Some("この本棚では句や写真を消されへんねん。消したいときは、おうちの人に頼んでな。");
+    }
+    None
+}
+
 async fn guard(State(app): State<Arc<App>>, req: Request, next: Next) -> Response {
     let headers = req.headers();
     let trusted = headers.get(header::HOST).and_then(|v| v.to_str().ok())
@@ -162,11 +197,36 @@ async fn guard(State(app): State<Arc<App>>, req: Request, next: Next) -> Respons
     {
         return (
             StatusCode::FORBIDDEN,
-            Json(json!({"detail":"この本棚の画面から操作してください。"})),
+            Json(json!({"detail":if app.child_mode { "本棚の画面を開き直して、もう一度試してな。" } else { "この本棚の画面から操作してください。" }})),
         )
             .into_response();
     }
+    let parent = parent_access(&app, headers);
+    if let Some(detail) = family_refusal(&app, req.uri().path(), write, parent) {
+        return (StatusCode::FORBIDDEN, Json(json!({"detail":detail}))).into_response();
+    }
     let mut response = next.run(req).await;
+    // 子の画面の失敗は固定文で案内する。保存済みと断言せず、入力の保持をUIへ任せる。
+    if app.child_mode && !parent && (response.status().is_client_error() || response.status().is_server_error()) {
+        let status = response.status();
+        let reason = response.extensions().get::<FailureReason>().map(|value| value.0.as_str());
+        let detail = match reason {
+            Some("memory_disabled") => "記憶を残す設定がお休み中みたいや。おうちの人に設定を見てもらってな。",
+            Some("player_photo_unavailable" | "photo_file_missing") => "写真が見つからへんみたいや。保存先がつながっているか、おうちの人に見てもらってな。",
+            Some("research_original_protected") => "オレが撮った元の写真は、そのまま残しておくで。",
+            Some("j_lens_not_prepared" | "j_lens_unconfigured" | "translation_not_prepared") => "この記録を読む準備がまだできてへんみたいや。おうちの人に見てもらってな。",
+            Some("changed" | "reading_changed" | "saved_poem_changed" | "source_poem_changed"
+                | "parent_revision_mismatch" | "revision_id_conflict" | "player_photo_changed") =>
+                "別のところで先に更新されたみたいや。書いた内容を控えてから、もう一度開いてな。",
+            _ => match status {
+                StatusCode::NOT_FOUND => "今はその記録が見つからへんみたいや。少し待って、もう一度開いてな。",
+                StatusCode::FORBIDDEN => "その操作はここではできへんねん。おうちの人に見てもらってな。",
+                StatusCode::UNPROCESSABLE_ENTITY | StatusCode::BAD_REQUEST => "うまく受け取れへんかったみたいや。入力した内容を確かめて、もう一度試してな。",
+                _ => "今はうまく確認できへんみたいや。少し待って、もう一度試してな。",
+            },
+        };
+        response = (status, Json(json!({"detail":detail}))).into_response();
+    }
     let h = response.headers_mut();
     h.insert(header::CACHE_CONTROL, "no-store".parse().unwrap());
     h.insert("x-content-type-options", "nosniff".parse().unwrap());
@@ -179,7 +239,9 @@ async fn guard(State(app): State<Arc<App>>, req: Request, next: Next) -> Respons
     h.insert(header::CONTENT_SECURITY_POLICY,"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'".parse().unwrap());
     response
 }
-fn bootstrap(app: &App) -> Result<Value> {
+#[cfg(test)]
+fn bootstrap(app: &App) -> Result<Value> { bootstrap_for(app, false) }
+fn bootstrap_for(app: &App, parent: bool) -> Result<Value> {
     let view = app.store.library_view()?;
     let readings = crate::haiku_record::MemoryStore::new(&app.store.memory);
     let catalog = store::catalog();
@@ -205,11 +267,12 @@ fn bootstrap(app: &App) -> Result<Value> {
         );
     }
     Ok(
-        json!({"catalog":catalog,"poems":view["poems"],"journeys":view["journeys"],"player":view["player"],"photos":view["photos"],"corrections":readings.reading_corrections()?,"readings_writable":app.memory_enabled && readings.readings_writable(),"status":{"active":false,"memoryEnabled":app.memory_enabled,"message":"Minecraftを閉じた状態でも閲覧・編集できます。"},"csrf":app.csrf,"biomes":biomes,"biomeEnglish":english,"dataRepository":app.data_repository.as_ref().map(|c|json!({"url":data_repository::URL,"mode":c.mode}))}),
+        json!({"catalog":catalog,"poems":view["poems"],"journeys":view["journeys"],"player":view["player"],"photos":view["photos"],"corrections":if app.child_mode { Vec::new() } else { readings.reading_corrections()? },"readings_writable":!app.child_mode && app.memory_enabled && readings.readings_writable(),"child_mode":app.child_mode,"can_delete":!app.child_mode || parent,"show_readings":!app.child_mode,"parent_view":parent,"status":{"active":false,"memoryEnabled":app.memory_enabled,"message":"Minecraftを閉じた状態でも閲覧・編集できます。"},"csrf":app.csrf,"biomes":biomes,"biomeEnglish":english,"dataRepository":app.data_repository.as_ref().map(|c|json!({"url":data_repository::URL,"mode":c.mode}))}),
     )
 }
-async fn boot(State(app): State<Arc<App>>) -> Result<Response, ApiError> {
-    let value = blocking(move || bootstrap(&app)).await?;
+async fn boot(State(app): State<Arc<App>>, headers: HeaderMap) -> Result<Response, ApiError> {
+    let parent = parent_access(&app, &headers);
+    let value = blocking(move || bootstrap_for(&app, parent)).await?;
     let code = format!(
         "window.DOGIDO_BOOTSTRAP={};window.DOGIDO_CATALOG_SAMPLE=window.DOGIDO_BOOTSTRAP.catalog;",
         serde_json::to_string(&value)?
@@ -458,6 +521,13 @@ fn router(app: Arc<App>) -> Router {
         .layer(middleware::from_fn_with_state(app.clone(), guard))
         .with_state(app)
 }
+async fn purge_for_mode(store: store::Store, child_mode: bool) {
+    if child_mode { return; }
+    if let Err(e) = blocking(move || store.purge(Utc::now())).await {
+        tracing::warn!(event="bookshelf_cleanup_failed",error=%e.0);
+    }
+}
+
 pub async fn run(config: Config, port: u16) -> Result<()> {
     ensure!(
         config.ui.join("index.html").is_file(),
@@ -477,11 +547,9 @@ pub async fn run(config: Config, port: u16) -> Result<()> {
         memory: config.memory,
         photos: config.photos,
     };
-    let research = spawn_research_worker(store.clone());
-    let upkeep = store.clone();
-    if let Err(e) = blocking(move || upkeep.purge(Utc::now())).await {
-        tracing::warn!(event="bookshelf_cleanup_failed",error=%e.0);
-    }
+    // 子の本棚を開くだけで別保存先への複製や期限整理を始めない。
+    let research = (!config.child_mode).then(|| spawn_research_worker(store.clone()));
+    purge_for_mode(store.clone(), config.child_mode).await;
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await?;
     let authority = listener.local_addr()?.to_string();
     let origin = format!("http://{authority}");
@@ -492,6 +560,8 @@ pub async fn run(config: Config, port: u16) -> Result<()> {
         origin: origin.clone(),
         authority,
         memory_enabled: config.memory_enabled,
+        child_mode: config.child_mode,
+        admin_token: config.admin_token,
         j_lens: config.j_lens,
         readout_lock: Arc::new(std::sync::Mutex::new(())),
         translation_lock: Arc::new(tokio::sync::Mutex::new(())),
@@ -500,15 +570,13 @@ pub async fn run(config: Config, port: u16) -> Result<()> {
         publish_lock: Arc::new(std::sync::Mutex::new(())),
     });
     let worker = app.store.clone();
+    let child_mode = app.child_mode;
     let cleanup = tokio::spawn(async move {
         let mut timer = tokio::time::interval(std::time::Duration::from_secs(3600));
         timer.tick().await;
         loop {
             timer.tick().await;
-            let s = worker.clone();
-            if let Err(e) = blocking(move || s.purge(Utc::now())).await {
-                tracing::warn!(event="bookshelf_cleanup_failed",error=%e.0);
-            }
+            purge_for_mode(worker.clone(), child_mode).await;
         }
     });
     println!("DOGIDO_LIBRARY_URL={origin}/");
@@ -519,7 +587,7 @@ pub async fn run(config: Config, port: u16) -> Result<()> {
         })
         .await;
     cleanup.abort();
-    research.abort();
+    if let Some(research) = research { research.abort(); }
     result?;
     Ok(())
 }

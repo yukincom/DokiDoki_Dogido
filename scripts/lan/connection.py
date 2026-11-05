@@ -23,6 +23,7 @@ from discovery import Bonjour, BonjourError, PermissionDenied, lan_ipv4
 import transport
 import message_client
 import shared_readings
+import bookshelf_bridge
 from family_messages import MessageBox, TIMEOUT, Unavailable
 
 STATE = Path.home() / "Library/Application Support/Dogido LAN"
@@ -294,14 +295,16 @@ def run_host(state):
                 background(prepare_messages, messages, partial(render_message, proxy.server_port)):
             listen = transport.host_listener(state, proxy.server_port, confirm, messages,
                                              shared_readings.parent_export())
-            serve_lan(discovery, listen, commands)
+            with bookshelf_bridge.serve_host(state, listen.bookshelf):
+                serve_lan(discovery, listen, commands)
     finally:
         debug.close()
 
 
 class PeerRoute:
     """Only a successful pinned+authenticated probe selects the forwarding destination."""
-    def __init__(self):
+    def __init__(self, report=None):
+        self.report = report or (lambda message: print(message, flush=True))
         self._address = None
         self.message = ""
         self._lock = threading.Lock()
@@ -332,7 +335,7 @@ class PeerRoute:
         with self._lock:
             self._address = selected
         if message != self.message:
-            print(message, flush=True)
+            self.report(message)
             self.message = message
         return selected is None and revoked
 

@@ -9,5 +9,7 @@
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleVersion</key><string>1</string>
 <key>NSHighResolutionCapable</key><true/>
+<key>NSLocalNetworkUsageDescription</key><string>登録済みの家族のMacと接続して、同じ川柳の本棚を開きます。</string>
+<key>NSBonjourServices</key><array><string>_dogido._tcp</string></array>
 <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
 </dict></plist>

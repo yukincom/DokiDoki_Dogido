@@ -1267,6 +1267,8 @@ fn test_app(f: &Fixture) -> Arc<App> {
         origin: "http://127.0.0.1:45678".into(),
         authority: "127.0.0.1:45678".into(),
         memory_enabled: true,
+        child_mode: false,
+        admin_token: None,
         j_lens: None,
         readout_lock: Arc::new(std::sync::Mutex::new(())),
         translation_lock: Arc::new(tokio::sync::Mutex::new(())),
@@ -1892,4 +1894,93 @@ fn journey_export_is_private_and_uses_immutable_snapshots_including_memos() {
     assert!(!public["files"].to_string().contains("journeys/"));
     assert!(!public["files"].to_string().contains("非公開"));
     assert!(!public["files"].to_string().contains("private-session"));
+}
+
+// 見込み: 子の保存入口だけに役割を付ければ、閲覧・本人編集を保ったまま削除を親へ限定できる。
+// 合格: 子の削除と辞書操作は403、親の削除だけ成功。編集再送は一件で元句のbyte不変。範囲: 一時保存先と実HTTP router、LANは別確認。
+#[tokio::test]
+async fn family_child_edits_once_and_only_parent_can_trash() {
+    use tower::ServiceExt;
+    let f = Fixture::new();
+    let dir = f.poem("root", "p");
+    let original = fs::read(dir.join("long_term/haiku_entries.jsonl")).unwrap();
+    let mut owned = (*test_app(&f)).clone();
+    owned.child_mode = true;
+    owned.admin_token = Some("parent-only-test-token".into());
+    let app = Arc::new(owned);
+    async fn send(app: Arc<App>, path: &str, body: Value, admin: Option<&str>) -> (StatusCode, Value) {
+        let mut request = axum::http::Request::builder().uri(path).method("PUT")
+            .header("host", "127.0.0.1:45678").header("origin", "http://127.0.0.1:45678")
+            .header("content-type", "application/json").header("x-dogido-library", "secret-test-token");
+        if let Some(token) = admin { request = request.header("x-dogido-bookshelf-admin", token); }
+        let response = router(app).oneshot(request.body(Body::from(body.to_string())).unwrap()).await.unwrap();
+        let status = response.status();
+        let value = serde_json::from_slice(&axum::body::to_bytes(response.into_body(), 1024 * 1024).await.unwrap()).unwrap();
+        (status, value)
+    }
+    let boot = bootstrap_for(&app, false).unwrap();
+    assert_eq!(boot["can_delete"], false);
+    assert_eq!(boot["show_readings"], false);
+    assert_eq!(boot["corrections"], json!([]));
+    let parent = bootstrap_for(&app, true).unwrap();
+    assert_eq!(parent["can_delete"], true);
+    assert_eq!(parent["show_readings"], false);
+    assert!(!parent.to_string().contains("parent-only-test-token"));
+    for (token, allowed) in [(None, false), (Some("wrong-parent-token"), false), (Some("parent-only-test-token"), true)] {
+        let mut request = axum::http::Request::builder().uri("/bootstrap.js").header("host", "127.0.0.1:45678");
+        if let Some(token) = token { request = request.header("x-dogido-bookshelf-admin", token); }
+        let response = router(app.clone()).oneshot(request.body(Body::empty()).unwrap()).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(response.into_body(), 1024 * 1024).await.unwrap();
+        let script = std::str::from_utf8(&bytes).unwrap();
+        assert!(script.contains(&format!("\"can_delete\":{allowed}")));
+        assert!(script.contains("\"show_readings\":false"));
+    }
+    let poem = &boot["poems"][0];
+    let edit = json!({"id":"root:p","requestId":uuid::Uuid::new_v4().to_string(),
+        "expectedRevisionId":poem["current"]["id"],"expectedLines":poem["lines"],
+        "lines":["親子の山","とりのこえする","もりのみち"]});
+    for _ in 0..2 {
+        let (status, result) = send(app.clone(), "/api/poems/current", edit.clone(), None).await;
+        assert_eq!(status, StatusCode::OK, "{result}");
+    }
+    assert_eq!(fs::read_to_string(dir.join("long_term/haiku_revisions.jsonl")).unwrap().lines().count(), 2);
+    assert_eq!(fs::read(dir.join("long_term/haiku_entries.jsonl")).unwrap(), original);
+    let deletion = json!({"kind":"poem","id":"root:p","restore":false});
+    for token in [None, Some("wrong-parent-token")] {
+        let (status, detail) = send(app.clone(), "/api/trash", deletion.clone(), token).await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        assert!(detail["detail"].as_str().unwrap().contains("頼んでな"));
+    }
+    for route in ["/api/readings", "/api/research-storage"] {
+        assert_eq!(send(app.clone(), route, json!({}), Some("parent-only-test-token")).await.0, StatusCode::FORBIDDEN);
+    }
+    assert_eq!(send(app.clone(), "/api/trash", deletion.clone(), Some("parent-only-test-token")).await.0, StatusCode::OK);
+    // 再送でも同じ原句を再作成せず、既存のごみ箱記録を使う。
+    assert_eq!(send(app.clone(), "/api/trash", deletion, Some("parent-only-test-token")).await.0, StatusCode::OK);
+    assert!(app.store.library_view().unwrap()["poems"].as_array().unwrap().is_empty());
+    assert_eq!(fs::read(dir.join("long_term/haiku_entries.jsonl")).unwrap(), original);
+}
+
+// 見込み: 起動と定期整理が同じ役割判定を使えば、子の本棚では30日後にも原句・修正・写真を自動削除しない。
+// 合格: 期限超過のごみ箱に対する子の整理は元ファイルを保ち、本人用の従来整理は実行される。範囲: 一時保存先の実整理関数。
+#[tokio::test]
+async fn family_child_never_runs_expired_trash_cleanup() {
+    let f = Fixture::new();
+    let dir = f.poem("root", "p");
+    let store = f.store();
+    let photo = f.photo();
+    let original = fs::read(dir.join("long_term/haiku_entries.jsonl")).unwrap();
+    let revisions = fs::read(dir.join("long_term/haiku_revisions.jsonl")).unwrap();
+    let image = fs::read(store.photos.join("20261013_01.png")).unwrap();
+    let past = Utc::now() - chrono::Duration::days(40);
+    crate::poem_trash::change(&store.memory, "root:p", false, past).unwrap();
+    store.photo_change(&photo, false, past).unwrap();
+    purge_for_mode(store.clone(), true).await;
+    assert_eq!(fs::read(dir.join("long_term/haiku_entries.jsonl")).unwrap(), original);
+    assert_eq!(fs::read(dir.join("long_term/haiku_revisions.jsonl")).unwrap(), revisions);
+    assert_eq!(fs::read(store.photos.join("20261013_01.png")).unwrap(), image);
+    purge_for_mode(store.clone(), false).await;
+    assert!(store::poems(&store.memory, true).unwrap().is_empty());
+    assert!(!store.photos.join("20261013_01.png").exists());
 }

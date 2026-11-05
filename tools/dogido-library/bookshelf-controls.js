@@ -2,6 +2,7 @@
 (function(){
   'use strict';
   const boot=window.DOGIDO_BOOTSTRAP;if(!boot)return;
+  const canDelete=boot.can_delete!==false,showReadingsMenu=boot.show_readings!==false;
   const readings=window.DogidoReadingModel.create(boot.corrections,boot.readings_writable===true);
   let busy=false,readingNotice='',pendingPoemIds=[];
   const selectedReadings=new Set(),addition={surface:'',reading:''};
@@ -18,6 +19,7 @@
   function placeMenuActions(){
     const head=indexPanel.querySelector('.index-head'),meta=indexPanel.querySelector('.result-meta');
     head.append(meta);poemActions.hidden=true;
+    if(!canDelete)return;
     if(document.body.classList.contains('library-photos'))document.querySelector('.album-sidebar')?.append(restoreButton);
     else if(state.book==='poems'){poemActions.append(deletePoemsButton,restoreButton);head.append(poemActions);if(canSelectPoems()){poemActions.append(meta);poemActions.hidden=false;}updatePoemSelection();}
     else $('categories').append(restoreButton);
@@ -30,14 +32,14 @@
   };
   renderNavigation=function(){
     originalNavigation();
-    if(state.book==='catalog'){
+    if(state.book==='catalog'&&showReadingsMenu){
       allButton.setAttribute('aria-pressed',String(readingPageOpen()));
       $('categories').append(allButton);
       window.DogidoResearchSettings?.placeMenu(allButton);
     }
     placeMenuActions();
   };
-  if(state.book==='catalog')$('categories').append(allButton);
+  if(state.book==='catalog'&&showReadingsMenu)$('categories').append(allButton);
   placeMenuActions();
   document.addEventListener('dogido-album-rendered',placeMenuActions);
   const changed=()=>document.dispatchEvent(new Event('dogido-readings-changed'));
@@ -45,6 +47,7 @@
     return `<form data-reading-add><label>読み仮名<input name="reading" value="${esc(addition.reading)}" placeholder="例：くさち" maxlength="80" required></label><label>漢字・表記<input name="surface" value="${esc(addition.surface)}" placeholder="例：草地" maxlength="80" required></label><button type="submit">追加</button><p class="reading-error" role="status"></p></form>`;
   }
   function renderReadingsPage(){
+    if(!showReadingsMenu)return;
     const rows=readings.rows();
     for(const key of selectedReadings)if(!rows.some(r=>r.key===key))selectedReadings.delete(key);
     const writable=readings.writable;
@@ -72,13 +75,14 @@
   function decorate(){
     const old=document.querySelector('.catalog-reading'),entry=current();
     updatePoemSelection();
-    if(old&&state.book==='catalog'){
+    if(old&&!showReadingsMenu)old.hidden=true;
+    if(old&&showReadingsMenu&&state.book==='catalog'){
       const surface=entry.raw.label;
       const matching=readings.rows().filter(r=>r.surface===surface);
       old.innerHTML=`<h3>読み訂正</h3>${matching.length?matching.map(r=>`<p>${esc(r.reading)} <span aria-hidden="true">｜</span> ${esc(r.surface)}</p>`).join(''):'<p>この言葉の読み訂正はまだありません。</p>'}<button type="button" data-show-readings>読み訂正の一覧を開く</button>`;
     }
     const notes=document.querySelector('.catalog-player-notes>p');
-    if(notes)notes.textContent='この項目の個人メモです。読み訂正だけが次の読み上げに反映されます。';
+    if(notes)notes.textContent=showReadingsMenu?'この項目の個人メモです。読み訂正だけが次の読み上げに反映されます。':'この項目の個人メモです。';
     const label=document.querySelector('label[for="catalog-key-new"]');if(label)label.textContent='ことばのメモ';
     const foot=$('index-foot');if(foot)foot.textContent=state.book==='catalog'?'本体と共通のカタログ':'本体に保存された句';
   }
@@ -92,14 +96,14 @@
   }
   // 既存の一件ずつのごみ箱処理を順に呼ぶ。確認したIDだけを送り、部分成功を隠さない。
   function confirmSelectedPoems(){
-    if(busy||!canSelectPoems()||!canReload())return;
+    if(!canDelete||busy||!canSelectPoems()||!canReload())return;
     const poems=entries().filter(e=>selectedPoems.has(e.id));if(!poems.length)return;
     pendingPoemIds=poems.map(e=>e.id);
     dialog.dataset.mode='poems';dialog.innerHTML=header('選択した句をごみ箱へ移す')+`<ul class="poem-delete-preview">${poems.map(e=>`<li>${e.lines.map(esc).join('<br>')}</li>`).join('')}</ul><p>${poems.length}句を削除します。30日間は復元できます。貼り付けた写真は削除しません。</p><p data-dialog-status role="status"></p><div class="dialog-actions"><button type="button" data-close-bookshelf>キャンセル</button><button type="button" class="danger-button" data-confirm-poems>ごみ箱へ移す</button></div>`;
     if(!dialog.open)dialog.showModal();
   }
   async function deleteSelectedPoems(button){
-    if(!canSelectPoems()||!canReload())return;
+    if(!canDelete||!canSelectPoems()||!canReload())return;
     // 確認画面を開いた後の選択変化や、別ページの項目を削除へ混ぜない。
     selectedPoems.retain(M.poems.filter(e=>pendingPoemIds.includes(e.id)));
     busy=true;button.disabled=true;updatePoemSelection();
@@ -115,6 +119,7 @@
     }finally{busy=false;button.disabled=false;updatePoemSelection();}
   }
   function showReadings(){
+    if(!showReadingsMenu)return;
     closeBookCover();
     state.catalogPane='readings';state.listOpen=false;
     renderNavigation();renderDetail();
@@ -142,7 +147,8 @@
   window.DogidoReadings={hasChanges:()=>readings.hasChanges(),save,renderPage:renderReadingsPage,hasInput:()=>readings.writable&&Boolean(addition.surface.trim()||addition.reading.trim()),busy:()=>busy};
   window.DogidoBookshelfDeletePhoto=(id,label)=>confirmDelete('photo',id,label);
   async function showTrash(){
-    dialog.dataset.mode='trash';dialog.innerHTML=header('ごみ箱')+'<p>削除から30日間は復元できます。期限後は本棚の起動時・起動中に、句と直し履歴・写真の元画像を削除します。</p><p data-dialog-status role="status">読み込み中…</p><ul class="trash-list"></ul>';
+    if(!canDelete)return;
+    dialog.dataset.mode='trash';dialog.innerHTML=header('ごみ箱')+`<p>${boot.child_mode?'削除から30日間は復元できます。息子用の本棚では、期限後も元データの自動削除は行いません。':'削除から30日間は復元できます。期限後は本棚の起動時・起動中に、句と直し履歴・写真の元画像を削除します。'}</p>`+'<p data-dialog-status role="status">読み込み中…</p><ul class="trash-list"></ul>';
     if(!dialog.open)dialog.showModal();
     // 閉じた画面・別の確認画面・新しい読込へ、古い応答を反映しない。
     const status=dialog.querySelector('[data-dialog-status]'),list=dialog.querySelector('.trash-list');
@@ -151,9 +157,10 @@
       const data=await request('/api/trash','GET');if(!active())return;
       status.textContent=data.items.length?'':'ごみ箱は空です。';
       list.innerHTML=data.items.map(p=>`<li><div><strong>${p.kind==='poem'?'句':'写真'}：${esc(p.label)}</strong><small>復元期限：${esc(new Date(p.expiresAt).toLocaleString('ja-JP'))}</small></div><button type="button" data-restore-kind="${esc(p.kind)}" data-restore-id="${esc(p.id)}">復元</button></li>`).join('');
-    }catch(e){if(active())status.textContent=e.message;}
+    }catch(e){if(active())status.textContent=window.dogidoLibraryError?.(e)||e.message;}
   }
   function confirmDelete(kind,id,label){
+    if(!canDelete)return;
     if(!canReload())return;
     dialog.dataset.mode='delete';dialog.innerHTML=header(kind==='poem'?'句をごみ箱へ移す':'写真をごみ箱へ移す')+`<p>${esc(label)}</p><p>30日間は復元できます。${kind==='poem'?'この句に貼った写真は削除しません。':'各ページからも非表示になります。復元すると、変更されていない貼り付け枠にも戻ります。'}</p><p data-dialog-status role="status"></p><div class="dialog-actions"><button type="button" data-close-bookshelf>キャンセル</button><button type="button" class="danger-button" data-confirm-kind="${kind}" data-confirm-id="${esc(id)}">ごみ箱へ移す</button></div>`;
     if(!dialog.open)dialog.showModal();
@@ -167,7 +174,7 @@
     if(!event.target.matches('[data-reading-add]'))return;
     event.preventDefault();if(!readings.writable)return;const f=event.target;
     try{readings.add(f.elements.surface.value,f.elements.reading.value);addition.surface='';addition.reading='';readingNotice='追加しました。「変更を保存」で確定します。';renderReadingsPage();changed();}
-    catch(e){f.querySelector('.reading-error').textContent=e.message;}
+    catch(e){f.querySelector('.reading-error').textContent=window.dogidoLibraryError?.(e)||e.message;}
   });
   document.addEventListener('input',event=>{
     if(!readings.writable)return;
@@ -176,7 +183,7 @@
   });
   document.addEventListener('change',event=>{
     const poemId=event.target.dataset.poemSelect;
-    if(poemId&&state.book==='poems'&&!busy){
+    if(canDelete&&poemId&&state.book==='poems'&&!busy){
       if(!canSelectPoems())return;
       selectedPoems.set(poemId,event.target.checked);state.selected=poemId;renderList();
       [...document.querySelectorAll('[data-poem-select]')].find(box=>box.dataset.poemSelect===poemId)?.focus({preventScroll:true});
@@ -195,11 +202,11 @@
       renderReadingsPage();changed();
     }
     const restore=b.dataset.restoreId,remove=b.dataset.confirmId;
-    if(restore||remove){
+    if(canDelete&&(restore||remove)){
       if(!canReload())return;
       busy=true;b.disabled=true;
       try{await request('/api/trash','PUT',{kind:restore?b.dataset.restoreKind:b.dataset.confirmKind,id:restore||remove,restore:Boolean(restore)});busy=false;location.reload();}
-      catch(e){dialog.querySelector('[data-dialog-status]').textContent=e.message;}
+      catch(e){dialog.querySelector('[data-dialog-status]').textContent=window.dogidoLibraryError?.(e)||e.message;}
       finally{busy=false;b.disabled=false;}
     }
   });

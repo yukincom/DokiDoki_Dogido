@@ -49,7 +49,7 @@ test('poem page places exact preface above the poem, has an icon-only bookmark a
 });
 test('poem list checks and reading buttons are separate and selection survives opening another poem',()=>{
  const elements={'result-count':{},'entry-list':{}},selection=M.createPoemSelection(poems);selection.set('root:one',true);
- const state={book:'poems',poemSection:'all',selected:'session:a:one'},scope={state,selectedPoems:selection,entries:()=>poems,poemTags:()=>'<span class="test-tags">バイオーム・時間帯</span>',renderDetail(){},$:id=>elements[id]};vm.createContext(scope);
+ const state={book:'poems',poemSection:'all',selected:'session:a:one'},scope={window:{DOGIDO_BOOTSTRAP:{can_delete:true}},state,selectedPoems:selection,entries:()=>poems,poemTags:()=>'<span class="test-tags">バイオーム・時間帯</span>',renderDetail(){},$:id=>elements[id]};vm.createContext(scope);
  const render=app.slice(app.indexOf('function canSelectPoems('),app.indexOf('function folio('));vm.runInContext(escape+render+'renderList();',scope);
  const html=elements['entry-list'].innerHTML;
  assert.match(html,/data-poem-select="root:one"[^>]*checked><button class="entry"/);
@@ -62,11 +62,14 @@ test('poem list checks and reading buttons are separate and selection survives o
  state.poemSection='favorites';vm.runInContext('renderList();',scope);
  assert.doesNotMatch(elements['entry-list'].innerHTML,/data-poem-select|type="checkbox"/);assert.deepEqual(selection.ids(),[]);
  state.poemSection='all';vm.runInContext('renderList();',scope);assert.doesNotMatch(elements['entry-list'].innerHTML,/ checked/);
+ // 見込み: 同じ一覧でも子用権限は削除選択を作らない。合格: checkboxゼロで句の閲覧ボタンは残る。範囲: 実renderListと模擬DOM。
+ scope.window.DOGIDO_BOOTSTRAP.can_delete=false;vm.runInContext('renderList();',scope);
+ assert.doesNotMatch(elements['entry-list'].innerHTML,/data-poem-select|type="checkbox"/);assert.match(elements['entry-list'].innerHTML,/data-entry="root:one"/);
 });
 test('delete and restore icons stay inside the all-poems index and hide on bookmarks',()=>{
  const source=fs.readFileSync(__dirname+'/bookshelf-controls.js','utf8'),placed=[];
  const meta={},state={book:'poems'},poemActions={buttons:[],append(...buttons){this.buttons.push(...buttons);}},indexHead={append(element){placed.push(element);}};
- const scope={state,poemActions,indexPanel:{querySelector:selector=>{assert(['.index-head','.result-meta'].includes(selector));return selector==='.index-head'?indexHead:meta;}},deletePoemsButton:{},restoreButton:{},document:{body:{classList:{contains:()=>false}}},canSelectPoems:()=>true,updatePoemSelection(){},$:()=>{throw Error('must not place actions between navigation categories');}};
+ const scope={canDelete:true,state,poemActions,indexPanel:{querySelector:selector=>{assert(['.index-head','.result-meta'].includes(selector));return selector==='.index-head'?indexHead:meta;}},deletePoemsButton:{},restoreButton:{},document:{body:{classList:{contains:()=>false}}},canSelectPoems:()=>true,updatePoemSelection(){},$:()=>{throw Error('must not place actions between navigation categories');}};
  vm.createContext(scope);vm.runInContext(source.slice(source.indexOf('  function placeMenuActions('),source.indexOf('  const originalNavigation='))+'placeMenuActions();',scope);
  assert(placed.includes(poemActions));assert.equal(poemActions.hidden,false);assert.equal(poemActions.buttons.length,3);assert.equal(poemActions.buttons[2],meta);
  scope.canSelectPoems=()=>false;vm.runInContext('placeMenuActions();',scope);assert.equal(poemActions.hidden,true);
@@ -75,7 +78,7 @@ test('delete and restore icons stay inside the all-poems index and hide on bookm
  assert.match(source,/data-icon="restore-return"/);assert.doesNotMatch(source,/M5 4v5A10/);
 });
 test('bookmark view refuses both delete confirmation and execution before touching data',async()=>{
- const source=fs.readFileSync(__dirname+'/bookshelf-controls.js','utf8'),scope={busy:false,canSelectPoems:()=>false,canReload(){throw Error('must stop before save or data operations');}};
+ const source=fs.readFileSync(__dirname+'/bookshelf-controls.js','utf8'),scope={canDelete:true,busy:false,canSelectPoems:()=>false,canReload(){throw Error('must stop before save or data operations');}};
  vm.createContext(scope);const start=source.indexOf('  function confirmSelectedPoems('),end=source.indexOf('  function showReadings(');
  assert(end>start);vm.runInContext(source.slice(start,end)+'confirmSelectedPoems();result=deleteSelectedPoems({});',scope);await scope.result;
 });

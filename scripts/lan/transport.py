@@ -20,6 +20,7 @@ import subprocess
 import tempfile
 import threading
 import time
+import bookshelf_bridge
 from urllib.parse import quote, unquote
 
 from family_messages import GAME_REASONS, MessageBox, check_activity, check_text
@@ -495,13 +496,15 @@ class Handler(BaseHTTPRequestHandler):
     do_GET = do_POST = dispatch
 
 
-def host_listener(state_dir, upstream_port, confirm, messages=None, readings=None):
+def host_listener(state_dir, upstream_port, confirm, messages=None, readings=None, bookshelf=None):
     """同じ登録受付・TLS鍵・伝言を、LANアドレス別の待受けで共有する。"""
     root = _directory(state_dir)
     pin, ctx = _identity(root)
     pairings = Pairings(root, pin, confirm)
     if messages is None:
         messages = MessageBox(root, pairings.devices)
+    if bookshelf is None:
+        bookshelf = bookshelf_bridge.Broker(pairings.device_records)
     messages.device_name = pairings.device_name
 
     class HostHandler(Handler):
@@ -543,6 +546,18 @@ def host_listener(state_dir, upstream_port, confirm, messages=None, readings=Non
                     except ValueError:
                         raise Refusal(400)
                 self.reply(200)
+            elif self.command == 'POST' and self.path in (bookshelf_bridge.NEXT, bookshelf_bridge.RESULT):
+                try:
+                    data = json.loads(self.body(bookshelf_bridge.WIRE_LIMIT if self.path == bookshelf_bridge.RESULT else 1024))
+                    if self.path == bookshelf_bridge.NEXT:
+                        if data != {}:
+                            raise ValueError
+                        self.reply(200, {'request': bookshelf.poll(device)})
+                    else:
+                        bookshelf.result(device, data)
+                        self.reply(200)
+                except (ValueError, TypeError, RecursionError):
+                    raise Refusal(400)
             elif self.path == READINGS:
                 if self.command != 'GET':
                     raise Refusal(405)
@@ -582,12 +597,13 @@ def host_listener(state_dir, upstream_port, confirm, messages=None, readings=Non
     def revoke(device):
         removed = pairings.revoke(device)
         messages.revoked(device)
+        bookshelf.revoke(device)
         return removed
 
     def listen(bind):
         server = Server(bind, HostHandler, ctx)
         server.pin = pin
-        for name in ('open_pairing', 'devices', 'device_records', 'revoke', 'messages'):
+        for name in ('open_pairing', 'devices', 'device_records', 'revoke', 'messages', 'bookshelf'):
             setattr(server, name, getattr(listen, name))
         return server
     # 設定はLANの抜き差しと独立して同じ登録正本へ届く。
@@ -596,11 +612,12 @@ def host_listener(state_dir, upstream_port, confirm, messages=None, readings=Non
     listen.device_records = pairings.device_records
     listen.revoke = revoke
     listen.messages = messages
+    listen.bookshelf = bookshelf
     return listen
 
 
-def make_host(state_dir, bind, upstream_port, confirm, messages=None, readings=None):
-    return host_listener(state_dir, upstream_port, confirm, messages, readings)(bind)
+def make_host(state_dir, bind, upstream_port, confirm, messages=None, readings=None, bookshelf=None):
+    return host_listener(state_dir, upstream_port, confirm, messages, readings, bookshelf)(bind)
 
 
 def make_client_relay(resolve, credentials, port=8080):

@@ -1,7 +1,7 @@
 /* 全句の未送信分を、メモ下の小さなアイコンからまとめて送る。 */
 (function(){
   'use strict';
-  const boot=window.DOGIDO_BOOTSTRAP;if(!boot?.dataRepository)return;
+  const boot=window.DOGIDO_BOOTSTRAP;if(!boot?.dataRepository||boot.child_mode)return;
   const url=boot.dataRepository.url;if(url!=='https://github.com/yukincom/DokiDoki-Dogido-data')return;
   const uploadLabel='未送信のデータをまとめてアップロード';
   let busy=false,message='',result='',resultUrl=url;

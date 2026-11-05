@@ -1,7 +1,7 @@
 /* 研究保存先の設定ページ。選択と確定を分け、正本の保存場所や旧保存先は変更しない。 */
 (function(){
   'use strict';
-  const boot=window.DOGIDO_BOOTSTRAP;if(!boot)return;
+  const boot=window.DOGIDO_BOOTSTRAP;if(!boot||boot.child_mode)return;
   const statusLabels={unconfigured:'未設定',ready:'保全済み',pending:'保全待ち',offline:'保存先に接続できません',error:'保存先を確認してください'};
   let storage=normalize(boot.photos?.researchStorage),selection=null,saving=false,picking=false,notice='',noticeKind='';
   const menu=document.createElement('button');menu.type='button';menu.className='catalog-settings-menu';menu.textContent='環境設定';

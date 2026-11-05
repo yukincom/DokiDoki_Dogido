@@ -1,7 +1,7 @@
 /* 保存済みの句を月範囲で出力。未保存入力や現在の絞込みとは混ぜない。 */
 (function(){
   'use strict';
-  const boot=window.DOGIDO_BOOTSTRAP;if(!boot)return;
+  const boot=window.DOGIDO_BOOTSTRAP;if(!boot||boot.child_mode)return;
   const button=document.createElement('button');button.type='button';button.className='poem-export-button';button.textContent='JSONを書き出す';
   document.querySelector('.book-label').after(button);
   const dialog=document.createElement('dialog');dialog.className='poem-export-dialog';dialog.setAttribute('aria-labelledby','poem-export-title');

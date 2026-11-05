@@ -56,12 +56,12 @@ test('catalog writable mode preserves the existing edit and save route',async()=
   assert.equal(get('saved').children[0].children[0].children[1].textContent,'くさば');
 });
 
-function bookshelfFixture(writable){
+function bookshelfFixture(writable,flags={}){
   const nodes=new Map(['detail','categories','index-foot'].map(id=>[id,element()])),events={},requests=[];
   const document={body:element('body'),createElement:element,
     addEventListener:(name,callback)=>events[name]=callback,dispatchEvent(){},
     querySelector:selector=>selector==='.readings-page'?element():null,querySelectorAll:()=>[]};
-  const selected=[],scope={window:{DOGIDO_BOOTSTRAP:{corrections:[record],readings_writable:writable,csrf:'test'},DogidoReadingModel:readingModel},
+  const selected=[],scope={window:{DOGIDO_BOOTSTRAP:{corrections:[record],readings_writable:writable,csrf:'test',...flags},DogidoReadingModel:readingModel},
     document,state:{book:'catalog',catalogPane:'readings'},$:id=>nodes.get(id),esc:String,indexPanel:element(),
     renderNavigation(){},renderDetail(){},renderList(){},current:()=>null,canSelectPoems:()=>true,
     selectedPoems:{ids:()=>[],set:(id,value)=>selected.push([id,value])},
@@ -84,4 +84,31 @@ test('bookshelf shared readings expose no editing controls and do not disable po
   assert.deepEqual(f.selected,[['poem-1',true]]);
   const parent=bookshelfFixture(true).nodes.get('detail').innerHTML;
   assert.match(parent,/data-reading-add/);assert.match(parent,/data-reading-key/);assert.match(parent,/data-remove-selected-readings/);
+});
+
+// 見込み: 子用権限があるときだけ読み辞書と削除導線を隠し、古い操作イベントも書込みへ進めない。
+// 合格: 子に辞書・削除メニューがなく、句選択・写真削除を呼んでも要求ゼロ。親用は従来どおり。範囲: 実controlsと模擬DOM。
+test('family child hides dictionary and trash and ignores stale delete events',async()=>{
+  const f=bookshelfFixture(false,{child_mode:true,can_delete:false,show_readings:false});
+  assert.equal(f.nodes.get('detail').innerHTML,'');
+  assert.equal(f.nodes.get('categories').children.length,0);
+  f.scope.state.book='poems';f.events.change({target:{dataset:{poemSelect:'poem-1'},checked:true}});
+  f.scope.window.DogidoBookshelfDeletePhoto('photo-1','写真');
+  await f.scope.window.DogidoReadings.save();
+  assert.deepEqual(f.selected,[]);assert.deepEqual(f.requests,[]);
+  const parent=bookshelfFixture(true);
+  assert.ok(parent.nodes.get('categories').children.length>0);
+});
+
+// 見込み: 子の入力エラーは固定案内で扱い、本人用の文面と保存結果の不確実性を保つ。
+// 合格: 三行の直し方と結果未確認がドギドの口調になり、本人用は元文面。範囲: 実エラー表示関数、モデル呼出しなし。
+test('child error wording explains correction without claiming a successful save',()=>{
+  const app=fs.readFileSync(__dirname+'/app.js','utf8');
+  const scope={window:{DOGIDO_BOOTSTRAP:{child_mode:true,parent_view:false}}};vm.createContext(scope);
+  vm.runInContext(app.slice(0,app.indexOf('/* 本体の本棚データ')),scope);
+  const format=scope.window.dogidoLibraryError;
+  assert.match(format(Error('句は改行で三行に分けて入力してください。')),/三行に分けてな/);
+  const unknown=format(Error('句の保存結果を確認できませんでした。入力は残っています。'));
+  assert.match(unknown,/まだ確認できへん/);assert.doesNotMatch(unknown,/保存できたで|保存しました/);
+  scope.window.DOGIDO_BOOTSTRAP.parent_view=true;assert.equal(format(Error('元の案内')),'元の案内');
 });

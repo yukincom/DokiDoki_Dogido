@@ -26,7 +26,7 @@ test('catalog draft is restored escaped and remains unsaved while its input is n
 function trashScope(){
  let nodes,resolve,reject;
  const dialog={dataset:{},open:false,showModal(){this.open=true;},get innerHTML(){return '';},set innerHTML(_html){if(nodes)nodes.status.isConnected=false;nodes={status:{isConnected:true,textContent:'読み込み中…'},list:{innerHTML:''}};},querySelector:s=>s==='[data-dialog-status]'?nodes.status:nodes.list};
- const scope={dialog,header:()=>'',esc:String,request:()=>new Promise((yes,no)=>{resolve=yes;reject=no;})};vm.createContext(scope);
+ const scope={canDelete:true,boot:{child_mode:false},window:{},dialog,header:()=>'',esc:String,request:()=>new Promise((yes,no)=>{resolve=yes;reject=no;})};vm.createContext(scope);
  vm.runInContext(controls.slice(controls.indexOf('  async function showTrash(){'),controls.indexOf('  function confirmDelete(')),scope);
  return {scope,dialog,start(){return vm.runInContext('showTrash()',scope);},nodes:()=>nodes,resolve:value=>resolve(value),reject:error=>reject(error)};
 }

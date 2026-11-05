@@ -8,7 +8,7 @@
   const saveButton=document.createElement('button');saveButton.id='library-save';saveButton.className='export';saveButton.textContent='変更を保存';
   saveButton.setAttribute('aria-describedby',banner.id);
   bar.append(saveButton,banner);document.querySelector('.header-actions').append(bar);
-  const label='読み訂正は次の読み上げから反映されます。個人メモは本棚に保存します。';
+  const label=boot.show_readings===false?'川柳の変更と個人メモは、今の保存先に保存します。':'読み訂正は次の読み上げから反映されます。個人メモは本棚に保存します。';
   function saveStatus(text,notice=false){banner.textContent=text;bar.classList.toggle('has-notice',notice);bar.classList.remove('help-dismissed');}
   bar.addEventListener('keydown',event=>{if(event.key==='Escape'){bar.classList.remove('has-notice');bar.classList.add('help-dismissed');}});
   bar.addEventListener('pointerleave',()=>bar.classList.remove('help-dismissed'));
@@ -42,10 +42,10 @@
   // Save all edited pages, not only the currently selected entry.
   async function saveAll(){
     if(saving||boot.status.active)return;
-    if(unadded()||window.DogidoReadings?.hasInput()){saveStatus('入力中の言葉は「追加」を押してから保存してください。',true);return;}
+    if(unadded()||window.DogidoReadings?.hasInput()){saveStatus(boot.child_mode&&!boot.parent_view?'入力した言葉は「追加」を押してから保存してな。':'入力中の言葉は「追加」を押してから保存してください。',true);return;}
     const edits=changes();
     if(edits.some(e=>e.section==='catalog'&&(e.value.keys.some(k=>!k.trim())||e.value.readings.some(r=>!r.word.trim()||!r.reading.trim())))){
-      saveStatus('空欄の項目があります。言葉や読みを入力するか、その行を削除してください。',true);return;
+      saveStatus(boot.child_mode&&!boot.parent_view?'空っぽの項目があるみたいや。言葉を入れるか、その項目を直してな。':'空欄の項目があります。言葉や読みを入力するか、その行を削除してください。',true);return;
     }
     saving=true;saveButton.disabled=true;saveStatus('保存しています…',true);
     try{
@@ -59,7 +59,7 @@
       await window.DogidoReadings?.save();
       await window.DogidoPoemEditor?.save();
       saveStatus(changes().length||photoDirty()||readingDirty()||poemDirty()?'保存中に編集した変更が残っています。もう一度保存してください。':'保存しました。',true);
-    }catch(error){saveStatus(error.message,true);}
+    }catch(error){saveStatus(window.dogidoLibraryError?.(error)||error.message,true);}
     finally{saving=false;const dirty=changes().length>0||photoDirty()||readingDirty()||poemDirty();saveButton.disabled=boot.status.active||!dirty;saveButton.classList.toggle('has-changes',dirty);}
   }
   let composing=false,saveAfterComposition=false;

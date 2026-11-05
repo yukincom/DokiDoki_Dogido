@@ -64,7 +64,7 @@ def assemble(app: Path, role: str, kit: Path | None, config: dict, source: Path)
         build_launcher(binary)
     packaged = (source / "lan_tools").is_dir()
     lan = source / ("lan_tools" if packaged else "lan")
-    for name in ("connection.py", "transport.py", "discovery.py", "family_messages.py", "message_client.py", "shared_readings.py"):
+    for name in ("connection.py", "transport.py", "discovery.py", "family_messages.py", "message_client.py", "shared_readings.py", "bookshelf_bridge.py"):
         copy_regular(lan / name, resources / "lan" / name)
     if role == "host":
         for name in ("line_inbox.py", "message_wording.py", "export_readings.py"):

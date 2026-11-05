@@ -37,7 +37,7 @@
         output.textContent=formatValues(data);
         status.textContent=`トークンID ${data.predicted_token_id} · 入力位置 ${data.input_position} · 次元 ${data.offset+1}〜${data.offset+data.values.length} / ${data.shape[2]}`;
       }catch(error){
-        if(running.get(view)===controller&&view.isConnected&&error.name!=='AbortError')status.textContent=error.message;
+        if(running.get(view)===controller&&view.isConnected&&error.name!=='AbortError')status.textContent=root.dogidoLibraryError?.(error)||error.message;
       }
     };
   }

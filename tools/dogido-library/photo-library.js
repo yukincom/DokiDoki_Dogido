@@ -10,10 +10,11 @@
   const disabled=()=>editable?'':'disabled';
   const changed=()=>document.dispatchEvent(new Event('dogido-photos-changed'));
   function photoFolderButton(){
-    const available=Boolean(window.webkit?.messageHandlers?.dogidoPhotoFolder?.postMessage);
+    const available=!window.DOGIDO_BOOTSTRAP?.parent_view&&Boolean(window.webkit?.messageHandlers?.dogidoPhotoFolder?.postMessage);
     return `<button type="button" class="photo-folder-button" data-show-photo-folder title="${available?'Minecraft標準のscreenshotsフォルダを開きます。写真の移動・取り込みはしません。':'Finder表示はMac版の本棚アプリで利用できます。'}" ${available?'':'disabled'}>写真の場所をFinderで表示</button>`;
   }
   function showPhotoFolder(){
+    if(window.DOGIDO_BOOTSTRAP?.parent_view)return;
     window.webkit?.messageHandlers?.dogidoPhotoFolder?.postMessage('showMinecraftScreenshots');
   }
   function pageTarget(){const entry=current();return entry?`${state.book}:${entry.id}`:null;}
@@ -31,7 +32,7 @@
   }
   function photoDetail(id,choose=false){
     const p=model.find(id);if(!p)return '';
-    return `<img class="album-large-photo" src="${esc(p.url)}" alt=""><div class="album-photo-details">${choose?`<h3 data-photo-label="${esc(id)}">${esc(model.displayTitle(id))}</h3>${playerPhotoLabel(id)}`:titleInput(id)}${related(id)}${choose||p.protected?'':`<button class="danger-button" type="button" data-delete-photo="${esc(id)}">この写真をごみ箱へ</button>`}</div>`;
+    return `<img class="album-large-photo" src="${esc(p.url)}" alt=""><div class="album-photo-details">${choose?`<h3 data-photo-label="${esc(id)}">${esc(model.displayTitle(id))}</h3>${playerPhotoLabel(id)}`:titleInput(id)}${related(id)}${choose||p.protected||boot?.can_delete===false?'':`<button class="danger-button" type="button" data-delete-photo="${esc(id)}">この写真をごみ箱へ</button>`}</div>`;
   }
   function renderAlbum(){
     // 再描画で共用の表紙要素を消さない。
@@ -108,7 +109,7 @@
   document.addEventListener('click',event=>{
     const button=event.target.closest('button');if(!button||button.disabled)return;
     if(button.hasAttribute('data-show-photo-folder')){showPhotoFolder();return;}
-    if(button.dataset.deletePhoto){if(!model.find(button.dataset.deletePhoto)?.protected)window.DogidoBookshelfDeletePhoto?.(button.dataset.deletePhoto,model.displayTitle(button.dataset.deletePhoto));return;}
+    if(button.dataset.deletePhoto){if(boot?.can_delete!==false&&!model.find(button.dataset.deletePhoto)?.protected)window.DogidoBookshelfDeletePhoto?.(button.dataset.deletePhoto,model.displayTitle(button.dataset.deletePhoto));return;}
     if(button.dataset.albumSelect){closeBookCover();selected=button.dataset.albumSelect;renderAlbum();page.querySelector(`[data-album-select="${selected}"]`)?.focus({preventScroll:true});}
     if(button.dataset.openPhotoPoem){switchBook('poems',button.dataset.openPhotoPoem);if(picker.open)picker.close();}
     if(button.dataset.attachSlot!==undefined&&editable)openPicker(Number(button.dataset.attachSlot));

@@ -1,5 +1,17 @@
-/* 本体の本棚データを表示し、メモと句の変更を画面内に保持する。保存はlive-libraryの既存HTTP処理が所有する。 */
 'use strict';
+// 子の画面の固定エラーだけをドギドの口調に揃える。モデル入力は変えない。
+window.dogidoLibraryError=function(error){
+  const message=error?.message||String(error);
+  const boot=window.DOGIDO_BOOTSTRAP;
+  if(!boot?.child_mode||boot.parent_view)return message;
+  if(/な。$|や。$|で。$/.test(message))return message;
+  if(message.includes('三行'))return '句は改行して三行に分けてな。空っぽの行がないかも見てみてな。';
+  if(message.includes('保存結果'))return '保存できたか、まだ確認できへんねん。書いた内容はここに残しとくから、もう一度保存してみてな。';
+  if(message.includes('範囲内の整数'))return '表示する位置は、範囲の中の整数で指定してな。';
+  if(message.includes('記録')||message.includes('候補')||message.includes('翻訳'))return '今はその記録をうまく読めへんみたいや。少し待って、もう一度試してな。';
+  return '今はうまく確認できへんみたいや。書いた内容はここに残しとくから、少し待ってもう一度試してな。';
+};
+/* 本体の本棚データを表示し、メモと句の変更を画面内に保持する。保存はlive-libraryの既存HTTP処理が所有する。 */
 const M=window.DogidoLibrary, catalog=window.DOGIDO_BOOTSTRAP.catalog;
 const $=id=>document.getElementById(id);
 const defaultCatalogEntry=catalog.find(e=>e.category==='mob'&&(e.catalogId||e.id)==='creeper')?.id??catalog[0]?.id??null;
@@ -48,7 +60,7 @@ function icon(entry){
 function scene(){return '<svg viewBox="0 0 620 300" preserveAspectRatio="xMidYMid slice" aria-hidden="true" shape-rendering="crispEdges"><path fill="#a9c5bd" d="M0 0h620v300H0z"/><path fill="#e5e7cf" d="M40 35h100v17H40zM57 23h57v12H57zM279 61h115v15H279z"/><path fill="#708873" d="M0 141h100v-24h110v41h130v-32h160v-25h120v199H0z"/><path fill="#75895a" d="M0 184h620v116H0z"/><path fill="#9b9a61" d="M250 180h65v25h-65zM200 205h115v25H200zM130 230h185v35H130zM75 265h240v35H75z"/><path fill="#655b3e" d="M107 105h21v111h-21zM30 119h17v77H30z"/><path fill="#426747" d="M58 62h130v40H58zM44 96h153v44H44zM0 100h83v48H0z"/><path fill="#5b7a4b" d="M73 55h100v27H73zM57 83h94v32H57z"/><path fill="#a7b778" d="M15 231h38v8H15zM330 193h36v8h-36zM354 248h25v8h-25z"/>'+(state.photo==='player'?'<path fill="#504732" d="M196 196h13v41h-13zM215 196h13v41h-13z"/><path fill="#698f8d" d="M188 160h47v39h-47z"/><path fill="#bdac88" d="M196 136h31v26h-31z"/><path fill="#4b493c" d="M196 130h31v10h-31z"/>':'')+'</svg>';}
 function entries(){return state.book==='catalog'?M.filterCatalog(catalog,state):M.filterPoems(M.poems,state);}
 function current(){return entries().find(e=>e.id===state.selected);}
-function canSelectPoems(){return state.book==='poems'&&state.poemSection==='all';}
+function canSelectPoems(){return window.DOGIDO_BOOTSTRAP?.can_delete!==false&&state.book==='poems'&&state.poemSection==='all';}
 function renderList(){
   const items=entries();if(!items.some(e=>e.id===state.selected))state.selected=items[0]?.id??null;
   selectedPoems.retain(canSelectPoems()?items:[]);
@@ -198,7 +210,7 @@ document.addEventListener('input',event=>{
 document.addEventListener('submit',event=>{
   if(event.target.id!=='catalog-key-form')return;
   event.preventDefault();const input=$('catalog-key-new');
-  if(!catalogNotes.add(catalogNoteId(current()),input.value)){$('catalog-key-feedback').textContent='ことばのメモを入力してください。';input.focus();return;}
+  if(!catalogNotes.add(catalogNoteId(current()),input.value)){$('catalog-key-feedback').textContent=window.DOGIDO_BOOTSTRAP?.child_mode&&!window.DOGIDO_BOOTSTRAP.parent_view?'ことばのメモを入れてから「追加」を押してな。':'ことばのメモを入力してください。';input.focus();return;}
   renderDetail();
   ($('catalog-key-new').disabled?document.querySelector('[data-reading-add] input'):$('catalog-key-new'))?.focus({preventScroll:true});
 });

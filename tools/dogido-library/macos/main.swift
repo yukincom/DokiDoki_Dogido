@@ -1,6 +1,7 @@
 import AppKit
 import WebKit
 import UniformTypeIdentifiers
+import Darwin
 
 // A dedicated local window. Only its own bookshelf child is stopped on exit.
 final class Bookshelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler, WKScriptMessageHandlerWithReply {
@@ -13,6 +14,10 @@ final class Bookshelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavi
     private var closing = false
     private var baseURL: URL?
     private var choosingResearchDirectory = false
+    // 棚の切替世代。終了した棚から届くURL・接続結果を新しい窓へ混ぜない。
+    private var shelfGeneration = 0
+    private var selectedShelf = "self"
+    private var childEdition: Bool { Bundle.main.object(forInfoDictionaryKey: "DogidoBookshelfRole") as? String == "child" }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
@@ -23,6 +28,10 @@ final class Bookshelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavi
         let fileMenu = NSMenu(title: "ファイル")
         let save = fileMenu.addItem(withTitle: "変更を保存", action: #selector(saveChanges(_:)), keyEquivalent: "s")
         save.target = self
+        if !childEdition {
+            let choose = fileMenu.addItem(withTitle: "本棚を選ぶ", action: #selector(chooseShelf(_:)), keyEquivalent: "0")
+            choose.target = self
+        }
         let file = NSMenuItem(); file.title = "ファイル"; file.submenu = fileMenu; menu.addItem(file)
         let editMenu = NSMenu(title: "編集")
         for (title, selector, key) in [("コピー", "copy:", "c"), ("貼り付け", "paste:", "v"), ("切り取り", "cut:", "x"), ("すべて選択", "selectAll:", "a"), ("取り消す", "undo:", "z")] {
@@ -44,15 +53,72 @@ final class Bookshelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavi
         web = WKWebView(frame: .zero, configuration: config)
         web.navigationDelegate = self
         web.uiDelegate = self
+        window.center(); window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)
+        if childEdition { openShelf("child") } else { showEntrance() }
+    }
+
+    private func showEntrance() {
+        shelfGeneration += 1
+        child?.terminationHandler = nil
+        if child?.isRunning == true { child.map { _ = Darwin.kill($0.processIdentifier, SIGINT) } }
+        child = nil; launched = false; baseURL = nil; output = ""
+        window.title = "ドギドの本棚 — 本棚を選ぶ"
+        let layout = NSStackView(); layout.orientation = .vertical
+        layout.alignment = .centerX; layout.spacing = 28
+        let title = NSTextField(labelWithString: "どちらの本棚を開きますか？")
+        title.font = .systemFont(ofSize: 26, weight: .semibold)
+        layout.addArrangedSubview(title)
+        for (label, identifier) in [("私用", "self"), ("息子用", "son")] {
+            let button = NSButton(title: label, target: self, action: #selector(openChosenShelf(_:)))
+            button.identifier = NSUserInterfaceItemIdentifier(identifier)
+            button.bezelStyle = .rounded; button.font = .systemFont(ofSize: 22)
+            button.widthAnchor.constraint(equalToConstant: 260).isActive = true
+            layout.addArrangedSubview(button)
+        }
+        let hint = NSTextField(labelWithString: "息子用は、息子さんのMacで本棚を開いている間に使えます。")
+        hint.textColor = .secondaryLabelColor; layout.addArrangedSubview(hint)
+        let content = NSView(); layout.translatesAutoresizingMaskIntoConstraints = false
+        content.addSubview(layout)
+        NSLayoutConstraint.activate([layout.centerXAnchor.constraint(equalTo: content.centerXAnchor), layout.centerYAnchor.constraint(equalTo: content.centerYAnchor)])
+        window.contentView = content
+    }
+
+    @objc private func openChosenShelf(_ sender: NSButton) {
+        guard let choice = sender.identifier?.rawValue, ["self", "son"].contains(choice) else { return }
+        openShelf(choice)
+    }
+
+    @objc private func chooseShelf(_ sender: Any?) {
+        guard !childEdition, !closing, !choosingResearchDirectory else { return }
+        if !launched { showEntrance(); return }
+        let generation = shelfGeneration
+        web.evaluateJavaScript("Boolean(window.dogidoLibraryHasUnsaved?.())") { [weak self] value, error in
+            guard let self = self, self.shelfGeneration == generation else { return }
+            if error != nil || value as? Bool == true {
+                self.fail("保存していない変更があります。本棚で保存してから切り替えてください。")
+                return
+            }
+            self.showEntrance()
+        }
+    }
+
+    private func openShelf(_ profile: String) {
+        shelfGeneration += 1
+        let generation = shelfGeneration
+        selectedShelf = profile
+        output = ""; launched = false; baseURL = nil
+        window.title = profile == "self" ? "ドギドの本棚 — 私用" : "ドギドの本棚 — 息子用"
         window.contentView = web
         web.loadHTMLString("<html lang='ja'><body style='background:#f8f0df;font:22px sans-serif;padding:50px'>ドギドの本棚を開いています…</body></html>", baseURL: nil)
-        window.center(); window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)
         guard let root = Bundle.main.object(forInfoDictionaryKey: "DogidoProjectRoot") as? String else {
             fail("起動元が見つかりません。本棚アプリを作り直してください。"); return
         }
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/zsh")
-        process.arguments = [root + "/scripts/start_dogido_library.command", "--port", "0"]
+        process.arguments = [root + "/scripts/start_dogido_library.command", "--port", "0", "--profile", profile]
+        if profile == "son", let device = Bundle.main.object(forInfoDictionaryKey: "DogidoChildDevice") as? String {
+            process.arguments! += ["--device", device]
+        }
         process.currentDirectoryURL = URL(fileURLWithPath: root)
         let pipe = Pipe()
         process.standardOutput = pipe
@@ -61,11 +127,11 @@ final class Bookshelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavi
             let data = handle.availableData
             if data.isEmpty { handle.readabilityHandler = nil; return }
             let chunk = String(decoding: data, as: UTF8.self)
-            DispatchQueue.main.async { self?.readOutput(chunk) }
+            DispatchQueue.main.async { guard self?.shelfGeneration == generation else { return }; self?.readOutput(chunk) }
         }
         process.terminationHandler = { [weak self] process in
             DispatchQueue.main.async {
-                guard let self = self, !self.mayClose else { return }
+                guard let self = self, !self.mayClose, self.shelfGeneration == generation else { return }
                 self.fail("本棚の保存処理が終了しました。アプリを開き直してください。")
             }
         }
@@ -81,26 +147,39 @@ final class Bookshelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavi
     private func readOutput(_ chunk: String) {
         guard !launched else { return }
         output += chunk
-        for line in output.components(separatedBy: "\n") where line.hasPrefix("DOGIDO_LIBRARY_URL=") {
+        var lines = output.components(separatedBy: "\n")
+        output = lines.removeLast()
+        for line in lines where line.hasPrefix("DOGIDO_LIBRARY_URL=") {
             guard let url = URL(string: String(line.dropFirst("DOGIDO_LIBRARY_URL=".count))), url.host == "127.0.0.1", url.port != nil else { continue }
             launched = true; baseURL = url; awaitServer(url, attempts: 40); return
         }
     }
 
     private func awaitServer(_ url: URL, attempts: Int) {
-        var request = URLRequest(url: url); request.timeoutInterval = 1
+        let generation = shelfGeneration
+        var request = URLRequest(url: url); request.timeoutInterval = selectedShelf == "son" ? 22 : 2
         URLSession.shared.dataTask(with: request) { [weak self] _, response, _ in
             DispatchQueue.main.async {
-                guard let self = self, !self.mayClose else { return }
+                guard let self = self, !self.mayClose, self.shelfGeneration == generation else { return }
                 if (response as? HTTPURLResponse)?.statusCode == 200 { self.web.load(URLRequest(url: url)); return }
                 if attempts <= 0 { self.fail("本棚の起動を確認できませんでした。アプリを開き直してください。"); return }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { self.awaitServer(url, attempts: attempts - 1) }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                    guard self.shelfGeneration == generation else { return }
+                    self.awaitServer(url, attempts: attempts - 1)
+                }
             }
         }.resume()
     }
 
     private func fail(_ message: String) {
-        let alert = NSAlert(); alert.messageText = message; alert.runModal()
+        let alert = NSAlert()
+        if childEdition {
+            alert.messageText = "うまく確認できへんかったみたいや。"
+            alert.informativeText = message.contains("写真")
+                ? "写真の場所が見つからへんねん。保存場所を、おうちの人に見てもらってな。"
+                : "本棚を開き直してみてな。続くときは、おうちの人に見てもらおう。"
+        } else { alert.messageText = message }
+        alert.runModal()
     }
 
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
@@ -142,6 +221,7 @@ final class Bookshelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavi
               message.body as? String == "showMinecraftScreenshots",
               let port = baseURL?.port,
               origin.protocol == "http", origin.host == "127.0.0.1", origin.port == port else { return }
+        if selectedShelf == "son" { fail("写真は息子さんのMacにあります。息子さんの本棚から開いてください。"); return }
         let folder = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Application Support/minecraft/screenshots", isDirectory: true)
         var isDirectory: ObjCBool = false
@@ -152,12 +232,13 @@ final class Bookshelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavi
     }
 
     private func requestClose() {
+        if !launched { mayClose = true; NSApp.terminate(nil); return }
         if closing { return }; closing = true
         web.evaluateJavaScript("Boolean(window.dogidoLibraryHasUnsaved?.())") { [weak self] value, _ in
             guard let self = self else { return }; self.closing = false
             if value as? Bool == true {
-                let alert = NSAlert(); alert.messageText = "保存していない変更があります。"
-                alert.informativeText = "保存するには本棚に戻って「変更を保存」を押してください。"
+                let alert = NSAlert(); alert.messageText = self.childEdition ? "まだ保存してへん変更があるで。" : "保存していない変更があります。"
+                alert.informativeText = self.childEdition ? "残しておくなら、本棚に戻って「変更を保存」を押してな。" : "保存するには本棚に戻って「変更を保存」を押してください。"
                 alert.addButton(withTitle: "本棚に戻る"); alert.addButton(withTitle: "保存せず終了")
                 if alert.runModal() != .alertSecondButtonReturn { return }
             }
@@ -236,7 +317,7 @@ final class Bookshelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavi
     }
     func applicationWillTerminate(_ notification: Notification) {
         mayClose = true
-        if child?.isRunning == true { child?.terminate() }
+        if child?.isRunning == true { child.map { _ = Darwin.kill($0.processIdentifier, SIGINT) } }
     }
 }
 

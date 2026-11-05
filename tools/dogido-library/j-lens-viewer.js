@@ -68,7 +68,7 @@
       const cached=await root.fetch(`${view.dataset.captureBase}/j-lens-translation?phase=${pane.dataset.phase}&layer=${layer}`,{cache:'no-store'});
       if(cached.ok){const translated=await cached.json();if(view.isConnected&&versions.get(view)===version)applyTranslations(list,translated.translations||[]);}
     }catch(error){
-      if(view.isConnected&&versions.get(view)===version){status.textContent=error.message;retry.hidden=false;}
+      if(view.isConnected&&versions.get(view)===version){status.textContent=root.dogidoLibraryError?.(error)||error.message;retry.hidden=false;}
     }
   }
   async function translate(view){
@@ -80,7 +80,7 @@
       const value=await response.json();if(!response.ok)throw Error(value.detail||'翻訳できませんでした。');
       if(!view.isConnected||versions.get(view)!==version)return;
       applyTranslations(pane.querySelector('.j-lens-candidates'),value.translations);status.textContent='訳を表示しました。';
-    }catch(error){if(view.isConnected&&versions.get(view)===version)status.textContent=error.message;}
+    }catch(error){if(view.isConnected&&versions.get(view)===version)status.textContent=root.dogidoLibraryError?.(error)||error.message;}
     finally{if(view.isConnected&&versions.get(view)===version)button.disabled=false;}
   }
   document.addEventListener('toggle',event=>{
