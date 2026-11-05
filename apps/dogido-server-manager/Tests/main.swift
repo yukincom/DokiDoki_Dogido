@@ -191,6 +191,16 @@ if CommandLine.arguments.contains("--integration") {
     try independent.stop(voice)
     check(awaitState(.voice, "停止中").stopped, "stop microphone separately")
     check(awaitState(.server, "稼働中").process?.pid == own.process?.pid, "microphone stop preserves server")
+    // 見込み: マイクの異常終了も、そのサービスの状態だけを更新すれば本体へ伝播しない。
+    // 合格: 一時領域の模擬voiceだけを強制終了し、本体の同一PIDとHTTP応答を保つ。実マイク・音声は対象外。
+    try manager.start(.voice)
+    let failedVoice = awaitState(.voice, "稼働中")
+    cleanup.append { try? manager.stop(failedVoice) }
+    defer { try? manager.stop(failedVoice) }
+    let failedPID = try ServiceController.validateStop(expected: failedVoice, current: failedVoice)
+    check(Darwin.kill(failedPID, SIGKILL) == 0, "terminate isolated microphone worker")
+    check(awaitState(.voice, "停止中").message.contains("終了コード"), "microphone failure is reported")
+    check(awaitState(.server, "稼働中").process?.pid == own.process?.pid, "microphone failure preserves server and HTTP")
     try independent.stop(own)
     check(awaitState(.server, "停止中").stopped, "stop server from independent manager")
     let tail = try ServiceController.readTail(output, maximum: 12)

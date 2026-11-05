@@ -12,11 +12,12 @@ launcher = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(launcher)
 
 
-# 見込み: 新しいkitの一括起動はペアリング窓口を開き、VOICEVOXを必要な場合だけ起動してから音声を開始する。
-# 合格: 未起動時だけVOICEVOXを開き、準備順・停止対象が一致する。対話中継も同じ起動で開始・終了する。プロセスと通信は模擬。
+# 見込み: 音声入力だけを任意のworkerにすれば、マイクの停止・異常終了でも本体・接続・対話中継を維持できる。
+# 合格: voiceの起動失敗／終了後も監視を3巡継続し、案内は一度。必須workerの終了時と明示停止時だけ残りを停止。通信・プロセスは模擬。
 @pytest.mark.parametrize('voicevox_running', [True, False])
 @pytest.mark.parametrize('installed_app', [True, False])
-def test_one_click_waits_for_readiness_and_stops_only_owned_children(tmp_path, monkeypatch, voicevox_running, installed_app):
+@pytest.mark.parametrize('failure', ['voice-0', 'voice-1', 'voice-start', 'server', 'client', 'minecraft_log_relay.py'])
+def test_one_click_waits_for_readiness_and_stops_only_owned_children(tmp_path, monkeypatch, capsys, voicevox_running, installed_app, failure):
     (tmp_path / 'lan_tools').mkdir()
     (tmp_path / 'lan_tools/connection.py').touch()
     events, children = [], []
@@ -30,17 +31,29 @@ def test_one_click_waits_for_readiness_and_stops_only_owned_children(tmp_path, m
     monkeypatch.setattr(runtime_module, 'validate_runtime', lambda root: None)
     monkeypatch.setitem(sys.modules, 'family_runtime', runtime_module)
     monkeypatch.setattr(launcher.signal, 'signal', lambda *args: None)
-    monkeypatch.setattr(launcher.time, 'sleep', lambda _: None)
+    cycles = []
+    def idle(_):
+        cycles.append(True)
+        assert failure.startswith('voice')
+        assert not any(event in events for event in ('stop:server', 'stop:client', 'relay-close'))
+        if len(cycles) == 3:
+            raise KeyboardInterrupt
+    monkeypatch.setattr(launcher.time, 'sleep', idle)
     class Child:
         def __init__(self, argv):
             self.name = Path(argv[-1]).name
+            if self.name == 'voice' and failure == 'voice-start':
+                raise OSError('mock microphone worker start failed')
             if self.name == 'client':
                 assert Path(argv[-2]) == tmp_path / 'lan_tools/connection.py'
             self.returncode = None
             children.append(self)
             events.append('spawn:' + self.name)
         def poll(self):
-            if self.name == 'voice':
+            events.append('poll:' + self.name)
+            if self.name == 'voice' and failure in ('voice-0', 'voice-1'):
+                self.returncode = int(failure[-1])
+            elif self.name == failure and any(child.name == 'voice' for child in children):
                 self.returncode = 1
             return self.returncode
     monkeypatch.setattr(launcher.subprocess, 'Popen', lambda argv, **kw: Child(argv))
@@ -79,16 +92,24 @@ def test_one_click_waits_for_readiness_and_stops_only_owned_children(tmp_path, m
         assert url == 'http://127.0.0.1:5111/healthz'
         events.append('server-ready'); return {'ok': True, 'service': 'dogido-server', 'runtime': 'rust', 'dialogue_ready': True}
     monkeypatch.setattr(launcher, 'json_response', response)
-    with pytest.raises(RuntimeError, match='音声入力が終了'):
+    if failure.startswith('voice'):
         launcher.run(tmp_path)
+        assert len(cycles) == 3
+        assert events.count('poll:server') >= 3 and events.count('poll:client') >= 3
+        assert capsys.readouterr().out.count('文字入力・読み上げ・伝言は続けます。') == 1
+    else:
+        with pytest.raises(RuntimeError, match='残りも停止します'):
+            launcher.run(tmp_path)
     assert launcher.os.environ['DOGIDO_CHAT_IMAGE_ENABLED'] == 'true'
     assert launcher.os.environ['DOGIDO_HAIKU_INTERNAL_CAPTURE_ENABLED'] == 'false'
     assert events.index('model-ready') < events.index('spawn:server')
     assert events.count('open-voicevox') == int(not voicevox_running)
     assert events.index('voicevox-ready') < events.index('spawn:server')
-    assert events.index('server-ready') < events.index('spawn:voice')
-    assert [e for e in events if e.startswith('stop:')] == [
-        'stop:voice', 'stop:server', 'stop:minecraft_log_relay.py', 'stop:client']
+    if failure != 'voice-start':
+        assert events.index('server-ready') < events.index('spawn:voice')
+    assert [e for e in events if e.startswith('stop:')] == (
+        ([] if failure == 'voice-start' else ['stop:voice']) +
+        ['stop:server', 'stop:minecraft_log_relay.py', 'stop:client'])
     assert events.count('relay-close') == 2
 
 

@@ -152,12 +152,22 @@ def run(root, lan_tools=None):
             args=(dialogue_stop, base_url, settings.auth_token, dialogue_relay.put), daemon=True)
         dialogue_worker.start()
         say('[3/3] 本体の準備ができたので、音声入力を開始します。')
-        spawn('音声入力', [sys.executable, '-u', str(helpers / 'log_relay.py'), 'voice'])
-        say('[待機] 音声入力の「待機中」が出たら、Minecraftで遊べます。この画面だけ開いたままにしてください。')
+        try:
+            spawn('音声入力', [sys.executable, '-u', str(helpers / 'log_relay.py'), 'voice'])
+        except OSError as error:
+            say(f'[エラー] 音声入力を開始できませんでした。文字入力・読み上げ・伝言は続けます。{error}')
+        say('[待機] Minecraftで遊べます。この画面だけ開いたままにしてください。')
         say('[終了方法] Ctrl+C一回で音声入力・本体・専用接続を順に終了します。')
         while True:
-            for name, child in children:
+            for name, child in tuple(children):
                 if child.poll() is not None:
+                    if name == '音声入力':
+                        # 録音・STTだけの終了は、文字受付・TTS・伝言を所有する本体へ伝播させない。
+                        # 終了済みworkerを監視から外し、同じエラーの反復や無断の録音再開も避ける。
+                        stop_child(child)
+                        children.remove((name, child))
+                        say(f'[エラー] 音声入力が終了しました（exit={child.returncode}）。文字入力・読み上げ・伝言は続けます。')
+                        continue
                     raise RuntimeError(f'{name}が終了しました（exit={child.returncode}）。残りも停止します。')
             time.sleep(0.3)
     except KeyboardInterrupt:
