@@ -115,7 +115,9 @@ def test_registered_start_skips_pairing(lan, monkeypatch, tmp_path):
 def test_host_controls_only_explicitly_enroll_and_revoke(lan, monkeypatch):
     events = []
     host = SimpleNamespace(open_pairing=lambda seconds: events.append(("open", seconds)),
-                           devices=lambda: ["id1", "id2"], revoke=lambda device: events.append(("revoke", device)))
+                           device_records=lambda: [{'id': 'id1', 'name': 'PC一台目'}, {'id': 'id2', 'name': 'PC二台目'}],
+                           messages=SimpleNamespace(selected=lambda: None),
+                           revoke=lambda device: events.append(("revoke", device)))
     monkeypatch.setattr(lan, "choose", lambda *_: None)
     lan.manage(host, "")
     lan.manage(host, "pair")
@@ -133,13 +135,37 @@ def test_family_controls_preserve_typed_or_dictated_text(lan, monkeypatch):
     monkeypatch.setattr(sys, 'stdin', io.StringIO('recipient\nmessage ' + lan.json.dumps(text) + '\n'))
     lan.read_controls(commands)
     seen = []
-    host = SimpleNamespace(devices=lambda: ['other', 'play'],
-                           messages=SimpleNamespace(select=seen.append,
+    host = SimpleNamespace(device_records=lambda: [{'id': 'other', 'name': '別のPC'}, {'id': 'play', 'name': '遊ぶPC'}],
+                           messages=SimpleNamespace(select=seen.append, selected=lambda: None,
                                enqueue=lambda message, **kw: seen.append(message)))
     monkeypatch.setattr(lan, 'choose', lambda *_: 1)
     while not commands.empty():
         lan.manage(host, *commands.get())
     assert seen == ['play', text]
+
+
+# 見込み: 名前は表示だけに使えば、同名PCでも選んだ登録を変更し、削除は指定した登録だけに限定できる。
+# 合格: 一時DBと模擬登録で宛先と削除対象がIDどおり。空・混在・古い選択は無変更。実GUI/TLSは別試験。
+def test_device_settings_use_names_but_target_ids(lan, tmp_path, capsys):
+    devices = {'first': 'Mac mini', 'second': 'Mac mini', 'legacy': ''}
+    messages = lan.MessageBox(tmp_path, lambda: devices)
+    def revoke(device):
+        devices.pop(device)
+        messages.revoked(device)
+    host = SimpleNamespace(device_records=lambda: [{'id': key, 'name': value} for key, value in devices.items()],
+                           messages=messages, revoke=revoke)
+    lan.manage(host, 'recipient "second"')
+    snapshot = lan.device_settings(host)
+    assert snapshot == {'devices': [{'id': 'first', 'name': 'Mac mini'}, {'id': 'second', 'name': 'Mac mini'},
+                                   {'id': 'legacy', 'name': '登録PC 3'}], 'recipient': 'second'}
+    assert 'second' not in capsys.readouterr().out
+    for command in ('revoke []', 'revoke ["first", "unknown"]', 'revoke {}', 'recipient "unknown"'):
+        lan.manage(host, command)
+    assert messages.selected() == 'second' and len(devices) == 3
+    lan.manage(host, 'revoke ["first"]')
+    assert messages.selected() == 'second' and set(devices) == {'second', 'legacy'}
+    lan.manage(host, 'revoke ["second", "legacy"]')
+    assert not devices and messages.selected() is None
 
 
 # 見込み: 共有画面の管理者名を既存のsenderへ渡せば、表示・生成・原文代替に同じ送り主を使える。
@@ -211,7 +237,8 @@ def test_unplug_one_port_keeps_the_other_serving(lan, monkeypatch):
     monkeypatch.setattr(lan, "lan_interfaces", lambda: next(iterations))
     monkeypatch.setattr(lan.time, "monotonic", iter(range(0, 100, 5)).__next__)
     monkeypatch.setattr(lan.time, "sleep", lambda _: None)
+    settings = SimpleNamespace(device_records=lambda: [], messages=SimpleNamespace(selected=lambda: None))
     with pytest.raises(StopIteration):
-        lan.serve_lan(None, None, lan.queue.SimpleQueue())
+        lan.serve_lan(None, settings, lan.queue.SimpleQueue())
     assert events == [("open", wifi), ("open", wired), ("poll", wifi), ("poll", wired),
                       ("close", wired), ("poll", wifi), ("close", wifi)]

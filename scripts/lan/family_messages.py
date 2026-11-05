@@ -102,6 +102,11 @@ class MessageBox:
             db.execute('DELETE FROM recipient')
             db.execute('INSERT INTO recipient VALUES(?)', (device,))
 
+    def selected(self):
+        with closing(sqlite3.connect(self.path)) as db:
+            row = db.execute('SELECT device FROM recipient').fetchone()
+            return row[0] if row and row[0] in self.devices() else None
+
     def _finish(self, db, message_id, status, activity=None):
         # 端末で表示・再生を確認した本文だけを画面へ渡す。失敗時の生成文は発話済みにしない。
         spoken, = db.execute('SELECT spoken FROM messages WHERE id=?', (message_id,)).fetchone()

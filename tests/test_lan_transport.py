@@ -85,7 +85,8 @@ class World:
 
 
 @pytest.fixture
-def world(tmp_path):
+def world(tmp_path, monkeypatch):
+    monkeypatch.setattr(transport, 'computer_name', lambda: '遊ぶMac')
     with ExitStack() as stack:
         yield World(tmp_path, stack)
 
@@ -105,6 +106,47 @@ def test_first_pair_and_new_address_without_new_approval(world):
     transport.probe(moved, credentials)
     assert len(world.host_codes) == 1
     assert not world.upstream_calls
+
+
+# 見込み: 認証済み端末の名前だけを登録へ足せば、既存の鍵・宛先とIP変更後の再接続を保てる。
+# 合格: 実TLSと一時保存で旧登録が同じtokenのまま名前付きになり、再起動後も名前と宛先が一致。
+def test_authenticated_computer_name_preserves_registration_and_recipient(world, monkeypatch):
+    credentials = world.pair()
+    device = credentials['device']
+    file = world.root / 'host/devices.json'
+    old_digest = json.loads(file.read_text())[device]
+    world.host.messages.select(device)
+    monkeypatch.setattr(transport, 'computer_name', lambda: '家のMac mini')
+    transport.probe(world.address, credentials)
+    assert json.loads(file.read_text())[device] == {'token_hash': old_digest, 'name': '家のMac mini'}
+    stamp = file.stat().st_mtime_ns
+    transport.probe(world.address, credentials)
+    assert file.stat().st_mtime_ns == stamp
+    later, moved = world.new_host(world.root / 'host')
+    transport.probe(moved, credentials)
+    assert later.device_records() == [{'id': device, 'name': '家のMac mini'}]
+    assert later.messages.selected() == device
+    assert len(world.host_codes) == 1 and not world.upstream_calls
+    later.revoke(device)
+    assert later.device_records() == [] and later.messages.selected() is None
+
+
+# 見込み: PC名は認証後にだけ受ければ、未登録要求や改行入りの名前で既存登録を書き換えない。
+# 合格: 実TLSで未認証401・不正名400、登録内容は不変。旧クライアントの名前なし認証は成功する。
+def test_device_name_requires_authentication_and_valid_text(world):
+    credentials = world.pair()
+    path = world.root / 'host/devices.json'
+    before = path.read_bytes()
+    for headers, expected in [({'X-Dogido-Device-Name': 'fake'}, 401),
+            ({'Authorization': transport._auth(credentials), 'X-Dogido-Device-Name': 'bad%0Aname'}, 400),
+            ({'Authorization': transport._auth(credentials)}, 200)]:
+        conn, _ = transport._tls(world.address, credentials['pin'])
+        try:
+            conn.request('GET', transport.AUTH, headers=headers)
+            assert conn.getresponse().status == expected
+        finally:
+            conn.close()
+    assert path.read_bytes() == before
 
 
 # 見込み: 登録受付と双方の承認を独立して要求すれば、拒否された端末には資格を保存しない。

@@ -103,18 +103,51 @@ int main(int argc, const char *argv[]) {
         require(host.commands.count == 1, "composition sent prematurely");
         [editor unmarkText];
 
-        // 見込み: 設定は伝言の編集とは別の操作。合格: 同じ3コマンドへ届き、未送信本文は残る。
+        // 見込み: PC一覧はworker通知を表示し、選択の保存は既存commandへ届く。合格: 内部IDを表示しない。
         host.messageField.stringValue = @"設定中の下書き";
+        host.pending = [NSMutableData new];
+        NSString *snapshot = @"\x1e" @"DOGIDO_DEVICES {\"devices\":[{\"id\":\"1111111111111111\",\"name\":\"遊ぶMac\"},{\"id\":\"2222222222222222\",\"name\":\"遊ぶMac\"}],\"recipient\":\"1111111111111111\"}\n";
+        NSData *bytes = [snapshot dataUsingEncoding:NSUTF8StringEncoding];
+        const unsigned char *raw = bytes.bytes;
+        NSUInteger split = 0;
+        while (split < bytes.length && raw[split] < 0x80) split++;
+        split++;
+        [host displayData:[bytes subdataWithRange:NSMakeRange(0,split)] final:NO];
+        require(host.registeredDevices.count == 0, "partial snapshot applied");
+        [host displayData:[bytes subdataWithRange:NSMakeRange(split,bytes.length-split)] final:NO];
+        require(host.registeredDevices.count == 2, "split UTF-8 snapshot missing");
+        NSArray<NSButton *> *checks = host.deviceScroll.documentView.subviews;
+        require(checks.count == 2 && [checks[0].title isEqual:@"遊ぶMac"], "registered name missing");
+        require(![host.output.string containsString:@"1111111111111111"], "internal ID visible in log");
+        require([host.recipientPicker.selectedItem.representedObject isEqual:@"1111111111111111"], "saved recipient missing");
         [host setWorkerControlsEnabled:YES];
-        NSArray *expected = @[@"pair\n", @"revoke\n", @"recipient\n"];
-        require(host.managementButtons.count == expected.count, "settings count changed");
-        for (NSUInteger i = 0; i < expected.count; i++) {
-            require(host.managementButtons[i].enabled, "running setting disabled");
-            [host.managementButtons[i] performClick:nil];
-            require([host.commands.lastObject isEqual:expected[i]], "setting used another command");
-            require([host.messageField.stringValue isEqual:@"設定中の下書き"], "setting changed draft");
-        }
-        require(host.commands.count == 4, "setting sent draft");
+        require(!host.deleteButton.enabled, "unchecked delete enabled");
+        [host.managementButtons[0] performClick:nil];
+        require([host.commands.lastObject isEqual:@"pair\n"], "registration did not use pair");
+
+        // 見込み: チェックは削除候補にだけ作用し、宛先とは独立する。合格: 解除時/停止時は削除を押せない。
+        [checks[0] performClick:nil];
+        require(host.deleteButton.enabled && [host.recipientID isEqual:@"1111111111111111"], "checkbox changed recipient");
+        [checks[0] performClick:nil];
+        require(!host.deleteButton.enabled, "unchecking did not disable delete");
+        [checks[0] performClick:nil];
+        [host setWorkerControlsEnabled:NO];
+        require(!host.deleteButton.enabled && !host.recipientPicker.enabled, "stopped controls enabled");
+        [host setWorkerControlsEnabled:YES];
+        require(host.deleteButton.enabled, "checked delete did not resume");
+
+        // 見込み: 同名でもmenu itemのIDを保存する。合格: 保存通知前は元の宛先を表示し、通知後に新宛先。
+        [host.recipientPicker selectItemAtIndex:2];
+        [host recipient:host.recipientPicker];
+        require([host.commands.lastObject isEqual:@"recipient \"2222222222222222\"\n"], "same-name PC mixed up");
+        require([host.recipientPicker.selectedItem.representedObject isEqual:@"1111111111111111"], "unconfirmed recipient applied");
+        NSString *changed = [snapshot stringByReplacingOccurrencesOfString:@"\"recipient\":\"1111111111111111\"" withString:@"\"recipient\":\"2222222222222222\""];
+        [host displayData:[changed dataUsingEncoding:NSUTF8StringEncoding] final:NO];
+        require([host.recipientPicker.selectedItem.representedObject isEqual:@"2222222222222222"], "saved recipient not reflected");
+        [host.deleteButton performClick:nil];
+        require([host.commands.lastObject isEqual:@"revoke [\"1111111111111111\"]\n"], "delete targeted unchecked device");
+        require(!host.deleteButton.enabled && host.checkedDevices.count == 0, "submitted checks not cleared");
+        require([host.messageField.stringValue isEqual:@"設定中の下書き"] && host.commands.count == 4, "settings changed message draft");
         host.window.delegate = nil;
         [host.window orderOut:nil];
         puts("host controls passed");

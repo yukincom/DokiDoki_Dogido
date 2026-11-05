@@ -27,6 +27,7 @@ from family_messages import MessageBox, TIMEOUT, Unavailable
 
 STATE = Path.home() / "Library/Application Support/Dogido LAN"
 PAIR_SECONDS = 120
+DEVICES_PREFIX = '\x1eDOGIDO_DEVICES '
 
 
 def dialog(script, args):
@@ -126,6 +127,14 @@ def report_to_yuno(result):
         print("ユノに伝言の状態を通知できませんでした。", flush=True)
 
 
+def device_settings(host):
+    """UIへは名前・宛先・操作用IDだけを渡す。鍵やIPを表示用データへ混ぜない。"""
+    rows = host.device_records()
+    for index, row in enumerate(rows, 1):
+        row['name'] = row['name'] or f'登録PC {index}'
+    return {'devices': rows, 'recipient': host.messages.selected()}
+
+
 def manage(host, command, received=None):
     if command == "":
         selection = choose("端末の登録または解除を選んでください。", ["端末を追加", "登録を解除"])
@@ -153,28 +162,50 @@ def manage(host, command, received=None):
             print(f"伝言を受け付けられませんでした。{error}", flush=True)
             return
         print("伝言を預かりました。ゲームでの表示または再生を待っています。", flush=True)
-    elif command == "recipient":
-        devices = sorted(host.devices())
-        if not devices:
+    elif command == 'recipient' or command.startswith('recipient '):
+        rows = device_settings(host)['devices']
+        if not rows:
             print("先に遊ぶMacを登録してください。", flush=True)
             return
-        selected = choose("この画面とLINEの伝言を届けるMacの登録IDを選んでください。", devices)
-        if selected is not None:
-            try:
-                host.messages.select(devices[selected])
-            except ValueError as error:
-                print(error, flush=True)
-                return
-            print(f"伝言の宛先を {devices[selected]} に設定しました。", flush=True)
-    elif command == "revoke":
-        devices = sorted(host.devices())
-        if not devices:
+        try:
+            if command == 'recipient':
+                selected = choose('この画面とLINEの伝言を届けるPCを選んでください。', [row['name'] for row in rows])
+                if selected is None:
+                    return
+                device = rows[selected]['id']
+            else:
+                device = json.loads(command[len('recipient '):])
+            row = next((row for row in rows if row['id'] == device), None)
+            if row is None:
+                raise ValueError('選んだPCは登録されていません。')
+            host.messages.select(device)
+        except (ValueError, sqlite3.Error) as error:
+            print(error, flush=True)
+            return
+        print(f"伝言の宛先を {row['name']} に設定しました。", flush=True)
+    elif command == 'revoke' or command.startswith('revoke '):
+        rows = device_settings(host)['devices']
+        if not rows:
             print("登録済みの端末はありません。", flush=True)
             return
-        selected = choose("登録を解除する端末を選んでください。", devices)
-        if selected is not None:
-            host.revoke(devices[selected])
-            print("選んだ端末の登録を解除しました。", flush=True)
+        try:
+            if command == 'revoke':
+                selected = choose('登録を削除するPCを選んでください。', [row['name'] for row in rows])
+                if selected is None:
+                    return
+                devices = [rows[selected]['id']]
+            else:
+                devices = json.loads(command[len('revoke '):])
+            registered = {row['id'] for row in rows}
+            if (not isinstance(devices, list) or not devices
+                    or any(not isinstance(device, str) or device not in registered for device in devices)):
+                raise ValueError('削除する登録PCを選んでください。')
+            for device in dict.fromkeys(devices):
+                host.revoke(device)
+        except (ValueError, OSError, sqlite3.Error) as error:
+            print(error, flush=True)
+            return
+        print('選んだPCの登録を削除しました。', flush=True)
 
 
 @contextmanager
@@ -194,9 +225,12 @@ def serve_lan(discovery, listen, commands):
     # 各経路の待受けと広告を一緒に閉じる。一方の抜き差しでは他方の接続や端末登録を閉じない。
     active = {}
     next_check = 0
+    last_settings = None
     try:
         while True:
+            refresh_settings = False
             if time.monotonic() >= next_check:
+                refresh_settings = True
                 interfaces = lan_interfaces()
                 if not interfaces and (active or next_check == 0):
                     print("LANへの接続を待っています。", flush=True)
@@ -216,8 +250,16 @@ def serve_lan(discovery, listen, commands):
                     active[entry] = stack, server, poll
                     print("ドギド共有受付を開始しました。", flush=True)
                 next_check = time.monotonic() + 3
-            if active and not commands.empty():
-                manage(next(iter(active.values()))[1], *commands.get())
+            if not commands.empty():
+                manage(listen, *commands.get())
+                refresh_settings = True
+            if refresh_settings:
+                settings = device_settings(listen)
+                if settings != last_settings:
+                    # 他workerのログが本文と改行の間に入らないよう、一行を一度に書く。
+                    sys.stdout.write(DEVICES_PREFIX + json.dumps(settings, ensure_ascii=False) + '\n')
+                    sys.stdout.flush()
+                    last_settings = settings
             for entry, (stack, _, poll) in list(active.items()):
                 try:
                     poll(0)
@@ -257,7 +299,7 @@ def prepare_messages(stop, messages, render):
 def run_host(state):
     discovery = Bonjour()
     commands = queue.SimpleQueue()
-    print("新しいMacを登録するときは「端末を追加」を押してください。", flush=True)
+    print("新しいMacを登録するときは設定の「登録追加」を押してください。", flush=True)
     threading.Thread(target=read_controls, args=(commands,), daemon=True).start()
     # ユノの受信部品と文面生成は共有アプリにだけ同梱する。
     from line_inbox import serve
@@ -358,7 +400,7 @@ def run_client(state):
         replica = shared_readings.client_replica(credentials)
         route = PeerRoute()
         if 'device' in credentials:
-            print(f"このMacの伝言用の登録ID: {credentials['device']}", flush=True)
+            print('このMacの登録が完了しました。', flush=True)
         with serving(transport.make_client_relay(route.resolve, credentials, port=8080)), background(
                 message_client.run, state, route.resolve, credentials), background(
                 shared_readings.run, replica, route.resolve, credentials):

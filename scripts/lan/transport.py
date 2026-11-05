@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from collections import deque
 from contextlib import contextmanager
+from functools import lru_cache
 import fcntl
 import hashlib
 import hmac
@@ -13,11 +14,13 @@ import os
 from pathlib import Path
 import re
 import secrets
+import socket
 import ssl
 import subprocess
 import tempfile
 import threading
 import time
+from urllib.parse import quote, unquote
 
 from family_messages import GAME_REASONS, MessageBox, check_activity, check_text
 
@@ -228,6 +231,25 @@ class Pairings:
     def devices(self):
         return sorted(self._devices())
 
+    def device_records(self):
+        """表示名は登録情報に添える。宛先と認証は従来の端末ID・tokenで照合する。"""
+        return [{'id': device, 'name': value.get('name', '') if isinstance(value, dict) else ''}
+                for device, value in sorted(self._devices().items())]
+
+    def name_device(self, device, name):
+        name = check_text(name, 80)
+        with _locked(self.root / 'devices.lock'):
+            devices = self._devices()
+            if device not in devices:
+                return
+            old = devices[device]
+            value = dict(old) if isinstance(old, dict) else {'token_hash': old}
+            if value.get('name') == name:
+                return
+            value['name'] = name
+            devices[device] = value
+            _save(self.root / 'devices.json', devices)
+
     def revoke(self, device):
         with _locked(self.root / 'devices.lock'):
             devices = self._devices()
@@ -242,8 +264,11 @@ class Pairings:
             return None
         prefix, _, credential = headers[0].partition(' ')
         device, _, token = credential.partition('.')
+        stored = self._devices().get(device, '')
+        # 名前のない既存登録もそのまま読める。表示名の追加でtokenを作り直さない。
+        digest = stored.get('token_hash', '') if isinstance(stored, dict) else stored
         if (prefix == 'Bearer' and DEVICE_ID.fullmatch(device) and TOKEN.fullmatch(token)
-                and hmac.compare_digest(self._devices().get(device, ''), _digest(token))):
+                and isinstance(digest, str) and hmac.compare_digest(digest, _digest(token))):
             return device
         return None
 
@@ -323,11 +348,23 @@ def _auth(value):
     return 'Bearer ' + credentials['device'] + '.' + credentials['token']
 
 
+@lru_cache(maxsize=1)
+def computer_name():
+    """macOSの登録名を起動中に一度読む。HTTPヘッダーへはUTF-8をpercent encodeして渡す。"""
+    try:
+        result = subprocess.run(['/usr/sbin/scutil', '--get', 'ComputerName'],
+                                capture_output=True, text=True, check=True, timeout=2)
+        return check_text(result.stdout.strip(), 80)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return check_text(socket.gethostname().removesuffix('.local')[:80], 80)
+
+
 def probe(address, credentials):
     # 切断済みの経路が、同じ登録先の別経路への切り替えを長く塞がないようにする。
     conn, _ = _tls(address, credentials['pin'], timeout=2)
     try:
-        conn.request('GET', AUTH, headers={'Authorization': _auth(credentials)})
+        conn.request('GET', AUTH, headers={'Authorization': _auth(credentials),
+                                          'X-Dogido-Device-Name': quote(computer_name(), safe='')})
         response = conn.getresponse()
         if response.status in (401, 403):
             raise RevokedError('端末登録が解除されています')
@@ -492,6 +529,14 @@ def host_listener(state_dir, upstream_port, confirm, messages=None, readings=Non
             if not device:
                 raise Refusal(401)
             if self.path == AUTH and self.command == 'GET':
+                names = self.headers.get_all('X-Dogido-Device-Name', [])
+                if names:
+                    try:
+                        if len(names) != 1 or len(names[0]) > 960:
+                            raise ValueError
+                        pairings.name_device(device, unquote(names[0], errors='strict'))
+                    except ValueError:
+                        raise Refusal(400)
                 self.reply(200)
             elif self.path == READINGS:
                 if self.command != 'GET':
@@ -537,11 +582,15 @@ def host_listener(state_dir, upstream_port, confirm, messages=None, readings=Non
     def listen(bind):
         server = Server(bind, HostHandler, ctx)
         server.pin = pin
-        server.open_pairing = lambda seconds=PAIR_SECONDS: pairings.open(seconds)
-        server.devices = pairings.devices
-        server.revoke = revoke
-        server.messages = messages
+        for name in ('open_pairing', 'devices', 'device_records', 'revoke', 'messages'):
+            setattr(server, name, getattr(listen, name))
         return server
+    # 設定はLANの抜き差しと独立して同じ登録正本へ届く。
+    listen.open_pairing = lambda seconds=PAIR_SECONDS: pairings.open(seconds)
+    listen.devices = pairings.devices
+    listen.device_records = pairings.device_records
+    listen.revoke = revoke
+    listen.messages = messages
     return listen
 
 

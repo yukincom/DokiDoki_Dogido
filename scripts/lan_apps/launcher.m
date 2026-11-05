@@ -122,6 +122,13 @@ static int finderAlias(NSString *operation, NSString *file, NSString *app) {
 @property NSTextField *administratorField;
 @property NSTextField *settingsError;
 @property NSString *administratorName;
+@property NSMutableString *hostOutputBuffer;
+@property NSArray<NSDictionary *> *registeredDevices;
+@property NSMutableSet<NSString *> *checkedDevices;
+@property NSString *recipientID;
+@property NSScrollView *deviceScroll;
+@property NSPopUpButton *recipientPicker;
+@property NSButton *deleteButton;
 @property NSFileHandle *input;
 @property NSFileHandle *reader;
 @property NSMutableData *pending;
@@ -160,6 +167,9 @@ static int finderAlias(NSString *operation, NSString *file, NSString *app) {
     return button;
 }
 - (void)buildHostInterface {
+    self.hostOutputBuffer = [NSMutableString new];
+    self.registeredDevices = @[];
+    self.checkedDevices = [NSMutableSet new];
     NSDictionary *preferences = [NSDictionary dictionaryWithContentsOfURL:self.settingsFile];
     BOOL exists = [NSFileManager.defaultManager fileExistsAtPath:self.settingsFile.path];
     self.administratorName = exists ? [self checkedAdministratorName:preferences[@"administrator_name"]] : @"管理者";
@@ -245,13 +255,13 @@ static int finderAlias(NSString *operation, NSString *file, NSString *app) {
     return name;
 }
 - (void)buildSettingsInterface {
-    self.settingsWindow = [[NSPanel alloc] initWithContentRect:NSMakeRect(0,0,420,352)
+    self.settingsWindow = [[NSPanel alloc] initWithContentRect:NSMakeRect(0,0,520,430)
             styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
     self.settingsWindow.title = @"設定";
     self.settingsWindow.appearance = self.window.appearance;
-    self.settingsWindow.contentView = [[HostCanvas alloc] initWithFrame:NSMakeRect(0,0,420,352)];
+    self.settingsWindow.contentView = [[HostCanvas alloc] initWithFrame:NSMakeRect(0,0,520,430)];
     NSTextField *label = [NSTextField labelWithString:@"管理者名"];
-    label.frame = NSMakeRect(24,302,372,20);
+    label.frame = NSMakeRect(24,380,472,20);
     label.font = [NSFont monospacedSystemFontOfSize:13 weight:NSFontWeightBold];
     label.textColor = hostInk();
     [self.settingsWindow.contentView addSubview:label];
@@ -265,34 +275,88 @@ static int finderAlias(NSString *operation, NSString *file, NSString *app) {
     self.administratorField.textColor = hostInk();
     self.administratorField.font = [NSFont monospacedSystemFontOfSize:14 weight:NSFontWeightRegular];
     self.administratorField.usesSingleLineMode = YES;
-    self.administratorField.frame = NSMakeRect(24,263,260,30);
+    self.administratorField.frame = NSMakeRect(24,341,360,30);
     self.administratorField.accessibilityLabel = @"管理者名";
     self.administratorField.target = self;
     self.administratorField.action = @selector(saveSettings:);
     self.administratorField.cell.sendsActionOnEndEditing = NO;
     [self.settingsWindow.contentView addSubview:self.administratorField];
     self.settingsWindow.initialFirstResponder = self.administratorField;
-    NSButton *save = [self hostButton:@"保存" action:@selector(saveSettings:) frame:NSMakeRect(298,261,98,34) accent:YES];
+    NSButton *save = [self hostButton:@"保存" action:@selector(saveSettings:) frame:NSMakeRect(398,339,98,34) accent:YES];
     [self.settingsWindow.contentView addSubview:save];
-    NSMutableArray *buttons = [NSMutableArray new];
-    NSArray *items = @[@[@"端末を追加", NSStringFromSelector(@selector(pair:))],
-                       @[@"登録を解除", NSStringFromSelector(@selector(revoke:))],
-                       @[@"伝言の宛先…", NSStringFromSelector(@selector(recipient:))]];
-    for (NSUInteger i = 0; i < items.count; i++) {
-        NSButton *button = [self hostButton:items[i][0] action:NSSelectorFromString(items[i][1])
-                frame:NSMakeRect(24,205-i*44,372,34) accent:NO];
-        button.enabled = self.task.running;
-        [self.settingsWindow.contentView addSubview:button];
-        [buttons addObject:button];
-    }
-    self.managementButtons = buttons;
+    NSTextField *registered = [NSTextField labelWithString:@"登録PC"];
+    registered.frame = NSMakeRect(24,292,320,20);
+    registered.font = label.font;
+    registered.textColor = hostInk();
+    [self.settingsWindow.contentView addSubview:registered];
+    NSButton *add = [self hostButton:@"登録追加" action:@selector(pair:) frame:NSMakeRect(398,284,98,34) accent:NO];
+    [self.settingsWindow.contentView addSubview:add];
+    self.deviceScroll = [[NSScrollView alloc] initWithFrame:NSMakeRect(24,134,472,140)];
+    self.deviceScroll.hasVerticalScroller = YES;
+    self.deviceScroll.borderType = NSBezelBorder;
+    self.deviceScroll.backgroundColor = NSColor.whiteColor;
+    [self.settingsWindow.contentView addSubview:self.deviceScroll];
+    NSTextField *recipient = [NSTextField labelWithString:@"伝言の宛先"];
+    recipient.frame = NSMakeRect(24,94,100,20);
+    recipient.font = label.font;
+    recipient.textColor = hostInk();
+    [self.settingsWindow.contentView addSubview:recipient];
+    self.recipientPicker = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(132,86,250,32) pullsDown:NO];
+    self.recipientPicker.target = self;
+    self.recipientPicker.action = @selector(recipient:);
+    self.recipientPicker.accessibilityLabel = @"伝言の宛先";
+    self.recipientPicker.font = [NSFont systemFontOfSize:13];
+    [self.settingsWindow.contentView addSubview:self.recipientPicker];
+    self.deleteButton = [self hostButton:@"削除" action:@selector(revoke:) frame:NSMakeRect(398,86,98,34) accent:NO];
+    [self.settingsWindow.contentView addSubview:self.deleteButton];
+    self.managementButtons = @[add, self.deleteButton];
     self.settingsError = [NSTextField wrappingLabelWithString:@""];
-    self.settingsError.frame = NSMakeRect(24,65,372,40);
+    self.settingsError.frame = NSMakeRect(24,54,472,26);
     self.settingsError.font = [NSFont systemFontOfSize:11];
     self.settingsError.textColor = hostColor(0x984b39);
     [self.settingsWindow.contentView addSubview:self.settingsError];
-    NSButton *close = [self hostButton:@"閉じる" action:@selector(closeSettings:) frame:NSMakeRect(298,20,98,34) accent:NO];
+    NSButton *close = [self hostButton:@"閉じる" action:@selector(closeSettings:) frame:NSMakeRect(398,16,98,34) accent:NO];
     [self.settingsWindow.contentView addSubview:close];
+    [self refreshDeviceList];
+}
+// チェックは削除候補だけ。宛先と登録の正本はworkerに置き、一覧の更新で保存済み値を反映する。
+- (void)refreshDeviceList {
+    if (!self.deviceScroll) return;
+    NSMutableSet *live = [NSMutableSet new];
+    for (NSDictionary *device in self.registeredDevices) [live addObject:device[@"id"]];
+    [self.checkedDevices intersectSet:live];
+    CGFloat width = self.deviceScroll.contentSize.width;
+    CGFloat height = MAX(self.deviceScroll.contentSize.height, self.registeredDevices.count * 34 + 12);
+    NSView *list = [[NSView alloc] initWithFrame:NSMakeRect(0,0,width,height)];
+    [self.recipientPicker removeAllItems];
+    [self.recipientPicker addItemWithTitle:@"未選択"];
+    self.recipientPicker.lastItem.enabled = NO;
+    for (NSUInteger index = 0; index < self.registeredDevices.count; index++) {
+        NSDictionary *device = self.registeredDevices[index];
+        NSString *name = device[@"name"];
+        NSButton *check = [NSButton checkboxWithTitle:name target:self action:@selector(checkDevice:)];
+        check.frame = NSMakeRect(12,height-40-index*34,width-24,30);
+        check.font = [NSFont systemFontOfSize:14];
+        check.contentTintColor = hostInk();
+        check.cell.lineBreakMode = NSLineBreakByTruncatingTail;
+        check.tag = index;
+        check.state = [self.checkedDevices containsObject:device[@"id"]] ? NSControlStateValueOn : NSControlStateValueOff;
+        [list addSubview:check];
+        // 同名PCもmenu itemのrepresentedObjectで区別し、表示名から登録IDを逆引きしない。
+        NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:name action:nil keyEquivalent:@""];
+        item.representedObject = device[@"id"];
+        [self.recipientPicker.menu addItem:item];
+        if ([self.recipientID isEqual:device[@"id"]]) [self.recipientPicker selectItem:item];
+    }
+    self.deviceScroll.documentView = list;
+    [self setWorkerControlsEnabled:self.task.running];
+}
+- (void)checkDevice:(NSButton *)sender {
+    if (sender.tag < 0 || (NSUInteger)sender.tag >= self.registeredDevices.count) return;
+    NSString *device = self.registeredDevices[sender.tag][@"id"];
+    if (sender.state == NSControlStateValueOn) [self.checkedDevices addObject:device];
+    else [self.checkedDevices removeObject:device];
+    self.deleteButton.enabled = self.task.running && self.checkedDevices.count > 0;
 }
 - (void)showSettings:(id)sender {
     if (!self.settingsWindow) [self buildSettingsInterface];
@@ -329,6 +393,9 @@ static int finderAlias(NSString *operation, NSString *file, NSString *app) {
 - (void)setWorkerControlsEnabled:(BOOL)enabled {
     for (NSButton *button in self.hostButtons) button.enabled = enabled;
     for (NSButton *button in self.managementButtons) button.enabled = enabled;
+    self.deleteButton.enabled = enabled && self.checkedDevices.count > 0;
+    self.recipientPicker.enabled = enabled && self.registeredDevices.count > 0;
+    for (NSButton *check in self.deviceScroll.documentView.subviews) check.enabled = enabled;
 }
 - (void)applicationDidFinishLaunching:(NSNotification *)note {
     BOOL host = [[NSBundle.mainBundle objectForInfoDictionaryKey:@"DogidoRole"] isEqual:@"host"];
@@ -441,9 +508,39 @@ static int finderAlias(NSString *operation, NSString *file, NSString *app) {
     }
     if (end) {
         NSString *line = [[NSString alloc] initWithBytes:bytes length:end encoding:NSUTF8StringEncoding];
-        [self append:line ?: @"[ログの文字コードを読み取れません]\n"];
+        NSString *text = line ?: @"[ログの文字コードを読み取れません]\n";
+        if (self.hostOutputBuffer) [self.hostOutputBuffer appendString:text];
+        else [self append:text];
         [self.pending replaceBytesInRange:NSMakeRange(0,end) withBytes:NULL length:0];
     }
+    // pipeの分割位置とUTF-8の境界に依存せず、一行の設定通知だけをUIへ渡す。
+    while (self.hostOutputBuffer.length) {
+        NSRange newline = [self.hostOutputBuffer rangeOfString:@"\n"];
+        if (newline.location == NSNotFound && !final) break;
+        NSUInteger count = newline.location == NSNotFound ? self.hostOutputBuffer.length : newline.location + 1;
+        NSString *line = [self.hostOutputBuffer substringToIndex:count];
+        [self.hostOutputBuffer deleteCharactersInRange:NSMakeRange(0,count)];
+        [self receiveHostLine:line];
+    }
+}
+- (void)receiveHostLine:(NSString *)line {
+    NSString *prefix = @"\x1e" @"DOGIDO_DEVICES ";
+    if (![line hasPrefix:prefix]) { [self append:line]; return; }
+    NSData *data = [[line substringFromIndex:prefix.length] dataUsingEncoding:NSUTF8StringEncoding];
+    id value = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+    if (![value isKindOfClass:NSDictionary.class] || ![value[@"devices"] isKindOfClass:NSArray.class]) return;
+    NSMutableSet *ids = [NSMutableSet new];
+    for (id row in value[@"devices"]) {
+        if (![row isKindOfClass:NSDictionary.class] || ![row[@"id"] isKindOfClass:NSString.class] ||
+                ![row[@"name"] isKindOfClass:NSString.class] || ![row[@"name"] length] ||
+                [ids containsObject:row[@"id"]]) return;
+        [ids addObject:row[@"id"]];
+    }
+    id recipient = value[@"recipient"];
+    if (recipient != NSNull.null && ![ids containsObject:recipient]) return;
+    self.registeredDevices = value[@"devices"];
+    self.recipientID = recipient == NSNull.null ? nil : recipient;
+    [self refreshDeviceList];
 }
 - (void)pipeReady:(NSNotification *)notice {
     if (notice.object != self.reader) return;
@@ -484,8 +581,25 @@ static int finderAlias(NSString *operation, NSString *file, NSString *app) {
     return YES;
 }
 - (void)pair:(id)sender { [self command:@"pair\n"]; }
-- (void)revoke:(id)sender { [self command:@"revoke\n"]; }
-- (void)recipient:(id)sender { [self command:@"recipient\n"]; }
+- (BOOL)deviceCommand:(NSString *)name value:(id)value {
+    NSData *data = [NSJSONSerialization dataWithJSONObject:value options:NSJSONWritingFragmentsAllowed error:nil];
+    if (!data) return NO;
+    NSString *json = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+    return [self command:[NSString stringWithFormat:@"%@ %@\n", name, json]];
+}
+- (void)revoke:(id)sender {
+    if (!self.checkedDevices.count) return;
+    if ([self deviceCommand:@"revoke" value:[self.checkedDevices.allObjects sortedArrayUsingSelector:@selector(compare:)]]) {
+        [self.checkedDevices removeAllObjects];
+        [self refreshDeviceList];
+    }
+}
+- (void)recipient:(id)sender {
+    NSString *device = self.recipientPicker.selectedItem.representedObject;
+    if (device && ![device isEqual:self.recipientID]) [self deviceCommand:@"recipient" value:device];
+    // 書込み成功を保存成功とみなさず、workerの次の通知で選択を確定する。
+    [self refreshDeviceList];
+}
 - (void)sendMessage:(id)sender {
     // ボタン操作中も、日本語などの未確定文字列を送信しない。
     NSTextView *editor = (NSTextView *)self.messageField.currentEditor;
