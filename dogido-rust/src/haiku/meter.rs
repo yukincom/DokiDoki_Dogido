@@ -82,6 +82,7 @@ pub fn line_failure_reasons(
     }
     let count = count_japanese_sounds(text);
     let target = TARGETS[line_index];
+    // プロンプトでは五・七・五を目標にしつつ、コード側の許容幅は当面±1音を維持する（5-7-5が安定して出るようになったらここも厳密化する）。
     if count < target - 1 {
         reasons.push("meter_too_short");
     } else if count > target + 1 {

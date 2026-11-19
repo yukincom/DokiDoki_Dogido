@@ -203,6 +203,7 @@ async fn regenerate<B: Backend>(
     max_tokens: Option<u64>,
 ) -> BTreeMap<usize, String> {
     let mut details = details.clone();
+    // プロンプトでは五・七・五を目標にしつつ、コード側の許容幅は当面±1音を維持する（5-7-5が安定して出るようになったらここも厳密化する）。
     let rows:Vec<_> = lines.iter().enumerate().map(|(i,l)| {
         let count = meter::count_japanese_sounds(&l.text); let target = meter::TARGETS[i];
         json!({"line_index":i,"text":l.text,"frozen":!failed.contains(&i),

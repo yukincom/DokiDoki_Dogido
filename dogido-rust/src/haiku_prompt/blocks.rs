@@ -142,7 +142,7 @@ pub(super) fn materials(d: &Value) -> String {
         chunks.push(format!("空と時間: {weather} / {time}"));
         let context = clean(&d["weather_context"]);
         if !context.is_empty() {
-            chunks.push(format!("コードで確定した現在地の気象: {context}"));
+            chunks.push(format!("現在地の気象: {context}"));
         }
     }
     // 直前の雑談は80字の要約と最大3語に留め、プレイヤーとの会話に由来する軽い材料と明示する。
