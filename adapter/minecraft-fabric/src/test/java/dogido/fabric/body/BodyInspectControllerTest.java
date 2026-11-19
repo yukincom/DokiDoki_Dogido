@@ -52,7 +52,6 @@ class BodyInspectControllerTest {
             onResolve.run();
             return actual == null ? null : new BodyInspectController.ResolvedTarget(actual,targetBounds,shape,false);
         }
-        public Target imageTarget(Command command,SessionRef session,BodyInspectController.Live live) {return grounded;}
         public boolean collisionFree(BodyApproachGeometry.Bounds destination) { onCollision.run(); return clear; }
         public String moveTo(SessionRef session,Command command,BodyConnection.MoveRequest request) { requests.add(request); return submission; }
         public BodyLookController.Result lookOwner(SessionRef session,Command command) {
@@ -161,11 +160,16 @@ class BodyInspectControllerTest {
         Fake fake=new Fake(); fake.actual=null; fake.controller.handle(command(),SESSION,NOW);
         assertEquals("target_unavailable",fake.detail()); assertTrue(fake.requests.isEmpty());
     }
-    @Test void movedCandidateOrMovedActualTargetDoesNotSubmit() {
-        Fake cached=new Fake(); cached.observation.getAsJsonArray("candidates").get(0).getAsJsonObject().add("position",new Point(11,64,0).json());
-        cached.controller.handle(command(),SESSION,NOW); assertEquals("target_moved",cached.detail());
-        Fake live=new Fake(); live.actual=new Point(11,64,0); live.controller.handle(command(),SESSION,NOW);
-        assertEquals("target_moved",live.detail()); assertTrue(live.requests.isEmpty());
+    @Test void movedCandidateOrActualTargetStillApproachesIfWithinOwnerRange() {
+        Fake cached=new Fake();
+        cached.observation.getAsJsonArray("candidates").get(0).getAsJsonObject().add("position",new Point(6,64,0).json());
+        cached.controller.handle(command(),SESSION,NOW);
+        assertEquals(1,cached.requests.size());
+        Fake live=new Fake();
+        live.actual=new Point(6,64,0);
+        live.targetBounds=new BodyApproachGeometry.Bounds(5.5,64,-.5,6.5,65,.5);
+        live.controller.handle(command(),SESSION,NOW);
+        assertEquals(1,live.requests.size());
     }
     @Test void expiredOrFutureCommandDoesNotSubmit() {
         Fake expired=new Fake(); expired.controller.handle(command(),SESSION,NOW.plusSeconds(4));
@@ -204,9 +208,18 @@ class BodyInspectControllerTest {
         Fake fake=new Fake(); fake.submission="stale_session"; fake.controller.handle(command(),SESSION,NOW);
         assertFalse(fake.controller.pending()); assertTrue(fake.results.isEmpty());
     }
-    @Test void targetMovementUsesTheSameOneAndAHalfBlockLimitAsRust() {
-        Fake fake=new Fake(); fake.actual=new Point(9.51,64,0); fake.controller.handle(command(),SESSION,NOW);
-        assertTrue(fake.requests.isEmpty()); assertEquals("target_moved",fake.detail());
+    @Test void blockCandidateMatchesByTypeIdAndMovesToNearestCurrentBlock() {
+        Fake fake=new Fake();
+        Point oldPoint=new Point(2.5,64.5,0.5);
+        Point newPoint=new Point(3.5,64.5,0.5);
+        Target requested=new Target(blockId(oldPoint,"minecraft:poppy"),"block","minecraft:poppy","ポピー",oldPoint,null);
+        Target currentNearest=new Target(blockId(newPoint,"minecraft:poppy"),"block","minecraft:poppy","ポピー",newPoint,null);
+        JsonArray candidates=new JsonArray(); candidates.add(currentNearest.json());
+        fake.observation.add("candidates",candidates);
+        fake.actual=newPoint;
+        fake.targetBounds=new BodyApproachGeometry.Bounds(3,64,0,4,65,1);
+        fake.controller.handle(new Command(UUID.randomUUID(),NOW,NOW.plusSeconds(4),CONTEXT,requested),SESSION,NOW);
+        assertEquals(1,fake.requests.size());
     }
     @Test void bodyContextChangeFinishesOldActionWithoutAcceptingNewBodyResult() {
         Fake fake=new Fake(); Command command=command(); fake.controller.handle(command,SESSION,NOW);
@@ -268,19 +281,4 @@ class BodyInspectControllerTest {
         fake.controller.handle(new Command(UUID.randomUUID(),NOW,NOW.plusSeconds(4),CONTEXT,null,Purpose.OWNER_NEAR),SESSION,NOW);
         assertEquals("outside_owner_range",fake.detail()); assertTrue(fake.requests.isEmpty());
     }
-    @Test void imageCanResolveOutsideCandidateTableButStillNeedsSafeCurrentTarget() {
-        var image=new ImageTarget("view_12345678-1234-1234-1234-123456789abc","気になる牛","mob","any","center","middle");
-        for(String mode:List.of("valid","unresolved","unsafe","moved","range")) {
-            var fake=new Fake();fake.observation.add("candidates",new JsonArray());
-            if(mode.equals("unresolved"))fake.grounded=null;
-            if(mode.equals("unsafe"))fake.clear=false;
-            if(mode.equals("moved"))fake.actual=new Point(14,64,0);
-            if(mode.equals("range"))fake.owner=new Point(-10,64,0);
-            var command=new Command(UUID.randomUUID(),NOW,NOW.plusSeconds(4),CONTEXT,null,Purpose.INSPECT,image);
-            fake.controller.handle(command,SESSION,NOW);
-            assertEquals(mode.equals("valid")?1:0,fake.requests.size(),mode);
-            if(mode.equals("valid"))assertEquals(Purpose.INSPECT,fake.requests.getFirst().purpose());
-        }
-    }
-
 }

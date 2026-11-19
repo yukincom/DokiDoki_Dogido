@@ -159,7 +159,7 @@ Body API v9対応時、観測capabilityは`body_autonomy.v2`、実行capability�
 - `reassurance`: `value`（0〜100）、`owner_distance`（block）、`owner_visible,face_visible,owner_working`（bool）。身体server tickで更新し、実行受付・到着成功から回復を作らない。
 - `attention`: `scope`は`target_only/narrow/ambient/ordinary`、`expansion`は0〜1。同じframeへ実適用した範囲であり、世界の種類変化とは別の材料。
 - unavailable: `version:2,status:"unavailable",reason`。前回候補を現在値へ補完しない。
-- candidates: 最大24件。`id,kind,type_id,label,position`とentityだけ`entity_id`。entity IDは`e:UUID`、block IDは`b:x,y,z:type_id`、block位置はセル中心。現在の注意範囲で実視認でき、ownerの`follow_distance`内にある候補だけを選択へ渡す。
+- candidates: 最大24件。`id,kind,type_id,label,position`とentityだけ`entity_id`。entity IDは`e:UUID`、block IDは`b:x,y,z:type_id`、block位置はセル中心。現在の通常視野（水平120度・垂直90度）で実視認でき、ownerの`follow_distance`内にある非敵対モブと、視認数が少ない上位3種類のブロック（各種類で最も近い一点）だけを選択へ渡す。実行時は同一個体または同種ブロックの現在位置を再照合し、最も近い安全な隣へ移動する。
 - command: `type:"inspect_body_target",command_id,issued_at,expires_at,context,purpose,target`。purposeは`inspect/owner_near/owner_face`。inspectだけ選択した候補をtargetに保持し、owner行動はtarget=null。開始期限は5秒以内、同一ID・内容で再送し、結果待ちは発行から最大35秒。
 - result: `command_type:"inspect_body_target",command_id,status,executed_at,detail_code,body_id,epoch`。既存の結果とACKを使う。受付と到着を分け、終端`arrived`だけを到着成功として扱う。
 

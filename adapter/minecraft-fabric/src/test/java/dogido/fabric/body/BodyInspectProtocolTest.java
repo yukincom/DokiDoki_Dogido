@@ -64,14 +64,4 @@ class BodyInspectProtocolTest {
         row.remove("purpose"); assertTrue(parseCommands(envelope(row)).isEmpty());
         row=wire(); row.add("target",com.google.gson.JsonNull.INSTANCE); assertTrue(parseCommands(envelope(row)).isEmpty());
     }
-    @Test void imageSelectionAcceptsAppearanceAndRejectsCoordinates() {
-        var row=wire();row.add("target",com.google.gson.JsonNull.INSTANCE);
-        var image=new JsonObject();image.addProperty("capture_id","view_12345678-1234-1234-1234-123456789abc");
-        image.addProperty("description","黄色い花");image.addProperty("kind","flower");image.addProperty("color","yellow");image.addProperty("horizontal","left");image.addProperty("vertical","any");row.add("image_target",image);
-        assertEquals("yellow",parseCommands(envelope(row)).getFirst().imageTarget().color());
-        image.addProperty("z",99);assertTrue(parseCommands(envelope(row)).isEmpty());image.remove("z");
-        image.addProperty("x",.3);assertTrue(parseCommands(envelope(row)).isEmpty());image.remove("x");
-        row.addProperty("purpose","owner_face");assertTrue(parseCommands(envelope(row)).isEmpty());
-    }
-
 }

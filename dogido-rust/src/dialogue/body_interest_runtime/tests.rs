@@ -786,3 +786,20 @@ async fn model_can_silently_look_at_owner_with_unchanged_image_and_covered_rain(
     assert!(d.data.lock().unwrap().sessions["s"].body_autonomy.commands(Instant::now(),chrono::Utc::now()).is_empty());
     d.shutdown().await;
 }
+
+// 見込み: 画像が添付された環境判断でも、無言（silent）での見物移動を棄却しない。
+// 合格: 画像付きの環境判断で silent + inspect を返したとき、inspect_body_target 命令が発行される。範囲: 模擬HTTP。
+#[tokio::test]
+async fn model_can_silently_inspect_target_even_when_image_is_attached() {
+    let mock=Mock::new(Duration::ZERO,INSPECT).await;
+    let d=server(&mock,true);
+    let mut image=crate::chat_image::tests::image();
+    image.captured_at=chrono::Utc::now().to_rfc3339();
+    environment_decision_with_image(&d,wire(1),Some(image));
+    completed(&d,&mock).await;
+    let commands=d.data.lock().unwrap().sessions["s"].body_autonomy.commands(Instant::now(),chrono::Utc::now());
+    assert_eq!(commands.len(),1);
+    assert_eq!(commands[0]["purpose"],"inspect");
+    assert_eq!(commands[0]["target"]["entity_id"],COW);
+    d.shutdown().await;
+}

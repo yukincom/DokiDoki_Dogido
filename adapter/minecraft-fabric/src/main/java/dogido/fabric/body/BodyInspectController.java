@@ -20,9 +20,6 @@ final class BodyInspectController {
         default long nextSequence(Context context,long prior,long tick,long last) { return Math.max(Math.max(last,prior),tick)+1; }
         /** 現在の生存・種類・非敵対・視認を再検査し、実座標を返す。未確認はnull。 */
         ResolvedTarget resolve(Target target,Live live);
-        /** 同じsessionの撮影時対応表へ見た目の属性を問い合わせる。通常候補表とは独立に現物を確定する。 */
-        default Target imageTarget(Command command,SessionRef session,Live live) { return null; }
-        default ResolvedTarget resolveImage(Target target,Live live) { return resolve(target,live); }
         boolean collisionFree(BodyApproachGeometry.Bounds destination);
         String moveTo(SessionRef session,Command command,BodyConnection.MoveRequest request);
         /** BERT注視と同じ実測・LOOK_AT送信器を使い、受付番号を既存の結果待ちへ返す。 */
@@ -44,7 +41,7 @@ final class BodyInspectController {
     BodyInspectController(Access access,Predicate<SessionRef> current,Consumer<JsonObject> resultSink,Clock clock) {
         this.access=access; this.current=current; this.resultSink=resultSink; this.clock=clock;
     }
-    /** client threadから呼ぶ。応答待ち中の世界世代と、生成前候補の座標を再照合して一度だけ送る。 */
+    /** client threadから呼ぶ。応答待ち中の世界世代と、現在の同一個体または最寄り同種ブロックを再照合して一度だけ送る。 */
     void handle(Command command,SessionRef session,Instant now) {
         if (!current.test(session) || !seen.add(command.commandId())) return;
         while (seen.size() > 2048) seen.remove(seen.iterator().next());
@@ -54,31 +51,22 @@ final class BodyInspectController {
         try {
             Live live=access.capture(); String invalid=invalid(live,command.context(),command.purpose());
             if (invalid != null) { finish(command,"rejected",invalid,now); return; }
-            boolean fromImage=command.imageTarget()!=null;
-            if(fromImage) {
-                Target grounded=access.imageTarget(command,session,live);
-                if(grounded==null) {finish(command,"rejected","image_target_unresolved",now);return;}
-                command=new Command(command.commandId(),command.issuedAt(),command.expiresAt(),command.context(),grounded,Purpose.INSPECT);
-            }
             double followDistance=live.autonomy().get("follow_distance").getAsDouble();
             Point destination=null;
             if (command.purpose() == Purpose.INSPECT) {
-                Target selected=fromImage?command.target():null;
+                Target selected=null;
                 for (var row : live.autonomy().getAsJsonArray("candidates")) {
-                    if(fromImage)break;
                     Target candidate=target(row.getAsJsonObject());
-                    if (candidate.id().equals(command.target().id()) && candidate.kind().equals(command.target().kind())
+                    boolean same="entity".equals(command.target().kind())
+                        ? candidate.id().equals(command.target().id())
+                        : "block".equals(candidate.kind()) && candidate.typeId().equals(command.target().typeId());
+                    if (same && candidate.kind().equals(command.target().kind())
                             && candidate.typeId().equals(command.target().typeId())) { selected=candidate; break; }
                 }
                 if (selected == null) { finish(command,"rejected","target_not_observed",now); return; }
-                double tolerance="block".equals(selected.kind()) ? .01 : 1.5;
-                if (selected.position().distance(command.target().position()) > tolerance) {
-                    finish(command,"rejected","target_moved",now); return;
-                }
-                ResolvedTarget resolved=fromImage?access.resolveImage(selected,live):access.resolve(selected,live);
+                ResolvedTarget resolved=access.resolve(selected,live);
                 if (resolved == null) { finish(command,"rejected","target_unavailable",now); return; }
                 Point actual=resolved.position();
-                if (actual.distance(command.target().position()) > tolerance) { finish(command,"rejected","target_moved",now); return; }
                 if (!Double.isFinite(followDistance) || followDistance <= 0
                         || actual.distance(live.owner()) > followDistance || live.body().distance(live.owner()) > followDistance) {
                     finish(command,"rejected","outside_owner_range",now); return;

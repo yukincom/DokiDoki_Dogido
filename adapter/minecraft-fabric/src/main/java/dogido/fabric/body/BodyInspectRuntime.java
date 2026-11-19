@@ -41,11 +41,7 @@ public final class BodyInspectRuntime {
                 JsonObject observation=senses.capture(currentFrame,client,currentBody);
                 return live(client,currentFrame,senses.autonomy(currentFrame,observation));
             }
-            public BodyInspectController.ResolvedTarget resolve(Target target,BodyInspectController.Live live) { return resolveCurrent(target,live,false); }
-            public Target imageTarget(Command command,SessionRef session,BodyInspectController.Live live) {
-                return dogido.fabric.screenshot.BodyViewTargets.resolve(command.imageTarget(),command.context(),session.sessionId());
-            }
-            public BodyInspectController.ResolvedTarget resolveImage(Target target,BodyInspectController.Live live) { return resolveCurrent(target,live,true); }
+            public BodyInspectController.ResolvedTarget resolve(Target target,BodyInspectController.Live live) { return resolveCurrent(target); }
             public boolean collisionFree(BodyApproachGeometry.Bounds destination) { return clearSpace(destination); }
             public BodyLookController.Result lookOwner(SessionRef session,Command command) {
                 // 同一commandの再送は上位台帳で除外済み。BERTと同じ実測・鮮度・共有sequenceを使う。
@@ -74,17 +70,12 @@ public final class BodyInspectRuntime {
             new Point(client.player.getX(),client.player.getY(),client.player.getZ()),client.player.getEyeY()-client.player.getY());
     }
     public void clear() { controller.clear(); senses.clearFocus(); currentFrame=null; currentBody=null; }
-    private BodyInspectController.ResolvedTarget resolveCurrent(Target target,BodyInspectController.Live live,boolean fromImage) {
+    private BodyInspectController.ResolvedTarget resolveCurrent(Target target) {
         MinecraftClient client=MinecraftClient.getInstance();
         if (client.player == null || client.world == null || currentFrame == null) return null;
         JsonObject sample=currentFrame.observation().getAsJsonObject("sample");
-        var vision=senses.inspectionVision(sample,currentFrame.autonomy());
-        if(fromImage) {
-            // 画像で指した対象は通常の注意箱・候補上限に縛らない。現在の身体視野・遮蔽・距離は同じ実測で再照合する。
-            var pose=sample.getAsJsonObject("self_pose");var eye=point(pose.getAsJsonObject("eye_position"));
-            vision=new BodyOriginVision(sample.get("server_tick").getAsLong(),new Vec3d(eye.x(),eye.y(),eye.z()),
-                pose.get("view_yaw").getAsDouble(),pose.get("view_pitch").getAsDouble());
-        }
+        // 見物対象の実行前再照合も通常の身体視野（水平120度・垂直90度）と遮蔽判定を使う。
+        var vision=BodySensesCollector.vision(sample,null);
         if (currentBody == null) return null;
         // 補間中の身体座標は使わず、現物の寸法だけをserver姿勢に合わせる。
         Box bodyBox=currentBody.getBoundingBox().offset(currentBody.getEntityPos().negate());

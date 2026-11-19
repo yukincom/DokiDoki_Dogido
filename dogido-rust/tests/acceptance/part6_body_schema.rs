@@ -68,37 +68,3 @@ fn acceptance_body_schema_normal_prompt_examples_pass_real_receivers() {
         assert_eq!(command.is_some(), action != "stay");
     }
 }
-
-// 風景を眺める行動の本体プロンプトから完成例を読む。image_targetの詳細objectがそのまま実操作パーサを通る。
-#[test]
-fn acceptance_body_schema_image_prompt_example_passes_real_receivers() {
-    let (mut state, mut prepared, now, utc) = ready();
-    prepared.available_actions.push("inspect_image".into());
-    prepared.image_capture = Some(("view_12345678-1234-1234-1234-123456789abc".into(), utc));
-    let response = response(&prepared);
-    let example = selected_example(
-        crate::companion_prompt::image_body_contract(),
-        "inspect_image",
-    );
-    assert!(example["body_action"]["image_target"].is_object());
-    let choice = decode(&response, &example);
-    let command = state
-        .choose(&prepared, &choice.to_string(), now, utc)
-        .unwrap()
-        .unwrap();
-    assert!(command["image_target"].is_object());
-}
-
-// 合成入力を対照に使う。詳細objectは受理されるが文字列image_targetは拒否され、欠けたプロンプト例とは区別できる。
-#[test]
-fn acceptance_body_schema_control_object_target_accepts_and_string_target_rejects() {
-    for string in [false, true] {
-        let (mut state, mut prepared, now, utc) = ready();
-        prepared.available_actions.push("inspect_image".into());
-        prepared.image_capture = Some(("view_12345678-1234-1234-1234-123456789abc".into(), utc));
-        let target = json!({"description":"左の黄色い花","kind":"flower","color":"yellow","horizontal":"left","vertical":"middle"});
-        let choice = json!({"action":"inspect_image","target_id":null,"image_target":if string {json!("左の黄色い花")} else {target}});
-        let result = state.choose(&prepared, &choice.to_string(), now, utc);
-        assert_eq!(result.is_ok(), !string);
-    }
-}

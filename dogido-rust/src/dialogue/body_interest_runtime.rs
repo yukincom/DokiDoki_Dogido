@@ -57,7 +57,6 @@ pub(super) struct Pending {
     turn: String,
     instance: String,
     generation: u64,
-    image_choice: bool,
     prepared: Option<Prepared>,
 }
 
@@ -119,15 +118,7 @@ pub(super) fn attach(s: &mut Session, turn: &str, action: &mut Speech, now_ms: u
     // 共有の生成枠を待つ間にも帰還できる。退出・到着通知は、生成直前にも未消費を確かめる。
     if action.kind == KIND && !(concern || s.body_interest_notice.pending
         || s.body_autonomy.owner_arrival_pending(Instant::now())) { return; }
-    let Some(mut prepared) = s.body_autonomy.prepare(Instant::now()) else { return; };
-    // 添付された当回の画像だけを移動申請へ使える。撮影IDはコードが埋め、モデルへUUIDや座標を作らせない。
-    if action.image.is_some() && !prepared.after_owner_arrival
-        && let Some(capture)=action.leaf.as_ref().map(|l| &l.details["visual_capture"])
-        && let (Some(id),Some(at))=(capture["capture_id"].as_str(),capture["captured_at"].as_str())
-        && let Ok(at)=chrono::DateTime::parse_from_rfc3339(at) {
-        prepared.image_capture=Some((id.into(),at.with_timezone(&chrono::Utc)));
-        prepared.available_actions.push("inspect_image".into());
-    }
+    let Some(prepared) = s.body_autonomy.prepare(Instant::now()) else { return; };
     // 周囲の変化による判断へ同時に添えた場合も、この退出は一回で消費する。
     // stay・沈黙・生成失敗の後に、同じ範囲外滞在を時刻だけで再試行しない。
     let details = &mut action.leaf.as_mut().unwrap().details["reaction_context"];
@@ -152,7 +143,7 @@ pub(super) fn attach(s: &mut Session, turn: &str, action: &mut Speech, now_ms: u
     if prepared.after_owner_arrival { details["body_options"]["after_owner_arrival"] = json!(true); }
     details["world_context"]["observations"]["owner_observation"] = prepared.owner_observation.clone();
     s.body_interest_pending = Some(Pending { turn: turn.to_owned(), instance: s.instance_id.clone(),
-        generation: s.input_generation, image_choice: action.image.is_some(), prepared: Some(prepared) });
+        generation: s.input_generation, prepared: Some(prepared) });
 }
 
 /// 返った行動だけを既存の身体検証器へ渡す。不正な行動は捨て、正常な発話や沈黙は維持する。
@@ -171,11 +162,6 @@ pub(super) fn apply(s: &mut Session, turn: &str, result: Option<&Value>, now_ms:
         s.body_autonomy.cancel_preparation();
         return;
     };
-    // 画像から移動する判断には相手への一言も必要。語句や理由の意味は検査せず、発話なしなら移動も保留する。
-    if pending.image_choice && matches!(choice["action"].as_str(), Some("inspect"|"inspect_image"|"owner_near"|"owner_face"))
-        && result.and_then(|r| r["text"].as_str()).is_none_or(|text| text.trim().is_empty()) {
-        s.body_autonomy.cancel_preparation();return;
-    }
     match s.body_autonomy.choose(&prepared, &choice.to_string(), Instant::now(), chrono::Utc::now()) {
         Ok(command) => tracing::info!(event="environment_body_selected",turn_id=turn,command=%json!(command)),
         Err(error) => tracing::info!(event="environment_body_rejected",turn_id=turn,%error),

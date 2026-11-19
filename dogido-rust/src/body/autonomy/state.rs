@@ -68,7 +68,6 @@ pub struct Prepared {
     pub owner_observation: Value,
     pub available_actions: Vec<String>,
     pub after_owner_arrival: bool,
-    pub image_capture: Option<(String, DateTime<Utc>)>,
     attempt: uuid::Uuid,
 }
 
@@ -81,7 +80,6 @@ impl Prepared {
                 "owner_face" => "顔が見える位置へ近づく",
                 "look_owner" => "その場でプレイヤーを見る",
                 "inspect" => "見物",
-                "inspect_image" => "画像の気になる所を見物",
                 "stay" => "その場におる",
                 _ => unreachable!("closed body action"),
             };
@@ -116,28 +114,11 @@ struct Choice {
     target_id: Option<String>,
     #[serde(default)]
     reason: Option<String>,
-    #[serde(default)]
-    image_target: Option<ImageTarget>,
-}
-/// モデルは見た目の分類・色・画面内の位置関係を返す。実物IDと位置は撮影時の対応表で解決する。
-#[derive(Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-struct ImageTarget { description: String, kind: String, color: String, horizontal: String, vertical: String }
-impl ImageTarget {
-    fn valid(&self) -> bool {
-        short_text(&self.description,80)
-            && ["any","mob","flower","plant","block","fluid"].contains(&self.kind.as_str())
-            && ["any","red","orange","yellow","green","cyan","blue","purple","pink","brown","white","gray","black"].contains(&self.color.as_str())
-            && ["any","left","center","right"].contains(&self.horizontal.as_str())
-            && ["any","upper","middle","lower"].contains(&self.vertical.as_str())
-            && (self.kind != "any" || self.color != "any" || self.horizontal != "any" || self.vertical != "any")
-    }
 }
 #[derive(Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 enum Action {
     Inspect,
-    InspectImage,
     OwnerNear,
     OwnerFace,
     LookOwner,
@@ -438,7 +419,6 @@ impl State {
             owner_observation: data.reassurance.owner_observation(),
             available_actions,
             after_owner_arrival,
-            image_capture: None,
             attempt,
         };
         // 帰還後のstay・注視・沈黙・失敗や顔への到着で再通知しない。新しい実帰還だけが次を作る。
@@ -447,8 +427,8 @@ impl State {
         self.prepared = Some(attempt);
         Some(result)
     }
-    /// 閉じた選択JSONを読み、準備時と最新の同一候補・身体世代・所有者距離を再照合して発行する。
-    /// 移動した候補を最新座標へすり替えず、モデルが選んだ元候補をそのままFabricへ渡す。
+    /// 閉じた選択JSONを読み、準備時と最新の同一対象（個体はUUID、ブロックは種類ID）・身体世代・所有者距離を再照合して発行する。
+    /// 推論中の対象移動や最寄り同種ブロックの位置更新は、最新の候補位置をFabricへ渡す。
     pub fn choose(
         &mut self,
         prepared: &Prepared,
@@ -488,22 +468,9 @@ impl State {
         );
         let action_name = serde_json::to_value(choice.action)?.as_str().expect("action enum").to_owned();
         ensure!(prepared.available_actions.contains(&action_name), "body_autonomy_action_not_available");
-        ensure!(choice.action == Action::InspectImage || choice.image_target.is_none(), "body_autonomy_unexpected_image_target");
         // 明示注視の前に生成を始めた自律注視も次の周期へ送る。返答本文と別の身体移動は継続する。
         if choice.action==Action::LookOwner && !self.owner_look_ready(now) { return Ok(None); }
-        let mut image_target = None;
         let target = match choice.action {
-            Action::InspectImage => {
-                ensure!(choice.target_id.is_none(), "body_autonomy_image_target_id");
-                let (capture_id, captured_at) = prepared.image_capture.as_ref().ok_or_else(|| anyhow!("body_autonomy_image_missing"))?;
-                ensure!(utc >= *captured_at && utc-*captured_at < UtcDuration::seconds(30), "body_autonomy_image_expired");
-                let selection=choice.image_target.as_ref().ok_or_else(|| anyhow!("body_autonomy_image_description_missing"))?;
-                ensure!(selection.valid(), "body_autonomy_image_description_invalid");
-                let mut value=serde_json::to_value(selection)?;
-                value["capture_id"]=json!(capture_id);
-                image_target=Some(value);
-                None
-            }
             Action::Stay => {
                 ensure!(choice.target_id.is_none(), "body_autonomy_stay_target");
                 None
@@ -529,17 +496,16 @@ impl State {
                 let latest = current
                     .candidates
                     .iter()
-                    .find(|c| c.id == selected.id)
+                    .find(|c| match selected.kind {
+                        CandidateKind::Entity => c.id == selected.id,
+                        CandidateKind::Block => c.kind == CandidateKind::Block && c.type_id == selected.type_id,
+                    })
                     .ok_or_else(|| anyhow!("body_autonomy_target_disappeared"))?;
                 ensure!(
                     latest.kind == selected.kind
                         && latest.type_id == selected.type_id
-                        && latest.entity_id == selected.entity_id,
+                        && (selected.kind == CandidateKind::Block || latest.entity_id == selected.entity_id),
                     "body_autonomy_target_changed"
-                );
-                ensure!(
-                    distance_squared(latest.position, selected.position) <= 1.5_f64.powi(2),
-                    "body_autonomy_target_moved"
                 );
                 let owner = self
                     .accepted
@@ -548,17 +514,16 @@ impl State {
                     .player_pose
                     .position;
                 ensure!(
-                    distance_squared(owner, selected.position) <= current.follow_distance.powi(2)
-                        && distance_squared(owner, latest.position)
-                            <= current.follow_distance.powi(2),
+                    distance_squared(owner, latest.position)
+                        <= current.follow_distance.powi(2),
                     "body_autonomy_outside_follow_range"
                 );
-                Some(selected.clone())
+                Some(latest.clone())
             }
         };
         let command_id = (choice.action != Action::Stay).then(|| uuid::Uuid::new_v4().to_string());
         self.choices.push_back(json!({"type_id":target.as_ref().map(|c| &c.type_id),"label":target.as_ref().map(|c| &c.label),
-            "action":action_name,"reason":choice.reason,"image_target":choice.image_target,
+            "action":action_name,"reason":choice.reason,
             "command_id":command_id,"context":prepared.context,"issued_at":utc,
             "execution":{"status":if command_id.is_some() {"pending"} else {"not_requested"},
                 "detail_code":if command_id.is_some() {"waiting_for_result"} else {"stay_selected"},
@@ -568,10 +533,9 @@ impl State {
         }
         if choice.action == Action::Stay { return Ok(None); }
         let id = command_id.expect("non-stay body command");
-        let mut command = json!({"command_id":id,"type":COMMAND_TYPE,"issued_at":utc,
+        let command = json!({"command_id":id,"type":COMMAND_TYPE,"issued_at":utc,
             "expires_at":utc+UtcDuration::seconds(5),"context":prepared.context,
-            "purpose":if choice.action==Action::InspectImage {"inspect"} else {&action_name},"target":target});
-        if let Some(image_target)=image_target {command["image_target"]=image_target;}
+            "purpose":&action_name,"target":target});
         self.pending = Some(Pending {
             id,
             context: prepared.context.clone(),

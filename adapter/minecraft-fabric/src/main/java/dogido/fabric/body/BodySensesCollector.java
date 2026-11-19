@@ -211,10 +211,8 @@ public final class BodySensesCollector {
             senses.add("auditory_threats",heardThreats);
             senses.add("ambient_sounds",ambient);
             BodySenseCapacity.fit(senses);
-            var pose = sample.getAsJsonObject("self_pose");
-            var focusedVision = vision.forAttention(attention.view(point(pose.getAsJsonObject("eye_position")),
-                pose.get("view_yaw").getAsDouble(),frame.autonomy()));
-            retainedCandidates = candidates(client,frame.autonomy(),focusedVision);
+            // 見物候補も通常の身体視野（水平120度・垂直90度）と追従範囲から採り、狭い注意箱で候補を切り落とさない。
+            retainedCandidates = candidates(client,frame.autonomy(),vision);
             var gaze = new java.util.ArrayList<BodySpeechGaze.Target>();
             for (var mob : mobs.bodyVisibleMobs()) gaze.add(new BodySpeechGaze.Target("body","entity",mob.entityId().toString(),mob.position()));
             for (var mob : hostile) if (mob.lineOfSight()) gaze.add(new BodySpeechGaze.Target("body","entity",mob.uuid().toString(),new Vec3d(mob.x(),mob.y(),mob.z())));
@@ -264,7 +262,7 @@ public final class BodySensesCollector {
             mob -> focusedVision.entity(client.world,mob.entityId(),mob.bounds(),NearbyComposition.MOB_ENTER),
             block -> focusedVision.point(client.world,Vec3d.ofCenter(block.position()),block.position(),NearbyComposition.BLOCK_RAY_RANGE));
     }
-    /** 実視認済みのframeからだけ選ぶ。注意内の同種ブロックを選んでから一種類一件へまとめる。 */
+    /** 実視認済みのframeから、モブと視認数が少ない上位3種類のブロックを選ぶ。注意内の同種ブロックは一種類一件へまとめる。 */
     static JsonArray candidates(List<AmbientMobObserver.VisibleMob> visibleMobs,List<WorldObserver.VisibleBlock> visibleBlocks,
             Vec3d owner,double followDistance,java.util.function.Predicate<AmbientMobObserver.VisibleMob> focusedMob,
             java.util.function.Predicate<WorldObserver.VisibleBlock> focusedBlock) {
@@ -275,8 +273,15 @@ public final class BodySensesCollector {
             rows.add(new BodyInspectProtocol.Target("e:"+mob.entityId(),"entity",mob.typeId(),boundedLabel(mob.label()),
                 new BodyInspectProtocol.Point(mob.position().x,mob.position().y,mob.position().z),mob.entityId()));
         }
-        // 広い視野で最も近い同種ブロックが注意外でも、注意内の実視認点を候補にできる。
+        var ownerPoint = new BodyInspectProtocol.Point(owner.x,owner.y,owner.z);
+        rows.sort(java.util.Comparator.comparingDouble(row -> row.position().distance(ownerPoint)));
+        var blockCounts = new java.util.HashMap<String, Integer>();
+        for (var block : visibleBlocks) {
+            if (wireType(block.typeId())) blockCounts.merge(block.typeId(), 1, Integer::sum);
+        }
+        // 広い視野で最も近い同種ブロックが注意外でも、注意内の実視認点を一種類一件選び、視認数が少ない上位3種類に絞る。
         var candidateBlockTypes = new java.util.HashSet<String>();
+        var blockRows = new java.util.ArrayList<BodyInspectProtocol.Target>();
         for (var block : visibleBlocks) {
             Vec3d position = Vec3d.ofCenter(block.position());
             if (candidateBlockTypes.contains(block.typeId()) || position.distanceTo(owner) > followDistance
@@ -284,10 +289,12 @@ public final class BodySensesCollector {
             if (!focusedBlock.test(block)) continue;
             candidateBlockTypes.add(block.typeId());
             var point = new BodyInspectProtocol.Point(position.x,position.y,position.z);
-            rows.add(new BodyInspectProtocol.Target(BodyInspectProtocol.blockId(point,block.typeId()),"block",block.typeId(),boundedLabel(block.label()),point,null));
+            blockRows.add(new BodyInspectProtocol.Target(BodyInspectProtocol.blockId(point,block.typeId()),"block",block.typeId(),boundedLabel(block.label()),point,null));
         }
-        var ownerPoint = new BodyInspectProtocol.Point(owner.x,owner.y,owner.z);
-        rows.sort(java.util.Comparator.comparingDouble(row -> row.position().distance(ownerPoint)));
+        blockRows.sort(java.util.Comparator
+            .<BodyInspectProtocol.Target, Integer>comparing(row -> blockCounts.getOrDefault(row.typeId(), Integer.MAX_VALUE))
+            .thenComparing(BodyInspectProtocol.Target::typeId));
+        blockRows.stream().limit(3).forEach(rows::add);
         JsonArray result = new JsonArray();
         rows.stream().limit(BodyInspectProtocol.MAX_CANDIDATES).forEach(row -> result.add(row.json())); return result;
     }

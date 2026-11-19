@@ -444,14 +444,13 @@ async fn existing_environment_model_gets_one_image_request_and_can_select_silenc
     assert!(plain["world_context"]["changes"].as_array().unwrap().iter().any(|c| c["kind"] == "body_view"));
     http.abort();
 }
-// 見込み: 画像行動の選択肢に応じた契約を一回の応答へ添えられる。合格: HTTP要求一件、画像指示一回、inspect_image有効時だけ専用契約を含み固定body_actionを受理する。確認範囲: 模擬HTTP。
+// 見込み: 画像添付時も通常の候補ID選択（inspect）へ一本化し、画像指示を一回だけ添えてbody_actionを受理する。確認範囲: 模擬HTTP。
 #[tokio::test]
 async fn image_movement_uses_one_reply_and_only_available_image_guidance() {
     for inspect in [false,true] {
         let sent=Arc::new(std::sync::Mutex::new(Vec::<Value>::new()));let recorded=sent.clone();
-        let choice=json!({"action":"inspect_image","target_id":null,"image_target":{"description":"左の黄色い花",
-            "kind":"flower","color":"yellow","horizontal":"left","vertical":"any"}});
-        let reply=json!({"action":"speak","speech":"あの花、見てくるわ。","body_action":choice});
+        let choice=if inspect {json!({"action":"inspect","target_id":"c1"})} else {json!({"action":"owner_face","target_id":null})};
+        let reply=json!({"action":"silent","speech":"","body_action":choice});
         let app=axum::Router::new().route("/v1/chat/completions",axum::routing::post(move |axum::Json(payload):axum::Json<Value>| {
             recorded.lock().unwrap().push(payload);let text=reply.to_string();async move {axum::Json(json!({"id":"fixture","object":"chat.completion","created":0,"model":"fixture",
             "choices":[{"index":0,"message":{"role":"assistant","content":text},"finish_reason":"stop"}]}))}
@@ -461,18 +460,19 @@ async fn image_movement_uses_one_reply_and_only_available_image_guidance() {
         let llm=crate::llm::RigLlm::new(&url,None,Duration::from_secs(2)).unwrap();
         let mut config=super::super::DialogueConfig {model:"fixture".into(),..Default::default()};config.reading_engine="off".into();
         let (mut state,result,now)=pending();state.receive(&result,now);let captured=state.latest.unwrap();
-        let available=if inspect {json!({"stay":"その場におる","inspect_image":"画像を見物"})} else {json!({"stay":"その場におる","owner_face":"顔を見る"})};
+        let available=if inspect {json!({"stay":"その場におる","inspect":"見物"})} else {json!({"stay":"その場におる","owner_face":"顔を見る"})};
+        let candidates=if inspect {json!([{"id":"c1","kind":"block","type_id":"minecraft:poppy","label":"ポピー"}])} else {json!([])};
         let input=json!({"kind":"environment_reaction","model":"fixture","max_tokens":300,"fallback_text":"",
             "details":{"reaction_context":{"topic":"surroundings","visual_capture":{"captured_at":captured.image.captured_at},
-                "body_options":{"available_actions":available,"candidates":[]},"world_context":{"observations":{},"changes":[]}}}});
+                "body_options":{"available_actions":available,"candidates":candidates},"world_context":{"observations":{},"changes":[]}}}});
         let (_tx,mut cancel)=watch::channel(false);
         let result=super::super::reaction_runtime::render_image(&config,&super::super::tts_runtime::Dictionary::default(),&llm,&input,&mut cancel,Some(&captured.image)).await.unwrap();
         assert_eq!(result["body_action"],choice);
         let requests=sent.lock().unwrap();assert_eq!(requests.len(),1);
         let system=requests[0]["messages"][0]["content"].as_str().unwrap();
         assert_eq!(system.matches(crate::companion_prompt::chat_image()).count(),1);
-        assert!(system.contains(crate::companion_prompt::image_move_notice()));
-        assert_eq!(system.contains(crate::companion_prompt::image_body_contract()),inspect);
+        assert!(!system.contains("移動する行動を選んだら action は speak にして"));
+        assert!(!system.contains("inspect_image"));
         assert!(!system.contains("対象がある行動の target_id") && !system.contains("x は左0") && !system.contains("たとえば"));
         let content=requests[0]["messages"].as_array().unwrap().last().unwrap()["content"][0]["text"].as_str().unwrap();
         assert!(!content.contains("これは今あんたが見とる風景"));

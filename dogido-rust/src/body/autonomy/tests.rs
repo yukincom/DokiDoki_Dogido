@@ -569,16 +569,15 @@ fn choice_rejects_unknown_fields_forged_ids_types_and_invalid_reasons() {
     }
 }
 #[test]
-fn choice_revalidates_disappearance_type_and_movement_and_keeps_original_target() {
+fn choice_revalidates_disappearance_and_type_and_updates_to_latest_target_position() {
     let at = Instant::now();
-    for change in 0..3 {
+    for change in 0..2 {
         let (mut state, p) = prepared(at);
         let s = sample(2);
         let mut o = observation(&s);
         match change {
             0 => data(&mut o).candidates.clear(),
-            1 => data(&mut o).candidates[0].type_id = "minecraft:pig".into(),
-            _ => data(&mut o).candidates[0].position.x += 1.51,
+            _ => data(&mut o).candidates[0].type_id = "minecraft:pig".into(),
         }
         state.observe(Some(&o), Some(&s), at, Some(0));
         assert!(
@@ -595,10 +594,35 @@ fn choice_revalidates_disappearance_type_and_movement_and_keeps_original_target(
     let (mut state, p) = prepared(at);
     let s = sample(2);
     let mut o = observation(&s);
-    data(&mut o).candidates[0].position.x += 1.5;
+    data(&mut o).candidates[0].position.x += 2.5;
     state.observe(Some(&o), Some(&s), at, Some(0));
     let command = inspect(&mut state, &p, at);
-    assert_eq!(command["target"]["position"]["x"], 2.0);
+    assert_eq!(command["target"]["position"]["x"], 4.5);
+
+    let mut state = State::default();
+    let s1 = sample(1);
+    let mut o1 = observation(&s1);
+    let first_block = Candidate {
+        id: "b:2,64,3:minecraft:poppy".into(),
+        kind: CandidateKind::Block,
+        type_id: "minecraft:poppy".into(),
+        label: "ポピー".into(),
+        position: Position { x: 2.5, y: 64.5, z: 3.5 },
+        entity_id: None,
+    };
+    data(&mut o1).candidates = vec![first_block.clone()];
+    state.observe(Some(&o1), Some(&s1), at, Some(0));
+    let p = state.prepare(at).unwrap();
+    let s2 = sample(2);
+    let mut o2 = observation(&s2);
+    let mut shifted = first_block;
+    shifted.id = "b:4,64,3:minecraft:poppy".into();
+    shifted.position.x = 4.5;
+    data(&mut o2).candidates = vec![shifted];
+    state.observe(Some(&o2), Some(&s2), at, Some(0));
+    let command = inspect(&mut state, &p, at);
+    assert_eq!(command["target"]["id"], "b:4,64,3:minecraft:poppy");
+    assert_eq!(command["target"]["position"]["x"], 4.5);
 }
 #[test]
 fn choice_uses_latest_accepted_owner_even_without_new_autonomy_payload() {
@@ -856,27 +880,24 @@ fn replayed_payload_cannot_replace_candidates_or_restore_a_retired_context() {
 }
 
 #[test]
-fn both_selected_and_latest_target_must_be_inside_current_owner_range() {
+fn latest_target_must_be_inside_current_owner_range() {
     let at = Instant::now();
-    // 元位置だけ範囲外の場合と、移動後だけ範囲外の場合をそれぞれ拒否する。
-    for owner_x in [18.5, -13.0] {
-        let (mut state, p) = prepared(at);
-        let mut s = sample(2);
-        s.player_pose.position.x = owner_x;
-        let mut o = observation(&s);
-        data(&mut o).candidates[0].position.x = 3.5;
-        state.observe(Some(&o), Some(&s), at, Some(0));
-        assert!(
-            state
-                .choose(
-                    &p,
-                    r#"{"action":"inspect","target_id":"c1","reason":"見る"}"#,
-                    at,
-                    utc()
-                )
-                .is_err()
-        );
-    }
+    let (mut state, p) = prepared(at);
+    let mut s = sample(2);
+    s.player_pose.position.x = -13.0;
+    let mut o = observation(&s);
+    data(&mut o).candidates[0].position.x = 3.5;
+    state.observe(Some(&o), Some(&s), at, Some(0));
+    assert!(
+        state
+            .choose(
+                &p,
+                r#"{"action":"inspect","target_id":"c1","reason":"見る"}"#,
+                at,
+                utc()
+            )
+            .is_err()
+    );
 }
 
 #[test]
@@ -1134,23 +1155,6 @@ fn looking_around_preserves_a_real_return_but_a_stale_gap_never_revives_it() {
     state.observe(Some(&o),Some(&s),at+Duration::from_secs(4),Some(0));
     assert!(!state.owner_arrival_pending(at+Duration::from_secs(4)));
     assert!(state.prepare(at+Duration::from_secs(4)).is_none());
-}
-
-#[test]
-fn image_choice_has_no_invented_coordinates_and_keeps_existing_availability_checks() {
-    for invalid in ["valid","color","extra","expired","unavailable"] {
-        let at=Instant::now();let (mut state,mut prepared)=prepared(at);
-        prepared.image_capture=Some(("view_12345678-1234-1234-1234-123456789abc".into(),utc()));
-        if invalid!="unavailable" {prepared.available_actions.push("inspect_image".into());}
-        let mut choice=json!({"action":"inspect_image","target_id":null,"image_target":{"description":"黄色い花","kind":"flower","color":"yellow","horizontal":"left","vertical":"any"}});
-        if invalid=="color" {choice["image_target"]["color"]=json!("unknown_color");}
-        if invalid=="extra" {choice["image_target"]["x"]=json!(64);}
-        let now=if invalid=="expired" {utc()+chrono::Duration::seconds(31)} else {utc()};
-        let result=state.choose(&prepared,&choice.to_string(),at,now);
-        if invalid=="valid" {let command=result.unwrap().unwrap();assert!(command["target"].is_null());assert_eq!(command["purpose"],"inspect");
-            assert_eq!(command["image_target"]["color"],"yellow");assert!(command["image_target"].get("x").is_none());assert!(command["image_target"].get("position").is_none());}
-        else {assert!(result.is_err(),"{invalid}");}
-    }
 }
 
 #[test]

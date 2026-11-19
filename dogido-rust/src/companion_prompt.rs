@@ -18,12 +18,6 @@ pub fn base() -> &'static str {
 pub fn mode(mode: &str) -> &'static str {
     TEXT["modes"][mode].as_str().unwrap_or("")
 }
-pub fn image_move_notice() -> &'static str {
-    TEXT["image_move_notice"].as_str().unwrap()
-}
-pub fn image_body_contract() -> &'static str {
-    TEXT["image_body_contract"].as_str().unwrap()
-}
 pub fn player_approach_contract() -> &'static str {
     TEXT["player_approach_contract"].as_str().unwrap()
 }

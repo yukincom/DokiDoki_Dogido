@@ -67,7 +67,6 @@ public final class BodyViewCapture {
         final BodyViewCamera camera;
         final CompletableFuture<Boolean> restored=new CompletableFuture<>();
         Owner owner;
-        BodyViewTargets.Sample targets;
         Matrix4f projection,view;
         int width,height;
         boolean scheduled;
@@ -226,7 +225,7 @@ public final class BodyViewCapture {
     }
     private static void tick(Live observed) {
         long now=System.nanoTime();
-        if(observed==null) {MOTION.clear();BodyViewTargets.clear();}
+        if(observed==null) MOTION.clear();
         else MOTION.observe(java.util.List.of(observed.world,observed.network,observed.sample.get("context")),pose(observed));
         if(poemRequest!=null) {
             Request request=poemRequest;
@@ -320,14 +319,6 @@ public final class BodyViewCapture {
     /** 復帰の事実をIO側へ渡してからframeを閉じる。GPU callbackを待ってCameraを保持しない。 */
     public static void end(Frame frame,boolean cameraRestored) {
         if (frame==null) return;
-        if(cameraRestored && frame.scheduled && frame.request.command!=null) {
-            var live=frame.request.live;
-            try {
-                frame.targets=BodyViewTargets.sample(frame.request.command.sessionId(),live.sample.getAsJsonObject("context"),
-                    live.world,live.network,live.body,frame.camera.getCameraPos(),frame.projection,frame.view,frame.capturedAt);
-            } catch(RuntimeException error) { LOG.warn("Image target sampling failed",error); }
-        }
-        // 色集計のIOは、このfuture完了後にだけ撮影時の対応表を読む。
         frame.restored.complete(cameraRestored);
         if (!frame.scheduled && DEADLINE.finish(frame.request.id)) {
             lastResult="render_not_captured";complete(frame.request,null,"render_not_captured");
@@ -437,7 +428,6 @@ public final class BodyViewCapture {
             String hash=BodyViewFiles.hash(target);data.addProperty("image_sha256",hash);data.addProperty("camera_restored",true);
             var original=ImageIO.read(target.toFile());
             BodyViewImage.Encoded resized=BodyViewImage.encode(original,data);
-            if(frame.request.command!=null)BodyViewTargets.remember(frame.request.id,frame.targets,original);
             BodyViewChange.Result change=null;
             if(frame.request.command!=null) {
                 JsonObject eye=data.getAsJsonObject("camera_eye");

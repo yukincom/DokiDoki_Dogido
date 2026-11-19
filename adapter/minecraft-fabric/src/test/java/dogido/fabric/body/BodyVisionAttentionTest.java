@@ -99,8 +99,8 @@ class BodyVisionAttentionTest {
             new Vec3d(13,0,13),NearbyComposition.BLOCK_RAY_RANGE));
     }
 
-    // 見込み: 同種の近いブロックが注意外でも、注意内の別ブロックを選べる。
-    // 合格: 注意外の原木を除き、注意内の近い原木一件だけを送る。視認済み一覧を固定し実候補整形を検査。
+    // 見込み: 同種の近いブロックが注意外でも、注意内の別ブロックを選べ、ブロック候補は少ない順の上位3種に絞る。
+    // 合格: 注意外の原木を除き、注意内の近い原木一件だけを送る。多種類のときは少ない上位3種だけが順に並ぶ。
     @Test void blockKindsAreReducedOnlyAfterAttentionFiltering() {
         var outside=new WorldObserver.VisibleBlock(new BlockPos(3,0,2),"minecraft:oak_log","オークの原木");
         var inside=new WorldObserver.VisibleBlock(new BlockPos(0,0,4),"minecraft:oak_log","オークの原木");
@@ -110,6 +110,21 @@ class BodyVisionAttentionTest {
             mob -> false,block -> sees(focused,Vec3d.ofCenter(block.position()),NearbyComposition.BLOCK_RAY_RANGE));
         assertEquals(1,candidates.size());
         assertEquals("b:0,0,4:minecraft:oak_log",candidates.get(0).getAsJsonObject().get("id").getAsString());
+
+        var ranked=BodySensesCollector.candidates(List.of(),List.of(
+            new WorldObserver.VisibleBlock(new BlockPos(0,0,1),"minecraft:stone","石"),
+            new WorldObserver.VisibleBlock(new BlockPos(0,0,2),"minecraft:stone","石"),
+            new WorldObserver.VisibleBlock(new BlockPos(0,0,3),"minecraft:stone","石"),
+            new WorldObserver.VisibleBlock(new BlockPos(0,0,4),"minecraft:poppy","ポピー"),
+            new WorldObserver.VisibleBlock(new BlockPos(0,0,5),"minecraft:dandelion","タンポポ"),
+            new WorldObserver.VisibleBlock(new BlockPos(0,0,6),"minecraft:dandelion","タンポポ"),
+            new WorldObserver.VisibleBlock(new BlockPos(0,0,7),"minecraft:torch","松明"),
+            new WorldObserver.VisibleBlock(new BlockPos(1,0,7),"minecraft:torch","松明")
+        ),Vec3d.ZERO,8,mob -> false,block -> sees(focused,Vec3d.ofCenter(block.position()),NearbyComposition.BLOCK_RAY_RANGE));
+        assertEquals(3,ranked.size());
+        assertEquals("minecraft:poppy",ranked.get(0).getAsJsonObject().get("type_id").getAsString());
+        assertEquals("minecraft:dandelion",ranked.get(1).getAsJsonObject().get("type_id").getAsString());
+        assertEquals("minecraft:torch",ranked.get(2).getAsJsonObject().get("type_id").getAsString());
     }
 
     // 見込み: 候補確認は同じframeのrayを再利用し、別frameへは持ち越さない。

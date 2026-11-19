@@ -74,14 +74,6 @@ pub(super) async fn render_image(
         if image.is_some() {
             prepared.request.messages[0].content.push_str("\n\n");
             prepared.request.messages[0].content.push_str(crate::companion_prompt::chat_image());
-            if input["details"]["reaction_context"]["body_options"].is_object() {
-                prepared.request.messages[0].content.push_str("\n\n");
-                prepared.request.messages[0].content.push_str(crate::companion_prompt::image_move_notice());
-                if input["details"]["reaction_context"]["body_options"]["available_actions"].get("inspect_image").is_some() {
-                    prepared.request.messages[0].content.push_str("\n\n");
-                    prepared.request.messages[0].content.push_str(crate::companion_prompt::image_body_contract());
-                }
-            }
         }
         let mut result = tokio::time::timeout_at(
             deadline,

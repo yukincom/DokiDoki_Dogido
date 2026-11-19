@@ -40,23 +40,10 @@ public final class BodyInspectProtocol {
     }
     /** 本人への接近・注視は目的だけを指定し、座標は現在の実体から取得する。 */
     public enum Purpose { INSPECT, OWNER_NEAR, OWNER_FACE, LOOK_OWNER }
-    /** 見た目による申請。descriptionは説明用で、実物照合は閉じた属性と撮影時の対応表で行う。 */
-    public record ImageTarget(String captureId,String description,String kind,String color,String horizontal,String vertical) {
-        public ImageTarget {
-            if(!dogido.fabric.screenshot.BodyViewProtocol.captureId(captureId) || description==null || description.isBlank()
-                || description.codePointCount(0,description.length())>80 || description.codePoints().anyMatch(Character::isISOControl)
-                || !dogido.fabric.screenshot.BodyViewAppearance.valid(kind,color,horizontal,vertical))
-                throw new IllegalArgumentException("image_target");
-        }
-    }
-    public record Command(UUID commandId, Instant issuedAt, Instant expiresAt, Context context, Target target, Purpose purpose,ImageTarget imageTarget) {
+    public record Command(UUID commandId, Instant issuedAt, Instant expiresAt, Context context, Target target, Purpose purpose) {
         public Command {
-            if (purpose == null || (purpose == Purpose.INSPECT) != (target != null || imageTarget != null)
-                    || target != null && imageTarget != null)
+            if (purpose == null || (purpose == Purpose.INSPECT) != (target != null))
                 throw new IllegalArgumentException("purpose_target");
-        }
-        public Command(UUID commandId, Instant issuedAt, Instant expiresAt, Context context, Target target,Purpose purpose) {
-            this(commandId,issuedAt,expiresAt,context,target,purpose,null);
         }
         public Command(UUID commandId, Instant issuedAt, Instant expiresAt, Context context, Target target) {
             this(commandId,issuedAt,expiresAt,context,target,Purpose.INSPECT);
@@ -87,16 +74,10 @@ public final class BodyInspectProtocol {
                         case "look_owner" -> Purpose.LOOK_OWNER;
                         default -> throw new IllegalArgumentException("purpose");
                     };
-                    if (!row.has("target")) throw new IllegalArgumentException("target_missing");
+                    if (!row.has("target") || row.has("image_target")) throw new IllegalArgumentException("target_missing");
                     Target target = row.get("target").isJsonNull() ? null : target(row.getAsJsonObject("target"));
-                    ImageTarget image=null;
-                    if(row.has("image_target")) {
-                        JsonObject selection=row.getAsJsonObject("image_target");
-                        if(!selection.keySet().equals(java.util.Set.of("capture_id","description","kind","color","horizontal","vertical")))throw new IllegalArgumentException("image_fields");
-                        image=new ImageTarget(required(selection,"capture_id",64),required(selection,"description",160),required(selection,"kind",16),required(selection,"color",16),required(selection,"horizontal",16),required(selection,"vertical",16));
-                    }
                     Command command = new Command(uuid(row,"command_id"),Instant.parse(string(row,"issued_at")),
-                        Instant.parse(string(row,"expires_at")),context(row.getAsJsonObject("context")),target,purpose,image);
+                        Instant.parse(string(row,"expires_at")),context(row.getAsJsonObject("context")),target,purpose);
                     if (command.timeError(command.issuedAt()) == null) commands.add(command);
                 } catch (RuntimeException ignored) { }
             }
