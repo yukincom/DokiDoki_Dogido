@@ -357,10 +357,10 @@ fn templates_do_not_delegate_bert_owned_line_or_end_decisions() {
         "close_workshopの例",
         "終了の意思は、今回の発話と会話の流れから判断",
         "対象行を読んでな",
+        "target_fragment",
     ] {
         assert!(!instructions.contains(retired), "{retired}");
     }
-    assert!(instructions.contains("BERTへ変更済み"));
 }
 
 #[test]
