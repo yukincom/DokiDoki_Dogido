@@ -104,21 +104,21 @@ fn compose_dialogue(
         DialoguePurpose::Ambient => "ambient",
     };
     let body = body_player.map(body_observation).unwrap_or_default();
-    // 文面・適用条件・system/userの役割を変えず、再利用できる接頭部を長くする。
+    // 人格・観測の読み方を前方へ揃え、場面・トーン、出力契約を末尾へまとめる。
     // 完成したpromptは保存しない。現在観測・履歴は呼出元で毎回組み立てる。
     [
         base(),
         grounding(),
-        contract,
-        TEXT["dialogue"][purpose_key].as_str().unwrap(),
-        if matches!(purpose, DialoguePurpose::Ambient) { ambient_request() } else { "" },
         &body,
-        mode(mode_name),
         if smell_observed {
             TEXT["observed_smell"].as_str().unwrap()
         } else {
             ""
         },
+        TEXT["dialogue"][purpose_key].as_str().unwrap(),
+        if matches!(purpose, DialoguePurpose::Ambient) { ambient_request() } else { "" },
+        mode(mode_name),
+        contract,
     ]
     .into_iter()
     .filter(|s| !s.is_empty())

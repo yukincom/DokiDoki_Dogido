@@ -425,7 +425,7 @@ async fn existing_environment_model_gets_one_image_request_and_can_select_silenc
     let history = context["recent"]["conversation"].as_str().unwrap();
     assert!(history.contains("ドギド: カメさん、砂浜でゆっくりしとるなぁ。"));
     assert!(history.contains("契機不明"));
-    assert!(context["situation"].as_str().unwrap().contains("今はプレイヤーから新しい発言を受けてへん"));
+    assert!(context["situation"].as_str().unwrap().contains("自分の発言に相づちや返事をせんと"));
     let shared = crate::reaction_leaf::context("surroundings_notice", &json!({})).unwrap();
     assert_eq!(context["situation"], shared["situation"]);
     let rule = "会話履歴で自分の発言を確認してな。プレイヤーはちゃんと聞いとるから、返事がなくても似たような発言は繰り返さんといてな。";

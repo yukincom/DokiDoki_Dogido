@@ -611,8 +611,8 @@ fn spontaneous_history_labels_speakers_without_changing_stored_roles_or_events()
         crate::dialogue::history::History::lines_for(conversation.as_array().unwrap()));
     assert_eq!(a.leaf.as_ref().unwrap().details, details);
     let situation = context["situation"].as_str().unwrap();
-    assert!(situation.contains("今はプレイヤーから新しい発言を受けてへん"));
-    assert!(situation.contains("自分の発言に相づちや返事をせず"));
+    assert!(situation.contains("履歴の「ドギド」はあんた自身の発言やから"));
+    assert!(situation.contains("自分の発言に相づちや返事をせんと"));
     for rule in [
         "会話履歴で自分の発言を確認してな。プレイヤーはちゃんと聞いとるから、返事がなくても似たような発言は繰り返さんといてな。",
     ] {

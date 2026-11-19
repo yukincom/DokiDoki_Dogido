@@ -77,8 +77,8 @@ fn reordering_preserves_every_dialogue_section() {
     }
 }
 
-// 見込み: modeと匂いより前へ固定説明を寄せると、状態が変わっても説明部分まで共有できる。
-// 合格: 通常→緊張＋匂いの変化で、身体説明末尾までが共通接頭部に入り、旧順序より長い。
+// 見込み: 人格と身体観測を前方へ寄せ、出力契約を末尾へまとめても、モード変化や匂い変化の共通接頭部を保てる。
+// 合格: 通常→緊張＋匂いの変化で、身体説明末尾までが共通接頭部に入り、出力契約は身体説明より後ろにある。
 // 範囲: 文字列の前方一致だけ。トークン数・KVキャッシュ・実測時間は含まない。
 #[test]
 fn fixed_guidance_remains_a_common_prefix_across_mode_and_smell_changes() {
@@ -95,7 +95,7 @@ fn fixed_guidance_remains_a_common_prefix_across_mode_and_smell_changes() {
                     &previous_dialogue("tension", purpose, true)
                 )
         );
-        assert!(a.find(choice_contract()).unwrap() < a.find(&body).unwrap());
+        assert!(a.find(&body).unwrap() < a.find(choice_contract()).unwrap());
     }
 }
 
