@@ -524,7 +524,7 @@ async fn acceptance_part8_inspection_preserves_provided_materials_without_mutati
     assert_eq!(serde_json::from_str::<Value>(tool["content"].as_str().unwrap()).unwrap(), observed);
     assert!(request["messages"][1]["content"].as_str().unwrap().contains(
         &crate::text_format::spaced_json(&details["workshop_context"])));
-    assert!(request.to_string().contains("実際に使った根拠の確認はしてへん"));
+    assert!(request.to_string().contains("実使用や意味の証明にはならへん"));
     assert_eq!(f.view(text), before);
     f.assert_original_entry_preserved();
     assert!(f.revisions().is_empty());
