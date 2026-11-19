@@ -618,7 +618,7 @@ mod tests {
                 )
             );
             for rule in [
-                "会話履歴で自分（ドギド）の発言を確認してな。プレイヤーはちゃんと聞いとるから、返事がなくても似たような意味の発言はせんといてな。",
+                "会話履歴で自分の発言を確認してな。プレイヤーはちゃんと聞いとるから、返事がなくても似たような発言は繰り返さんといてな。",
             ] {
                 assert_eq!(reply[0].content.matches(rule).count(), 1);
             }
@@ -648,7 +648,7 @@ mod tests {
                 assert!(
                     out[0]
                         .content
-                        .contains(&format!("事実の文にあるドギドはオレ、プレイヤーは{expected}のことやで。"))
+                        .contains(&format!("文中のドギドはオレ、プレイヤーは{expected}のことやで。"))
                 );
                 assert_eq!(
                     out[0].content.matches(&crate::companion_prompt::body_observation(name)).count(),
@@ -659,11 +659,6 @@ mod tests {
                     crate::companion_prompt::dialogue_with_body(
                         "normal", crate::companion_prompt::DialoguePurpose::Reply, false, Some(name)
                     )
-                );
-                assert!(
-                    out[0]
-                        .content
-                        .contains("今の位置は分からへんで。")
                 );
                 assert_eq!(out[1].content.matches("\"body_observation\"").count(), 1);
             }

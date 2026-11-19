@@ -428,7 +428,7 @@ async fn existing_environment_model_gets_one_image_request_and_can_select_silenc
     assert!(context["situation"].as_str().unwrap().contains("今はプレイヤーから新しい発言を受けてへん"));
     let shared = crate::reaction_leaf::context("surroundings_notice", &json!({})).unwrap();
     assert_eq!(context["situation"], shared["situation"]);
-    let rule = "会話履歴で自分（ドギド）の発言を確認してな。プレイヤーはちゃんと聞いとるから、返事がなくても似たような意味の発言はせんといてな。";
+    let rule = "会話履歴で自分の発言を確認してな。プレイヤーはちゃんと聞いとるから、返事がなくても似たような発言は繰り返さんといてな。";
     assert_eq!(requests[0]["messages"][0]["content"].as_str().unwrap().matches(rule).count(), 1);
     assert!(!context["situation"].as_str().unwrap().contains(rule));
     assert!(context["world_context"].get("revision").is_none());
