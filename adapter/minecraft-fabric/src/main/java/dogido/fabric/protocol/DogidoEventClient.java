@@ -128,6 +128,7 @@ public final class DogidoEventClient {
     public synchronized void rememberBodyRequestResult(SessionRef ref,JsonObject result) {
         if (!result.has("input_generation") || !isCurrentBodyRequest(ref,result.get("input_generation").getAsLong())) return;
         this.commandState.rememberResult(result);
+        this.freshSnapshotRequested.set(true);
     }
     private synchronized void observeBodyRequestGeneration(JsonObject root,SessionRef ref) {
         if (!isCurrent(ref)) return;
@@ -205,6 +206,8 @@ public final class DogidoEventClient {
         this.bodyViewState.clearResults();this.freshSnapshotRequested.set(false);
     }
     /** 次client tickで通常snapshotを新しく組み立てる合図。古い観測の再送や独立poll経路は作らない。 */
+    public boolean hasFreshSnapshotRequest() { return this.freshSnapshotRequested.get(); }
+    public void clearFreshSnapshotRequest() { this.freshSnapshotRequested.set(false); }
     public boolean consumeFreshSnapshotRequest() { return this.freshSnapshotRequested.getAndSet(false); }
     public synchronized void rememberBodyViewResult(SessionRef ref,JsonObject result) {
         if(!isCurrent(ref))return;

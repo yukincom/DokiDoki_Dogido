@@ -408,7 +408,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         boolean engagementStarted = this.threatObserver.playerEngaged() && !this.reportedEngaged;
         List<ThreatObservation> visibleThreats = this.threatObserver.filterVisibleThreats(threats);
         boolean urgentChange = this.threatObserver.urgentObservationChanged(visibleThreats);
-        boolean captureNearbyKinds = this.eventClient.consumeFreshSnapshotRequest() || shouldSendSnapshot()
+        boolean captureNearbyKinds = shouldSendSnapshot()
             || engagementStarted || opponentsChanged || urgentChange;
         WorldObservationFrame worldFrame = this.eventCapture.frame(player, world, captureNearbyKinds, workshopObservation);
         if (!workshopObservation) this.bossObserver.observeWardenSpecialSetups(player, worldFrame, threats);
@@ -428,6 +428,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             JsonObject ownedHorses = workshopObservation ? null : this.horseRecall.snapshotJson();
             if (ownedHorses != null) snapshot.add("owned_horses", ownedHorses);
             this.eventClient.postEvent(snapshot);
+            this.eventClient.clearFreshSnapshotRequest();
             this.lastSnapshotTick = this.tickCounter;
         }
 
@@ -609,8 +610,17 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     // 旧: snapshotIntervalTicks（既定20tick=1秒）経過まで送信を待つため、body_request完了や明示撮影結果の到着が平均500〜700ms遅れる。
     // 新: 未送信のbody_request結果や明示撮影結果（body_view）があるときだけ、20tickを待たず即時送信する（通常の定期スナップショット間隔は変えない）。
     // 意図: 視線・注目系の往復遅延を短縮しつつ、平常時の通信頻度や既存プロトコル契約を維持する。
+    private static final long MIN_IMMEDIATE_SNAPSHOT_TICKS = 2;
+
     private boolean shouldSendSnapshot() {
-        return this.lastSnapshotTick < 0 || this.tickCounter - this.lastSnapshotTick >= this.config.snapshotIntervalTicks;
+        if (this.lastSnapshotTick < 0) {
+            return true;
+        }
+        long elapsed = this.tickCounter - this.lastSnapshotTick;
+        if (elapsed >= this.config.snapshotIntervalTicks) {
+            return true;
+        }
+        return elapsed >= MIN_IMMEDIATE_SNAPSHOT_TICKS && this.eventClient.hasFreshSnapshotRequest();
     }
 
     private boolean shouldSendThreatEvent(List<ThreatObservation> threats) {
