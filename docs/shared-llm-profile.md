@@ -12,6 +12,14 @@
 
 **プロンプトキャッシュ**は `llama-server` 側で有効です。以前の要求と一致する先頭トークンのKVキャッシュを再利用できます。固定の指示を先に、変わる観測・対話履歴・今回の入力を後に組み立てます。速度を比べるときは入力全体の長さと再利用分を分け、取得できる場合は `timings.cache_n`（再利用トークン数）と `timings.prompt_ms`（今回の入力処理時間）を記録します。実際の会話履歴・画像は各要求に合わせて用意します。
 
+### キャッシュ効率化・応答短縮の調整方針（2026-11-23 計画・未反映）
+
+2026-11-23 の実機ログでは `-c 65536`・KV未量子化の構成で 1 キャッシュエントリが約 870〜1,074 MiB に達し、毎ターン `making room for prompt cache entry, removing oldest entry` による追い出しと、通常会話／環境反応での `body_observation` 呼び名不一致による接頭部割れ（`f_keep=0.159`）が確認された。詳細は [応答レイテンシ短縮の実装計画](2026-11-23-response-latency-reduction-plan.md) を参照。
+
+- **Rust 側（Part 3 計画）**: 通常会話と環境反応で `body_observation` の呼び名を揃え、`base` → `grounding` → `body_observation` の先頭トークン列を一致させる。
+- **共有 `llama-server` 側（推奨調整・未反映）**: `~/mlx-server/gguf/profiles.json` で `-c 16384`〜`32768`、`-ctk q8_0 -ctv q8_0`、`--cache-ram 8192` を検討する（実機適用後は `llama-server.log` の `f_keep` と追い出し警告の減少で確認する）。
+- **低電力モードの注意**: macOS が低電力モード（`lowpowermode=1`）だと AC 接続中でもプロンプト処理速度が 1/3〜1/4 に低下するため、実測時は通常電源モードを確認する。
+
 ## ドギドの設定プロファイル
 
 `standalone` と `shared` はどちらもRust本体を起動します。`standalone` は `.env`、`shared` は `.env` の後で `.env.shared` を読みます。

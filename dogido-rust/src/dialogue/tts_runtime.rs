@@ -43,6 +43,10 @@ impl Drop for DictionaryWorker {
     }
 }
 impl Dictionary {
+    // [遅延短縮計画 Part 5] docs/2026-11-23-response-latency-reduction-plan.md
+    // 旧: 漢字を含まないひらがな・カタカナだけの短い文でも毎回tts_unidic_adapter.pyへIPCしている。
+    // 新: 明示訂正辞書を適用した上で、UniDic解析が不要な文（漢字・英字なし）はIPCをバイパスしてそのままVOICEVOXへ渡す。
+    // 意図: 文ごとの読み補正往復を削って発話開始を早める。明示訂正辞書の適用順と漢字を含む文のUniDic補正は維持する。
     async fn exchange(&self, config: &DialogueConfig, source: &str) -> Result<Option<String>> {
         let request_id = uuid::Uuid::new_v4().to_string();
         tracing::info!(event = "tts_unidic_requested", request_id);

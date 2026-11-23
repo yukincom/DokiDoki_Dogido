@@ -1,4 +1,8 @@
 // One resident whisper.cpp model; Rust owns recording, request order and results.
+// [遅延短縮計画 Part 1] docs/2026-11-23-response-latency-reduction-plan.md
+// 旧: Whisperモデルだけを常駐させ、Silero VADはRust側から毎回別プロセス（whisper-vad-speech-segments）を起動している。
+// 新: 起動引数に任意の --vad-model を追加して起動時に1回だけVADモデルを常駐ロードし、VAD判定要求をこのワーカーで処理できるようにする。
+// 意図: 毎発話のVADプロセス起動・モデル再読込（約550ms）をなくし、既存のtranscribe/cancel/shutdownプロトコルとfail-open方針を維持する。
 #include "whisper.h"
 #include "json.hpp"
 

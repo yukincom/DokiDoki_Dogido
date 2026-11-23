@@ -15,6 +15,10 @@ pub(crate) fn crowded(world: &Value) -> bool {
         || o["nearby_block_types_partial"] == true || o["nearby_mob_types_partial"] == true
 }
 
+// [遅延短縮計画 Part 2] docs/2026-11-23-response-latency-reduction-plan.md
+// 旧: モデル入力用コピーにも多数のnull項目・長い内部basis文字列・重複するobserved_atが残り、spaced_jsonでトークンを圧迫している。
+// 新: モデルへ渡す直前のコピーに限り、意味を落とさないnull項目や不要な内部メタを省いて軽量化する（必要に応じコンパクトJSON化も検討）。
+// 意図: 正本台帳や視認・位置関係・匂い・天気・指差しの意味を一切損なわず、プロンプト読み込み時間（実測4.88秒）を1.5〜2.5秒短縮する。
 pub(crate) fn compact(world: &mut Value, crowded: bool) {
     if let Some(changes) = world.get_mut("changes").and_then(Value::as_array_mut) {
         // 全種類の増減は内部比較の入力。前回の景色を今の場所の特徴として載せない。

@@ -219,6 +219,10 @@ pub(super) fn messages(kind: &str, d: &Value) -> Result<Vec<ChatMessage>> {
     {
         *conversation = crate::dialogue::history::History::lines_for(rows).into();
     }
+    // [遅延短縮計画 Part 3] docs/2026-11-23-response-latency-reduction-plan.md
+    // 旧: 環境反応のbody_playerを固定"プレイヤー"にしており、通常会話（player_name付き）とbody_observation先頭が食い違ってKVキャッシュが毎回割れる。
+    // 新: d["player_name"]があれば通常会話と同じ呼び名をdialogue_with_bodyへ渡し、base→grounding→body_observationの先頭トークン列を完全一致させる。
+    // 意図: 通常会話と環境反応の間でllama-serverのKVキャッシュ再利用（f_keep）を高める。player_name未設定時は従来通り"プレイヤー"へフォールバックする。
     let system = crate::companion_prompt::dialogue_with_body(
         mode(kind, d),
         if kind == "body_recall" {

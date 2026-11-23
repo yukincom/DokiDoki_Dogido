@@ -388,6 +388,10 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
         crate::conversation_observation::select_chat_mobs(&mut world, &current_topics, flag(d, "combat_active"));
         crate::conversation_observation::dialogue_capacity::compact(&mut world, crowded);
         let named_description = serde_json::from_str::<Value>(text(d, "named_entity_description_hints", "")).ok();
+        // [遅延短縮計画 Part 2] docs/2026-11-23-response-latency-reduction-plan.md
+        // 旧: topic_names.is_empty()（特定モブ名を含まない通常雑談）のとき、catalog_knowledge全件とvillager_routinesがそのままモデルへ渡され、6,300トークン級に膨らむ。
+        // 新: 通常雑談（topic_names空）では、直近変化（changes）や指差し（look_target）に関わる対象だけへ絞り、無関係な周囲全モブの辞書解説や村人日課を省く。
+        // 意図: 雑談ターンの入力トークン数を大幅に削減する。asks_mob_information時やモブ名言及時の該当辞書提示・正本台帳は変更しない。
         if let Some(entries) = world.pointer_mut("/catalog_knowledge/entries").and_then(Value::as_array_mut) {
             entries.retain(|entry| {
                 let duplicate = named_description.as_ref().is_some_and(|description| {

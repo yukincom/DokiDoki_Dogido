@@ -149,6 +149,10 @@ fn vad_count(stdout: &[u8]) -> Option<usize> {
 /// VAD判定成功かつ検出区間が0件の場合、または処理がキャンセルされた場合のみ `false`（スキップ）を返す。
 /// VAD設定が無効な場合はそのままWhisper推論へ進める。プロセス起動失敗、出力形式不明、10秒のタイムアウト超過時は、診断ログを残した上でフォールバックとして `true` を返す。
 /// （※補助VADの不調によってユーザー入力を誤って破棄するのを防ぐため、確実に無音と特定できた場合のみスキップする方針をとる）。
+// [遅延短縮計画 Part 1] docs/2026-11-23-response-latency-reduction-plan.md
+// 旧: 毎発話ごとに外部CLI（whisper-vad-speech-segments）を新規起動してSilero VADモデルを再読込している（実測552〜576ms）。
+// 新: 常駐の dogido-whisper-worker に --vad-model を1回だけロードさせ、同一プロセスでVAD判定を行う（CLIは互換フォールバックとして維持）。
+// 意図: Whisper本体より2倍遅いVADのプロセス起動・モデル読込コストを削り、精度・fail-open方針・voice_vad_cli互換を保ったまま毎発話約550ms短縮する。
 async fn vad(
     settings: &Settings,
     wav: &Path,

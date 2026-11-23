@@ -605,6 +605,10 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         return (dx * dx) + (dy * dy) + (dz * dz) >= thresholdSquared;
     }
 
+    // [遅延短縮計画 Part 4] docs/2026-11-23-response-latency-reduction-plan.md
+    // 旧: snapshotIntervalTicks（既定20tick=1秒）経過まで送信を待つため、body_request完了や明示撮影結果の到着が平均500〜700ms遅れる。
+    // 新: 未送信のbody_request結果や明示撮影結果（body_view）があるときだけ、20tickを待たず即時送信する（通常の定期スナップショット間隔は変えない）。
+    // 意図: 視線・注目系の往復遅延を短縮しつつ、平常時の通信頻度や既存プロトコル契約を維持する。
     private boolean shouldSendSnapshot() {
         return this.lastSnapshotTick < 0 || this.tickCounter - this.lastSnapshotTick >= this.config.snapshotIntervalTicks;
     }

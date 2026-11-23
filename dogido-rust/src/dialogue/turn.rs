@@ -202,6 +202,10 @@ impl Dialogue {
             }
         });
         let mut completed = false;
+        // [遅延短縮計画 Part 4] docs/2026-11-23-response-latency-reduction-plan.md
+        // 旧: (!input.follows_look() || input.player_approach.is_some()) により、follows_look経由の返答が非ストリーミングになり全文生成完了までTTSが始まらない。
+        // 新: follows_look経由の通常返答でもspeech_streamを有効化し、第1文確定と同時にVOICEVOX合成を並列開始する。
+        // 意図: 視線・注目後返答の話し出しを早める。workshop・workshop_fallbackの非ストリーム経路や取消・表示ACK仕様は維持する。
         if input["workshop"].is_null() && (!input.follows_look() || input.player_approach.is_some()) {
             input.speech_stream =
                 super::speech_stream_runtime::Source::new(&self, &sid, &turn, epoch)

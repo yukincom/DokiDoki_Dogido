@@ -601,6 +601,10 @@ pub async fn run(config: Config, port: u16) -> Result<()> {
 }
 
 /// 本棚と本体で共有する保全worker。保存判断やゲーム処理から独立し、設定無しは何もしない。
+// [遅延短縮計画 Part 5] docs/2026-11-23-response-latency-reduction-plan.md
+// 旧: 30秒ごとにsync_research_storage()を無条件リトライし、外付けSSD等でos error 45（Operation not supported）が出続けて裏負荷になる。
+// 新: os error 45の原因（ハードリンク／xattr／ロック等の非対応FS操作）を切り分け、不要な反復リトライやバックオフ不足を解消する。
+// 意図: 会話・推論に影響するバックグラウンドCPU負荷と警告ログの連打を抑える。
 pub fn spawn_research_worker(store: store::Store) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let mut timer = tokio::time::interval(std::time::Duration::from_secs(30));
