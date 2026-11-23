@@ -48,6 +48,9 @@ impl Dictionary {
     // 新: 明示訂正辞書を適用した上で、UniDic解析が不要な文（漢字・英字なし）はIPCをバイパスしてそのままVOICEVOXへ渡す。
     // 意図: 文ごとの読み補正往復を削って発話開始を早める。明示訂正辞書の適用順と漢字を含む文のUniDic補正は維持する。
     async fn exchange(&self, config: &DialogueConfig, source: &str) -> Result<Option<String>> {
+        if !needs_unidic_lookup(source) {
+            return Ok(None);
+        }
         let request_id = uuid::Uuid::new_v4().to_string();
         tracing::info!(event = "tts_unidic_requested", request_id);
         let (reply, response) = tokio::sync::oneshot::channel();
@@ -131,6 +134,11 @@ impl Dictionary {
             }
         }
     }
+}
+
+/// 漢字または英字を含む文のみUniDic IPCの対象とし、かな・記号のみの文はバイパスする。
+fn needs_unidic_lookup(text: &str) -> bool {
+    tts_reading::has_kanji(text) || text.chars().any(|c| c.is_ascii_alphabetic())
 }
 
 /// 読み訂正は返答ごとに読み直す。辞書の寿命はDialogueの所有者が管理する。
@@ -653,5 +661,38 @@ done
             );
             std::fs::remove_dir_all(&dir).unwrap();
         }
+    }
+
+    #[tokio::test]
+    async fn kana_only_text_bypasses_unidic_ipc_and_keeps_explicit_corrections() {
+        let dictionary = Dictionary::default();
+        let config = DialogueConfig {
+            reading_engine: "auto".into(),
+            python: std::path::PathBuf::from("/nonexistent/python"),
+            helper: std::path::PathBuf::from("/nonexistent/helper.py"),
+            ..Default::default()
+        };
+        assert!(!needs_unidic_lookup("おはよう、ドギド！"));
+        assert!(needs_unidic_lookup("今日はいい天気"));
+        assert!(needs_unidic_lookup("Minecraftやな"));
+        assert_eq!(
+            dictionary.exchange(&config, "おはよう、ドギド！").await.unwrap(),
+            None
+        );
+
+        let corrections = vec![serde_json::json!({"surface": "草地", "reading": "くさち"})];
+        let mut reader = Reader::new(&dictionary, corrections);
+        let (_tx, mut cancel) = watch::channel(false);
+        let spoken = reader
+            .read(
+                &config,
+                "草地でまったりやな。",
+                &mut cancel,
+                Instant::now() + Duration::from_secs(5),
+            )
+            .await
+            .unwrap();
+        assert_eq!(spoken, "くさちでまったりやな。");
+        dictionary.close().await;
     }
 }

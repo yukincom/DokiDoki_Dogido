@@ -605,17 +605,42 @@ pub async fn run(config: Config, port: u16) -> Result<()> {
 // 旧: 30秒ごとにsync_research_storage()を無条件リトライし、外付けSSD等でos error 45（Operation not supported）が出続けて裏負荷になる。
 // 新: os error 45の原因（ハードリンク／xattr／ロック等の非対応FS操作）を切り分け、不要な反復リトライやバックオフ不足を解消する。
 // 意図: 会話・推論に影響するバックグラウンドCPU負荷と警告ログの連打を抑える。
+fn is_unsupported_fs_error(error: &anyhow::Error) -> bool {
+    error.chain().any(|cause| {
+        cause.downcast_ref::<std::io::Error>().is_some_and(|io| {
+            io.kind() == std::io::ErrorKind::Unsupported || io.raw_os_error() == Some(45)
+        })
+    })
+}
+
 pub fn spawn_research_worker(store: store::Store) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
-        let mut timer = tokio::time::interval(std::time::Duration::from_secs(30));
-        timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        const BASE_SECS: u64 = 30;
+        const MAX_SECS: u64 = 300;
+        let mut backoff_secs = BASE_SECS;
         loop {
-            timer.tick().await;
+            tokio::time::sleep(std::time::Duration::from_secs(backoff_secs)).await;
             let worker = store.clone();
             match tokio::task::spawn_blocking(move || worker.sync_research_storage()).await {
-                Ok(Ok(_)) => {},
-                Ok(Err(error)) => tracing::warn!(event="research_archive_pending",error=%error),
-                Err(error) => tracing::warn!(event="research_archive_worker_failed",error=%error),
+                Ok(Ok(_)) => {
+                    backoff_secs = BASE_SECS;
+                }
+                Ok(Err(error)) if is_unsupported_fs_error(&error) => {
+                    tracing::warn!(
+                        event = "research_archive_unsupported",
+                        error = %error,
+                        "外付け記憶先が非対応操作(os error 45)を返したため周期保全を停止します"
+                    );
+                    break;
+                }
+                Ok(Err(error)) => {
+                    tracing::warn!(event = "research_archive_pending", error = %error);
+                    backoff_secs = (backoff_secs * 2).min(MAX_SECS);
+                }
+                Err(error) => {
+                    tracing::warn!(event = "research_archive_worker_failed", error = %error);
+                    backoff_secs = (backoff_secs * 2).min(MAX_SECS);
+                }
             }
         }
     })
@@ -633,4 +658,24 @@ pub fn sync_research(config: Config, root: Option<PathBuf>) -> Result<Value> {
         ensure!(status["state"] == "ready", "research_archive_pending: {status}");
         Ok(status)
     } else { store.sync_research_storage() }
+}
+
+#[cfg(test)]
+mod worker_tests {
+    use super::is_unsupported_fs_error;
+
+    #[test]
+    fn detects_os_error_45_and_unsupported_in_error_chain() {
+        let os45: anyhow::Error = std::io::Error::from_raw_os_error(45).into();
+        let wrapped = os45.context("cannot lock archive");
+        assert!(is_unsupported_fs_error(&wrapped));
+
+        let unsupported: anyhow::Error =
+            std::io::Error::new(std::io::ErrorKind::Unsupported, "enotsup").into();
+        assert!(is_unsupported_fs_error(&unsupported));
+
+        let temporary: anyhow::Error =
+            std::io::Error::new(std::io::ErrorKind::NotFound, "missing").into();
+        assert!(!is_unsupported_fs_error(&temporary));
+    }
 }
