@@ -223,6 +223,11 @@ pub(super) fn messages(kind: &str, d: &Value) -> Result<Vec<ChatMessage>> {
     // 旧: 環境反応のbody_playerを固定"プレイヤー"にしており、通常会話（player_name付き）とbody_observation先頭が食い違ってKVキャッシュが毎回割れる。
     // 新: d["player_name"]があれば通常会話と同じ呼び名をdialogue_with_bodyへ渡し、base→grounding→body_observationの先頭トークン列を完全一致させる。
     // 意図: 通常会話と環境反応の間でllama-serverのKVキャッシュ再利用（f_keep）を高める。player_name未設定時は従来通り"プレイヤー"へフォールバックする。
+    let body_player = d["player_name"]
+        .as_str()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("プレイヤー");
     let system = crate::companion_prompt::dialogue_with_body(
         mode(kind, d),
         if kind == "body_recall" {
@@ -233,7 +238,7 @@ pub(super) fn messages(kind: &str, d: &Value) -> Result<Vec<ChatMessage>> {
         context["world_context"]["observations"]["smell"]["status"] == "present",
         context["world_context"]["observations"]["body_observation"]
             .is_object()
-            .then_some("プレイヤー"),
+            .then_some(body_player),
     );
     Ok(vec![
         ChatMessage {
@@ -245,4 +250,44 @@ pub(super) fn messages(kind: &str, d: &Value) -> Result<Vec<ChatMessage>> {
             content: serde_json::to_string(&context)?,
         },
     ])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn reaction_body_player_matches_chat_prompt_and_falls_back_to_default() {
+        let base_world = json!({
+            "observations": {
+                "body_observation": {"position": "近く"}
+            }
+        });
+        let named = messages(
+            "aftermath",
+            &json!({
+                "player_name": "Meal_chan",
+                "conversation_context": {"world_context": base_world}
+            }),
+        )
+        .unwrap();
+        let expected_body = crate::companion_prompt::body_observation("Meal_chan");
+        assert!(named[0].content.contains(&expected_body));
+
+        let blank = messages(
+            "aftermath",
+            &json!({
+                "player_name": "   ",
+                "conversation_context": {"world_context": base_world}
+            }),
+        )
+        .unwrap();
+        assert!(blank[0]
+            .content
+            .contains(&crate::companion_prompt::body_observation("プレイヤー")));
+
+        let no_body = messages("aftermath", &json!({"player_name": "Meal_chan"})).unwrap();
+        assert!(!no_body[0].content.contains("Meal_chan"));
+    }
 }
