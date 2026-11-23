@@ -148,6 +148,39 @@ class NativeWhisperWorkerTest(unittest.TestCase):
         self.assertTrue(self.receive()["success"])
         self.assertEqual(self.logged().count("load:cpu"), 1)
 
+    # 見込み: --vad-model 指定時は起動時に1回だけVADモデルを読み込み、複数発話で使い回せる。
+    # 合格: ready={"ready":True,"vad":True}、複数回vad op成功、shutdown時にvad-freeが呼ばれる。
+    def test_resident_vad_loads_once_and_handles_multiple_requests(self):
+        vad_events = Path(self.directory.name) / "vad_events"
+        env = {**os.environ, "DOGIDO_WHISPER_STUB_EVENTS": str(vad_events)}
+        proc = subprocess.Popen(
+            [str(self.binary), "--model", "unused", "--vad-model", "silero-stub", "--no-gpu"],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env,
+        )
+        try:
+            ready = json.loads(proc.stdout.readline())
+            self.assertEqual(ready, {"ready": True, "vad": True})
+            for ident in (1, 2):
+                req = {"op": "vad", "id": ident, "wav": str(self.wav), "threshold": 0.5,
+                       "min_speech_duration_ms": 250, "min_silence_duration_ms": 500, "speech_pad_ms": 200}
+                proc.stdin.write((json.dumps(req) + "\n").encode())
+                proc.stdin.flush()
+                reply = json.loads(proc.stdout.readline())
+                self.assertEqual(reply, {"id": ident, "success": True, "segments": 2, "stderr": ""})
+            proc.stdin.write((json.dumps({"op": "shutdown"}) + "\n").encode())
+            proc.stdin.flush()
+            self.assertEqual(proc.wait(timeout=5), 0)
+        finally:
+            if proc.poll() is None:
+                proc.kill()
+                proc.wait()
+            for s in (proc.stdin, proc.stdout, proc.stderr):
+                s.close()
+        events = vad_events.read_text().splitlines()
+        self.assertEqual(events.count("vad-load"), 1)
+        self.assertEqual(events.count("vad:250:500:200:4"), 2)
+        self.assertIn("vad-free", events)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -155,6 +155,7 @@ fn vad_count(stdout: &[u8]) -> Option<usize> {
 // 意図: Whisper本体より2倍遅いVADのプロセス起動・モデル読込コストを削り、精度・fail-open方針・voice_vad_cli互換を保ったまま毎発話約550ms短縮する。
 async fn vad(
     settings: &Settings,
+    whisper: &mut super::whisper::Whisper,
     wav: &Path,
     report: &Reporter,
     stop: &mut watch::Receiver<bool>,
@@ -162,6 +163,35 @@ async fn vad(
     let Some(config) = &settings.vad else {
         return true;
     };
+    // 常駐ワーカーがVAD対応なら外部プロセス起動を省く。
+    let resident_error = match whisper.vad(wav, config.threshold, stop).await {
+        Ok(super::whisper::VadOutcome::Cancelled) => return false,
+        Ok(super::whisper::VadOutcome::Segments(count)) => {
+            if count == 0 {
+                report.event("vad_rejected", "info", Some("no_speech_segment"), json!({}));
+            }
+            return count > 0;
+        }
+        Ok(super::whisper::VadOutcome::Timeout) => Some("Silero VAD timeout".to_string()),
+        Ok(super::whisper::VadOutcome::Unavailable(reason)) => {
+            if whisper.has_vad() {
+                Some(reason)
+            } else {
+                None
+            }
+        }
+        Err(error) => Some(error.to_string()),
+    };
+    if let Some(error) = resident_error {
+        report.event(
+            "vad_error",
+            "warning",
+            Some("silero_probe_failed_open"),
+            json!({"detail":error}),
+        );
+        return true;
+    }
+
     let mut command = Command::new(&config.cli);
     command
         .arg("--vad-model")
@@ -287,7 +317,7 @@ pub async fn process_segment(
     last_mode: &mut String,
 ) -> Result<()> {
     let wav = Wav::create(&segment.pcm)?;
-    if !vad(settings, &wav.0, report, stop).await {
+    if !vad(settings, whisper, &wav.0, report, stop).await {
         return Ok(());
     }
     let context = tokio::select! { biased;

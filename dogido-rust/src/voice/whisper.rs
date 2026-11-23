@@ -64,10 +64,26 @@ struct Response {
     stderr: String,
 }
 
+#[derive(Deserialize)]
+struct VadResponse {
+    success: bool,
+    #[serde(default)]
+    segments: usize,
+    stderr: String,
+}
+
+pub(super) enum VadOutcome {
+    Segments(usize),
+    Unavailable(String),
+    Timeout,
+    Cancelled,
+}
+
 pub(super) struct Whisper {
     settings: Arc<Settings>,
     shutdown: watch::Receiver<bool>,
     worker: Option<Worker>,
+    vad_ready: bool,
     next_id: u64,
 }
 impl Whisper {
@@ -80,6 +96,7 @@ impl Whisper {
             settings,
             shutdown,
             worker: None,
+            vad_ready: false,
             next_id: 0,
         };
         let mut stop = this.shutdown.clone();
@@ -90,12 +107,20 @@ impl Whisper {
         }
     }
 
+    pub fn has_vad(&self) -> bool {
+        self.vad_ready
+    }
+
     async fn load(&mut self, stop: &mut watch::Receiver<bool>) -> Result<bool> {
         if *stop.borrow() || *self.shutdown.borrow() {
             return Ok(false);
         }
+        self.vad_ready = false;
         let mut command = Command::new(&self.settings.whisper_worker);
         command.arg("--model").arg(&self.settings.whisper_model);
+        if let Some(vad) = &self.settings.vad {
+            command.arg("--vad-model").arg(&vad.model);
+        }
         if !self.settings.use_gpu {
             command.arg("--no-gpu");
         }
@@ -111,20 +136,28 @@ impl Whisper {
         };
         // 旧CLIのモデル読込を含む60秒の期限を、起動時の読込にも使う。
         let result = tokio::select! { biased;
-            _ = process::cancelled(stop) => Ok(false),
-            _ = process::cancelled(&mut self.shutdown) => Ok(false),
+            _ = process::cancelled(stop) => Ok(None),
+            _ = process::cancelled(&mut self.shutdown) => Ok(None),
             result = tokio::time::timeout(Duration::from_secs(60), worker.receive()) => {
-                result.context("Whisperモデルの読込が時間内に完了しませんでした").and_then(|value| value).map(|_| true)
+                result
+                    .context("Whisperモデルの読込が時間内に完了しませんでした")
+                    .and_then(|value| value)
+                    .map(Some)
             },
         };
         match result {
-            Ok(true) => {
+            Ok(Some(ready)) => {
+                self.vad_ready = ready.get("vad").and_then(Value::as_bool).unwrap_or(false);
                 self.worker = Some(worker);
                 Ok(true)
             }
-            other => {
+            Ok(None) => {
+                let _ = worker.close().await;
+                Ok(false)
+            }
+            Err(error) => {
                 let stderr = worker.close().await;
-                other.with_context(|| String::from_utf8_lossy(&stderr).into_owned())
+                Err(error).with_context(|| String::from_utf8_lossy(&stderr).into_owned())
             }
         }
     }
@@ -178,7 +211,67 @@ impl Whisper {
         result.map(|(output, _)| output)
     }
 
+    pub async fn vad(
+        &mut self,
+        wav: &Path,
+        threshold: f64,
+        stop: &mut watch::Receiver<bool>,
+    ) -> Result<VadOutcome> {
+        if *stop.borrow() || *self.shutdown.borrow() {
+            return Ok(VadOutcome::Cancelled);
+        }
+        if self.worker.is_none() && !self.load(stop).await? {
+            return Ok(VadOutcome::Cancelled);
+        }
+        if !self.vad_ready {
+            return Ok(VadOutcome::Unavailable("resident vad not ready".into()));
+        }
+        self.next_id += 1;
+        let id = self.next_id;
+        let worker = self.worker.as_mut().unwrap();
+        let request = json!({
+            "op": "vad",
+            "id": id,
+            "wav": wav,
+            "threshold": threshold,
+            "min_speech_duration_ms": 250,
+            "min_silence_duration_ms": 500,
+            "speech_pad_ms": 200,
+        });
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let result = async {
+            worker.send(request).await?;
+            tokio::select! { biased;
+                _ = process::cancelled(&mut self.shutdown) => Ok((VadOutcome::Cancelled, false)),
+                _ = process::cancelled(stop) => {
+                    worker.send(json!({"op":"cancel", "id":id})).await?;
+                    let drained = tokio::select! { biased;
+                        _ = process::cancelled(&mut self.shutdown) => false,
+                        result = timeout_at(deadline, worker.receive()) => matches!(result, Ok(Ok(_))),
+                    };
+                    Ok((VadOutcome::Cancelled, drained))
+                },
+                result = timeout_at(deadline, worker.receive()) => match result {
+                    Err(_) => Ok((VadOutcome::Timeout, false)),
+                    Ok(result) => {
+                        let response: VadResponse = serde_json::from_value(result?)?;
+                        if response.success {
+                            Ok((VadOutcome::Segments(response.segments), true))
+                        } else {
+                            Ok((VadOutcome::Unavailable(response.stderr), true))
+                        }
+                    },
+                },
+            }
+        }.await;
+        if !matches!(&result, Ok((_, true))) {
+            self.close().await;
+        }
+        result.map(|(outcome, _)| outcome)
+    }
+
     pub async fn close(&mut self) {
+        self.vad_ready = false;
         if let Some(worker) = self.worker.take() {
             worker.close().await;
         }

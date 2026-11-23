@@ -72,3 +72,37 @@ int whisper_full_n_segments(whisper_context *) { return 1; }
 int64_t whisper_full_get_segment_t0(whisper_context *, int) { return 0; }
 int64_t whisper_full_get_segment_t1(whisper_context *, int) { return 100; }
 const char *whisper_full_get_segment_text(whisper_context *context, int) { return context->text.c_str(); }
+
+struct whisper_vad_context { int segments; };
+struct whisper_vad_segments { int count; };
+
+whisper_vad_context_params whisper_vad_default_context_params() {
+    return {};
+}
+
+whisper_vad_context *whisper_vad_init_from_file_with_params(const char *path, whisper_vad_context_params) {
+    if (std::string(path) == "fail-vad") {
+        event("vad-load-failed");
+        return nullptr;
+    }
+    event("vad-load");
+    return new whisper_vad_context{std::string(path) == "silent-vad" ? 0 : 2};
+}
+
+whisper_vad_params whisper_vad_default_params() {
+    return {};
+}
+
+whisper_vad_segments *whisper_vad_segments_from_samples(
+    whisper_vad_context *vctx, whisper_vad_params params, const float *, int count
+) {
+    event("vad:" + std::to_string(params.min_speech_duration_ms) + ":" + std::to_string(params.min_silence_duration_ms) + ":" + std::to_string(params.speech_pad_ms) + ":" + std::to_string(count));
+    return new whisper_vad_segments{vctx->segments};
+}
+
+int whisper_vad_segments_n_segments(whisper_vad_segments *segments) { return segments->count; }
+void whisper_vad_free_segments(whisper_vad_segments *segments) { delete segments; }
+void whisper_vad_free(whisper_vad_context *ctx) {
+    event("vad-free");
+    delete ctx;
+}

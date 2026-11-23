@@ -26,9 +26,14 @@ using json = nlohmann::json;
 
 struct Request {
     int64_t id;
+    std::string op;
     std::string wav;
     std::string prompt;
-    float no_speech_threshold;
+    float no_speech_threshold = 0.6f;
+    float vad_threshold = 0.5f;
+    int min_speech_duration_ms = 250;
+    int min_silence_duration_ms = 500;
+    int speech_pad_ms = 200;
     std::atomic<bool> cancelled{false};
 };
 
@@ -62,10 +67,23 @@ static void receive(Inbox &inbox) {
             } else if (op == "transcribe") {
                 auto request = std::make_shared<Request>();
                 request->id = id;
+                request->op = op;
                 request->wav = frame.at("wav").get<std::string>();
                 request->prompt = frame.at("prompt").get<std::string>();
                 request->no_speech_threshold = frame.at("no_speech_threshold").get<float>();
                 // Register at receipt: a cancel arriving before dequeue must survive.
+                inbox.pending.emplace(id, request);
+                inbox.queue.push_back(std::move(request));
+                inbox.changed.notify_one();
+            } else if (op == "vad") {
+                auto request = std::make_shared<Request>();
+                request->id = id;
+                request->op = op;
+                request->wav = frame.at("wav").get<std::string>();
+                request->vad_threshold = frame.value("threshold", 0.5f);
+                request->min_speech_duration_ms = frame.value("min_speech_duration_ms", 250);
+                request->min_silence_duration_ms = frame.value("min_silence_duration_ms", 500);
+                request->speech_pad_ms = frame.value("speech_pad_ms", 200);
                 inbox.pending.emplace(id, request);
                 inbox.queue.push_back(std::move(request));
                 inbox.changed.notify_one();
@@ -161,15 +179,49 @@ static json transcribe(whisper_context *context, Request &request) {
     return reply;
 }
 
+static json detect_vad(whisper_vad_context *vctx, const Request &request) {
+    json reply = {{"id", request.id}, {"success", false}, {"segments", 0}, {"stderr", ""}};
+    try {
+        if (request.cancelled.load()) {
+            reply["stderr"] = "cancelled";
+            return reply;
+        }
+        if (!vctx) {
+            reply["stderr"] = "vad model not loaded";
+            return reply;
+        }
+        const auto samples = read_wav(request.wav);
+        auto params = whisper_vad_default_params();
+        params.threshold = request.vad_threshold;
+        params.min_speech_duration_ms = request.min_speech_duration_ms;
+        params.min_silence_duration_ms = request.min_silence_duration_ms;
+        params.speech_pad_ms = request.speech_pad_ms;
+        auto *segments = whisper_vad_segments_from_samples(
+            vctx, params, samples.data(), static_cast<int>(samples.size()));
+        if (!segments) {
+            reply["stderr"] = "vad failed";
+            return reply;
+        }
+        reply["segments"] = whisper_vad_segments_n_segments(segments);
+        reply["success"] = true;
+        whisper_vad_free_segments(segments);
+    } catch (const std::exception &) {
+        reply["stderr"] = "cannot process request audio";
+    }
+    return reply;
+}
+
 int main(int argc, char **argv) {
     std::string model;
+    std::string vad_model;
     bool use_gpu = true;
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
         if (arg == "--model" && i + 1 < argc) model = argv[++i];
+        else if (arg == "--vad-model" && i + 1 < argc) vad_model = argv[++i];
         else if (arg == "--no-gpu") use_gpu = false;
         else {
-            std::cerr << "usage: dogido-whisper-worker --model PATH [--no-gpu]\n";
+            std::cerr << "usage: dogido-whisper-worker --model PATH [--vad-model PATH] [--no-gpu]\n";
             return 2;
         }
     }
@@ -185,7 +237,20 @@ int main(int argc, char **argv) {
         std::cerr << "model initialization failed\n";
         return 1;
     }
-    std::cout << json({{"ready", true}}).dump() << std::endl;
+    whisper_vad_context *vad_context = nullptr;
+    if (!vad_model.empty()) {
+        auto vad_params = whisper_vad_default_context_params();
+        vad_context = whisper_vad_init_from_file_with_params(vad_model.c_str(), vad_params);
+        if (!vad_context) {
+            // VADモデル初期化失敗でもWhisper本体の常駐起動は継続し、Rust側のフォールバックへ委ねる。
+            std::cerr << "vad model initialization failed\n";
+        }
+    }
+    json ready = {{"ready", true}};
+    if (!vad_model.empty()) {
+        ready["vad"] = (vad_context != nullptr);
+    }
+    std::cout << ready.dump() << std::endl;
     Inbox inbox;
     std::thread reader([&] { receive(inbox); });
     while (true) {
@@ -197,7 +262,9 @@ int main(int argc, char **argv) {
             request = inbox.queue.front();
             inbox.queue.pop_front();
         }
-        auto reply = transcribe(context, *request);
+        auto reply = request->op == "vad"
+            ? detect_vad(vad_context, *request)
+            : transcribe(context, *request);
         {
             std::lock_guard<std::mutex> lock(inbox.mutex);
             inbox.pending.erase(request->id);
@@ -205,13 +272,14 @@ int main(int argc, char **argv) {
             // An arriving cancel can still win after whisper_full returned.
             if (request->cancelled.load()) {
                 reply["success"] = false;
-                reply["stdout"] = "";
+                if (reply.contains("stdout")) reply["stdout"] = "";
                 reply["stderr"] = "cancelled";
             }
         }
         std::cout << reply.dump(-1, ' ', false, json::error_handler_t::replace) << std::endl;
     }
     reader.join();
+    if (vad_context) whisper_vad_free(vad_context);
     whisper_free(context);
     return 0;
 }
