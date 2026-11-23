@@ -1024,15 +1024,17 @@ impl Dialogue {
                 self.warning_update(&sid, &turn, status, None);
             }
             Err(e) => {
+                // プレイヤー入力等の正常な割り込みキャンセルは失敗ではないため、error欄へ残さない。
+                let cancelled = *cancel.borrow();
                 self.warning_update(
                     &sid,
                     &turn,
-                    if *cancel.borrow() {
+                    if cancelled {
                         PlaybackStatus::Cancelled
                     } else {
                         PlaybackStatus::Failed
                     },
-                    Some(e.to_string()),
+                    if cancelled { None } else { Some(e.to_string()) },
                 );
             }
         }
