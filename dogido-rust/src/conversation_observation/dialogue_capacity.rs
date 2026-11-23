@@ -19,7 +19,32 @@ pub(crate) fn crowded(world: &Value) -> bool {
 // 旧: モデル入力用コピーにも多数のnull項目・長い内部basis文字列・重複するobserved_atが残り、spaced_jsonでトークンを圧迫している。
 // 新: モデルへ渡す直前のコピーに限り、意味を落とさないnull項目や不要な内部メタを省いて軽量化する（必要に応じコンパクトJSON化も検討）。
 // 意図: 正本台帳や視認・位置関係・匂い・天気・指差しの意味を一切損なわず、プロンプト読み込み時間（実測4.88秒）を1.5〜2.5秒短縮する。
+fn strip_null_fields(value: &mut Value) {
+    match value {
+        Value::Object(object) => {
+            object.retain(|key, child| {
+                if child.is_null() {
+                    // 変化の before/now の null は「なし→あり」「あり→なし」の意味を持つため保持する。
+                    matches!(key.as_str(), "before" | "now")
+                } else {
+                    true
+                }
+            });
+            for child in object.values_mut() {
+                strip_null_fields(child);
+            }
+        }
+        Value::Array(rows) => {
+            for child in rows {
+                strip_null_fields(child);
+            }
+        }
+        _ => {}
+    }
+}
+
 pub(crate) fn compact(world: &mut Value, crowded: bool) {
+    strip_null_fields(world);
     if let Some(changes) = world.get_mut("changes").and_then(Value::as_array_mut) {
         // 全種類の増減は内部比較の入力。前回の景色を今の場所の特徴として載せない。
         changes.retain(|row| row["kind"] != "nearby_block_types");
@@ -140,5 +165,31 @@ mod tests {
                 .len(),
             25
         );
+    }
+
+    #[test]
+    fn compact_strips_null_fields_without_mutating_source_or_change_sentinels() {
+        let raw = json!({
+            "observations": {
+                "mob_states": [
+                    {"catalog_id": "wolf", "custom_name": null, "hunger": null, "tamed": true, "basis": "look_target"}
+                ],
+                "weather": "clear",
+                "unused": null
+            },
+            "changes": [
+                {"kind": "weather", "before": null, "now": "rain"}
+            ]
+        });
+        let mut model = raw.clone();
+        compact(&mut model, false);
+        let wolf = &model["observations"]["mob_states"][0];
+        assert!(wolf.get("custom_name").is_none());
+        assert!(wolf.get("hunger").is_none());
+        assert_eq!(wolf["tamed"], true);
+        assert!(model["observations"].get("unused").is_none());
+        assert!(model["changes"][0].get("before").is_some());
+        assert!(model["changes"][0]["before"].is_null());
+        assert!(raw["observations"]["mob_states"][0]["hunger"].is_null());
     }
 }

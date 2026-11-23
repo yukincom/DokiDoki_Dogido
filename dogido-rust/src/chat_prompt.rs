@@ -392,13 +392,18 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
         // 旧: topic_names.is_empty()（特定モブ名を含まない通常雑談）のとき、catalog_knowledge全件とvillager_routinesがそのままモデルへ渡され、6,300トークン級に膨らむ。
         // 新: 通常雑談（topic_names空）では、直近変化（changes）や指差し（look_target）に関わる対象だけへ絞り、無関係な周囲全モブの辞書解説や村人日課を省く。
         // 意図: 雑談ターンの入力トークン数を大幅に削減する。asks_mob_information時やモブ名言及時の該当辞書提示・正本台帳は変更しない。
+        let casual_targets = if topic_names.is_empty() {
+            casual_relevant_targets(&world)
+        } else {
+            std::collections::HashSet::new()
+        };
         if let Some(entries) = world.pointer_mut("/catalog_knowledge/entries").and_then(Value::as_array_mut) {
             entries.retain(|entry| {
                 let duplicate = named_description.as_ref().is_some_and(|description| {
                     entry["kind"] == description["kind"] && entry["id"] == description["id"]
                 });
                 let relevant = if topic_names.is_empty() {
-                    true
+                    entry["kind"] != "mob" || casual_entry_relevant(entry, &casual_targets)
                 } else if entry["kind"] == "mob" {
                     entry["id"].as_str().is_some_and(|id| topics.iter().any(|topic| topic == id))
                 } else {
@@ -409,7 +414,11 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
             if entries.is_empty() { world.as_object_mut().unwrap().shift_remove("catalog_knowledge"); }
         }
         let villager_topic = topics.iter().any(|topic| topic == "villager");
-        if !topic_names.is_empty() && !villager_topic {
+        let has_villager_change = world
+            .get("changes")
+            .and_then(Value::as_array)
+            .is_some_and(|changes| changes.iter().any(|change| change["kind"] == "villager_routines"));
+        if !villager_topic && (!topic_names.is_empty() || !has_villager_change) {
             world.as_object_mut().unwrap().shift_remove("villager_routines");
             if let Some(changes) = world.get_mut("changes").and_then(Value::as_array_mut) {
                 changes.retain(|change| change["kind"] != "villager_routines");
@@ -544,6 +553,78 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
         },
     ];
     Ok(out)
+}
+
+/// 通常雑談時に辞書解説を残すべき対象（指差し対象と直近変化に関わる対象）のID・ラベルを収集する。
+fn casual_relevant_targets(world: &Value) -> std::collections::HashSet<String> {
+    fn collect_tokens(value: &Value, out: &mut std::collections::HashSet<String>) {
+        match value {
+            Value::Object(object) => {
+                for key in ["id", "catalog_id", "label", "species"] {
+                    if let Some(text) = object.get(key).and_then(Value::as_str)
+                        && !text.is_empty()
+                    {
+                        out.insert(text.to_owned());
+                        if let Some(stripped) = text.strip_prefix("minecraft:") {
+                            out.insert(stripped.to_owned());
+                        }
+                    }
+                }
+                for (key, child) in object {
+                    if matches!(key.as_str(), "before" | "now" | "target" | "targets") {
+                        collect_tokens(child, out);
+                    }
+                }
+            }
+            Value::Array(rows) => {
+                for child in rows {
+                    collect_tokens(child, out);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let mut targets = std::collections::HashSet::new();
+    if let Some(mobs) = world
+        .pointer("/observations/mob_states")
+        .and_then(Value::as_array)
+    {
+        for row in mobs {
+            if row["basis"] == "look_target" {
+                collect_tokens(row, &mut targets);
+            }
+        }
+    }
+    if let Some(look) = world.pointer("/observations/look_target") {
+        collect_tokens(look, &mut targets);
+    }
+    if let Some(changes) = world.get("changes").and_then(Value::as_array) {
+        for change in changes {
+            if change["kind"] != "villager_routines" {
+                collect_tokens(change, &mut targets);
+            }
+        }
+    }
+    targets
+}
+
+fn casual_entry_relevant(entry: &Value, targets: &std::collections::HashSet<String>) -> bool {
+    if targets.is_empty() {
+        return false;
+    }
+    for key in ["id", "label"] {
+        if let Some(text) = entry.get(key).and_then(Value::as_str) {
+            if targets.contains(text)
+                || text
+                    .strip_prefix("minecraft:")
+                    .is_some_and(|stripped| targets.contains(stripped))
+            {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 /// 通常会話のプロンプトへ渡す既知フィールドだけをRustで投影する。
@@ -727,6 +808,36 @@ mod tests {
         input["conversation_history"] = json!("user: パンダはいる？");
         let ordinary = messages(&input).unwrap();
         assert!(ordinary[1].content.contains("予定であり目撃ではない"));
+    }
+
+    #[test]
+    fn casual_chat_limits_catalog_to_look_target_and_changes_and_drops_idle_routines() {
+        let panda = crate::catalog_knowledge::mob("panda", None, false, "visual").unwrap();
+        let sheep = crate::catalog_knowledge::mob("sheep", None, false, "look_target").unwrap();
+        let zombie = crate::catalog_knowledge::mob("zombie", None, false, "visual").unwrap();
+        let world = json!({
+            "observations": {
+                "observed_at": "absolute-clock",
+                "time_phase": "day",
+                "mob_states": [
+                    {"catalog_id": "minecraft:sheep", "label": "羊", "basis": "look_target"},
+                    {"catalog_id": "minecraft:panda", "label": "パンダ", "basis": "visual"}
+                ]
+            },
+            "revision": 42,
+            "changes": [
+                {"kind": "mob_environment", "before": null, "now": {"catalog_id": "zombie", "label": "ゾンビ"}, "observed_at": "absolute-clock", "revision": 42}
+            ],
+            "catalog_knowledge": {"usage": "general", "entries": [panda, sheep, zombie]},
+            "villager_routines": {"basis": "schedule", "usage": "予定であり目撃ではない", "villagers": []}
+        });
+        let input = json!({"dialogue_choice": true, "user_text": "今日はいい天気だね", "world_context": world});
+        let out = messages(&input).unwrap();
+        let body = &out[1].content;
+        assert!(body.contains("\"id\": \"sheep\""));
+        assert!(body.contains("\"id\": \"zombie\""));
+        assert!(!body.contains("\"id\": \"panda\""));
+        assert!(!body.contains("予定であり目撃ではない"));
     }
 
     // 見込み: 履歴の管理用UTC時刻を外しても会話の内容と返答先は保てる。

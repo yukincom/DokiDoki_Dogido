@@ -154,8 +154,15 @@ fn authored_environment_conditions_and_individual_observations_reach_both_model_
         entries.iter().find(|row| row["id"] == "salmon").unwrap()["general"],
         entry.general
     );
-    let chat = crate::chat_prompt::messages(
+    let casual = crate::chat_prompt::messages(
         &json!({"user_text":"この魚、大丈夫かな。","world_context":context,"dialogue_choice":true}),
+    )
+    .unwrap();
+    assert!(casual[1].content.contains("水に触れず地面にいる"));
+    assert!(!casual[1].content.contains("雨だけでは防げない"));
+
+    let chat = crate::chat_prompt::messages(
+        &json!({"user_text":"このサケとゾンビ、大丈夫かな。","world_context":context,"dialogue_choice":true}),
     )
     .unwrap();
     assert!(chat[1].content.contains("水に触れず地面にいる"));
