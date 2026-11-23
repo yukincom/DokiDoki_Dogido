@@ -19,7 +19,7 @@ pub(crate) fn crowded(world: &Value) -> bool {
 // 旧: モデル入力用コピーにも多数のnull項目・長い内部basis文字列・重複するobserved_atが残り、spaced_jsonでトークンを圧迫している。
 // 新: モデルへ渡す直前のコピーに限り、意味を落とさないnull項目や不要な内部メタを省いて軽量化する（必要に応じコンパクトJSON化も検討）。
 // 意図: 正本台帳や視認・位置関係・匂い・天気・指差しの意味を一切損なわず、プロンプト読み込み時間（実測4.88秒）を1.5〜2.5秒短縮する。
-fn strip_null_fields(value: &mut Value) {
+pub(crate) fn strip_null_fields(value: &mut Value) {
     match value {
         Value::Object(object) => {
             object.retain(|key, child| {

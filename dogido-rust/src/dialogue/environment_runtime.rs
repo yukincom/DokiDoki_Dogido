@@ -1174,7 +1174,8 @@ mod tests {
                     );
                 }
             }
-            let input = json!({"user_text":"子供たち、元気だね。","world_context":s.conversation_observation.context(),"dialogue_choice":true});
+            // Part 2 仕様変更で通常雑談では無関係な村人日課を省くため、村人の話題を明示して日課の到達を確認する。
+            let input = json!({"user_text":"村人の子供たち、元気だね。","world_context":s.conversation_observation.context(),"dialogue_choice":true});
             let original = input.clone();
             let messages = crate::chat_prompt::messages(&input).unwrap();
             assert!(

@@ -66,12 +66,16 @@ struct Requests {
 }
 
 fn requests(d: &Dialogue, raw: &GameEvent) -> Requests {
+    requests_with_text(d, raw, "今はどんな音が聞こえる？")
+}
+
+fn requests_with_text(d: &Dialogue, raw: &GameEvent, user_text: &str) -> Requests {
     let data = d.data.lock().unwrap();
     let s = &data.sessions["s"];
     let native = chat_context::capture(s, raw, &d.config.combat, Default::default(), None).unwrap();
     let input = chat_materials::PlayerInput {
-        raw_text: "今はどんな音が聞こえる？".into(),
-        semantic_text: "今はどんな音が聞こえる？".into(),
+        raw_text: user_text.into(),
+        semantic_text: user_text.into(),
         asks_about_sound: true,
         ..Default::default()
     };
@@ -111,7 +115,7 @@ fn requests(d: &Dialogue, raw: &GameEvent) -> Requests {
         prior_sound_summary: native.snapshot.hearing.summary,
     };
     // 11月2日の入力仕様では絶対時刻を内部に留め、モデルには音の経過時間を渡す。
-    // 通常・環境の両方で、時刻以外の全フィールドが共通聴覚と一致することを確認する。
+    // Part 2 仕様変更（モデル入力のnullフィールド省略）を含め、時刻とnull以外の全フィールドが共通聴覚と一致することを確認する。
     let normal = user_material(&result.normal);
     let normal_world = json_section(&normal, "【現在の環境観測と変化（会話履歴とは別）】\n");
     let mut expected_hearing = hearing(&result).clone();
@@ -119,6 +123,7 @@ fn requests(d: &Dialogue, raw: &GameEvent) -> Requests {
         .as_object_mut()
         .expect("共通聴覚")
         .remove("observed_at");
+    crate::conversation_observation::dialogue_capacity::strip_null_fields(&mut expected_hearing);
     assert_eq!(normal_world["observations"]["hearing"], expected_hearing);
     assert_eq!(
         environment_material(&result)["world_context"]["observations"]["hearing"],
@@ -404,7 +409,13 @@ async fn control_catalog_sound_tags_remain_general_without_heard_evidence() {
         senses["ambient_sounds"] = json!([]);
         senses["passive_mobs"] = json!([{"type":"cow","distance":5,"certainty":"high"}]);
     });
-    let result = capture(&raw).await;
+    // Part 2 仕様変更により通常雑談では話題外のモブ辞書を省略するため、ウシを話題にした通常入力で辞書と聴覚の分離を確認する。
+    let d = server();
+    let permit = d.serial.acquire().await.unwrap();
+    d.observe("s", raw.clone(), None);
+    let result = requests_with_text(&d, &raw, "ウシの鳴き声は聞こえる？");
+    drop(permit);
+    d.shutdown().await;
     let knowledge = &result.common["catalog_knowledge"];
     assert!(
         knowledge.to_string().contains("もー"),
@@ -418,13 +429,9 @@ async fn control_catalog_sound_tags_remain_general_without_heard_evidence() {
     );
     assert!(result.prior_sound_summary.is_empty());
     let normal = user_material(&result.normal);
-    let catalog = json_section(&normal, "【対象のカタログ情報（一般的特徴・表現材料）】\n");
+    let named_hint = json_section(&normal, "【今回名前が出た種類の辞書描写ヒント】\n");
     assert!(
-        catalog["entries"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|entry| { entry["id"] == "cow" && entry.to_string().contains("もー") }),
+        named_hint["id"] == "cow" && named_hint.to_string().contains("もー"),
         "通常入力では鳴き声の表現をウシの辞書項目として渡す"
     );
     assert!(
